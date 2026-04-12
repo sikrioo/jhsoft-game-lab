@@ -1,0 +1,337 @@
+
+<div id="wrap" style="display:grid;grid-template-columns:1fr 300px;height:650px;background:#0a1810;border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid #2a5a3a;">
+  <div id="cw" style="position:relative;background:#0a1810;">
+    <canvas id="c" style="width:100%;height:100%;display:block;"></canvas>
+    <div id="rb" style="position:absolute;top:14px;left:50%;transform:translateX(-50%);background:rgba(5,20,10,0.95);border:1px solid #c8a826;border-radius:8px;padding:8px 22px;font-size:20px;font-weight:500;color:#f0c040;white-space:nowrap;opacity:0;transition:opacity 0.4s;pointer-events:none;"></div>
+    <div style="position:absolute;bottom:14px;left:50%;transform:translateX(-50%);font-size:11px;color:#3a7a4a;pointer-events:none;">드래그로 시점 조정</div>
+  </div>
+  <div id="panel" style="background:#091510;border-left:1px solid #1e4a2a;padding:14px;display:flex;flex-direction:column;gap:10px;overflow-y:auto;"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+window.addEventListener('load', function(){
+
+const NUMS=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const REDS=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const C1=[1,4,7,10,13,16,19,22,25,28,31,34];
+const C2=[2,5,8,11,14,17,20,23,26,29,32,35];
+const C3=[3,6,9,12,15,18,21,24,27,30,33,36];
+const N=NUMS.length, SA=(Math.PI*2)/N;
+
+let balance=10000, bets={}, chip=25, spinning=false, history=[];
+let wAngle=0, bAngle=0, bRadius=3.85, bVel=0, wVel=0;
+let phase='idle', settleTick=0, resultNum=0, resultPocket=0;
+
+// ── 패널 UI ──
+document.getElementById('panel').innerHTML=`
+<div style="font-size:10px;color:#5a9a6a;text-transform:uppercase;letter-spacing:1px;">잔액 / 베팅</div>
+<div style="display:flex;justify-content:space-between;font-size:13px;color:#aaa;"><span>잔액</span><span id="bal" style="color:#f0c040;font-weight:500;">₩10,000</span></div>
+<div style="display:flex;justify-content:space-between;font-size:13px;color:#aaa;"><span>총 베팅</span><span id="tbet" style="color:#f0c040;font-weight:500;">₩0</span></div>
+<div style="font-size:10px;color:#5a9a6a;text-transform:uppercase;letter-spacing:1px;">칩 선택</div>
+<div id="chips" style="display:flex;gap:6px;"></div>
+<div style="font-size:10px;color:#5a9a6a;text-transform:uppercase;letter-spacing:1px;">숫자 (0–36)</div>
+<div id="ng" style="display:grid;grid-template-columns:repeat(13,1fr);gap:2px;"></div>
+<div style="font-size:10px;color:#5a9a6a;text-transform:uppercase;letter-spacing:1px;">열 베팅</div>
+<div id="cg" style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;"></div>
+<div style="font-size:10px;color:#5a9a6a;text-transform:uppercase;letter-spacing:1px;">외부 베팅</div>
+<div id="og" style="display:grid;grid-template-columns:repeat(3,1fr);gap:3px;"></div>
+<div style="display:flex;gap:6px;">
+  <button id="sb" style="flex:1;padding:10px;font-size:14px;font-weight:500;border-radius:8px;cursor:pointer;border:none;background:#c8a826;color:#0d1f13;">스핀</button>
+  <button id="cb" style="padding:10px 12px;font-size:13px;font-weight:500;border-radius:8px;cursor:pointer;background:#1a3a22;color:#5a9a6a;border:1px solid #1e4a2a;">초기화</button>
+</div>
+<div id="msg" style="font-size:12px;min-height:14px;text-align:center;color:#f0c040;"></div>
+<div style="font-size:10px;color:#5a9a6a;text-transform:uppercase;letter-spacing:1px;">최근 결과</div>
+<div id="hist" style="display:flex;flex-wrap:wrap;gap:3px;"></div>
+<div style="display:flex;justify-content:space-between;font-size:12px;color:#aaa;"><span>총 수익</span><span id="profit" style="color:#f0c040;font-weight:500;">₩0</span></div>
+`;
+
+// 칩
+const chipDefs=[{v:1,bg:'#2a5ab8'},{v:5,bg:'#a0291b'},{v:10,bg:'#1e7a40'},{v:25,bg:'#6e2490'},{v:100,bg:'#b05010'}];
+const chipsEl=document.getElementById('chips');
+chipDefs.forEach(({v,bg})=>{
+  const d=document.createElement('div');
+  d.style.cssText=`width:38px;height:38px;border-radius:50%;background:${bg};border:2px dashed rgba(255,255,255,0.3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;cursor:pointer;color:#fff;user-select:none;flex-shrink:0;`;
+  d.textContent=v;
+  if(v===25) d.style.border='2px solid #f0c040';
+  d.addEventListener('click',()=>{
+    chip=v;
+    chipsEl.querySelectorAll('div').forEach(x=>x.style.border='2px dashed rgba(255,255,255,0.3)');
+    d.style.border='2px solid #f0c040';
+  });
+  chipsEl.appendChild(d);
+});
+
+function pb(btn){
+  if(spinning)return;
+  const k=btn.dataset.bet, cost=chip;
+  if(balance<cost){setMsg('잔액 부족!');return;}
+  balance-=cost; bets[k]=(bets[k]||0)+cost;
+  btn.style.background='#1a4040'; btn.style.borderColor='#3a9a6a';
+  let sp=btn.querySelector('span.bc');
+  if(!sp){sp=document.createElement('span');sp.className='bc';sp.style.cssText='position:absolute;top:1px;right:1px;font-size:8px;color:#f0c040;';btn.appendChild(sp);}
+  sp.textContent=bets[k];
+  updUI();
+}
+
+// 숫자 그리드
+const ng=document.getElementById('ng');
+const z0=document.createElement('button');
+z0.textContent='0'; z0.dataset.bet='n0';
+z0.style.cssText='grid-column:span 2;padding:4px 1px;font-size:10px;font-weight:500;border:1px solid #1e4a2a;background:#0d3a18;color:#5ddd8a;cursor:pointer;border-radius:2px;position:relative;width:100%;';
+z0.addEventListener('click',function(){pb(this);}); ng.appendChild(z0);
+for(let i=1;i<=36;i++){
+  const b=document.createElement('button');
+  b.textContent=i; b.dataset.bet='n'+i;
+  b.style.cssText='padding:4px 1px;font-size:10px;font-weight:500;border:1px solid #1e4a2a;background:#0d2a18;color:'+(REDS.has(i)?'#ff8080':'#bbb')+';cursor:pointer;border-radius:2px;position:relative;width:100%;';
+  b.addEventListener('click',function(){pb(this);}); ng.appendChild(b);
+}
+
+// 열 베팅
+[['col1','1열','2:1'],['col2','2열','2:1'],['col3','3열','2:1']].forEach(([k,l,o])=>{
+  const b=document.createElement('button'); b.dataset.bet=k;
+  b.style.cssText='padding:6px 2px;font-size:11px;font-weight:500;border:1px solid #1e4a2a;background:#0d2a18;color:#bbb;cursor:pointer;border-radius:4px;position:relative;width:100%;';
+  b.innerHTML=l+'<br><span style="font-size:9px;color:#5a9a6a;">'+o+'</span>';
+  b.addEventListener('click',function(){pb(this);}); document.getElementById('cg').appendChild(b);
+});
+
+// 외부 베팅
+[['lo','1–18','1:1',''],['hi','19–36','1:1',''],['even','짝수','1:1',''],['odd','홀수','1:1',''],
+ ['red','빨강','1:1','color:#ff9090;'],['blk','검정','1:1','color:#888;'],
+ ['d1','1–12','2:1',''],['d2','13–24','2:1',''],['d3','25–36','2:1','']].forEach(([k,l,o,ex])=>{
+  const b=document.createElement('button'); b.dataset.bet=k;
+  b.style.cssText='padding:6px 2px;font-size:11px;font-weight:500;border:1px solid #1e4a2a;background:#0d2a18;color:#bbb;cursor:pointer;border-radius:4px;position:relative;width:100%;'+ex;
+  b.innerHTML=l+'<br><span style="font-size:9px;color:#5a9a6a;">'+o+'</span>';
+  b.addEventListener('click',function(){pb(this);}); document.getElementById('og').appendChild(b);
+});
+
+document.getElementById('sb').addEventListener('click', doSpin);
+document.getElementById('cb').addEventListener('click',()=>{
+  if(spinning)return;
+  Object.values(bets).forEach(v=>{balance+=v;}); bets={};
+  document.querySelectorAll('#ng button,#cg button,#og button').forEach(b=>{
+    b.style.background='#0d2a18'; b.style.borderColor='#1e4a2a';
+    const s=b.querySelector('span.bc'); if(s)s.remove();
+  });
+  updUI(); setMsg('');
+});
+
+function updUI(){
+  document.getElementById('bal').textContent='₩'+balance.toLocaleString();
+  const tb=Object.values(bets).reduce((a,v)=>a+v,0);
+  document.getElementById('tbet').textContent='₩'+tb.toLocaleString();
+  const p=balance-10000, pe=document.getElementById('profit');
+  pe.textContent=(p>=0?'+':'')+'₩'+p.toLocaleString();
+  pe.style.color=p>=0?'#6ddd9d':'#ff6060';
+}
+function setMsg(m,c){const e=document.getElementById('msg');e.textContent=m;e.style.color=c||'#f0c040';}
+function showBanner(t){
+  const b=document.getElementById('rb'); b.textContent=t; b.style.opacity='1';
+  setTimeout(()=>{b.style.opacity='0';},3000);
+}
+
+// ── Three.js ──
+const cw=document.getElementById('cw');
+const canvas=document.getElementById('c');
+const renderer=new THREE.WebGLRenderer({canvas,antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0a1810);
+const camera=new THREE.PerspectiveCamera(42,1,0.1,100);
+camera.position.set(0,10,7); camera.lookAt(0,0,0);
+
+function doResize(){
+  const w=cw.clientWidth||500, h=cw.clientHeight||500;
+  renderer.setSize(w,h,false);
+  camera.aspect=w/h; camera.updateProjectionMatrix();
+}
+
+// 조명
+scene.add(new THREE.AmbientLight(0xffffff,0.55));
+const dl=new THREE.DirectionalLight(0xfff5dd,1.1);
+dl.position.set(3,12,4); dl.castShadow=true;
+dl.shadow.mapSize.width=dl.shadow.mapSize.height=1024;
+scene.add(dl);
+const pl=new THREE.PointLight(0xffddaa,0.35,20);
+pl.position.set(-5,5,3); scene.add(pl);
+
+// 테이블
+const tbl=new THREE.Mesh(new THREE.CylinderGeometry(5.2,5.2,0.18,64),new THREE.MeshLambertMaterial({color:0x0a1f10}));
+tbl.position.y=-0.44; tbl.receiveShadow=true; scene.add(tbl);
+
+// 그릇
+const bowl=new THREE.Mesh(new THREE.CylinderGeometry(4.35,3.85,0.55,64,1,true),new THREE.MeshLambertMaterial({color:0x180e06,side:THREE.DoubleSide}));
+bowl.position.y=-0.12; scene.add(bowl);
+
+// 트랙
+const track=new THREE.Mesh(new THREE.TorusGeometry(3.88,0.3,8,80),new THREE.MeshLambertMaterial({color:0x221208}));
+track.rotation.x=Math.PI/2; scene.add(track);
+
+// 금 림
+const rim=new THREE.Mesh(new THREE.TorusGeometry(3.52,0.2,12,80),new THREE.MeshLambertMaterial({color:0xb8900a}));
+rim.rotation.x=Math.PI/2; scene.add(rim);
+
+// 휠 그룹
+const wg=new THREE.Group(); scene.add(wg);
+
+const disc=new THREE.Mesh(new THREE.CylinderGeometry(3.5,3.5,0.2,80),new THREE.MeshLambertMaterial({color:0x1a3a22}));
+disc.receiveShadow=true; wg.add(disc);
+
+function makeWheelTex(){
+  const cv=document.createElement('canvas'); cv.width=cv.height=1024;
+  const ctx=cv.getContext('2d');
+  const cx=512,cy=512,r=498,ir=145;
+  ctx.fillStyle='#1a3a22'; ctx.fillRect(0,0,1024,1024);
+  for(let i=0;i<N;i++){
+    const a=i*SA-Math.PI/2, a2=a+SA, n=NUMS[i];
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,a,a2); ctx.closePath();
+    ctx.fillStyle=n===0?'#1a6a30':REDS.has(n)?'#8a1515':'#111'; ctx.fill();
+    ctx.strokeStyle='#2a5a3a'; ctx.lineWidth=1.5; ctx.stroke();
+    const mid=a+SA/2, tx=cx+(r-75)*Math.cos(mid), ty=cy+(r-75)*Math.sin(mid);
+    ctx.save(); ctx.translate(tx,ty); ctx.rotate(mid+Math.PI/2);
+    ctx.fillStyle='#fff'; ctx.font='bold 26px sans-serif';
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.fillText(n,0,0); ctx.restore();
+    ctx.beginPath(); ctx.moveTo(cx+ir*Math.cos(a),cy+ir*Math.sin(a));
+    ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a));
+    ctx.strokeStyle='#c8a826'; ctx.lineWidth=2; ctx.stroke();
+  }
+  ctx.beginPath(); ctx.arc(cx,cy,ir,0,Math.PI*2); ctx.strokeStyle='#c8a826'; ctx.lineWidth=5; ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.strokeStyle='#c8a826'; ctx.lineWidth=4; ctx.stroke();
+  return new THREE.CanvasTexture(cv);
+}
+
+const top=new THREE.Mesh(new THREE.CylinderGeometry(3.5,3.5,0.01,80),new THREE.MeshLambertMaterial({map:makeWheelTex()}));
+top.position.y=0.105; wg.add(top);
+
+for(let i=0;i<N;i++){
+  const a=i*SA;
+  const pin=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.28,6),new THREE.MeshLambertMaterial({color:0xd4aa20}));
+  pin.position.set(Math.cos(a)*3.15, 0.18, Math.sin(a)*3.15);
+  wg.add(pin);
+}
+
+const boss=new THREE.Mesh(new THREE.CylinderGeometry(0.48,0.48,0.32,32),new THREE.MeshLambertMaterial({color:0xb8900a}));
+boss.position.y=0.26; wg.add(boss);
+
+// 볼
+const ballMesh=new THREE.Mesh(new THREE.SphereGeometry(0.14,16,16),new THREE.MeshLambertMaterial({color:0xffffff}));
+ballMesh.castShadow=true; scene.add(ballMesh);
+
+function updateBall(){
+  const h=0.12+(bRadius-2.85)*0.25+Math.max(0,(bRadius-3.5)*0.28);
+  ballMesh.position.set(Math.cos(bAngle)*bRadius, Math.max(h,0.1), Math.sin(bAngle)*bRadius);
+}
+updateBall();
+
+// 스핀
+function doSpin(){
+  if(spinning)return;
+  const tb=Object.values(bets).reduce((a,v)=>a+v,0);
+  if(tb===0){setMsg('베팅을 먼저 하세요!');return;}
+  spinning=true; settleTick=0;
+  document.getElementById('sb').disabled=true;
+  document.getElementById('rb').style.opacity='0';
+  setMsg('');
+  const ri=Math.floor(Math.random()*N);
+  resultNum=NUMS[ri]; resultPocket=ri*SA+SA/2;
+  wVel=0.012+Math.random()*0.006;
+  bVel=-(0.11+Math.random()*0.05);
+  bRadius=3.85; phase='spinning';
+}
+
+function calcPayout(r){
+  let w=0; const isR=REDS.has(r);
+  Object.entries(bets).forEach(([k,a])=>{
+    if(k==='n'+r)w+=a*36;
+    else if(k==='red'&&isR)w+=a*2;
+    else if(k==='blk'&&r>0&&!isR)w+=a*2;
+    else if(k==='even'&&r>0&&r%2===0)w+=a*2;
+    else if(k==='odd'&&r%2===1)w+=a*2;
+    else if(k==='lo'&&r>=1&&r<=18)w+=a*2;
+    else if(k==='hi'&&r>=19&&r<=36)w+=a*2;
+    else if(k==='d1'&&r>=1&&r<=12)w+=a*3;
+    else if(k==='d2'&&r>=13&&r<=24)w+=a*3;
+    else if(k==='d3'&&r>=25&&r<=36)w+=a*3;
+    else if(k==='col1'&&C1.includes(r))w+=a*3;
+    else if(k==='col2'&&C2.includes(r))w+=a*3;
+    else if(k==='col3'&&C3.includes(r))w+=a*3;
+  }); return w;
+}
+
+function finish(){
+  phase='idle'; spinning=false;
+  document.getElementById('sb').disabled=false;
+  const betTotal=Object.values(bets).reduce((a,v)=>a+v,0);
+  const payout=calcPayout(resultNum);
+  balance+=payout;
+  const net=payout-betTotal;
+  const col=resultNum===0?'초록':REDS.has(resultNum)?'빨강':'검정';
+  showBanner(resultNum+' ('+col+')');
+  if(payout>0)setMsg('+₩'+net.toLocaleString()+' 획득!','#6ddd9d');
+  else setMsg('₩'+betTotal.toLocaleString()+' 잃었습니다.','#ff6060');
+  history.unshift(resultNum); if(history.length>18)history.pop();
+  document.getElementById('hist').innerHTML=history.map(h=>{
+    const c=h===0?'#1a6a30':REDS.has(h)?'#8a1515':'#222';
+    return '<div style="width:22px;height:22px;border-radius:50%;background:'+c+';display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;color:#fff;border:1px solid rgba(255,255,255,0.15);">'+h+'</div>';
+  }).join('');
+  bets={};
+  document.querySelectorAll('#ng button,#cg button,#og button').forEach(b=>{
+    b.style.background='#0d2a18'; b.style.borderColor='#1e4a2a';
+    const s=b.querySelector('span.bc'); if(s)s.remove();
+  });
+  updUI();
+  if(balance<=0){balance=10000;setTimeout(()=>setMsg('₩10,000 충전!','#f0c040'),300);updUI();}
+}
+
+// 카메라 드래그
+let isDrag=false, pm={x:0,y:0}, theta=0, phi=0.85;
+function setCam(){
+  const r=16;
+  camera.position.set(Math.sin(theta)*Math.cos(phi)*r, Math.sin(phi)*r, Math.cos(theta)*Math.cos(phi)*r);
+  camera.lookAt(0,0,0);
+}
+setCam();
+cw.addEventListener('mousedown',e=>{isDrag=true; pm={x:e.clientX,y:e.clientY};});
+window.addEventListener('mouseup',()=>{isDrag=false;});
+window.addEventListener('mousemove',e=>{
+  if(!isDrag)return;
+  theta-=(e.clientX-pm.x)*0.007;
+  phi=Math.max(0.25,Math.min(1.45,phi-(e.clientY-pm.y)*0.007));
+  pm={x:e.clientX,y:e.clientY}; setCam();
+});
+
+// 애니메이션 루프
+function animate(){
+  requestAnimationFrame(animate);
+  if(phase==='spinning'){
+    wAngle+=wVel; wg.rotation.y=wAngle;
+    bAngle+=bVel; bVel*=0.9982; wVel*=0.9995;
+    const spd=Math.abs(bVel);
+    const tR=spd>0.07?3.85:spd>0.035?3.5:spd>0.015?3.15:2.9;
+    bRadius+=(tR-bRadius)*0.035;
+    updateBall();
+    if(spd<0.007&&bRadius<3.05){phase='settling';settleTick=0;}
+  } else if(phase==='settling'){
+    settleTick++; wVel*=0.985; wAngle+=wVel; wg.rotation.y=wAngle;
+    const pw=wAngle+resultPocket;
+    let diff=pw-bAngle;
+    while(diff>Math.PI)diff-=Math.PI*2;
+    while(diff<-Math.PI)diff+=Math.PI*2;
+    bVel+=diff*0.003; bVel*=0.92; bAngle+=bVel;
+    bRadius+=(2.88-bRadius)*0.05; updateBall();
+    if(settleTick>120&&Math.abs(wVel)<0.0008)finish();
+  } else {
+    wAngle+=0.0025; wg.rotation.y=wAngle;
+  }
+  renderer.render(scene,camera);
+}
+
+doResize();
+updUI();
+animate();
+window.addEventListener('resize',doResize);
+});
+</script>

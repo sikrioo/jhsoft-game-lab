@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root {
+            --bg: #0d0907;
+            --wood: #1e1510;
+            --gold: #ffcc00;
+            --white: #e2e2e2;
+        }
+
+        body { background: var(--bg); color: #d1d5db; font-family: 'serif'; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+
+        .tavern-table { 
+            width: 400px; background: var(--wood); border: 8px solid #2d1b14; 
+            padding: 20px; box-shadow: 0 0 100px rgba(0,0,0,1);
+            position: relative; border-radius: 4px;
+        }
+
+        /* 텍스트 로그 영역 (MUD 감성) */
+        .mud-log {
+            background: rgba(0,0,0,0.5); border: 1px solid #3d2b1f;
+            height: 120px; padding: 15px; font-size: 0.9rem; line-height: 1.6;
+            overflow-y: auto; margin-bottom: 20px; color: #a8917b;
+        }
+
+        .status { display: flex; justify-content: space-between; font-size: 0.8rem; margin-bottom: 10px; color: var(--gold); }
+
+        /* 주사위 비주얼 */
+        .dice-area { display: flex; justify-content: space-around; margin: 30px 0; perspective: 1000px; }
+        .dice { 
+            width: 60px; height: 60px; background: var(--white); color: #000;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 2rem; font-weight: bold; border-radius: 8px;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2), 5px 5px 15px rgba(0,0,0,0.5);
+            transition: 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .rolling { animation: dice-roll 0.15s infinite; }
+        @keyframes dice-roll {
+            0% { transform: rotate(0deg) translate(2px, 2px); }
+            50% { transform: rotate(10deg) translate(-2px, -2px); }
+            100% { transform: rotate(-10deg) translate(2px, -2px); }
+        }
+
+        /* 컨트롤러 */
+        .controls { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 10px; }
+        .btn { 
+            background: #3d2b1f; border: 1px solid #5d4332; color: #d1d5db; 
+            padding: 10px; cursor: pointer; font-weight: bold;
+        }
+        .btn:hover:not(:disabled) { background: #5d4332; color: #fff; }
+        .btn:disabled { opacity: 0.3; }
+        .btn-main { background: #8b4513; color: var(--gold); border: 1px solid var(--gold); }
+
+        .win-glow { box-shadow: 0 0 20px var(--gold); border: 2px solid var(--gold); }
+    </style>
+</head>
+<body>
+
+<div class="tavern-table">
+    <div class="status">
+        <span>[ 선술집 주인 루카스 ]</span>
+        <span>소지금: <span id="my-gold">1000</span> G</span>
+    </div>
+
+    <div class="mud-log" id="log">
+        주인이 가죽 컵을 닦으며 당신을 맞이합니다.<br>
+        "한 판 하겠나? 주사위 두 개의 합이 높은 쪽이 가져가는 거지."
+    </div>
+
+    <div class="dice-area">
+        <div id="dice-1" class="dice">?</div>
+        <div id="dice-2" class="dice">?</div>
+    </div>
+
+    <div style="text-align: center; margin-bottom: 10px; font-size: 1.1rem; color: var(--gold);">
+        판돈: <span id="bet-val">100</span> G
+    </div>
+
+    <div class="controls">
+        <button class="btn" onclick="changeBet(-50)">-</button>
+        <button class="btn btn-main" id="roll-btn" onclick="playDice()">컵 흔들기</button>
+        <button class="btn" onclick="changeBet(50)">+</button>
+    </div>
+</div>
+
+<script>
+    let gold = 1000;
+    let bet = 100;
+
+    function addLog(msg, color = "#a8917b") {
+        const log = document.getElementById('log');
+        const newLine = document.createElement('div');
+        newLine.innerHTML = msg;
+        newLine.style.color = color;
+        log.appendChild(newLine);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function changeBet(v) {
+        if(bet + v < 50) return;
+        bet += v;
+        document.getElementById('bet-val').innerText = bet;
+    }
+
+    function playDice() {
+        if (gold < bet) {
+            addLog("주인: \"돈도 없는 주제에 누굴 속이려 들어?\"", "#ef4444");
+            return;
+        }
+
+        const btn = document.getElementById('roll-btn');
+        const d1 = document.getElementById('dice-1');
+        const d2 = document.getElementById('dice-2');
+        
+        gold -= bet;
+        updateUI();
+        btn.disabled = true;
+        d1.className = 'dice rolling';
+        d2.className = 'dice rolling';
+        d1.innerText = "?"; d2.innerText = "?";
+
+        addLog("달그락... 달그락... 당신은 가죽 컵을 힘껏 흔듭니다.");
+
+        setTimeout(() => {
+            d1.classList.remove('rolling');
+            d2.classList.remove('rolling');
+            
+            const p1 = Math.floor(Math.random() * 6) + 1;
+            const p2 = Math.floor(Math.random() * 6) + 1;
+            const pSum = p1 + p2;
+
+            const m1 = Math.floor(Math.random() * 6) + 1;
+            const m2 = Math.floor(Math.random() * 6) + 1;
+            const mSum = m1 + m2;
+
+            d1.innerText = p1;
+            d2.innerText = p2;
+
+            addLog(`당신의 결과: [${p1}, ${p2}] (합: ${pSum})`, "#fff");
+            
+            setTimeout(() => {
+                addLog(`주인의 결과: [${m1}, ${m2}] (합: ${mSum})`);
+                
+                if (pSum > mSum) {
+                    addLog(`주인: "제길, 운이 좋군! ${bet * 2}G 가져가게."`, "#ffcc00");
+                    gold += bet * 2;
+                    d1.classList.add('win-glow');
+                    d2.classList.add('win-glow');
+                } else if (pSum < mSum) {
+                    addLog("주인: \"이건 내 거군. 더 도전해보겠나?\"", "#ef4444");
+                } else {
+                    addLog("무승부입니다. 판돈이 반환됩니다.");
+                    gold += bet;
+                }
+                
+                updateUI();
+                btn.disabled = false;
+            }, 800);
+
+        }, 1500);
+    }
+
+    function updateUI() {
+        document.getElementById('my-gold').innerText = gold;
+    }
+</script>
+</body>
+</html>

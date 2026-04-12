@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>NEON SURVIVOR</title>
+  <link rel="stylesheet" href="./css/style.css" />
+</head>
+<body>
+  <div id="wrap"></div>
+
+  <div class="hud">
+    <div class="row">
+      <div class="pill"><b>Score</b><span id="score">0</span></div>
+      <div class="pill"><b>Wave</b><span id="wave">1</span></div>
+      <div class="pill"><b>HP</b><span id="hp">100</span></div>
+      <div class="pill"><b>Combo</b><span id="combo">x1</span></div>
+      <div class="pill hint">WASD/←→↑↓ 이동 · 마우스 조준 · 클릭/Space 발사 · Shift 대시</div>
+    </div>
+  </div>
+
+  <div class="centerOverlay" id="overlayRoot">
+    <div class="card" id="startCard">
+      <h1>NEON SURVIVOR</h1>
+      <p>네온 글로우 + 파티클이 빵빵한 생존 슈팅.</p>
+      <div class="btnRow">
+        <button class="btn" id="btnStart">Start</button>
+        <button class="btn secondary" id="btnPractice">Practice</button>
+      </div>
+    </div>
+
+    <div class="card" id="upgradeCard" style="display:none;">
+      <h1>Upgrade 선택</h1>
+      <p>웨이브 클리어! 아래에서 하나를 선택하세요.</p>
+      <div class="upgradeGrid" id="upgradeGrid"></div>
+    </div>
+
+    <div class="card" id="gameOverCard" style="display:none;">
+      <h1>Game Over</h1>
+      <p>최종 점수: <b id="finalScore">0</b></p>
+      <div class="btnRow">
+        <button class="btn" id="btnRetry">Retry</button>
+        <button class="btn secondary" id="btnBack">Back</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="warningOverlay" id="warningOverlay">
+    <div class="warningText">WARNING</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@7.4.2/dist/pixi.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/pixi-filters@5.2.1/dist/pixi-filters.js"></script>
+
+  <script src="./js/config.js"></script>
+  <script src="./js/state.js"></script>
+  <script src="./js/ui.js"></script>
+  <script src="./js/enemy.js"></script>
+  <script src="./js/combat.js"></script>
+  <script src="./js/boot.js"></script>
+</body>
+</html>

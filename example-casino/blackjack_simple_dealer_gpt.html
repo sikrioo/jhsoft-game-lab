@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tavern Blackjack (Dealer) - Simple + 1% Fee</title>
+<style>
+  :root{
+    --bg:#0f1115; --fg:#e6e6e6; --dim:#9aa0a6; --line:#2a2f3a;
+    --win:#4caf50; --lose:#e53935; --tie:#9aa0a6; --fx:#f5d66b;
+    --cardBg:#151a23;
+  }
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    padding:16px; display:flex; justify-content:center;
+  }
+  .wrap{ width:min(980px, 100%); }
+  .panel{
+    border:1px solid var(--line);
+    padding:14px; border-radius:10px;
+    background:rgba(255,255,255,.02);
+  }
+  .title{ color:var(--dim); margin-bottom:10px; }
+
+  .hud{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    margin-bottom:12px;
+  }
+  .pill{
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:8px 12px;
+    background:rgba(0,0,0,.25);
+    white-space:pre;
+  }
+  .pill b{ color:var(--fg); }
+  .warn{ color:#ffb74d; }
+
+  .table{
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    background:rgba(0,0,0,.25);
+  }
+  .row, .head{
+    display:grid;
+    grid-template-columns: 140px 1fr 90px 120px 140px;
+    align-items:center;
+  }
+  .head{
+    background:rgba(255,255,255,.03);
+    color:var(--dim);
+    border-bottom:1px solid var(--line);
+    font-size:12px;
+  }
+  .cell{
+    padding:10px 12px;
+    /* border-bottom:1px solid rgba(42,47,58,.6); */
+    white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .row:last-child .cell{ border-bottom:none; }
+
+  .win{ color:var(--win); font-weight:800; }
+  .lose{ color:var(--lose); font-weight:800; }
+  .tie{ color:var(--tie); font-weight:800; }
+
+  .controls{
+    display:flex; gap:10px; flex-wrap:wrap;
+    margin-top:12px; align-items:center;
+  }
+  input, button{
+    background:#12151c; color:var(--fg);
+    border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px;
+    font:inherit;
+  }
+  button{ cursor:pointer; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+  .hint{ margin-top:8px; color:var(--dim); font-size:12px; line-height:1.45; }
+  .kbd{ border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:var(--dim); }
+
+  /* --- classic “number flicker” for totals --- */
+  @keyframes flicker { 0%{opacity:.7;} 50%{opacity:1;} 100%{opacity:.8;} }
+  .rolling{ animation:flicker 160ms linear infinite; color:var(--fx); }
+
+  /* --- FX for win/lose --- */
+  @keyframes thump {
+    0% { transform:scale(1); filter:brightness(1); }
+    25%{ transform:scale(1.04); filter:brightness(1.25); }
+    55%{ transform:scale(0.99); filter:brightness(1.15); }
+    100%{ transform:scale(1); filter:brightness(1); }
+  }
+  @keyframes shake {
+    0%{ transform:translateX(0); }
+    20%{ transform:translateX(-2px); }
+    40%{ transform:translateX(2px); }
+    60%{ transform:translateX(-2px); }
+    80%{ transform:translateX(2px); }
+    100%{ transform:translateX(0); }
+  }
+  .fxWin{ animation: thump 420ms ease-out 1; }
+  .fxLose{ animation: shake 360ms ease-out 1; }
+
+  .badge{
+    display:inline-block;
+    margin-left:6px;
+    padding:1px 6px;
+    border:1px solid rgba(245,214,107,.55);
+    border-radius:999px;
+    color:var(--fx);
+    font-size:12px;
+    font-weight:600;
+  }
+
+  /* --- card UI + deal animation --- */
+  .cards{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    align-items:center;
+  }
+  .card{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    min-width:46px;
+    height:30px;
+    padding:0 10px;
+    border:1px solid rgba(42,47,58,.9);
+    border-radius:10px;
+    background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(0,0,0,.18));
+    box-shadow: 0 6px 16px rgba(0,0,0,.25);
+    color:var(--fg);
+    letter-spacing:.5px;
+    font-weight:650;
+  }
+  .card.dim{
+    color:rgba(230,230,230,.55);
+    border-color:rgba(42,47,58,.55);
+  }
+  @keyframes dealIn {
+    0%{ transform:translateY(-6px) scale(.98); opacity:0; filter:blur(.4px); }
+    60%{ transform:translateY(0) scale(1.01); opacity:1; filter:blur(0); }
+    100%{ transform:translateY(0) scale(1); opacity:1; }
+  }
+  .card.deal{ animation: dealIn 260ms ease-out 1; }
+
+  /* tiny “dealer thinking” pulse */
+  @keyframes think {
+    0%{ opacity:.55; }
+    50%{ opacity:1; }
+    100%{ opacity:.6; }
+  }
+  .thinking{ animation: think 520ms ease-in-out infinite; color:var(--fx); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <div class="title">주점 딜러: 블랙잭 (A안: Deal/Hit/Stand + 승리금 1% 수수료)</div>
+
+    <div class="hud">
+      <div class="pill">내 소지금: <b id="gold">300</b>G</div>
+      <div class="pill">현재 판돈: <b id="betView">25</b>G</div>
+      <div class="pill">테이블 한도: <b id="tableLimitView">200</b>G</div>
+      <div class="pill" id="msg">상태: 대기</div>
+    </div>
+
+    <div class="table" role="table">
+      <div class="head" role="row">
+        <div class="cell" role="columnheader">참가자</div>
+        <div class="cell" role="columnheader">패</div>
+        <div class="cell" role="columnheader">합계</div>
+        <div class="cell" role="columnheader">결과</div>
+        <div class="cell" role="columnheader">정산</div>
+      </div>
+
+      <div class="row" role="row">
+        <div class="cell">딜러</div>
+        <div class="cell" id="dCards"></div>
+        <div class="cell" id="dTotal">?</div>
+        <div class="cell" id="dResult">-</div>
+        <div class="cell" id="dPay">0G</div>
+      </div>
+
+      <div class="row" role="row">
+        <div class="cell">당신</div>
+        <div class="cell" id="pCards"></div>
+        <div class="cell" id="pTotal">0</div>
+        <div class="cell" id="pResult">-</div>
+        <div class="cell" id="pPay">0G</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label>판돈
+        <input id="bet" type="number" min="1" max="9999" value="25" style="width:110px" />
+      </label>
+      <button id="b10">+10</button>
+      <button id="b50">+50</button>
+
+      <span style="width:10px"></span>
+
+      <button id="btnDeal">Deal</button>
+      <button id="btnHit" disabled>Hit</button>
+      <button id="btnStand" disabled>Stand</button>
+      <button id="btnReset">초기화</button>
+    </div>
+
+    <div class="hint">
+      - 룰(간결): 딜러는 <b>17 이상</b>에서 멈춤. A는 1 또는 11.<br/>
+      - 베팅 가능 조건(A안): <b>bet ≤ 소지금</b> 그리고 (옵션) <b>bet ≤ 테이블 한도</b><br/>
+      - 정산: 승리 <b>+bet</b> (승리금에서 <b>1% 수수료</b> 차감), 패배 <b>-bet</b>, 무승부 0, 블랙잭(첫 2장 21) 승리 시 <b>+1.5×bet</b> (승리금에서 1% 수수료)<br/>
+      - 단축키: <span class="kbd">Enter</span> Deal, <span class="kbd">H</span> Hit, <span class="kbd">S</span> Stand, <span class="kbd">Esc</span> Reset
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---- config ----
+  const FEE_RATE = 0.01;       // ✅ 요청: 1%
+  const DEALER_STAND = 17;
+  const PAY_NORMAL = 1.0;      // profit = 1.0 * bet
+  const PAY_BLACKJACK = 1.5;   // profit = 1.5 * bet
+  const TABLE_LIMIT = 200;     // ✅ 옵션
+
+  // 딜러 연출 템포(원하면 수치만 조정)
+  const FX = {
+    dealGap: 230,         // 카드 한 장 딜 간격
+    peekPause: 520,       // 딜러가 홀카드 확인하는 텀(연출)
+    thinkMin: 380,        // 딜러가 "생각"하는 최소 텀
+    thinkMax: 820,        // 딜러가 "생각"하는 최대 텀
+    hitGap: 420,          // 딜러가 카드를 추가로 뽑는 간격
+    revealPause: 320,     // 홀카드 공개 전 텀
+    afterFinish: 220
+  };
+
+  // ---- state ----
+  let playerGold = 300;
+
+  let phase = "IDLE"; // IDLE | PLAYER_TURN | DEALER_TURN | SETTLED
+  let bet = 25;
+
+  let deck = [];
+  let pHand = [];
+  let dHand = [];
+  let dealerHoleHidden = true;
+
+  // 애니메이션용(새 카드 등장 표시)
+  let lastPLen = 0;
+  let lastDLen = 0;
+
+  // 진행 중 잠금(연타 방지)
+  let busy = false;
+
+  // ---- helpers ----
+  function setMsg(text, warn=false, thinking=false){
+    $("msg").textContent = text;
+    $("msg").className = warn ? "pill warn" : "pill";
+    if (thinking) $("msg").classList.add("thinking");
+  }
+
+  function setResult(el, text, kind){
+    el.textContent = text;
+    el.classList.remove("win","lose","tie");
+    if (kind) el.classList.add(kind);
+  }
+
+  function setPay(el, amount){
+    const sign = amount > 0 ? "+" : (amount < 0 ? "-" : "");
+    el.textContent = `${sign}${Math.abs(amount)}G`;
+  }
+
+  function applyFx(el, type){
+    el.classList.remove("fxWin","fxLose");
+    void el.offsetWidth;
+    el.classList.add(type === "win" ? "fxWin" : "fxLose");
+    setTimeout(() => el.classList.remove("fxWin","fxLose"), 520);
+  }
+
+  function feeCut(profit){
+    // 수수료는 “승리금(이익)”에만 적용
+    return Math.floor(profit * FEE_RATE);
+  }
+
+  function buildDeck(){
+    const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+    const d = [];
+    for (let s=0; s<4; s++){
+      for (const r of ranks) d.push(r);
+    }
+    for (let i=d.length-1; i>0; i--){
+      const j = Math.floor(Math.random()*(i+1));
+      [d[i], d[j]] = [d[j], d[i]];
+    }
+    return d;
+  }
+
+  function draw(){
+    if (deck.length === 0) deck = buildDeck();
+    return deck.pop();
+  }
+
+  function rankValue(r){
+    if (r === "A") return 11;
+    if (r === "K" || r === "Q" || r === "J") return 10;
+    return parseInt(r, 10);
+  }
+
+  function handTotal(hand){
+    let total = 0;
+    let aces = 0;
+    for (const r of hand){
+      total += rankValue(r);
+      if (r === "A") aces++;
+    }
+    while (total > 21 && aces > 0){
+      total -= 10;
+      aces--;
+    }
+    return total;
+  }
+
+  function isBlackjack(hand){
+    return hand.length === 2 && handTotal(hand) === 21;
+  }
+
+  function randBetween(a,b){
+    return Math.floor(a + Math.random()*(b-a+1));
+  }
+
+  function setControlsDisabled(disabled){
+    $("btnDeal").disabled = disabled || !($("btnDeal").dataset.allowed === "1");
+    $("btnHit").disabled = disabled || !(phase === "PLAYER_TURN");
+    $("btnStand").disabled = disabled || !(phase === "PLAYER_TURN");
+    $("btnReset").disabled = disabled ? true : false;
+    $("bet").disabled = disabled;
+    $("b10").disabled = disabled;
+    $("b50").disabled = disabled;
+  }
+
+  function renderCards(elId, list, holeHidden, isDealer){
+    const el = $(elId);
+    const frag = document.createDocumentFragment();
+
+    const wrap = document.createElement("div");
+    wrap.className = "cards";
+
+    // 새 카드 등장 애니메이션: 마지막으로 늘어난 길이를 기준으로 "마지막 카드"에 deal 클래스
+    const prevLen = isDealer ? lastDLen : lastPLen;
+    const grew = list.length > prevLen;
+
+    const showList = holeHidden ? ["??", ...list.slice(1)] : list.slice();
+
+    if (showList.length === 0){
+      const c1 = document.createElement("span");
+      c1.className = "card dim";
+      c1.textContent = "-";
+      const c2 = document.createElement("span");
+      c2.className = "card dim";
+      c2.textContent = "-";
+      wrap.appendChild(c1);
+      wrap.appendChild(c2);
+      el.innerHTML = "";
+      el.appendChild(wrap);
+      return;
+    }
+
+    showList.forEach((v, idx) => {
+      const s = document.createElement("span");
+      const isHole = (holeHidden && idx === 0);
+      s.className = "card" + (isHole ? " dim" : "");
+      s.textContent = v;
+
+      // 막 추가된 카드면 등장 애니메이션
+      if (grew && idx === showList.length - 1){
+        s.classList.add("deal");
+      }
+      wrap.appendChild(s);
+    });
+
+    el.innerHTML = "";
+    el.appendChild(wrap);
+  }
+
+  function render(){
+    // bet clamp (min 1)
+    bet = parseInt($("bet").value || "1", 10);
+    bet = Number.isFinite(bet) ? bet : 1;
+    bet = clamp(bet, 1, 9999);
+    $("bet").value = bet;
+
+    $("gold").textContent = playerGold;
+    $("betView").textContent = bet;
+    $("tableLimitView").textContent = TABLE_LIMIT;
+
+    // cards
+    renderCards("pCards", pHand, false, false);
+    renderCards("dCards", dHand, dealerHoleHidden, true);
+
+    $("pTotal").textContent = pHand.length ? String(handTotal(pHand)) : "0";
+    $("dTotal").textContent = dealerHoleHidden ? "?" : (dHand.length ? String(handTotal(dHand)) : "0");
+
+    // remember lengths for deal animation
+    lastPLen = pHand.length;
+    lastDLen = dHand.length;
+  }
+
+  function clearRoundUI(){
+    setResult($("pResult"), "-", null);
+    setResult($("dResult"), "-", null);
+    setPay($("pPay"), 0);
+    setPay($("dPay"), 0);
+  }
+
+  function resetAll(){
+    busy = false;
+    phase = "IDLE";
+    deck = buildDeck();
+    pHand = [];
+    dHand = [];
+    dealerHoleHidden = true;
+    clearRoundUI();
+    setMsg("상태: 대기");
+    refreshGate();
+    render();
+    setControlsDisabled(false);
+  }
+
+  async function rollingTotal(elId, finalValue){
+    const el = $(elId);
+    el.classList.add("rolling");
+    for (let i=0;i<10;i++){
+      el.textContent = String(Math.floor(Math.random()*22));
+      await sleep(35);
+    }
+    el.classList.remove("rolling");
+    el.textContent = String(finalValue);
+  }
+
+  function canBetNow(){
+    if (bet > playerGold) return { ok:false, msg:`상태: 소지금 부족 (필요 ${bet}G)` };
+    if (bet > TABLE_LIMIT) return { ok:false, msg:`상태: 테이블 한도 초과 (최대 ${TABLE_LIMIT}G)` };
+    return { ok:true, msg:"상태: 대기" };
+  }
+
+  function refreshGate(){
+    const gate = canBetNow();
+    if (phase === "IDLE" || phase === "SETTLED"){
+      setMsg(gate.msg, !gate.ok);
+      $("btnDeal").dataset.allowed = gate.ok ? "1" : "0";
+      $("btnDeal").disabled = !gate.ok || busy;
+    }
+  }
+
+  // ---- round flow ----
+  async function deal(){
+    refreshGate();
+    if ($("btnDeal").disabled || busy) return;
+
+    busy = true;
+    setControlsDisabled(true);
+
+    // take bet up front
+    playerGold -= bet;
+
+    phase = "PLAYER_TURN";
+    pHand = [];
+    dHand = [];
+    dealerHoleHidden = true;
+    lastPLen = 0;
+    lastDLen = 0;
+
+    clearRoundUI();
+    setMsg("상태: 카드를 나누는 중…", false, true);
+    render();
+
+    // 연출: 번갈아 딜(플레이어 1, 딜러 1, 플레이어 1, 딜러 1(홀))
+    await sleep(140);
+    pHand.push(draw()); render(); await sleep(FX.dealGap);
+    dHand.push(draw()); render(); await sleep(FX.dealGap);
+    pHand.push(draw()); render(); await sleep(FX.dealGap);
+    dHand.push(draw()); render(); await sleep(FX.dealGap);
+
+    // 플레이어 합계는 살짝 굴리고 보여주기
+    await rollingTotal("pTotal", handTotal(pHand));
+    setMsg("상태: 당신 차례 (Hit / Stand)");
+    render();
+
+    // naturals check (연출: 딜러가 홀카드 “확인하는 척”)
+    const pBJ = isBlackjack(pHand);
+    const dBJ = isBlackjack(dHand);
+    if (pBJ || dBJ){
+      setMsg("상태: 딜러가 홀카드를 확인한다…", false, true);
+      await sleep(FX.peekPause);
+      await settleNatural(pBJ, dBJ);
+      busy = false;
+      setControlsDisabled(false);
+      return;
+    }
+
+    busy = false;
+    setControlsDisabled(false);
+    refreshGate();
+  }
+
+  async function settleNatural(pBJ, dBJ){
+    dealerHoleHidden = false;
+    render();
+
+    await sleep(FX.revealPause);
+    await rollingTotal("dTotal", handTotal(dHand));
+
+    if (pBJ && dBJ){
+      playerGold += bet;
+      setResult($("pResult"), "무승부", "tie");
+      setResult($("dResult"), "무승부", "tie");
+      setPay($("pPay"), 0);
+      setPay($("dPay"), 0);
+      setMsg("상태: 무승부(블랙잭) - 판돈 반환");
+    } else if (pBJ){
+      const profitRaw = Math.floor(bet * PAY_BLACKJACK);
+      const fee = feeCut(profitRaw);
+      const profitNet = profitRaw - fee;
+
+      playerGold += bet + profitNet;
+      $("pResult").innerHTML = `승리 <span class="badge">BJ</span>`;
+      setResult($("dResult"), "패배", "lose");
+      setPay($("pPay"), +profitNet);
+      setPay($("dPay"), -profitNet);
+
+      applyFx($("pResult"), "win");
+      applyFx($("pCards"), "win");
+      setMsg("상태: 블랙잭! (승리금 1% 수수료)");
+      $("pResult").classList.add("win");
+    } else {
+      setResult($("pResult"), "패배", "lose");
+      $("dResult").innerHTML = `승리 <span class="badge">BJ</span>`;
+      $("dResult").classList.add("win");
+      setPay($("pPay"), -bet);
+      setPay($("dPay"), +bet);
+
+      applyFx($("pResult"), "lose");
+      applyFx($("pCards"), "lose");
+      setMsg("상태: 딜러 블랙잭");
+    }
+
+    phase = "SETTLED";
+    refreshGate();
+    render();
+  }
+
+  async function hit(){
+    if (phase !== "PLAYER_TURN" || busy) return;
+    busy = true;
+    setControlsDisabled(true);
+
+    pHand.push(draw());
+    render();
+
+    const total = handTotal(pHand);
+    await rollingTotal("pTotal", total);
+
+    if (total > 21){
+      // 연출: 딜러가 천천히 홀카드 공개하고 “승리” 표시
+      setMsg("상태: 버스트… 딜러가 웃는다.", false, true);
+      await sleep(260);
+      dealerHoleHidden = false;
+      render();
+      await rollingTotal("dTotal", handTotal(dHand));
+
+      setResult($("pResult"), "버스트", "lose");
+      setResult($("dResult"), "승리", "win");
+      setPay($("pPay"), -bet);
+      setPay($("dPay"), +bet);
+
+      applyFx($("pResult"), "lose");
+      applyFx($("pCards"), "lose");
+
+      setMsg("상태: 버스트 (패배)");
+      phase = "SETTLED";
+      refreshGate();
+      render();
+
+      busy = false;
+      setControlsDisabled(false);
+      return;
+    }
+
+    busy = false;
+    setControlsDisabled(false);
+    refreshGate();
+  }
+
+  async function stand(){
+    if (phase !== "PLAYER_TURN" || busy) return;
+
+    busy = true;
+    phase = "DEALER_TURN";
+    setControlsDisabled(true);
+
+    // 연출: 딜러가 홀카드 공개 + 잠깐 뜸들임
+    setMsg("상태: 딜러 차례…", false, true);
+    await sleep(220);
+
+    dealerHoleHidden = false;
+    render();
+
+    // 홀카드 공개 후 “합계 굴리기”
+    await sleep(FX.revealPause);
+    await rollingTotal("dTotal", handTotal(dHand));
+
+    // 딜러 행동: 17 미만이면 히트 (중간중간 생각하는 텀 + 메시지)
+    while (handTotal(dHand) < DEALER_STAND){
+      const think = randBetween(FX.thinkMin, FX.thinkMax);
+      setMsg(`상태: 딜러가 고민한다… (${think}ms)`, false, true);
+      await sleep(think);
+
+      setMsg("상태: 딜러 Hit.", false, true);
+      await sleep(FX.hitGap);
+
+      dHand.push(draw());
+      render();
+      await rollingTotal("dTotal", handTotal(dHand));
+    }
+
+    // 연출: 딜러가 멈추는 한 박자
+    setMsg("상태: 딜러 Stand.", false, true);
+    await sleep(FX.afterFinish);
+
+    settleCompare();
+
+    busy = false;
+    setControlsDisabled(false);
+    refreshGate();
+  }
+
+  function settleCompare(){
+    const pT = handTotal(pHand);
+    const dT = handTotal(dHand);
+
+    if (dT > 21){
+      settleWin(PAY_NORMAL, "승리 (딜러 버스트)");
+      return;
+    }
+    if (pT > dT){
+      settleWin(PAY_NORMAL, "승리");
+    } else if (pT < dT){
+      settleLose("패배");
+    } else {
+      settlePush("무승부");
+    }
+  }
+
+  function settleWin(mult, label){
+    const profitRaw = Math.floor(bet * mult);
+    const fee = feeCut(profitRaw);
+    const profitNet = profitRaw - fee;
+
+    playerGold += bet + profitNet;
+
+    setResult($("pResult"), label, "win");
+    setResult($("dResult"), "패배", "lose");
+    setPay($("pPay"), +profitNet);
+    setPay($("dPay"), -profitNet);
+
+    applyFx($("pResult"), "win");
+    applyFx($("pCards"), "win");
+    setMsg("상태: 승리 (승리금 1% 수수료)");
+
+    phase = "SETTLED";
+    refreshGate();
+    render();
+  }
+
+  function settleLose(label){
+    setResult($("pResult"), label, "lose");
+    setResult($("dResult"), "승리", "win");
+    setPay($("pPay"), -bet);
+    setPay($("dPay"), +bet);
+
+    applyFx($("pResult"), "lose");
+    applyFx($("pCards"), "lose");
+    setMsg("상태: 패배");
+
+    phase = "SETTLED";
+    refreshGate();
+    render();
+  }
+
+  function settlePush(label){
+    playerGold += bet;
+
+    setResult($("pResult"), label, "tie");
+    setResult($("dResult"), label, "tie");
+    setPay($("pPay"), 0);
+    setPay($("dPay"), 0);
+
+    setMsg("상태: 무승부 - 판돈 반환");
+    phase = "SETTLED";
+    refreshGate();
+    render();
+  }
+
+  // ---- controls ----
+  function bumpBet(delta){
+    const v = parseInt($("bet").value || "1", 10) || 1;
+    $("bet").value = Math.max(1, v + delta);
+    render();
+    refreshGate();
+  }
+
+  $("bet").addEventListener("input", () => { render(); refreshGate(); });
+  $("b10").addEventListener("click", () => bumpBet(10));
+  $("b50").addEventListener("click", () => bumpBet(50));
+
+  $("btnDeal").addEventListener("click", () => deal().catch(console.error));
+  $("btnHit").addEventListener("click", () => hit().catch(console.error));
+  $("btnStand").addEventListener("click", () => stand().catch(console.error));
+  $("btnReset").addEventListener("click", resetAll);
+
+  window.addEventListener("keydown", (e) => {
+    if (busy) return;
+    if (e.key === "Enter") { if (!$("btnDeal").disabled) deal().catch(console.error); }
+    if (e.key.toLowerCase() === "h") { if (!$("btnHit").disabled) hit().catch(console.error); }
+    if (e.key.toLowerCase() === "s") { if (!$("btnStand").disabled) stand().catch(console.error); }
+    if (e.key === "Escape") resetAll();
+  });
+
+  // init
+  $("tableLimitView").textContent = TABLE_LIMIT;
+  resetAll();
+</script>
+</body>
+</html>

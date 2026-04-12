@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root {
+            --bg: #05070a;
+            --tablet-bg: #1c1c1e;
+            --mana-blue: #00d4ff;
+            --mana-glow: 0 0 15px #00d4ff, 0 0 30px #0055ff;
+            --jackpot-gold: #ffcc00;
+            --jackpot-glow: 0 0 20px #ffcc00, 0 0 60px #ff9900, 0 0 120px #ff6600;
+            --slot-h: 110px;
+        }
+
+        body { background: var(--bg); color: #a0aec0; font-family: 'Cinzel', serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+
+        /* 석판 본체: 차가운 돌의 질감 */
+        .tablet { 
+            width: 420px; background: linear-gradient(145deg, #232325, #141415);
+            border: 4px solid #3a3a3c; border-radius: 15px; 
+            padding: 25px; box-shadow: 0 0 50px rgba(0,0,0,1), inset 0 0 20px rgba(0,212,255,0.05);
+            position: relative; transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 석판 상단 마력 수치 */
+        .mana-status { display: flex; justify-content: space-between; font-size: 0.9rem; letter-spacing: 2px; margin-bottom: 15px; color: var(--mana-blue); text-shadow: 0 0 5px #0055ff; }
+
+        /* 룬 문자가 떠오르는 영역 */
+        .rune-viewport { 
+            height: var(--slot-h); overflow: hidden; position: relative; 
+            background: rgba(0,0,0,0.8); border-radius: 5px;
+            border: 1px solid #2d3748; margin: 10px 0;
+            box-shadow: inset 0 0 30px rgba(0,0,0,1);
+        }
+
+        .rune-container { position: absolute; top: 0; left: 0; width: 100%; transform: translateY(0); }
+
+        /* 마법 공명 애니메이션 (물리 엔진) */
+        .resonating { animation: magic-stop 5.5s cubic-bezier(0.1, 0, 0.05, 1) forwards; }
+        @keyframes magic-stop {
+            0% { transform: translateY(0); filter: blur(0px); }
+            30% { filter: blur(4px); } /* 회전 중 마법 안개 효과 */
+            85% { transform: translateY(var(--target)); filter: blur(0px); }
+            93% { transform: translateY(calc(var(--target) - 35px)); }
+            97% { transform: translateY(calc(var(--target) + 10px)); }
+            100% { transform: translateY(var(--target)); }
+        }
+
+        .rune-item {
+            height: var(--slot-h); display: flex; flex-direction: column; justify-content: center; align-items: center;
+            font-size: 1.8rem; font-weight: bold; color: #333; transition: all 0.6s;
+            text-transform: uppercase;
+        }
+
+        /* 룬 활성화 효과 */
+        .active-jackpot { color: var(--jackpot-gold) !important; text-shadow: var(--jackpot-glow); animation: pulse 2s infinite; }
+        .active-mana { color: var(--mana-blue) !important; text-shadow: var(--mana-glow); }
+        .active-fail { color: #222 !important; filter: grayscale(1) blur(2px); }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.15); opacity: 0.8; }
+        }
+
+        /* 마력 주입 제어 */
+        .mana-control { 
+            display: flex; align-items: center; justify-content: space-between; 
+            background: rgba(0,0,0,0.4); border: 1px solid #2d3748; padding: 8px; margin-top: 20px;
+        }
+        .control-btn { background: #2d3748; color: var(--mana-blue); border: 1px solid var(--mana-blue); width: 40px; height: 40px; cursor: pointer; font-size: 1.2rem; transition: 0.3s; }
+        .control-btn:hover { background: var(--mana-blue); color: #000; box-shadow: 0 0 10px var(--mana-blue); }
+        
+        .inject-btn { 
+            width: 100%; background: #1a202c; color: var(--mana-blue); border: 1px solid var(--mana-blue); 
+            padding: 15px; margin-top: 15px; cursor: pointer; font-weight: bold; letter-spacing: 3px;
+            transition: 0.4s;
+        }
+        .inject-btn:hover:not(:disabled) { background: #004466; color: #fff; text-shadow: 0 0 10px #fff; }
+        .inject-btn:disabled { opacity: 0.2; cursor: default; }
+
+        #rune-msg {
+            height: 25px; margin-top: 15px; text-align: center; font-size: 0.9rem;
+            letter-spacing: 1px; transition: 0.5s; opacity: 0;
+        }
+    </style>
+</head>
+<body>
+
+<div class="tablet" id="tablet">
+    <div class="mana-status">
+        <span>[ 정령의 가루 ]</span>
+        <span><span id="user-gold">1000</span> mg</span>
+    </div>
+
+    <div class="rune-viewport">
+        <div id="rune-container" class="rune-container"></div>
+    </div>
+
+    <div class="mana-control">
+        <button class="control-btn" onclick="changeBet(-50)">-</button>
+        <div style="text-align:center">
+            <div style="font-size:0.6rem; opacity:0.6; margin-bottom:3px;">INJECT MANA</div>
+            <div style="font-weight:bold; color:var(--mana-blue);"><span id="bet-amount">100</span> mg</div>
+        </div>
+        <button class="control-btn" onclick="changeBet(50)">+</button>
+    </div>
+
+    <button id="inject-btn" class="inject-btn" onclick="activate()">석판에 마력 주입</button>
+    <div id="rune-msg"></div>
+</div>
+
+<script>
+    let gold = 1000;
+    let bet = 100;
+    let timer;
+
+    const runes = [
+        { name: "ᚠ JACKPOT", type: "jackpot", multi: 10, effect: "active-jackpot" },
+        { name: "ᚢ SUCCESS", type: "good", multi: 2, effect: "active-mana" },
+        { name: "ᚦ REWIND", type: "good", multi: 1, effect: "active-mana" },
+        { name: "🌿 HERB", type: "item", multi: 0, effect: "active-mana" },
+        { name: "💊 PILL", type: "item", multi: 0, effect: "active-mana" },
+        { name: "ᛀ VOID", type: "fail", multi: 0, effect: "active-fail" }
+    ];
+
+    const container = document.getElementById('rune-container');
+    const slotH = 110;
+    let pool = [];
+
+    function init() {
+        let html = "";
+        for(let i=0; i<15; i++) {
+            runes.forEach(r => { html += `<div class="rune-item">${r.name}</div>`; });
+        }
+        container.innerHTML = html;
+        pool = Array.from(container.querySelectorAll('.rune-item'));
+    }
+
+    function showMsg(txt, color = "#00d4ff") {
+        const msg = document.getElementById('rune-msg');
+        msg.innerText = txt;
+        msg.style.color = color;
+        msg.style.opacity = '1';
+        clearTimeout(timer);
+        timer = setTimeout(() => { msg.style.opacity = '0'; }, 3000);
+    }
+
+    function changeBet(v) {
+        if(bet + v < 50) return;
+        bet += v;
+        document.getElementById('bet-amount').innerText = bet;
+    }
+
+    function activate() {
+        if (gold < bet) {
+            showMsg("! 마력이 부족합니다", "#ff4444");
+            return;
+        }
+
+        const btn = document.getElementById('inject-btn');
+        const tablet = document.getElementById('tablet');
+        
+        gold -= bet;
+        updateUI();
+        
+        btn.disabled = true;
+        pool.forEach(el => el.className = 'rune-item');
+        tablet.style.boxShadow = "0 0 30px rgba(0,212,255,0.2)";
+        tablet.style.borderColor = "#3a3a3c";
+
+        const rand = Math.floor(Math.random() * runes.length);
+        const res = runes[rand];
+        const targetIdx = (runes.length * 12) + rand;
+        const offset = -(targetIdx * slotH);
+
+        container.style.setProperty('--target', `${offset}px`);
+        container.classList.remove('resonating');
+        void container.offsetWidth;
+        container.classList.add('resonating');
+
+        setTimeout(() => {
+            const winEl = pool[targetIdx];
+            winEl.classList.add(res.effect);
+            btn.disabled = false;
+            
+            if(res.multi > 0) {
+                const winAmt = bet * res.multi;
+                gold += winAmt;
+                showMsg(`+ ${winAmt}mg 마력 회수`, "#00d4ff");
+            } else if (res.type === 'item') {
+                showMsg(`[${res.name.split(' ')[1]}] 석판에서 형상화됨`, "#fff");
+            } else {
+                showMsg("...정적이 흐릅니다", "#666");
+            }
+            updateUI();
+
+            if(res.type === 'jackpot') {
+                tablet.style.borderColor = "var(--jackpot-gold)";
+                tablet.style.boxShadow = "0 0 70px rgba(255, 204, 0, 0.5)";
+            }
+        }, 5500);
+    }
+
+    function updateUI() {
+        document.getElementById('user-gold').innerText = gold;
+    }
+
+    init();
+</script>
+</body>
+</html>

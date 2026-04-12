@@ -1,0 +1,821 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dice Gravity Puzzle</title>
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #0f172a;
+      font-family: Arial, sans-serif;
+    }
+
+    #game {
+      width: 100vw;
+      height: 100vh;
+    }
+  </style>
+</head>
+<body>
+<div id="game"></div>
+
+<script>
+const COLS = 3;
+const ROWS = 9;
+const CELL_SIZE = 82;
+const CELL_GAP = 8;
+const ROLL_COST = 1;
+
+const RARITIES = [
+  { name: 'Common', color: 0x9ca3af, chance: 50 },
+  { name: 'Uncommon', color: 0x22c55e, chance: 25 },
+  { name: 'Rare', color: 0x3b82f6, chance: 15 },
+  { name: 'Epic', color: 0xa855f7, chance: 7 },
+  { name: 'Legendary', color: 0xf59e0b, chance: 3 }
+];
+
+function rollRarity() {
+  const rand = Phaser.Math.Between(1, 100);
+  let acc = 0;
+  for (const rarity of RARITIES) {
+    acc += rarity.chance;
+    if (rand <= acc) return rarity;
+  }
+  return RARITIES[0];
+}
+
+function rollDie() {
+  return {
+    value: Phaser.Math.Between(1, 6),
+    rarity: rollRarity()
+  };
+}
+
+function isVisibleCell(cell) {
+  return !!cell && Number.isInteger(cell.value) && !!cell.rarity;
+}
+
+function cloneCell(cell) {
+  if (!cell) return null;
+  return { value: cell.value, rarity: cell.rarity };
+}
+
+function isSameNumberRow(row) {
+  return Array.isArray(row)
+    && row.length === COLS
+    && row.every(isVisibleCell)
+    && row.every((cell) => cell.value === row[0].value);
+}
+
+function isStraightRow(row) {
+  if (!Array.isArray(row) || row.length !== COLS || !row.every(isVisibleCell)) {
+    return false;
+  }
+
+  const values = row.map((cell) => cell.value).sort((a, b) => a - b);
+  for (let i = 1; i < values.length; i += 1) {
+    if (values[i] !== values[i - 1] + 1) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function createGrid(rows, cols) {
+  const grid = [];
+  for (let row = 0; row < rows; row += 1) {
+    const line = [];
+    for (let col = 0; col < cols; col += 1) {
+      line.push(rollDie());
+    }
+    grid.push(line);
+  }
+  return grid;
+}
+
+function applyGravityToGrid(grid) {
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const nextGrid = Array.from({ length: rows }, () => Array(cols).fill(null));
+
+  for (let col = 0; col < cols; col += 1) {
+    const survivors = [];
+
+    for (let row = rows - 1; row >= 0; row -= 1) {
+      const cell = grid[row][col];
+      if (isVisibleCell(cell)) {
+        survivors.push(cloneCell(cell));
+      }
+    }
+
+    let writeRow = rows - 1;
+    for (const cell of survivors) {
+      nextGrid[writeRow][col] = cell;
+      writeRow -= 1;
+    }
+
+    while (writeRow >= 0) {
+      nextGrid[writeRow][col] = rollDie();
+      writeRow -= 1;
+    }
+  }
+
+  return nextGrid;
+}
+
+function findMatchedRows(grid) {
+  const matched = [];
+  for (let row = 0; row < grid.length; row += 1) {
+    const rowData = grid[row];
+    if (isSameNumberRow(rowData) || isStraightRow(rowData)) {
+      matched.push(row);
+    }
+  }
+  return matched;
+}
+
+function clearMatchedRows(grid, matchedRows) {
+  const matchedSet = new Set(matchedRows);
+  return grid.map((row, rowIndex) => (
+    matchedSet.has(rowIndex)
+      ? row.map(() => null)
+      : row.map((cell) => cloneCell(cell))
+  ));
+}
+
+function resolveMatches(grid) {
+  let currentGrid = grid.map((row) => row.map((cell) => cloneCell(cell)));
+  let totalClearedRows = 0;
+  let chainCount = 0;
+
+  while (true) {
+    const matchedRows = findMatchedRows(currentGrid);
+    if (!matchedRows.length) {
+      return {
+        grid: currentGrid,
+        clearedRows: totalClearedRows,
+        chainCount
+      };
+    }
+
+    totalClearedRows += matchedRows.length;
+    chainCount += 1;
+    const clearedGrid = clearMatchedRows(currentGrid, matchedRows);
+    currentGrid = applyGravityToGrid(clearedGrid);
+  }
+}
+
+class DiceCell {
+  constructor(scene, row, col, x, y, size, data, onClick) {
+    this.scene = scene;
+    this.row = row;
+    this.col = col;
+    this.baseX = x;
+    this.baseY = y;
+    this.size = size;
+    this.data = data;
+    this.onClick = onClick;
+    this.isBusy = false;
+
+    this.container = scene.add.container(x, y);
+
+    this.bg = scene.add.rectangle(0, 0, size, size, 0xffffff)
+      .setStrokeStyle(3, 0x000000)
+      .setInteractive({ useHandCursor: true });
+
+    this.border = scene.add.rectangle(0, 0, size + 6, size + 6)
+      .setStrokeStyle(4, data.rarity.color);
+
+    this.pips = [];
+    for (let i = 0; i < 7; i++) {
+      const pip = scene.add.circle(0, 0, 6, 0x111111);
+      pip.setVisible(false);
+      this.pips.push(pip);
+    }
+
+    this.container.add([this.border, this.bg, ...this.pips]);
+
+    this.update(data);
+
+    this.bg.on('pointerdown', () => {
+      if (this.isBusy) return;
+      this.onClick(this.row, this.col, this);
+    });
+  }
+
+  setGridPosition(row, col, x, y) {
+    this.row = row;
+    this.col = col;
+    this.baseX = x;
+    this.baseY = y;
+  }
+
+  update(data) {
+    this.data = data;
+    if (!data) {
+      this.container.setVisible(false);
+      return;
+    }
+
+    this.container.setVisible(true);
+    this.border.setStrokeStyle(4, data.rarity.color);
+    this.bg.setFillStyle(0xffffff);
+    this.drawPips(data.value);
+  }
+
+  drawPips(value) {
+    const offset = 18;
+    const positions = [
+      [0, 0],
+      [-offset, -offset], [offset, offset],
+      [-offset, offset], [offset, -offset],
+      [-offset, 0], [offset, 0]
+    ];
+
+    this.pips.forEach((p) => p.setVisible(false));
+
+    const map = {
+      1: [0],
+      2: [1, 2],
+      3: [1, 0, 2],
+      4: [1, 2, 3, 4],
+      5: [1, 2, 3, 4, 0],
+      6: [1, 2, 3, 4, 5, 6]
+    };
+
+    const indices = map[value] || [];
+    indices.forEach((i) => {
+      const pip = this.pips[i];
+      pip.setPosition(positions[i][0], positions[i][1]);
+      pip.setVisible(true);
+    });
+  }
+
+  playRollAnimation(finalData) {
+    this.isBusy = true;
+
+    this.scene.tweens.add({
+      targets: this.container,
+      angle: 360,
+      scaleX: 0.85,
+      scaleY: 0.85,
+      duration: 260,
+      yoyo: true
+    });
+
+    let count = 0;
+    const max = 6;
+
+    const timer = this.scene.time.addEvent({
+      delay: 50,
+      repeat: max - 1,
+      callback: () => {
+        count += 1;
+        const temp = count === max ? finalData : rollDie();
+        this.update(temp);
+      }
+    });
+
+    this.scene.time.delayedCall(350, () => {
+      timer.remove(false);
+      this.update(finalData);
+      this.container.angle = 0;
+      this.container.setScale(1);
+      this.isBusy = false;
+    });
+  }
+
+  animateRemoval() {
+    this.isBusy = true;
+    return new Promise((resolve) => {
+      this.scene.tweens.add({
+        targets: this.container,
+        alpha: 0,
+        scale: 0.5,
+        duration: 150,
+        onComplete: () => {
+          this.container.setVisible(false);
+          this.container.alpha = 1;
+          this.container.setScale(1);
+          this.isBusy = false;
+          resolve();
+        }
+      });
+    });
+  }
+
+  highlightMatch() {
+    this.isBusy = true;
+
+    const flashFill = this.scene.add.rectangle(0, 0, this.size + 10, this.size + 10, 0xffffff, 0.18);
+    const ringOuter = this.scene.add.rectangle(0, 0, this.size + 24, this.size + 24)
+      .setStrokeStyle(6, this.data.rarity.color, 0.95);
+    const ringInner = this.scene.add.rectangle(0, 0, this.size + 10, this.size + 10)
+      .setStrokeStyle(3, 0xffffff, 0.95);
+    const starBurst = this.scene.add.star(0, 0, 8, this.size * 0.18, this.size * 0.36, 0xffffff, 0.14);
+
+    this.container.addAt(starBurst, 0);
+    this.container.addAt(ringOuter, 0);
+    this.container.addAt(ringInner, 0);
+    this.container.addAt(flashFill, 0);
+
+    this.scene.tweens.add({
+      targets: this.container,
+      scaleX: 1.12,
+      scaleY: 1.12,
+      duration: 55,
+      yoyo: true,
+      repeat: 1,
+      ease: 'Quad.easeOut'
+    });
+
+    this.scene.tweens.add({
+      targets: this.container,
+      x: this.container.x + 4,
+      duration: 26,
+      yoyo: true,
+      repeat: 5,
+      ease: 'Sine.easeInOut',
+      onComplete: () => {
+        this.container.x = this.baseX;
+      }
+    });
+
+    return new Promise((resolve) => {
+      this.scene.tweens.add({
+        targets: ringOuter,
+        alpha: 0,
+        scaleX: 1.45,
+        scaleY: 1.45,
+        angle: 25,
+        duration: 240,
+        ease: 'Cubic.easeOut'
+      });
+
+      this.scene.tweens.add({
+        targets: ringInner,
+        alpha: 0,
+        scaleX: 1.25,
+        scaleY: 1.25,
+        duration: 200,
+        ease: 'Quad.easeOut'
+      });
+
+      this.scene.tweens.add({
+        targets: starBurst,
+        alpha: 0,
+        scaleX: 1.35,
+        scaleY: 1.35,
+        angle: 55,
+        duration: 220,
+        ease: 'Back.easeOut'
+      });
+
+      this.scene.tweens.add({
+        targets: flashFill,
+        alpha: 0,
+        duration: 160,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          flashFill.destroy();
+          ringOuter.destroy();
+          ringInner.destroy();
+          starBurst.destroy();
+          this.isBusy = false;
+          resolve();
+        }
+      });
+    });
+  }
+
+  animateTo(x, y, duration = 200) {
+    this.isBusy = true;
+    return new Promise((resolve) => {
+      this.scene.tweens.add({
+        targets: this.container,
+        x,
+        y,
+        duration,
+        ease: 'Bounce.easeOut',
+        onComplete: () => {
+          this.isBusy = false;
+          resolve();
+        }
+      });
+    });
+  }
+}
+
+class MainScene extends Phaser.Scene {
+  constructor() {
+    super('MainScene');
+    this.grid = [];
+    this.cells = [];
+    this.coins = 18;
+    this.score = 0;
+    this.isResolving = false;
+    this.hitStopOverlay = null;
+    this.boardFlash = null;
+  }
+
+  create() {
+    this.cameras.main.setBackgroundColor('#0f172a');
+    this.grid = createGrid(ROWS, COLS);
+
+    this.boardWidth = COLS * CELL_SIZE + (COLS - 1) * CELL_GAP;
+    this.boardHeight = ROWS * CELL_SIZE + (ROWS - 1) * CELL_GAP;
+    this.startX = this.scale.width / 2 - this.boardWidth / 2 + CELL_SIZE / 2;
+    this.startY = this.scale.height / 2 - this.boardHeight / 2 + CELL_SIZE / 2 + 14;
+
+    this.add.text(this.scale.width / 2, 34, '3 x 9 주사위 퍼즐', {
+      fontSize: '28px',
+      color: '#f8fafc',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    this.coinText = this.add.text(22, 22, '', { fontSize: '20px', color: '#ffffff' });
+    this.scoreText = this.add.text(22, 50, '', { fontSize: '20px', color: '#ffffff' });
+    this.infoText = this.add.text(22, 80, '주사위 1개 굴리기 비용: 1\n같은 숫자 3개 또는 연속 숫자 3개면 제거됨\n제거되면 위에 있던 주사위가 아래로 떨어짐', {
+      fontSize: '14px',
+      color: '#cbd5e1'
+    });
+
+    this.messageText = this.add.text(this.scale.width / 2, this.scale.height - 26, '', {
+      fontSize: '18px',
+      color: '#fde68a',
+      fontStyle: 'bold'
+    }).setOrigin(0.5);
+
+    this.hitStopOverlay = this.add.rectangle(
+      this.scale.width / 2,
+      this.scale.height / 2,
+      this.scale.width,
+      this.scale.height,
+      0xffffff,
+      0
+    ).setScrollFactor(0).setDepth(1000);
+
+    this.boardFlash = this.add.rectangle(
+      this.scale.width / 2,
+      this.startY + this.boardHeight / 2 - CELL_SIZE / 2,
+      this.boardWidth + 36,
+      this.boardHeight + 24,
+      0xffffff,
+      0
+    ).setStrokeStyle(0, 0xffffff, 0).setDepth(900);
+
+    this.createBoardCells();
+    this.updateHud();
+  }
+
+  createBoardCells() {
+    this.cells = [];
+    for (let row = 0; row < ROWS; row += 1) {
+      const line = [];
+      for (let col = 0; col < COLS; col += 1) {
+        const x = this.getCellX(col);
+        const y = this.getCellY(row);
+        const cell = new DiceCell(
+          this,
+          row,
+          col,
+          x,
+          y,
+          CELL_SIZE,
+          this.grid[row][col],
+          (clickedRow, clickedCol, clickedCell) => this.rollSingleDie(clickedRow, clickedCol, clickedCell)
+        );
+        line.push(cell);
+      }
+      this.cells.push(line);
+    }
+  }
+
+  getCellX(col) {
+    return this.startX + col * (CELL_SIZE + CELL_GAP);
+  }
+
+  getCellY(row) {
+    return this.startY + row * (CELL_SIZE + CELL_GAP);
+  }
+
+  updateHud() {
+    this.coinText.setText(`Coins: ${this.coins}`);
+    this.scoreText.setText(`Score: ${this.score}`);
+  }
+
+  showMessage(text) {
+    this.messageText.setText(text);
+    this.time.delayedCall(1100, () => {
+      if (this.messageText && this.messageText.active && this.messageText.text === text) {
+        this.messageText.setText('');
+      }
+    });
+  }
+
+  rollSingleDie(row, col, cell) {
+    if (this.isResolving) return;
+    if (this.coins < ROLL_COST) {
+      this.showMessage('코인이 부족하다');
+      return;
+    }
+
+    this.coins -= ROLL_COST;
+    this.updateHud();
+
+    const newData = rollDie();
+    this.grid[row][col] = cloneCell(newData);
+    cell.playRollAnimation(newData);
+
+    this.time.delayedCall(380, () => {
+      this.resolveBoard();
+    });
+  }
+
+  async resolveBoard() {
+    if (this.isResolving) return;
+    this.isResolving = true;
+
+    let chain = 0;
+
+    while (true) {
+      const matchedRows = findMatchedRows(this.grid);
+      if (!matchedRows.length) break;
+
+      chain += 1;
+      let gainedScore = 0;
+      for (const r of matchedRows) {
+        const rowData = this.grid[r];
+        if (isSameNumberRow(rowData)) {
+          gainedScore += 100 * chain;
+        } else if (isStraightRow(rowData)) {
+          gainedScore += 70 * chain;
+        }
+      }
+
+      this.score += gainedScore;
+      this.updateHud();
+      this.showMessage(`${matchedRows.map((row) => row + 1).join(', ')}행 제거! +${gainedScore}`);
+
+      await this.animateMatchedRowsRemoval(matchedRows);
+      this.grid = clearMatchedRows(this.grid, matchedRows);
+      await this.applyGravityWithAnimation();
+    }
+
+    this.isResolving = false;
+  }
+
+  async animateMatchedRowsRemoval(matchedRows) {
+    await this.playArcadeHitStop(matchedRows);
+
+    const highlightAnimations = [];
+    for (const row of matchedRows) {
+      for (let col = 0; col < COLS; col += 1) {
+        highlightAnimations.push(this.cells[row][col].highlightMatch());
+      }
+    }
+    await Promise.all(highlightAnimations);
+
+    const rowBands = matchedRows.map((row) => {
+      const band = this.add.rectangle(
+        this.scale.width / 2,
+        this.getCellY(row),
+        this.boardWidth + 34,
+        CELL_SIZE + 22,
+        0xffffff,
+        0.1
+      ).setStrokeStyle(5, 0xffffff, 0.95).setDepth(950);
+
+      const laser = this.add.rectangle(
+        this.scale.width / 2,
+        this.getCellY(row),
+        14,
+        CELL_SIZE + 28,
+        0xffffff,
+        0.85
+      ).setDepth(960);
+
+      return { band, laser };
+    });
+
+    await new Promise((resolve) => {
+      this.tweens.add({
+        targets: rowBands.map((item) => item.band),
+        alpha: 0,
+        scaleX: 1.08,
+        duration: 190,
+        ease: 'Quad.easeOut'
+      });
+
+      this.tweens.add({
+        targets: rowBands.map((item) => item.laser),
+        width: this.boardWidth + 48,
+        alpha: 0,
+        duration: 170,
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+          rowBands.forEach((item) => {
+            item.band.destroy();
+            item.laser.destroy();
+          });
+          resolve();
+        }
+      });
+    });
+
+    const removalAnimations = [];
+    for (const row of matchedRows) {
+      for (let col = 0; col < COLS; col += 1) {
+        removalAnimations.push(this.cells[row][col].animateRemoval());
+      }
+    }
+    await Promise.all(removalAnimations);
+  }
+
+  playArcadeHitStop(matchedRows) {
+    return new Promise((resolve) => {
+      const centerY = matchedRows.reduce((sum, row) => sum + this.getCellY(row), 0) / matchedRows.length;
+      const shockwave = this.add.rectangle(
+        this.scale.width / 2,
+        centerY,
+        this.boardWidth + 10,
+        CELL_SIZE + 10,
+        0xffffff,
+        0.16
+      ).setStrokeStyle(6, 0xffffff, 1).setDepth(980);
+
+      this.hitStopOverlay.setAlpha(0.15);
+      this.boardFlash.setAlpha(0.08);
+      this.boardFlash.setStrokeStyle(4, 0xffffff, 0.35);
+
+      this.tweens.add({
+        targets: this.cameras.main,
+        zoom: 1.025,
+        duration: 45,
+        yoyo: true,
+        ease: 'Quad.easeOut'
+      });
+
+      this.tweens.add({
+        targets: shockwave,
+        scaleX: 1.06,
+        scaleY: 1.25,
+        alpha: 0,
+        duration: 120,
+        ease: 'Cubic.easeOut',
+        onComplete: () => {
+          shockwave.destroy();
+        }
+      });
+
+      this.tweens.add({
+        targets: this.hitStopOverlay,
+        alpha: 0,
+        duration: 120,
+        ease: 'Quad.easeOut'
+      });
+
+      this.tweens.add({
+        targets: this.boardFlash,
+        alpha: 0,
+        duration: 140,
+        ease: 'Quad.easeOut',
+        onComplete: () => {
+          this.boardFlash.setStrokeStyle(0, 0xffffff, 0);
+          resolve();
+        }
+      });
+    });
+  }
+
+  async applyGravityWithAnimation() {
+    const nextGrid = applyGravityToGrid(this.grid);
+    const nextCells = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+    const animations = [];
+
+    for (let col = 0; col < COLS; col += 1) {
+      const availableCells = [];
+
+      for (let row = ROWS - 1; row >= 0; row -= 1) {
+        const cell = this.cells[row][col];
+        if (cell && isVisibleCell(cell.data)) {
+          availableCells.push(cell);
+        }
+      }
+
+      for (let targetRow = ROWS - 1; targetRow >= 0; targetRow -= 1) {
+        const targetData = nextGrid[targetRow][col];
+        let cellToUse = availableCells.shift();
+
+        if (!cellToUse) {
+          const spawnY = this.getCellY(-1) - Phaser.Math.Between(0, 40);
+          cellToUse = new DiceCell(
+            this,
+            -1,
+            col,
+            this.getCellX(col),
+            spawnY,
+            CELL_SIZE,
+            targetData,
+            (clickedRow, clickedCol, clickedCell) => this.rollSingleDie(clickedRow, clickedCol, clickedCell)
+          );
+        } else {
+          cellToUse.update(targetData);
+        }
+
+        cellToUse.setGridPosition(targetRow, col, this.getCellX(col), this.getCellY(targetRow));
+        nextCells[targetRow][col] = cellToUse;
+        animations.push(
+          cellToUse.animateTo(
+            this.getCellX(col),
+            this.getCellY(targetRow),
+            240 + (ROWS - targetRow) * 12
+          )
+        );
+      }
+    }
+
+    this.grid = nextGrid;
+    this.cells = nextCells;
+    await Promise.all(animations);
+  }
+}
+
+(function runTests() {
+  const rowA = [
+    { value: 4, rarity: RARITIES[0] },
+    { value: 4, rarity: RARITIES[1] },
+    { value: 4, rarity: RARITIES[2] }
+  ];
+  console.assert(isSameNumberRow(rowA) === true, 'same number row should match');
+
+  const rowB = [
+    { value: 4, rarity: RARITIES[0] },
+    { value: 5, rarity: RARITIES[1] },
+    { value: 4, rarity: RARITIES[2] }
+  ];
+  console.assert(isSameNumberRow(rowB) === false, 'mixed row should not match');
+
+  const straightA = [
+    { value: 1, rarity: RARITIES[0] },
+    { value: 2, rarity: RARITIES[4] },
+    { value: 3, rarity: RARITIES[1] }
+  ];
+  console.assert(isStraightRow(straightA) === true, '1,2,3 should be a straight regardless of color');
+
+  const straightB = [
+    { value: 4, rarity: RARITIES[3] },
+    { value: 6, rarity: RARITIES[3] },
+    { value: 5, rarity: RARITIES[3] }
+  ];
+  console.assert(isStraightRow(straightB) === true, '4,5,6 should be a straight even if unordered');
+
+  const straightC = [
+    { value: 1, rarity: RARITIES[0] },
+    { value: 3, rarity: RARITIES[1] },
+    { value: 4, rarity: RARITIES[2] }
+  ];
+  console.assert(isStraightRow(straightC) === false, '1,3,4 should not be a straight');
+
+  const gravityInput = [
+    [null, { value: 1, rarity: RARITIES[0] }, null],
+    [{ value: 2, rarity: RARITIES[0] }, null, { value: 3, rarity: RARITIES[0] }],
+    [null, { value: 4, rarity: RARITIES[0] }, null]
+  ];
+  const gravityOutput = applyGravityToGrid(gravityInput);
+  console.assert(isVisibleCell(gravityOutput[2][0]) === true, 'column 0 bottom should be filled');
+  console.assert(isVisibleCell(gravityOutput[2][1]) === true, 'column 1 bottom should be filled');
+  console.assert(isVisibleCell(gravityOutput[2][2]) === true, 'column 2 bottom should be filled');
+
+  const matchGrid = [
+    [{ value: 1, rarity: RARITIES[0] }, { value: 1, rarity: RARITIES[1] }, { value: 1, rarity: RARITIES[2] }],
+    [{ value: 2, rarity: RARITIES[0] }, { value: 3, rarity: RARITIES[1] }, { value: 4, rarity: RARITIES[2] }],
+    [{ value: 6, rarity: RARITIES[0] }, { value: 5, rarity: RARITIES[1] }, { value: 6, rarity: RARITIES[2] }]
+  ];
+  const matchedRows = findMatchedRows(matchGrid);
+  console.assert(matchedRows.length === 2 && matchedRows[0] === 0 && matchedRows[1] === 1, 'same-number and straight rows should match');
+
+  const resolved = resolveMatches(matchGrid);
+  console.assert(resolved.clearedRows >= 2, 'resolveMatches should clear initial matches');
+})();
+
+new Phaser.Game({
+  type: Phaser.AUTO,
+  parent: 'game',
+  width: window.innerWidth,
+  height: window.innerHeight,
+  scene: [MainScene],
+  scale: {
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.CENTER_BOTH
+  }
+});
+</script>
+</body>
+</html>

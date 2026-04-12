@@ -1,0 +1,1320 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cube Forge UI</title>
+  <link rel="stylesheet" href="main.css" />
+  <style>
+    body{
+      overflow:auto;
+      min-height:100vh;
+      background:
+        radial-gradient(900px 520px at 50% -8%, rgba(74,163,255,.08), transparent 58%),
+        radial-gradient(820px 500px at 85% 8%, rgba(255,154,60,.06), transparent 62%),
+        linear-gradient(180deg, rgba(7,10,16,.98), rgba(7,10,16,1));
+      padding:24px;
+    }
+    .cubePage{
+      max-width:1400px;
+      margin:0 auto;
+      display:grid;
+      grid-template-columns: 320px minmax(540px,1fr) 320px;
+      gap:16px;
+    }
+    .forgeCard{
+      border:1px solid var(--border);
+      border-radius:18px;
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+      box-shadow: 0 0 0 1px rgba(0,0,0,.25) inset, 0 18px 54px rgba(0,0,0,.42);
+      overflow:hidden;
+      min-height:0;
+    }
+    .forgeHd{
+      padding:14px 16px;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      background:linear-gradient(180deg, rgba(255,255,255,.04), transparent);
+    }
+    .forgeHd h2,
+    .forgeHd h3{
+      margin:0;
+      font-size:13px;
+      letter-spacing:.08em;
+      font-family:var(--mono);
+      color:#edf3ff;
+    }
+    .forgeSub{
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muted);
+    }
+    .inventoryPane,
+    .recipePane{
+      display:flex;
+      flex-direction:column;
+      min-height:720px;
+    }
+    .inventoryBody,
+    .recipeBody{
+      padding:14px;
+      overflow:auto;
+      display:grid;
+      gap:10px;
+      align-content:start;
+    }
+    .forgeCenter{
+      display:grid;
+      gap:16px;
+    }
+    .statusBar{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 2px;
+    }
+    .statusLeft,
+    .statusRight{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+    }
+    .forgeMain{
+      position:relative;
+      padding:20px;
+      min-height:720px;
+      display:grid;
+      grid-template-rows:auto auto minmax(280px, 1fr) auto auto;
+      gap:16px;
+      isolation:isolate;
+    }
+    .forgeMain::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(circle at 50% 26%, rgba(74,163,255,.08), transparent 30%),
+        radial-gradient(circle at 50% 55%, rgba(255,154,60,.06), transparent 24%);
+      pointer-events:none;
+      z-index:0;
+    }
+    .forgeMain > *{ position:relative; z-index:1; }
+    .forgeTitle{
+      text-align:center;
+      display:grid;
+      gap:7px;
+    }
+    .forgeTitle h1{
+      margin:0;
+      font-size:26px;
+      letter-spacing:.08em;
+      color:#f3f7ff;
+      text-transform:uppercase;
+    }
+    .forgeTitle p{
+      margin:0;
+      font-size:12px;
+      line-height:1.6;
+      color:#aebcd3;
+      max-width:720px;
+      justify-self:center;
+    }
+    .craftModeTabs{
+      display:flex;
+      gap:8px;
+      justify-content:center;
+      flex-wrap:wrap;
+    }
+    .modeBtn{
+      min-width:140px;
+      padding:10px 14px;
+      border-radius:999px;
+      font-family:var(--mono);
+      font-size:12px;
+      letter-spacing:.04em;
+    }
+    .modeBtn.active{
+      background:rgba(74,163,255,.16);
+      border-color:rgba(74,163,255,.38);
+      color:#edf3ff;
+      box-shadow:0 0 18px rgba(74,163,255,.12);
+    }
+    .cubeArena{
+      position:relative;
+      display:grid;
+      grid-template-columns: repeat(5, minmax(96px, 1fr));
+      grid-template-rows: 110px 150px 110px;
+      gap:12px;
+      align-items:center;
+      justify-items:center;
+      padding:18px 18px 28px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:22px;
+      background:
+        radial-gradient(circle at center, rgba(74,163,255,.08), transparent 30%),
+        linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.012));
+      overflow:hidden;
+    }
+    .cubeArena::before{
+      content:"";
+      position:absolute;
+      width:430px;
+      height:430px;
+      border-radius:50%;
+      border:1px solid rgba(122,164,255,.12);
+      box-shadow: 0 0 0 18px rgba(255,255,255,.01), 0 0 60px rgba(74,163,255,.06) inset;
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-50%);
+    }
+    .cubeArena::after{
+      content:"";
+      position:absolute;
+      inset:20px;
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.04);
+      pointer-events:none;
+    }
+    .cubeCenter{
+      grid-column:2 / span 3;
+      grid-row:2;
+      width:min(100%, 360px);
+      aspect-ratio:1;
+      position:relative;
+      display:grid;
+      place-items:center;
+      pointer-events:none;
+    }
+    .forgeCore{
+      position:relative;
+      width:260px;
+      height:260px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,.08);
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,154,60,.12), rgba(74,163,255,.08) 30%, rgba(7,10,16,.3) 56%, rgba(7,10,16,.02) 68%, transparent 70%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,.03), transparent 70%);
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,.35) inset,
+        0 0 30px rgba(74,163,255,.12),
+        0 0 60px rgba(255,154,60,.08);
+      overflow:hidden;
+    }
+    .forgeCore::before,
+    .forgeCore::after{
+      content:"";
+      position:absolute;
+      inset:16px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,.06);
+      animation: runeSpin 18s linear infinite;
+    }
+    .forgeCore::after{
+      inset:40px;
+      border-style:dashed;
+      border-color:rgba(255,212,106,.15);
+      animation-direction:reverse;
+      animation-duration:12s;
+    }
+    .forgeCoreGlyph{
+      position:absolute;
+      inset:0;
+      display:grid;
+      place-items:center;
+      font-size:66px;
+      color:#e9f1ff;
+      text-shadow:0 0 24px rgba(74,163,255,.25), 0 0 36px rgba(255,154,60,.16);
+      transform:translateY(-2px);
+    }
+    .forgePulse,
+    .forgeBurst,
+    .forgeFlash,
+    .forgeShards,
+    .forgeResultHalo{
+      position:absolute;
+      inset:50%;
+      transform:translate(-50%,-50%);
+      pointer-events:none;
+      opacity:0;
+    }
+    .forgePulse{
+      width:150px;
+      height:150px;
+      border-radius:50%;
+      border:1px solid rgba(124,184,255,.3);
+      box-shadow:0 0 30px rgba(74,163,255,.15);
+    }
+    .forgeBurst{
+      width:320px;
+      height:320px;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(255,255,255,.18) 0%, rgba(255,212,106,.08) 22%, rgba(74,163,255,.06) 42%, transparent 70%);
+      filter:blur(10px);
+    }
+    .forgeFlash{
+      width:220px;
+      height:220px;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(255,255,255,.95) 0%, rgba(255,244,208,.42) 22%, rgba(255,154,60,.12) 48%, transparent 72%);
+      filter:blur(16px);
+    }
+    .forgeResultHalo{
+      width:420px;
+      height:420px;
+      border-radius:50%;
+      background:radial-gradient(circle, rgba(255,154,60,.13) 0%, rgba(182,140,255,.10) 28%, rgba(74,163,255,.04) 48%, transparent 72%);
+      filter:blur(14px);
+    }
+    .forgeShards{
+      width:420px;
+      height:420px;
+      background:
+        conic-gradient(from 0deg, transparent 0 14deg, rgba(255,255,255,.18) 14deg 18deg, transparent 18deg 45deg, rgba(255,212,106,.16) 45deg 49deg, transparent 49deg 90deg, rgba(74,163,255,.18) 90deg 94deg, transparent 94deg 144deg, rgba(255,255,255,.14) 144deg 148deg, transparent 148deg 194deg, rgba(182,140,255,.14) 194deg 198deg, transparent 198deg 248deg, rgba(255,154,60,.16) 248deg 252deg, transparent 252deg 360deg);
+      mask: radial-gradient(circle, transparent 0 120px, #000 140px 190px, transparent 206px);
+      -webkit-mask: radial-gradient(circle, transparent 0 120px, #000 140px 190px, transparent 206px);
+    }
+    .slot{
+      width:100%;
+      max-width:110px;
+      aspect-ratio:1;
+      border:1px dashed rgba(255,255,255,.14);
+      border-radius:18px;
+      background:linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.008));
+      display:grid;
+      place-items:center;
+      position:relative;
+      transition:transform .25s ease, border-color .25s ease, box-shadow .25s ease, background .25s ease;
+      cursor:pointer;
+      user-select:none;
+    }
+    .slot:hover{
+      transform:translateY(-2px);
+      border-color:rgba(142,188,255,.24);
+      box-shadow:0 0 18px rgba(74,163,255,.08);
+    }
+    .slot.filled{
+      border-style:solid;
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+    }
+    .slot.highlight{
+      border-color:rgba(255,212,106,.45);
+      box-shadow:0 0 20px rgba(255,212,106,.10), 0 0 0 1px rgba(255,255,255,.03) inset;
+    }
+    .slot.anim-in{
+      animation: slotLift .48s ease;
+    }
+    .slot.anim-out{
+      animation: slotAbsorb .8s cubic-bezier(.16,.84,.2,1) forwards;
+    }
+    .slotLabel{
+      position:absolute;
+      left:8px;
+      top:8px;
+      font:700 10px var(--mono);
+      color:#8596b4;
+      letter-spacing:.05em;
+    }
+    .slotEmpty{
+      display:grid;
+      gap:6px;
+      justify-items:center;
+      text-align:center;
+      color:#6f82a2;
+      font-size:11px;
+      line-height:1.45;
+      padding:8px;
+    }
+    .slotEmpty i{
+      font-style:normal;
+      font-size:22px;
+      opacity:.8;
+    }
+    .slotItem{
+      width:100%;
+      height:100%;
+      padding:14px 10px 10px;
+      display:grid;
+      align-content:center;
+      justify-items:center;
+      gap:5px;
+      text-align:center;
+    }
+    .slotItemIcon{ font-size:26px; }
+    .slotItemName{ font-size:12px; font-weight:700; line-height:1.3; }
+    .slotItemMeta{ font-size:10px; color:#93a4bf; font-family:var(--mono); }
+    .orbitalTag{
+      position:absolute;
+      bottom:8px;
+      padding:2px 8px;
+      border-radius:999px;
+      font-size:10px;
+      font-family:var(--mono);
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(0,0,0,.24);
+      color:#dfe7f3;
+    }
+    .cubeControls{
+      display:flex;
+      flex-wrap:wrap;
+      gap:10px;
+      justify-content:center;
+      align-items:center;
+    }
+    .actionBtn{
+      min-width:150px;
+      padding:12px 16px;
+      border-radius:14px;
+      font:700 12px var(--mono);
+      letter-spacing:.04em;
+    }
+    .actionBtn.primary{
+      color:#fff0cc;
+      border-color:rgba(255,212,106,.34);
+      background:linear-gradient(180deg, rgba(255,212,106,.10), rgba(255,154,60,.08));
+      box-shadow:0 0 20px rgba(255,154,60,.08);
+    }
+    .actionBtn.primary:disabled{
+      color:#808da3;
+      border-color:rgba(255,255,255,.08);
+      background:rgba(255,255,255,.03);
+      box-shadow:none;
+      cursor:not-allowed;
+    }
+    .hintText{
+      text-align:center;
+      font-size:11px;
+      color:#98a7bf;
+      line-height:1.6;
+      min-height:36px;
+    }
+    .resultPanel{
+      display:grid;
+      grid-template-columns: 1.2fr .8fr;
+      gap:14px;
+      align-items:stretch;
+    }
+    .resultCard,
+    .formulaCard{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:16px;
+      padding:14px;
+      background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.012));
+    }
+    .resultCard{
+      min-height:160px;
+      position:relative;
+      overflow:hidden;
+    }
+    .resultCard::before{
+      content:"";
+      position:absolute;
+      inset:-20% 25% auto;
+      height:120px;
+      background:radial-gradient(circle, rgba(255,255,255,.10), transparent 72%);
+      filter:blur(14px);
+      pointer-events:none;
+    }
+    .resultHead,
+    .formulaHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      margin-bottom:10px;
+      font-family:var(--mono);
+      font-size:11px;
+      color:#a7b6cb;
+    }
+    .resultContent{
+      display:grid;
+      gap:10px;
+      align-content:start;
+    }
+    .resultState{
+      font-size:11px;
+      color:#93a5bf;
+      line-height:1.6;
+      min-height:16px;
+    }
+    .resultItem{
+      display:none;
+      grid-template-columns:72px 1fr auto;
+      gap:12px;
+      align-items:center;
+      padding:12px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.025);
+      transform:translateY(8px);
+      opacity:0;
+    }
+    .resultItem.visible{
+      display:grid;
+      animation: resultReveal .7s cubic-bezier(.16,.84,.2,1) forwards;
+    }
+    .resultIcon{
+      width:72px;
+      height:72px;
+      border-radius:16px;
+      display:grid;
+      place-items:center;
+      font-size:34px;
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+      border:1px solid rgba(255,255,255,.08);
+      box-shadow:0 0 0 1px rgba(0,0,0,.2) inset;
+    }
+    .resultName{ font-size:17px; font-weight:800; }
+    .resultMeta{ margin-top:4px; font-size:11px; color:#9cadc6; line-height:1.5; }
+    .resultTag{
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      min-width:78px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      font:700 11px var(--mono);
+      background:rgba(255,255,255,.03);
+    }
+    .formulaList{ display:grid; gap:10px; }
+    .formulaRow{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      padding:10px 11px;
+      background:rgba(255,255,255,.02);
+      display:grid;
+      gap:5px;
+      cursor:pointer;
+      transition:border-color .2s ease, background .2s ease, transform .2s ease;
+    }
+    .formulaRow:hover{
+      border-color:rgba(142,188,255,.28);
+      background:rgba(255,255,255,.03);
+      transform:translateY(-1px);
+    }
+    .formulaRow.active{
+      border-color:rgba(255,212,106,.34);
+      box-shadow:0 0 0 1px rgba(255,212,106,.08) inset;
+    }
+    .formulaName{ font-size:12px; font-weight:700; color:#eef3ff; }
+    .formulaDesc{ font-size:11px; color:#99aac3; line-height:1.5; }
+    .formulaChances{ display:flex; flex-wrap:wrap; gap:6px; margin-top:2px; }
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:4px 8px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.09);
+      background:rgba(255,255,255,.025);
+      font:700 10px var(--mono);
+      color:#c5d2e6;
+    }
+    .inventoryToolbar{
+      padding:12px 14px 0;
+      display:grid;
+      gap:10px;
+    }
+    .searchInput,
+    .selectLike{
+      width:100%;
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:10px 12px;
+      background:rgba(0,0,0,.28);
+      color:var(--txt);
+      font-family:var(--mono);
+      font-size:12px;
+      outline:none;
+      box-shadow:0 0 0 1px rgba(0,0,0,.2) inset;
+    }
+    .filterRow{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .itemCard{
+      border:1px solid rgba(255,255,255,.09);
+      border-radius:14px;
+      padding:12px;
+      background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.014));
+      display:grid;
+      grid-template-columns:54px 1fr auto;
+      gap:10px;
+      align-items:center;
+      cursor:pointer;
+      transition:transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+    }
+    .itemCard:hover{
+      transform:translateY(-1px);
+      border-color:rgba(142,188,255,.24);
+      box-shadow:0 0 18px rgba(74,163,255,.06);
+    }
+    .itemCard.selected{
+      border-color:rgba(255,212,106,.34);
+      box-shadow:0 0 0 1px rgba(255,212,106,.08) inset, 0 0 22px rgba(255,212,106,.05);
+    }
+    .itemCard.disabled{
+      opacity:.48;
+      cursor:not-allowed;
+      filter:grayscale(.2);
+    }
+    .itemIcon{
+      width:54px;
+      height:54px;
+      border-radius:14px;
+      display:grid;
+      place-items:center;
+      font-size:28px;
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+      border:1px solid rgba(255,255,255,.07);
+    }
+    .itemName{ font-size:13px; font-weight:800; line-height:1.35; }
+    .itemMeta{ font-size:11px; color:#96a8c2; line-height:1.55; margin-top:4px; }
+    .itemQty{
+      font:800 11px var(--mono);
+      color:#dce8fb;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.08);
+      background:rgba(255,255,255,.025);
+    }
+    .historyList{ display:grid; gap:10px; }
+    .historyRow{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      padding:10px 11px;
+      background:rgba(255,255,255,.02);
+      display:grid;
+      gap:5px;
+    }
+    .historyTop{
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      font-family:var(--mono);
+      font-size:11px;
+      color:#a9b8cd;
+    }
+    .historyTitle{ font-size:12px; color:#e8effc; }
+    .historyMeta{ font-size:11px; color:#95a7c1; line-height:1.55; }
+    .emptyNotice{
+      padding:18px;
+      border:1px dashed rgba(255,255,255,.12);
+      border-radius:14px;
+      text-align:center;
+      font-size:11px;
+      line-height:1.7;
+      color:#8fa2c6;
+    }
+    .successGlow .forgePulse{ animation: pulseRing .9s ease-out 1; }
+    .successGlow .forgeBurst{ animation: burstGlow 1.1s ease-out 1; }
+    .successGlow .forgeFlash{ animation: flashPop .55s ease-out 1; }
+    .successGlow .forgeShards{ animation: shardSpin 1.1s cubic-bezier(.16,.84,.2,1) 1; }
+    .successGlow .forgeResultHalo{ animation: resultHalo .95s ease-out 1; }
+    .forgeMain.legendaryBurst .forgeCore{
+      box-shadow:
+        0 0 0 1px rgba(0,0,0,.35) inset,
+        0 0 44px rgba(255,154,60,.24),
+        0 0 90px rgba(182,140,255,.14);
+    }
+    .forgeMain.legendaryBurst .forgeShards{ filter:brightness(1.28); }
+    .forgeMain.legendaryBurst .forgeResultHalo{ filter:blur(10px) saturate(1.15); }
+    .resultTag.r-common{ border-color:rgba(214,214,214,.18); }
+    .resultTag.r-magic{ border-color:rgba(74,163,255,.28); }
+    .resultTag.r-rare{ border-color:rgba(255,216,74,.28); }
+    .resultTag.r-epic{ border-color:rgba(182,140,255,.28); }
+    .resultTag.r-legendary{ border-color:rgba(255,154,60,.32); }
+
+    @keyframes runeSpin{ from{ transform:rotate(0deg);} to{ transform:rotate(360deg);} }
+    @keyframes slotLift{ 0%{ transform:scale(.92); opacity:.35;} 100%{ transform:scale(1); opacity:1;} }
+    @keyframes slotAbsorb{ 0%{ transform:scale(1); opacity:1; filter:brightness(1);} 40%{ transform:scale(.88) translateY(-8px); opacity:.95; } 100%{ transform:scale(.18) translateY(0); opacity:0; filter:brightness(1.5);} }
+    @keyframes pulseRing{ 0%{ opacity:.1; transform:translate(-50%,-50%) scale(.5);} 35%{ opacity:.6;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(2.4);} }
+    @keyframes burstGlow{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.6);} 30%{ opacity:.78;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(1.45);} }
+    @keyframes flashPop{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.6);} 30%{ opacity:.95;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(1.4);} }
+    @keyframes shardSpin{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.5) rotate(0deg);} 25%{ opacity:.9;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(1.18) rotate(135deg);} }
+    @keyframes resultHalo{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.7);} 35%{ opacity:.88;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(1.16);} }
+    @keyframes resultReveal{ from{ opacity:0; transform:translateY(10px) scale(.98);} to{ opacity:1; transform:translateY(0) scale(1);} }
+
+    @media (max-width: 1220px){
+      .cubePage{ grid-template-columns: 1fr; }
+      .inventoryPane, .recipePane{ min-height:auto; }
+      .forgeMain{ min-height:auto; }
+    }
+    @media (max-width: 760px){
+      body{ padding:14px; }
+      .cubeArena{ grid-template-columns: repeat(3, minmax(92px, 1fr)); grid-template-rows: repeat(5, 102px); }
+      .cubeCenter{ grid-column:1 / span 3; grid-row:2 / span 3; }
+      .resultPanel{ grid-template-columns:1fr; }
+      .filterRow{ grid-template-columns:1fr; }
+      .forgeCore{ width:220px; height:220px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cubePage">
+    <aside class="forgeCard inventoryPane">
+      <div class="forgeHd">
+        <div>
+          <h2>재료 보관함</h2>
+          <div class="forgeSub">선택한 아이템을 큐브 슬롯에 채워 넣습니다</div>
+        </div>
+        <span class="pill">보유 골드 128,400</span>
+      </div>
+      <div class="inventoryToolbar">
+        <input id="searchInput" class="searchInput" type="text" placeholder="아이템 이름 검색" />
+        <div class="filterRow">
+          <select id="typeFilter" class="selectLike">
+            <option value="ALL">전체 타입</option>
+            <option value="material">재료</option>
+            <option value="weapon">무기</option>
+            <option value="armor">방어구</option>
+            <option value="catalyst">촉매</option>
+          </select>
+          <select id="rarityFilter" class="selectLike">
+            <option value="ALL">전체 등급</option>
+            <option value="common">일반</option>
+            <option value="magic">마법</option>
+            <option value="rare">희귀</option>
+            <option value="epic">영웅</option>
+          </select>
+        </div>
+      </div>
+      <div id="inventoryList" class="inventoryBody"></div>
+    </aside>
+
+    <main class="forgeCenter">
+      <div class="statusBar">
+        <div class="statusLeft">
+          <span class="pill">큐브 슬롯 <b id="slotCount">0</b> / 6</span>
+          <span class="pill">선택 조합 <b id="activeFormula">미선택</b></span>
+        </div>
+        <div class="statusRight">
+          <span class="pill">실패 시 일부 재료 소멸</span>
+          <span class="pill">상위 완제품 등장 가능</span>
+        </div>
+      </div>
+
+      <section class="forgeCard forgeMain" id="forgeMain">
+        <div class="forgeTitle">
+          <h1>Cube Forge</h1>
+          <p>재료·장비·촉매를 큐브에 봉인한 뒤 조합을 발동합니다. 조합식에 가까울수록 상위 등급, 완제품, 특수 무기/방어구가 나올 확률이 상승합니다.</p>
+        </div>
+
+        <div class="craftModeTabs" id="craftModeTabs">
+          <button class="modeBtn active" data-mode="upgrade">승급 큐빙</button>
+          <button class="modeBtn" data-mode="weapon">무기 제작</button>
+          <button class="modeBtn" data-mode="armor">방어구 제작</button>
+        </div>
+
+        <div class="cubeArena" id="cubeArena">
+          <div class="slot" data-slot="0"></div>
+          <div class="slot" data-slot="1"></div>
+          <div class="slot" data-slot="2"></div>
+          <div class="slot" data-slot="3"></div>
+          <div class="slot" data-slot="4"></div>
+          <div class="slot" data-slot="5"></div>
+
+          <div class="cubeCenter">
+            <div class="forgeResultHalo"></div>
+            <div class="forgeBurst"></div>
+            <div class="forgeFlash"></div>
+            <div class="forgeShards"></div>
+            <div class="forgePulse"></div>
+            <div class="forgeCore">
+              <div class="forgeCoreGlyph">✦</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="cubeControls">
+          <button id="autoFillBtn" class="actionBtn">추천 재료 자동 배치</button>
+          <button id="clearBtn" class="actionBtn">큐브 비우기</button>
+          <button id="craftBtn" class="actionBtn primary" disabled>큐빙 시작</button>
+        </div>
+
+        <div id="hintText" class="hintText">좌측 재료를 클릭해 슬롯에 채워 넣으세요. 같은 조합식에 가까울수록 성공 확률이 높아집니다.</div>
+
+        <div class="resultPanel">
+          <div class="resultCard">
+            <div class="resultHead">
+              <span>연성 결과</span>
+              <span id="chanceLabel">성공 확률 미리보기 없음</span>
+            </div>
+            <div class="resultContent">
+              <div id="resultState" class="resultState">결과가 아직 없습니다.</div>
+              <div id="resultItem" class="resultItem">
+                <div id="resultIcon" class="resultIcon">🧪</div>
+                <div>
+                  <div id="resultName" class="resultName r-common">미지의 결과</div>
+                  <div id="resultMeta" class="resultMeta"></div>
+                </div>
+                <div id="resultTag" class="resultTag r-common">일반</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="formulaCard">
+            <div class="formulaHead">
+              <span>예상 조합</span>
+              <span id="formulaModeLabel">승급</span>
+            </div>
+            <div id="formulaList" class="formulaList"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="forgeCard recipePane">
+      <div class="forgeHd">
+        <div>
+          <h3>최근 연성 기록</h3>
+          <div class="forgeSub">연출과 결과 추이를 빠르게 확인</div>
+        </div>
+        <span class="pill">큐브 코어 안정도 84%</span>
+      </div>
+      <div class="recipeBody">
+        <div id="historyList" class="historyList"></div>
+        <div class="emptyNotice">
+          이 UI는 샘플 프로토타입입니다.<br />
+          실제 게임 연결 시에는 서버에서 재료 소모, 시드, 결과 로그를 받아 붙이면 됩니다.
+        </div>
+      </div>
+    </aside>
+  </div>
+
+  <script>
+    const INVENTORY = [
+      { id:'mat-ore-1', name:'균열 철광석', icon:'⛏️', rarity:'common', type:'material', tags:['ore','metal'], desc:'무기 승급의 기본 재료.', qty:14 },
+      { id:'mat-ore-2', name:'푸른 결정 파편', icon:'💠', rarity:'magic', type:'material', tags:['crystal','magic'], desc:'마력 각인과 승급에 사용.', qty:8 },
+      { id:'mat-ore-3', name:'심연 강철 편린', icon:'🜂', rarity:'rare', type:'material', tags:['ore','metal','rare'], desc:'상위 장비 제작의 핵심 금속.', qty:5 },
+      { id:'mat-ore-4', name:'별빛 가루', icon:'✨', rarity:'magic', type:'material', tags:['dust','magic'], desc:'큐브 반응을 안정화시키는 미세 분말.', qty:12 },
+      { id:'cat-1', name:'연성 촉매', icon:'🧿', rarity:'common', type:'catalyst', tags:['catalyst'], desc:'기본 큐빙 안정성 +.', qty:9 },
+      { id:'cat-2', name:'황혼의 심장', icon:'🫀', rarity:'rare', type:'catalyst', tags:['catalyst','boss'], desc:'완제품 제작식에 잘 반응하는 촉매.', qty:2 },
+      { id:'cat-3', name:'용의 숨결 병', icon:'🫙', rarity:'epic', type:'catalyst', tags:['catalyst','dragon'], desc:'전설급 결과에 개입하는 강력한 촉매.', qty:1 },
+      { id:'wep-1', name:'낡은 장검', icon:'🗡️', rarity:'common', type:'weapon', tags:['sword','weapon'], desc:'기본 무기 베이스.', qty:3 },
+      { id:'wep-2', name:'마력 주입 단검', icon:'🔪', rarity:'magic', type:'weapon', tags:['dagger','weapon','magic'], desc:'빠른 무기 제작식의 재료.', qty:2 },
+      { id:'wep-3', name:'흑요 도끼 머리', icon:'🪓', rarity:'rare', type:'weapon', tags:['axe','weapon'], desc:'도끼 완제품 제작 베이스.', qty:1 },
+      { id:'arm-1', name:'균열 흉갑', icon:'🛡️', rarity:'common', type:'armor', tags:['armor','plate'], desc:'방어구 승급에 쓰이는 기본 장비.', qty:2 },
+      { id:'arm-2', name:'수호의 견갑', icon:'🥋', rarity:'magic', type:'armor', tags:['armor','guard'], desc:'가벼운 방어구의 제작 베이스.', qty:2 },
+      { id:'arm-3', name:'서리 비늘 조각', icon:'🐉', rarity:'rare', type:'armor', tags:['armor','dragon'], desc:'냉기 방어구 완제품의 핵심.', qty:2 },
+      { id:'mat-5', name:'검은 용 비늘', icon:'🐲', rarity:'epic', type:'material', tags:['dragon','scale'], desc:'드물게 전설 조합을 여는 특수 재료.', qty:1 },
+      { id:'mat-6', name:'축복받은 가죽끈', icon:'🧵', rarity:'common', type:'material', tags:['cloth','binding'], desc:'방어구 조합 안정성 +.', qty:6 },
+      { id:'mat-7', name:'침묵의 룬 조각', icon:'🪬', rarity:'rare', type:'material', tags:['rune','magic'], desc:'각인 무기 결과를 강화.', qty:3 }
+    ];
+
+    const FORMULAS = {
+      upgrade: [
+        {
+          id:'upgrade-metal',
+          name:'금속 승급식',
+          desc:'광석 + 광석 + 촉매 + 기본 장비 조합. 상위 등급 장비나 같은 계열 강화판을 기대할 수 있습니다.',
+          slots:['material','material','catalyst','weapon|armor'],
+          preferredTags:['ore','metal','catalyst'],
+          chances:[
+            { label:'희귀 승급', value:'48%' },
+            { label:'영웅 승급', value:'18%' },
+            { label:'완제품', value:'8%' }
+          ],
+          outcomes:[
+            { weight:48, name:'균열 강철 장비', rarity:'rare', icon:'⚔️', type:'승급 장비', meta:'기존 장비보다 한 단계 높은 희귀 등급으로 재구성됩니다.' },
+            { weight:18, name:'빛나는 연성 장비', rarity:'epic', icon:'🜁', type:'영웅 승급', meta:'옵션이 추가된 영웅 등급으로 상승합니다.' },
+            { weight:8, name:'태고의 연성 무기', rarity:'legendary', icon:'🌠', type:'완제품', meta:'낮은 확률로 특수 완제품이 생성됩니다.' },
+            { weight:26, name:'찌그러진 금속 파편', rarity:'common', icon:'🪨', type:'실패 잔재', meta:'실패. 일부 재료는 소멸하고 파편만 남습니다.' }
+          ]
+        },
+        {
+          id:'upgrade-magic',
+          name:'마력 증폭식',
+          desc:'결정 파편과 룬, 촉매 비중이 높을수록 마법/영웅 장비가 나올 확률이 상승합니다.',
+          slots:['material','material','catalyst','material'],
+          preferredTags:['crystal','magic','rune'],
+          chances:[
+            { label:'마법 강화', value:'52%' },
+            { label:'영웅 제작', value:'16%' },
+            { label:'전설 흔적', value:'5%' }
+          ],
+          outcomes:[
+            { weight:52, name:'마력 각인 장비 조각', rarity:'magic', icon:'🔹', type:'마법 결과', meta:'마법 등급 재료 또는 장비가 생성됩니다.' },
+            { weight:16, name:'별빛 각인 무기', rarity:'epic', icon:'🪄', type:'영웅 제작', meta:'마법 옵션이 부여된 장비가 탄생합니다.' },
+            { weight:5, name:'천공의 룬블레이드', rarity:'legendary', icon:'☄️', type:'완제품 무기', meta:'드물게 전설 무기가 생성됩니다.' },
+            { weight:27, name:'흐릿한 결정 조각', rarity:'common', icon:'🧩', type:'실패 잔재', meta:'실패. 잔여 마력만 남았습니다.' }
+          ]
+        }
+      ],
+      weapon: [
+        {
+          id:'weapon-sword',
+          name:'장검 제작식',
+          desc:'검 베이스 + 금속 재료 + 연성 촉매로 안정적인 완제품 무기 제작.',
+          slots:['weapon','material','material','catalyst'],
+          preferredTags:['sword','ore','metal','catalyst'],
+          chances:[
+            { label:'희귀 장검', value:'44%' },
+            { label:'영웅 장검', value:'22%' },
+            { label:'전설 장검', value:'7%' }
+          ],
+          outcomes:[
+            { weight:44, name:'균열 기사장검', rarity:'rare', icon:'🗡️', type:'완제품 무기', meta:'희귀 장검 완제품.' },
+            { weight:22, name:'빛추적 장검', rarity:'epic', icon:'⚔️', type:'영웅 무기', meta:'치명 옵션이 붙은 영웅 장검.' },
+            { weight:7, name:'여명절단자', rarity:'legendary', icon:'🌅', type:'전설 무기', meta:'특수 이펙트가 붙는 전설 장검.' },
+            { weight:27, name:'휘어진 검신', rarity:'common', icon:'🪛', type:'실패', meta:'실패. 베이스가 손상되었습니다.' }
+          ]
+        },
+        {
+          id:'weapon-axe',
+          name:'도끼 제작식',
+          desc:'도끼 베이스와 심연 금속, 강한 촉매가 반응할 때 파괴형 무기가 완성됩니다.',
+          slots:['weapon','material','catalyst','material'],
+          preferredTags:['axe','metal','boss','dragon'],
+          chances:[
+            { label:'희귀 도끼', value:'39%' },
+            { label:'영웅 도끼', value:'24%' },
+            { label:'전설 도끼', value:'9%' }
+          ],
+          outcomes:[
+            { weight:39, name:'흑요 전투도끼', rarity:'rare', icon:'🪓', type:'완제품 무기', meta:'강타 특화 희귀 도끼.' },
+            { weight:24, name:'심연의 파쇄자', rarity:'epic', icon:'💥', type:'영웅 무기', meta:'중형 보스에 강한 도끼.' },
+            { weight:9, name:'용골 절단도끼', rarity:'legendary', icon:'🐲', type:'전설 무기', meta:'낮은 확률로 완성되는 드문 도끼.' },
+            { weight:28, name:'쪼개진 도끼 날', rarity:'common', icon:'🪵', type:'실패', meta:'실패. 재료만 일부 남았습니다.' }
+          ]
+        }
+      ],
+      armor: [
+        {
+          id:'armor-plate',
+          name:'판금 방어구식',
+          desc:'흉갑이나 금속 베이스를 중심으로 방어구 완제품을 제작합니다.',
+          slots:['armor','material','material','catalyst'],
+          preferredTags:['armor','plate','metal','binding'],
+          chances:[
+            { label:'희귀 방어구', value:'46%' },
+            { label:'영웅 방어구', value:'19%' },
+            { label:'전설 방어구', value:'6%' }
+          ],
+          outcomes:[
+            { weight:46, name:'균열 수호 흉갑', rarity:'rare', icon:'🛡️', type:'완제품 방어구', meta:'생존력을 크게 높여주는 희귀 흉갑.' },
+            { weight:19, name:'성벽 수호 판금', rarity:'epic', icon:'🏰', type:'영웅 방어구', meta:'피격 완화 효과가 붙은 영웅 방어구.' },
+            { weight:6, name:'천공 성채 갑주', rarity:'legendary', icon:'🪽', type:'전설 방어구', meta:'드물게 생성되는 최상급 갑주.' },
+            { weight:29, name:'금속 잔해 묶음', rarity:'common', icon:'🧱', type:'실패', meta:'실패. 금속 조각만 남습니다.' }
+          ]
+        },
+        {
+          id:'armor-scale',
+          name:'비늘 갑옷식',
+          desc:'용 비늘과 냉기/마력 재료 조합으로 특수 방어구를 노립니다.',
+          slots:['armor','material','catalyst','material'],
+          preferredTags:['dragon','armor','crystal','magic'],
+          chances:[
+            { label:'희귀 비늘갑', value:'38%' },
+            { label:'영웅 비늘갑', value:'23%' },
+            { label:'전설 비늘갑', value:'10%' }
+          ],
+          outcomes:[
+            { weight:38, name:'서리비늘 흉갑', rarity:'rare', icon:'❄️', type:'완제품 방어구', meta:'냉기 저항을 지닌 희귀 방어구.' },
+            { weight:23, name:'용숨결 수호갑', rarity:'epic', icon:'🐉', type:'영웅 방어구', meta:'상태이상 저항이 달린 영웅 장비.' },
+            { weight:10, name:'칠흑용 비늘갑', rarity:'legendary', icon:'🛡️', type:'전설 방어구', meta:'드물게 완성되는 전설 비늘갑.' },
+            { weight:29, name:'부서진 비늘 묶음', rarity:'common', icon:'🫧', type:'실패', meta:'실패. 비늘 조각만 남았습니다.' }
+          ]
+        }
+      ]
+    };
+
+    const rarityLabel = {
+      common:'일반',
+      magic:'마법',
+      rare:'희귀',
+      epic:'영웅',
+      legendary:'전설'
+    };
+
+    const state = {
+      mode:'upgrade',
+      formulaId:null,
+      selectedInventoryId:null,
+      slots:[null,null,null,null,null,null],
+      inventory: structuredClone(INVENTORY),
+      history: []
+    };
+
+    const inventoryList = document.getElementById('inventoryList');
+    const formulaList = document.getElementById('formulaList');
+    const slotEls = [...document.querySelectorAll('.slot')];
+    const resultItemEl = document.getElementById('resultItem');
+    const resultStateEl = document.getElementById('resultState');
+    const resultIconEl = document.getElementById('resultIcon');
+    const resultNameEl = document.getElementById('resultName');
+    const resultMetaEl = document.getElementById('resultMeta');
+    const resultTagEl = document.getElementById('resultTag');
+    const historyListEl = document.getElementById('historyList');
+    const hintTextEl = document.getElementById('hintText');
+    const chanceLabelEl = document.getElementById('chanceLabel');
+    const slotCountEl = document.getElementById('slotCount');
+    const activeFormulaEl = document.getElementById('activeFormula');
+    const formulaModeLabelEl = document.getElementById('formulaModeLabel');
+    const craftBtn = document.getElementById('craftBtn');
+    const autoFillBtn = document.getElementById('autoFillBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const forgeMain = document.getElementById('forgeMain');
+
+    function getFormulaList(){
+      return FORMULAS[state.mode];
+    }
+
+    function getActiveFormula(){
+      const list = getFormulaList();
+      return list.find(f => f.id === state.formulaId) || list[0];
+    }
+
+    function ensureFormula(){
+      const formulas = getFormulaList();
+      if (!formulas.some(f => f.id === state.formulaId)) {
+        state.formulaId = formulas[0].id;
+      }
+    }
+
+    function renderFormulas(){
+      ensureFormula();
+      formulaModeLabelEl.textContent = state.mode === 'upgrade' ? '승급' : state.mode === 'weapon' ? '무기' : '방어구';
+      const active = getActiveFormula();
+      activeFormulaEl.textContent = active.name;
+      formulaList.innerHTML = getFormulaList().map(formula => `
+        <button class="formulaRow ${formula.id === active.id ? 'active' : ''}" data-formula="${formula.id}">
+          <div class="formulaName">${formula.name}</div>
+          <div class="formulaDesc">${formula.desc}</div>
+          <div class="formulaChances">
+            ${formula.chances.map(ch => `<span class="chip">${ch.label} ${ch.value}</span>`).join('')}
+          </div>
+        </button>
+      `).join('');
+      formulaList.querySelectorAll('.formulaRow').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.formulaId = btn.dataset.formula;
+          renderAll();
+        });
+      });
+    }
+
+    function getFilters(){
+      return {
+        search: document.getElementById('searchInput').value.trim().toLowerCase(),
+        type: document.getElementById('typeFilter').value,
+        rarity: document.getElementById('rarityFilter').value
+      };
+    }
+
+    function isUsed(itemId){
+      return state.slots.some(item => item?.id === itemId);
+    }
+
+    function getInventoryView(){
+      const filters = getFilters();
+      return state.inventory.filter(item => {
+        if (filters.type !== 'ALL' && item.type !== filters.type) return false;
+        if (filters.rarity !== 'ALL' && item.rarity !== filters.rarity) return false;
+        if (filters.search && !(`${item.name} ${item.desc}`.toLowerCase().includes(filters.search))) return false;
+        return true;
+      });
+    }
+
+    function renderInventory(){
+      const activeFormula = getActiveFormula();
+      const view = getInventoryView();
+      inventoryList.innerHTML = view.map(item => {
+        const used = isUsed(item.id);
+        const selected = state.selectedInventoryId === item.id;
+        const fitScore = getFitScore(item, activeFormula);
+        return `
+          <button class="itemCard ${selected ? 'selected' : ''} ${used ? 'disabled' : ''}" data-item="${item.id}" ${used ? 'disabled' : ''}>
+            <div class="itemIcon">${item.icon}</div>
+            <div>
+              <div class="itemName r-${item.rarity === 'legendary' ? 'legendary' : item.rarity}">${item.name}</div>
+              <div class="itemMeta">${rarityLabel[item.rarity]} · ${labelType(item.type)} · 적합도 ${fitScore}%<br />${item.desc}</div>
+            </div>
+            <div class="itemQty">x${item.qty}</div>
+          </button>
+        `;
+      }).join('') || `<div class="emptyNotice">조건에 맞는 아이템이 없습니다.</div>`;
+
+      inventoryList.querySelectorAll('.itemCard').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.selectedInventoryId = btn.dataset.item;
+          const item = findItem(btn.dataset.item);
+          placeToFirstAvailable(item);
+        });
+      });
+    }
+
+    function labelType(type){
+      return ({ material:'재료', weapon:'무기', armor:'방어구', catalyst:'촉매' })[type] || type;
+    }
+
+    function findItem(id){
+      return state.inventory.find(item => item.id === id);
+    }
+
+    function getSlotConstraint(index){
+      const formula = getActiveFormula();
+      return formula.slots[index] || null;
+    }
+
+    function matchesConstraint(item, constraint){
+      if (!constraint) return true;
+      const list = constraint.split('|');
+      return list.includes(item.type);
+    }
+
+    function getFitScore(item, formula){
+      let score = 18;
+      if (formula.slots.some(slot => matchesConstraint(item, slot))) score += 34;
+      const tagHits = item.tags.filter(tag => formula.preferredTags.includes(tag)).length;
+      score += tagHits * 16;
+      if (item.rarity === 'rare') score += 8;
+      if (item.rarity === 'epic') score += 12;
+      return Math.min(score, 98);
+    }
+
+    function placeToFirstAvailable(item){
+      if (!item) return;
+      const formula = getActiveFormula();
+      let targetIndex = state.slots.findIndex((slot, idx) => !slot && matchesConstraint(item, formula.slots[idx] || ''));
+      if (targetIndex === -1) targetIndex = state.slots.findIndex(slot => !slot);
+      if (targetIndex === -1) {
+        hintTextEl.textContent = '모든 슬롯이 가득 찼습니다. 비우거나 바로 큐빙을 진행하세요.';
+        return;
+      }
+      state.slots[targetIndex] = item;
+      const slot = slotEls[targetIndex];
+      slot.classList.remove('anim-out');
+      slot.classList.add('anim-in');
+      setTimeout(() => slot.classList.remove('anim-in'), 480);
+      state.selectedInventoryId = item.id;
+      renderAll();
+    }
+
+    function clearSlot(index){
+      state.slots[index] = null;
+      renderAll();
+    }
+
+    function renderSlots(){
+      const formula = getActiveFormula();
+      slotEls.forEach((slot, idx) => {
+        const item = state.slots[idx];
+        const constraint = formula.slots[idx] || '자유';
+        const label = `SLOT ${idx + 1}`;
+        slot.className = 'slot';
+        slot.innerHTML = '';
+        const labelEl = document.createElement('div');
+        labelEl.className = 'slotLabel';
+        labelEl.textContent = label;
+        slot.appendChild(labelEl);
+        if (item) {
+          slot.classList.add('filled');
+          if (matchesConstraint(item, constraint)) slot.classList.add('highlight');
+          const body = document.createElement('div');
+          body.className = 'slotItem';
+          body.innerHTML = `
+            <div class="slotItemIcon">${item.icon}</div>
+            <div class="slotItemName r-${item.rarity === 'legendary' ? 'legendary' : item.rarity}">${item.name}</div>
+            <div class="slotItemMeta">${rarityLabel[item.rarity]} · ${labelType(item.type)}</div>
+          `;
+          const tag = document.createElement('div');
+          tag.className = 'orbitalTag';
+          tag.textContent = labelConstraint(constraint);
+          slot.appendChild(body);
+          slot.appendChild(tag);
+        } else {
+          const body = document.createElement('div');
+          body.className = 'slotEmpty';
+          body.innerHTML = `<i>✧</i><div>${labelConstraint(constraint)}</div>`;
+          slot.appendChild(body);
+        }
+      });
+
+      slotEls.forEach(slot => {
+        slot.onclick = () => {
+          const idx = Number(slot.dataset.slot);
+          if (state.slots[idx]) clearSlot(idx);
+          else if (state.selectedInventoryId) placeToFirstAvailable(findItem(state.selectedInventoryId));
+        };
+      });
+
+      slotCountEl.textContent = state.slots.filter(Boolean).length;
+    }
+
+    function labelConstraint(constraint){
+      if (!constraint) return '자유 슬롯';
+      return constraint.split('|').map(type => labelType(type)).join(' / ');
+    }
+
+    function getPreviewChance(){
+      const formula = getActiveFormula();
+      const filled = state.slots.filter(Boolean);
+      if (!filled.length) return null;
+      let score = 0;
+      filled.forEach((item, idx) => {
+        if (matchesConstraint(item, formula.slots[idx] || '')) score += 18;
+        score += item.tags.filter(tag => formula.preferredTags.includes(tag)).length * 7;
+        if (item.rarity === 'magic') score += 4;
+        if (item.rarity === 'rare') score += 7;
+        if (item.rarity === 'epic') score += 10;
+      });
+      const capacity = formula.slots.length * 18 + filled.length * 17;
+      const percent = Math.max(8, Math.min(92, Math.round((score / Math.max(capacity, 1)) * 100)));
+      return percent;
+    }
+
+    function updatePreview(){
+      const chance = getPreviewChance();
+      craftBtn.disabled = state.slots.filter(Boolean).length < 3;
+      chanceLabelEl.textContent = chance ? `예상 완성도 ${chance}%` : '성공 확률 미리보기 없음';
+      if (!chance) {
+        hintTextEl.textContent = '좌측 재료를 클릭해 슬롯에 채워 넣으세요. 같은 조합식에 가까울수록 성공 확률이 높아집니다.';
+        return;
+      }
+      if (chance >= 72) hintTextEl.textContent = '좋은 조합입니다. 상위 완제품이나 영웅 등급 결과를 기대할 수 있습니다.';
+      else if (chance >= 48) hintTextEl.textContent = '무난한 조합입니다. 승급 또는 희귀 완제품을 노려볼 수 있습니다.';
+      else hintTextEl.textContent = '조합 일치도가 낮습니다. 실패 잔재가 나올 가능성이 큽니다.';
+    }
+
+    function autoFill(){
+      clearAll(false);
+      const formula = getActiveFormula();
+      formula.slots.forEach((constraint, idx) => {
+        const candidates = state.inventory
+          .filter(item => !state.slots.some(slot => slot?.id === item.id))
+          .filter(item => matchesConstraint(item, constraint))
+          .sort((a,b) => getFitScore(b, formula) - getFitScore(a, formula));
+        state.slots[idx] = candidates[0] || null;
+      });
+      renderAll();
+    }
+
+    function clearAll(doRender = true){
+      state.slots = [null,null,null,null,null,null];
+      if (doRender) renderAll();
+    }
+
+    async function craft(){
+      if (craftBtn.disabled) return;
+      const formula = getActiveFormula();
+      const chance = getPreviewChance() || 0;
+      const weighted = formula.outcomes.map(outcome => ({ ...outcome, effectiveWeight: adjustedWeight(outcome, chance) }));
+      const total = weighted.reduce((sum, item) => sum + item.effectiveWeight, 0);
+      let roll = Math.random() * total;
+      let result = weighted[weighted.length - 1];
+      for (const item of weighted) {
+        roll -= item.effectiveWeight;
+        if (roll <= 0) { result = item; break; }
+      }
+
+      const rarityPower = { common:1, magic:2, rare:3, epic:4, legendary:5 }[result.rarity] || 1;
+      playForgeAnimation(rarityPower >= 4);
+      await wait(1050);
+      consumeMaterials(result);
+      revealResult(result, formula, chance);
+      appendHistory(result, formula, chance);
+      clearAll(false);
+      renderAll();
+    }
+
+    function adjustedWeight(outcome, chance){
+      const bonus = Math.max(0, chance - 40);
+      if (outcome.rarity === 'legendary') return outcome.weight + bonus * 0.18;
+      if (outcome.rarity === 'epic') return outcome.weight + bonus * 0.22;
+      if (outcome.rarity === 'rare') return outcome.weight + bonus * 0.16;
+      if (outcome.rarity === 'common') return Math.max(6, outcome.weight - bonus * 0.35);
+      return outcome.weight;
+    }
+
+    function consumeMaterials(result){
+      const usedIds = state.slots.filter(Boolean).map(item => item.id);
+      state.inventory = state.inventory.map(item => {
+        if (!usedIds.includes(item.id)) return item;
+        const shouldKeep = result.rarity !== 'common' && Math.random() < 0.18;
+        return { ...item, qty: Math.max(0, item.qty - (shouldKeep ? 0 : 1)) };
+      }).filter(item => item.qty > 0);
+    }
+
+    function revealResult(result, formula, chance){
+      resultStateEl.textContent = `${formula.name} 발동 완료 · 조합 완성도 ${chance}%`;
+      resultIconEl.textContent = result.icon;
+      resultNameEl.className = `resultName r-${result.rarity === 'legendary' ? 'legendary' : result.rarity}`;
+      resultNameEl.textContent = result.name;
+      resultMetaEl.textContent = `${result.type} · ${result.meta}`;
+      resultTagEl.className = `resultTag r-${result.rarity === 'legendary' ? 'legendary' : result.rarity}`;
+      resultTagEl.textContent = rarityLabel[result.rarity] || result.rarity;
+      resultItemEl.classList.remove('visible');
+      void resultItemEl.offsetWidth;
+      resultItemEl.classList.add('visible');
+    }
+
+    function appendHistory(result, formula, chance){
+      state.history.unshift({
+        ts: new Date().toLocaleTimeString('ko-KR', { hour:'2-digit', minute:'2-digit', second:'2-digit' }),
+        formula: formula.name,
+        result,
+        chance
+      });
+      state.history = state.history.slice(0, 7);
+      renderHistory();
+    }
+
+    function renderHistory(){
+      historyListEl.innerHTML = state.history.map(row => `
+        <div class="historyRow">
+          <div class="historyTop">
+            <span>${row.ts}</span>
+            <span class="r-${row.result.rarity === 'legendary' ? 'legendary' : row.result.rarity}">${rarityLabel[row.result.rarity]}</span>
+          </div>
+          <div class="historyTitle">${row.formula} → <span class="r-${row.result.rarity === 'legendary' ? 'legendary' : row.result.rarity}">${row.result.name}</span></div>
+          <div class="historyMeta">완성도 ${row.chance}% · ${row.result.meta}</div>
+        </div>
+      `).join('') || `<div class="emptyNotice">아직 큐빙 기록이 없습니다.</div>`;
+    }
+
+    function playForgeAnimation(legendary = false){
+      forgeMain.classList.remove('successGlow', 'legendaryBurst');
+      slotEls.filter(slot => slot.classList.contains('filled')).forEach((slot, idx) => {
+        setTimeout(() => slot.classList.add('anim-out'), idx * 50);
+        setTimeout(() => slot.classList.remove('anim-out'), 850);
+      });
+      void forgeMain.offsetWidth;
+      forgeMain.classList.add('successGlow');
+      if (legendary) forgeMain.classList.add('legendaryBurst');
+      setTimeout(() => forgeMain.classList.remove('successGlow', 'legendaryBurst'), 1200);
+    }
+
+    function wait(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+
+    document.getElementById('searchInput').addEventListener('input', renderInventory);
+    document.getElementById('typeFilter').addEventListener('change', renderInventory);
+    document.getElementById('rarityFilter').addEventListener('change', renderInventory);
+    craftBtn.addEventListener('click', craft);
+    autoFillBtn.addEventListener('click', autoFill);
+    clearBtn.addEventListener('click', () => clearAll(true));
+    document.querySelectorAll('.modeBtn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.modeBtn').forEach(el => el.classList.toggle('active', el === btn));
+        state.mode = btn.dataset.mode;
+        state.formulaId = null;
+        clearAll(false);
+        renderAll();
+      });
+    });
+
+    function renderAll(){
+      renderFormulas();
+      renderInventory();
+      renderSlots();
+      renderHistory();
+      updatePreview();
+    }
+
+    renderAll();
+  </script>
+</body>
+</html>

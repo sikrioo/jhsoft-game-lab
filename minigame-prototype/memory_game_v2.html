@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bemuse‑style UI • Memory Mode (Progressive Rounds)</title>
+  <!-- In your app, extract the <style> into /assets/bemuse-theme.css and keep the <link>. External CSS may not load in canvas preview. -->
+  <!-- <link rel="stylesheet" href="/assets/bemuse-theme.css"> -->
+  <style>
+    :root{
+      --bg:#0b0f17; --fg:#e5f7ff; --cyan:#00fff0; --pink:#ff2bd6; --violet:#7a5cff; --accent:#44ffd1; --danger:#ff5f7e;
+      --play-h: 520px;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0; background:radial-gradient(1200px 600px at 20% 10%, #142031 0%, #0b0f17 60%, #070b11 100%);
+      color:var(--fg); font-family:"Segoe UI", Roboto, Inter, system-ui, -apple-system, sans-serif; letter-spacing:.2px;
+      display:flex; align-items:center; justify-content:center}
+    .wrap{width:min(980px,96vw)}
+    .header{display:flex; align-items:center; justify-content:space-between; margin-bottom:16px}
+    .brand{font-weight:800; font-size:22px; letter-spacing:1px; text-transform:uppercase;
+      background:linear-gradient(90deg,var(--cyan),var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent;
+      text-shadow:0 0 15px rgba(0,255,240,.35), 0 0 25px rgba(255,43,214,.25)}
+    .hud{display:flex; gap:16px; align-items:center}
+    .pill{padding:6px 12px; border-radius:999px; font-size:12px; opacity:.9;
+      background:linear-gradient(90deg, rgba(0,255,240,.14), rgba(255,43,214,.14)); border:1px solid rgba(255,255,255,.08);
+      box-shadow:0 0 14px rgba(0,0,0,.35) inset}
+
+    /* Top controls */
+    .countbar{display:flex; justify-content:space-between; align-items:center; margin:8px 0 16px 0; gap:12px}
+    .timer{display:flex; align-items:center; gap:12px; padding:8px 12px; border-radius:999px;
+      background:linear-gradient(90deg, rgba(0,255,240,.12), rgba(255,43,214,.12)); border:1px solid rgba(255,255,255,.1);
+      box-shadow:0 6px 18px rgba(0,0,0,.35), inset 0 0 22px rgba(0,255,240,.08)}
+    .timer .label{font-size:12px; letter-spacing:1px; opacity:.85; text-transform:uppercase}
+    .timer .time{font-weight:900; font-size:24px; letter-spacing:1px; margin-left:4px; background:linear-gradient(90deg,var(--cyan),var(--pink));
+      -webkit-background-clip:text; background-clip:text; color:transparent; text-shadow:0 0 16px rgba(0,255,240,.35), 0 0 28px rgba(255,43,214,.25)}
+    .timer.ending .time{color:var(--danger); -webkit-text-fill-color:var(--danger); background:none; text-shadow:0 0 16px rgba(255,95,126,.6)}
+    .controls{display:flex; gap:8px}
+    .btn{padding:6px 10px; border-radius:10px; font-size:12px; cursor:pointer; color:#dff; background:rgba(10,14,22,.8);
+      border:1px solid rgba(255,255,255,.12); box-shadow:inset 0 0 0 1px rgba(255,255,255,.05); transition:transform .08s ease, box-shadow .08s ease}
+    .btn:hover{box-shadow:0 0 14px rgba(0,255,240,.3)} .btn:active{transform:translateY(1px) scale(.98)}
+    .btn.primary{border-color:rgba(0,255,240,.35); box-shadow:0 0 16px rgba(0,255,240,.25)}
+    .memoryctl{display:flex; align-items:center; gap:10px}
+    .memoryctl .meta{font-size:12px; opacity:.8}
+    .memoryctl .best{font-size:12px; opacity:.9; padding:4px 8px; border-radius:999px; background:rgba(255,255,255,.05); border:1px solid rgba(255,255,255,.08)}
+
+    /* Stage */
+    .stage{position:relative; height:var(--play-h); padding:20px; border-radius:18px;
+      background:linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02)); border:1px solid rgba(255,255,255,.08);
+      box-shadow:0 10px 40px rgba(0,0,0,.45), inset 0 0 60px rgba(255,255,255,.03); overflow:hidden}
+    .bg-lines{position:absolute; inset:0; pointer-events:none; opacity:.25}
+    .bg-lines:before,.bg-lines:after{content:""; position:absolute; inset:-50% -50%; background:conic-gradient(from 0deg, transparent 0 20deg, rgba(255,255,255,.06) 20deg 22deg, transparent 22deg 360deg); animation:spin 30s linear infinite; filter:blur(1px)}
+    .bg-lines:after{animation-direction:reverse; opacity:.7}
+    @keyframes spin{to{transform:rotate(1turn)}}
+
+    /* Phase Overlay (Prepare / Start / Clear / Fail) */
+    .overlay{position:absolute; inset:0; display:none; place-items:center; z-index:6;
+      background:radial-gradient(60% 60% at 50% 40%, rgba(0,0,0,.55), rgba(0,0,0,.75)),
+                  repeating-linear-gradient(135deg, rgba(255,255,255,.04) 0 6px, rgba(255,255,255,.02) 6px 12px);
+      backdrop-filter: blur(3px)}
+    .overlay.show{display:grid}
+    .overlay .big{font-weight:900; font-size:64px; letter-spacing:2px; text-transform:uppercase;
+      background:linear-gradient(90deg,var(--cyan),var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent;
+      text-shadow:0 0 32px rgba(0,255,240,.35), 0 0 60px rgba(255,43,214,.25)}
+    .overlay .sub{margin-top:12px; font-weight:700; font-size:18px; opacity:.9; color:#b7fffb; text-shadow:0 0 12px rgba(68,255,209,.45)}
+
+    /* Sequence strip */
+    .sequence{position:absolute; top:14px; left:50%; transform:translateX(-50%); display:flex; flex-wrap:wrap; gap:4px; z-index:8; max-width:calc(100% - 20px); justify-content:center; row-gap:4px}
+    .sequence.compact .chip{min-width:28px; height:28px; font-size:14px}
+    .sequence.xcompact{left:0; transform:none; width:100%; max-width:none; padding:0 8px; display:grid; grid-template-columns:repeat(auto-fit, minmax(18px, 1fr)); gap:2px; row-gap:2px; justify-content:stretch}
+    .sequence.xcompact .chip{min-width:unset; width:100%; height:22px; font-size:12px}
+    .chip{min-width:34px; height:34px; display:grid; place-items:center; border-radius:10px; font-weight:800; font-size:16px; color:#e8ffff; background:linear-gradient(180deg, rgba(0,255,240,.22), rgba(122,92,255,.18)); border:1px solid rgba(255,255,255,.12); text-shadow:0 0 12px rgba(0,255,240,.45)}
+    .sequence.hidden{display:none}
+
+    /* Center HUD */
+    .center-hud{position:absolute; inset:0; display:grid; place-items:center; pointer-events:none}
+    .combo{font-weight:800; font-size:40px; line-height:1; letter-spacing:1px; text-shadow:0 0 22px rgba(0,255,240,.35), 0 0 44px rgba(255,43,214,.25); background:linear-gradient(90deg,var(--cyan),var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent; opacity:.9; transform:translateY(-10px)}
+    .judge{margin-top:6px; font-weight:700; font-size:16px; letter-spacing:.8px; opacity:.9; color:#b7fffb; text-shadow:0 0 14px rgba(68,255,209,.55)}
+    .flash{animation:flash .22s ease} @keyframes flash{from{filter:brightness(1.2)} to{filter:brightness(1)}}
+
+    /* Pad */
+    .pad{display:grid; grid-template-columns:1fr auto 1fr; grid-template-rows:auto auto auto; gap:12px; place-items:center; margin:22px auto 0; width:min(460px,92%)}
+    .spacer{width:72px; height:62px}
+    .arrow{width:72px; height:62px; border-radius:14px; font-size:28px; font-weight:800; cursor:pointer; color:#dff; background:rgba(10,14,22,.8); border:1px solid rgba(255,255,255,.08); box-shadow:inset 0 0 0 1px rgba(255,255,255,.06), 0 10px 22px rgba(0,0,0,.35); text-shadow:0 0 18px rgba(0,255,240,.55); transition:transform .08s ease, box-shadow .08s ease, background .08s ease}
+    .arrow:hover{filter:saturate(1.2)} .arrow.active{transform:translateY(1px) scale(.98); background:linear-gradient(180deg, rgba(0,255,240,.18), rgba(255,43,214,.14)); box-shadow:0 0 22px rgba(0,255,240,.35), inset 0 0 0 2px rgba(0,255,240,.5)}
+
+    .tip{margin-top:10px; font-size:14px; opacity:.85; text-align:center}
+    .kbd{padding:2px 6px; border-radius:6px; border:1px solid rgba(255,255,255,.15); background:rgba(255,255,255,.05)}
+
+    /* Tabs */
+    .tabs{display:flex; gap:8px; margin-bottom:10px}
+    .tab{padding:8px 14px; border-radius:12px; font-weight:800; font-size:12px; letter-spacing:.6px; cursor:pointer; color:#e9ffff;
+      background:linear-gradient(90deg, rgba(0,255,240,.12), rgba(122,92,255,.12)); border:1px solid rgba(0,255,240,.35);
+      box-shadow:0 0 12px rgba(0,255,240,.18), inset 0 0 0 1px rgba(255,255,255,.05)}
+    .tab.active{background:linear-gradient(90deg, rgba(0,255,240,.25), rgba(122,92,255,.25)); box-shadow:0 0 20px rgba(0,255,240,.35)}
+
+    /* Views */
+    .view{display:none}
+    .view.show{display:block}
+
+    /* Arcade Leaderboard Flair */
+    .arcade{padding:16px; border-radius:18px; background:radial-gradient(800px 320px at 10% -10%, rgba(0,255,240,.08), transparent 40%),
+            radial-gradient(800px 320px at 110% 120%, rgba(255,43,214,.06), transparent 40%), rgba(255,255,255,.03);
+            border:1px solid rgba(255,255,255,.08); box-shadow:0 10px 40px rgba(0,0,0,.35), inset 0 0 60px rgba(255,255,255,.03)}
+    .arcade h3{margin:0 0 10px 0; font-size:18px; letter-spacing:1px; text-transform:uppercase;
+      background:linear-gradient(90deg,var(--cyan),var(--pink)); -webkit-background-clip:text; background-clip:text; color:transparent;
+      text-shadow:0 0 24px rgba(0,255,240,.45), 0 0 44px rgba(255,43,214,.35)}
+    .board.grid{display:grid; grid-template-columns:1fr 1fr; gap:16px}
+    .card{padding:12px; border-radius:14px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); box-shadow:0 8px 20px rgba(0,0,0,.25)}
+    .card h4{margin:0 0 8px 0; font-size:13px; opacity:.9; letter-spacing:.6px}
+    .card table{width:100%; border-collapse:collapse; font-size:12px}
+    .card th,.card td{padding:6px 8px; border-bottom:1px solid rgba(255,255,255,.06); text-align:left}
+    .card tr:last-child td{border-bottom:none}
+    .name{opacity:.9; font-weight:700}
+    .time{font-variant-numeric:tabular-nums}
+
+    /* Hit burst (Beatmania popup) */
+    .hit-burst{position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); pointer-events:none; opacity:0;
+      font-weight:900; font-size:150px; line-height:1; letter-spacing:1px;
+      color:#4fffd1; text-shadow:0 0 28px rgba(79,255,209,.95), 0 0 64px rgba(79,255,209,.55);} 
+    .hit-burst.show{animation:beatPop .55s cubic-bezier(.2,1,.3,1);} 
+    @keyframes beatPop{0%{transform:translate(-50%,-50%) scale(.4); opacity:0; filter:brightness(1.2);} 
+      35%{transform:translate(-50%,-50%) scale(2.4); opacity:1; filter:brightness(1.9) drop-shadow(0 0 10px rgba(79,255,209,1));} 
+      65%{transform:translate(-50%,-50%) scale(1.4); opacity:.85;} 
+      100%{transform:translate(-50%,-50%) scale(1); opacity:0;}}
+
+    /* Status badges */
+    .status-badges{display:flex; gap:8px; align-items:center}
+    .badge{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:12px; font-size:12px; font-weight:800;
+      background:linear-gradient(90deg, rgba(0,255,240,.18), rgba(122,92,255,.18)); border:1px solid rgba(0,255,240,.35);
+      box-shadow:0 0 14px rgba(0,255,240,.25), inset 0 0 0 1px rgba(255,255,255,.06); color:#e9ffff; letter-spacing:.5px}
+    .badge b{font-size:14px; letter-spacing:.5px}
+
+    /* (legacy list-style boards retained for possible reuse elsewhere) */
+    .boards{display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:14px}
+    .board{padding:10px; border-radius:12px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); box-shadow:0 10px 22px rgba(0,0,0,.25)}
+    .board h4{margin:0 0 8px 0; font-size:13px; letter-spacing:.8px; opacity:.9}
+    .board table{width:100%; border-collapse:collapse; font-size:12px}
+    .board th,.board td{padding:6px 8px; border-bottom:1px solid rgba(255,255,255,.06); text-align:left}
+    .board tr:last-child td{border-bottom:none}
+    .board .name{opacity:.9; font-weight:700}
+    .board .time{font-variant-numeric:tabular-nums}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="header">
+      <div class="brand">B E M U S E • style UI</div>
+      <div class="hud">
+        <div class="pill">Demo • UI Only</div>
+        <div class="pill">Arrow Keys Enabled</div>
+        <div class="pill">Memory Mode</div>
+      </div>
+    </div>
+
+    <!-- Tabs: Game / Leaderboard -->
+    <div class="tabs">
+      <button class="tab active" id="tab-game">Game</button>
+      <button class="tab" id="tab-leader">Leaderboard</button>
+    </div>
+
+    <div class="countbar">
+      <div class="timer">
+        <span class="label">TIMER</span>
+        <span class="time" id="cd-time">01:00</span>
+        <div class="controls">
+          <button class="btn" id="cd-start">Start</button>
+          <button class="btn" id="cd-pause">Pause</button>
+          <button class="btn" id="cd-reset">Reset</button>
+        </div>
+      </div>
+      <div class="memoryctl">
+        <button class="btn primary" id="mem-start">Start Game</button>
+        <span class="meta">Round:
+          <input id="round-in" type="number" min="1" max="4" value="1" style="width:48px; margin-left:6px;"> • Len:
+          <input id="len-in" type="number" min="1" max="256" value="3" style="width:64px; margin-left:6px;"> • Preview:
+          <input id="prev-in" type="number" min="1" max="30" value="4" style="width:56px; margin-left:6px;">s
+        </span>
+        <div class="status-badges">
+          <span class="badge" id="badge-lives">❤ x<b id="lives-val">3</b></span>
+          <span class="badge" id="badge-round">Round <b id="round-num">1</b></span>
+          <span class="badge" id="badge-len">Len <b id="len-val">3</b></span>
+        </div>
+        <span class="best" id="best-time">Best: --</span>
+      </div>
+    </div>
+
+    <!-- Views Container -->
+    <section class="view show" id="view-game">
+      <div class="stage" id="stage">
+        <div class="bg-lines"></div>
+        <div class="sequence" id="sequence"></div>
+        <div class="center-hud">
+          <div class="combo" id="combo">0</div>
+          <div class="judge" id="judge">READY</div>
+          <div class="hit-burst" id="hit-burst">1</div>
+        </div>
+        <!-- Phase Overlay -->
+        <div class="overlay" id="overlay">
+          <div>
+            <div class="big" id="overlay-big">PREPARE</div>
+            <div class="sub" id="overlay-sub">Memorize the sequence</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="view" id="view-boards">
+      <div class="arcade">
+        <h3>Leaderboard</h3>
+        <div class="board grid">
+          <div class="card" id="my-board">
+            <h4>My Records (best per round)</h4>
+            <table>
+              <thead><tr><th>Round</th><th>Best Time</th></tr></thead>
+              <tbody id="my-rows"></tbody>
+            </table>
+          </div>
+          <div class="card" id="global-board">
+            <h4>Top Times (Sample)</h4>
+            <table>
+              <thead><tr><th class="name">Player</th><th>R1</th><th>R2</th><th>R3</th><th>R4</th></tr></thead>
+              <tbody id="global-rows"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="pad">
+      <div class="spacer"></div>
+      <button class="arrow" data-key="ArrowUp">↑</button>
+      <div class="spacer"></div>
+      <button class="arrow" data-key="ArrowLeft">←</button>
+      <div class="spacer"></div>
+      <button class="arrow" data-key="ArrowRight">→</button>
+      <div class="spacer"></div>
+      <button class="arrow" data-key="ArrowDown">↓</button>
+      <div class="spacer"></div>
+    </div>
+    <div class="tip" id="tip-msg">Memorize the sequence, then enter it in order using the arrow keys (or tap the buttons).</div>
+  </div>
+
+  <script>
+    // ===== Memory Game (progressive rounds) =====
+    var keyToIcon  = { ArrowLeft:'←', ArrowDown:'↓', ArrowUp:'↑', ArrowRight:'→' };
+    var buttons = Array.prototype.slice.call(document.querySelectorAll('.arrow'));
+    var comboEl = document.getElementById('combo');
+    var judgeEl = document.getElementById('judge');
+    var seqEl = document.getElementById('sequence');
+    var bestEl = document.getElementById('best-time');
+    var startBtnMem = document.getElementById('mem-start');
+    var roundIn = document.getElementById('round-in');
+    var lenIn = document.getElementById('len-in');
+    var prevIn = document.getElementById('prev-in');
+    var roundNumEl = document.getElementById('round-num');
+    var lenEl = document.getElementById('len-val');
+    var prevEl = document.getElementById('prev-val'); // optional (Preview hidden from UI)
+    var tipEl = document.getElementById('tip-msg');
+    var overlay = document.getElementById('overlay');
+    var overlayBig = document.getElementById('overlay-big');
+    var overlaySub = document.getElementById('overlay-sub');
+    var burstEl = document.getElementById('hit-burst');
+    var myRowsEl = document.getElementById('my-rows');
+    var globalRowsEl = document.getElementById('global-rows');
+
+    var ROUND_LENS = [3,5,8,12]; // 1:3, 2:3+2, 3:5+3, 4:8+4
+    var PREVIEW_SEC = 4;         // preview duration per round (can be adjusted per round if needed)
+
+    var phase = 'idle'; // 'preview' | 'input'
+    var roundIdx = 0;   // 0-based index for rounds
+    var seq = []; var idx = 0; var inputStart = 0; var bestMs = null; var previewTO = null;
+    var lives = 3;
+    var myRecords = [null, null, null, null]; // per-round best ms
+    var sampleGlobal = [
+      { name:'PlayerA', r:[1.20, 2.55, 3.88, 5.01] },
+      { name:'PlayerB', r:[1.32, 2.61, 4.02, 5.20] },
+      { name:'PlayerC', r:[1.10, 2.49, 3.95, 4.92] }
+    ];
+
+    function rndKey(){
+      var arr = ['ArrowLeft','ArrowDown','ArrowUp','ArrowRight'];
+      return arr[Math.floor(Math.random()*arr.length)];
+    }
+    function renderSequence(){
+      seqEl.innerHTML = '';
+      // Responsive density classes for long sequences
+      seqEl.classList.remove('compact');
+      seqEl.classList.remove('xcompact');
+      if(seq.length > 60){ seqEl.classList.add('xcompact'); }
+      else if(seq.length > 24){ seqEl.classList.add('compact'); }
+      for(var i=0;i<seq.length;i++){
+        var chip = document.createElement('div');
+        chip.className='chip';
+        chip.textContent = keyToIcon[seq[i]];
+        chip.title = String(i+1);
+        seqEl.appendChild(chip);
+      }
+    }
+    function bump(el){ el.classList.remove('flash'); el.offsetWidth; el.classList.add('flash'); }
+    function setJudge(text, color){
+      judgeEl.textContent = text;
+      judgeEl.style.color = color;
+      judgeEl.style.textShadow = '0 0 16px ' + color + '88';
+      bump(judgeEl);
+    }
+    function showOverlay(big, sub){
+      overlayBig.textContent = big;
+      overlaySub.textContent = sub || '';
+      overlay.classList.add('show');
+    }
+    function hideOverlay(){ overlay.classList.remove('show'); }
+
+    function showHitBurst(text){
+      if(!burstEl) return;
+      burstEl.textContent = text;
+      burstEl.classList.remove('show'); // reset
+      // force reflow for restarting animation
+      void burstEl.offsetWidth;
+      burstEl.classList.add('show');
+      // auto clean after animation end safeguard
+      setTimeout(function(){ if(burstEl){ burstEl.classList.remove('show'); } }, 600);
+    }
+
+    function updateRoundUi(){
+      var len = ROUND_LENS[roundIdx];
+      roundNumEl.textContent = String(roundIdx+1);
+      lenEl.textContent = String(len);
+      if(prevEl){ prevEl.textContent = PREVIEW_SEC + 's'; }
+      // Reflect also in the inputs (for quick tweak)
+      if(roundIn){ roundIn.value = String(roundIdx+1); }
+      if(lenIn){ lenIn.value = String(len); }
+      if(prevIn){ prevIn.value = String(PREVIEW_SEC); }
+    }
+
+    function startGame(){
+      // Read testing inputs
+      var r = parseInt(roundIn && roundIn.value, 10);
+      var l = parseInt(lenIn && lenIn.value, 10);
+      var p = parseInt(prevIn && prevIn.value, 10);
+      if(isNaN(r) || r<1) r = 1; if(r>ROUND_LENS.length) r = ROUND_LENS.length;
+      if(!isNaN(l) && l>0){ ROUND_LENS[r-1] = l; }
+      if(!isNaN(p) && p>0){ PREVIEW_SEC = p; }
+      roundIdx = r-1;
+      startRound();
+    }
+
+    function startRound(){
+      updateRoundUi();
+      // Build sequence
+      var len = ROUND_LENS[roundIdx];
+      seq = []; for(var i=0;i<len;i++){ seq.push(rndKey()); }
+      idx = 0; phase='preview';
+      renderSequence();
+      // Ensure the sequence is visible during memorize phase
+      seqEl.classList.remove('hidden');
+      setJudge('PREPARE', '#b7fffb');
+      showOverlay('MEMORIZE', 'Memorize the sequence');
+      tipEl.textContent = 'Memorize the sequence shown at the top.';
+      clearTimeout(previewTO);
+      // Drive preview duration via top timer
+      if(window.bemuseTimer && window.bemuseTimer.set){
+        window.bemuseTimer.set(PREVIEW_SEC);
+        if(window.bemuseTimer.setOnZero){ window.bemuseTimer.setOnZero(function(){ startInputPhase(); }); }
+        window.bemuseTimer.start();
+      } else {
+        // Fallback if timer not ready
+        previewTO = setTimeout(function(){ startInputPhase(); }, PREVIEW_SEC*1000);
+      }
+    }
+
+    function startInputPhase(){
+      seqEl.classList.add('hidden');
+      hideOverlay();
+      phase='input'; idx=0; comboEl.textContent='0';
+      inputStart = (window.performance && performance.now) ? performance.now() : Date.now();
+      setJudge('START', '#8fffd8');
+      tipEl.textContent = 'Now enter the sequence in order.';
+    }
+
+    function finishSuccess(){
+      var now = (window.performance && performance.now) ? performance.now() : Date.now();
+      var ms = now - inputStart; var s = (ms/1000).toFixed(2);
+      comboEl.textContent = String(seq.length);
+      setJudge('CLEAR • ' + s + 's', '#8fffd8');
+      if(bestMs==null || ms < bestMs){ bestMs = ms; bestEl.textContent = 'Best: ' + (bestMs/1000).toFixed(2) + 's'; }
+      phase='idle';
+      showOverlay('CLEAR', 'Round ' + (roundIdx+1) + ' completed in ' + s + 's');
+      setTimeout(function(){
+        hideOverlay();
+        if(roundIdx < ROUND_LENS.length - 1){
+          roundIdx++; startRound();
+        } else {
+          showOverlay('FINISH', 'All rounds completed!');
+          tipEl.textContent = 'Game finished. Press Start Game to play again.';
+        }
+      }, 1000);
+    }
+
+    function fail(){
+      // Lose a life, but allow retry from the SAME round and SAME sequence
+      lives--;
+      document.getElementById('lives-val').textContent = lives;
+      if(lives <= 0){
+        setJudge('GAME OVER', '#ff8aa0');
+        showOverlay('GAME OVER', 'All lives lost — restarting');
+        setTimeout(function(){
+          hideOverlay();
+          lives = 3;
+          document.getElementById('lives-val').textContent = lives;
+          roundIdx = 0;
+          startRound();
+        }, 1200);
+        return;
+      }
+      // Retry flow: re-preview the SAME sequence, then restart input from index 0
+      setJudge('MISS! -1 life', '#ff8aa0');
+      phase='preview';
+      idx = 0; // restart input from the beginning of this round's sequence
+      tipEl.textContent = 'Memorize again, then retry this round.';
+      // Show sequence again for preview
+      renderSequence();
+      seqEl.classList.remove('hidden');
+      showOverlay('RETRY', 'Memorize the same sequence and try again');
+      clearTimeout(previewTO);
+      if(window.bemuseTimer && window.bemuseTimer.set){
+        window.bemuseTimer.set(PREVIEW_SEC);
+        if(window.bemuseTimer.setOnZero){ window.bemuseTimer.setOnZero(function(){ startInputPhase(); }); }
+        window.bemuseTimer.start();
+      } else {
+        previewTO = setTimeout(function(){ startInputPhase(); }, PREVIEW_SEC*1000);
+      }
+    }
+
+    function pressMemory(key){
+      // highlight the pressed button
+      var btn = null;
+      for(var i=0;i<buttons.length;i++){ if(buttons[i].getAttribute('data-key')===key){ btn=buttons[i]; break; } }
+      if(btn){ btn.classList.add('active'); }
+
+      if(phase!=='input') return;
+
+      if(key === seq[idx]){
+        idx++; comboEl.textContent = String(idx);
+        // Beatmania-style popup: show current combo big
+        showHitBurst(String(idx));
+        if(idx>=seq.length){ finishSuccess(); }
+      } else {
+        fail();
+      }
+    }
+    function releaseMemory(key){
+      var btn = null;
+      for(var i=0;i<buttons.length;i++){ if(buttons[i].getAttribute('data-key')===key){ btn=buttons[i]; break; } }
+      if(btn){ btn.classList.remove('active'); }
+    }
+
+    if(startBtnMem){ startBtnMem.addEventListener('click', function(){ startGame(); }); }
+
+    setJudge('Press "Start Game" to begin', '#b7fffb');
+    // Mirror initial defaults into inputs
+    if(roundIn) roundIn.value = '1';
+    if(lenIn) lenIn.value = String(ROUND_LENS[0]);
+    if(prevIn) prevIn.value = String(PREVIEW_SEC);
+
+    // Keyboard
+    window.addEventListener('keydown', function(e){
+      var keys = ['ArrowLeft','ArrowDown','ArrowUp','ArrowRight'];
+      if(keys.indexOf(e.key) !== -1){ e.preventDefault(); pressMemory(e.key); }
+    });
+    window.addEventListener('keyup', function(e){
+      var keys = ['ArrowLeft','ArrowDown','ArrowUp','ArrowRight'];
+      if(keys.indexOf(e.key) !== -1){ e.preventDefault(); releaseMemory(e.key); }
+    });
+
+    // Touch / mouse buttons
+    for(var b=0;b<buttons.length;b++){
+      (function(btn){
+        var key = btn.getAttribute('data-key');
+        var down = function(){ pressMemory(key); };
+        var up   = function(){ releaseMemory(key); };
+        btn.addEventListener('mousedown', down);
+        btn.addEventListener('mouseup', up);
+        btn.addEventListener('mouseleave', up);
+        btn.addEventListener('touchstart', function(e){ e.preventDefault(); down(); }, {passive:false});
+        btn.addEventListener('touchend', function(e){ e.preventDefault(); up(); }, {passive:false});
+      })(buttons[b]);
+    }
+
+    function msToText(ms){ if(ms==null) return '--'; return (ms/1000).toFixed(2)+'s'; }
+    function renderLeaderboards(){
+      // my board
+      if(myRowsEl){
+        var html='';
+        for(var i=0;i<ROUND_LENS.length;i++){
+          html += '<tr><td>Round '+(i+1)+'</td><td class="time">'+msToText(myRecords[i])+'</td></tr>';
+        }
+        myRowsEl.innerHTML = html;
+      }
+      // global sample
+      if(globalRowsEl){
+        var html2='';
+        for(var j=0;j<sampleGlobal.length;j++){
+          var r = sampleGlobal[j].r;
+          html2 += '<tr><td class="name">'+sampleGlobal[j].name+'</td>'+
+                   '<td class="time">'+r[0].toFixed(2)+'s</td>'+
+                   '<td class="time">'+r[1].toFixed(2)+'s</td>'+
+                   '<td class="time">'+r[2].toFixed(2)+'s</td>'+
+                   '<td class="time">'+r[3].toFixed(2)+'s</td></tr>';
+        }
+        globalRowsEl.innerHTML = html2;
+      }
+    }
+
+    // render leaderboards only when opening the Leaderboard tab
+    function ensureLeaderboards(){ renderLeaderboards(); }
+    // do not auto-render at load
+
+    // ===== Countdown Timer (Bemuse-style top bar) =====
+    (function(){
+      var timeEl = document.getElementById('cd-time');
+      var startBtn = document.getElementById('cd-start');
+      var pauseBtn = document.getElementById('cd-pause');
+      var resetBtn = document.getElementById('cd-reset');
+      var timerBox = document.querySelector('.timer');
+      if(!timeEl) return;
+
+      var total = 60; // default 60s
+      var remain = total;
+      var ticking = null;
+      var onZeroCb = null;
+
+      function fmt(s){
+        var m = Math.floor(s/60).toString(); if(m.length<2) m = '0'+m;
+        var sec = String(s%60); if(sec.length<2) sec = '0'+sec;
+        return m + ':' + sec;
+      }
+      function render(){
+        timeEl.textContent = fmt(remain);
+        if(remain<=10 && remain>0){ timerBox.classList.add('ending'); } else { timerBox.classList.remove('ending'); }
+      }
+      function tick(){
+        if(remain>0){
+          remain--; render();
+          if(remain===0){
+            timerBox.classList.remove('ending');
+            timeEl.textContent = 'START!';
+            timeEl.style.textShadow = '0 0 22px rgba(68,255,209,.85)';
+            clearInterval(ticking); ticking = null;
+            // notify consumer at zero
+            if(typeof onZeroCb === 'function'){ try{ onZeroCb(); }catch(e){} }
+            setTimeout(function(){ timeEl.style.textShadow=''; render(); }, 800);
+          }
+        }
+      }
+      function start(){ if(!ticking && remain>0){ ticking = setInterval(tick, 1000); } }
+      function pause(){ if(ticking){ clearInterval(ticking); ticking=null; } }
+      function reset(){ pause(); remain = total; render(); }
+
+      if(startBtn){ startBtn.addEventListener('click', start); }
+      if(pauseBtn){ pauseBtn.addEventListener('click', pause); }
+      if(resetBtn){ resetBtn.addEventListener('click', reset); }
+
+      window.bemuseTimer = {
+        set: function(seconds){ total = Math.max(1, Math.floor(seconds)); remain = total; render(); },
+        start: start,
+        pause: pause,
+        reset: reset,
+        setOnZero: function(cb){ onZeroCb = cb; }
+      };
+
+      render();
+    })();
+
+    // ===== Simple unit tests (console) =====
+    function checkSequence(expected, input){
+      if(expected.length !== input.length) return false;
+      for(var i=0;i<expected.length;i++){ if(expected[i] !== input[i]) return false; }
+      return true;
+    }
+    function getRoundLens(){ return [3,5,8,12]; }
+    (function runTests(){
+      var ok = 0, failC = 0;
+      function test(name, cond){ if(cond){ ok++; console.log('✅', name); } else { failC++; console.error('❌', name); } }
+      test('exact match', checkSequence(['L','R','U'], ['L','R','U'])===true);
+      test('length mismatch', checkSequence(['L','R'], ['L','R','U'])===false);
+      test('value mismatch', checkSequence(['L','R','U'], ['L','U','R'])===false);
+      var rl = getRoundLens();
+      test('round lengths count', rl.length===4);
+      test('round1 length=3', rl[0]===3);
+      test('round2 length=5', rl[1]===5);
+      test('round3 length=8', rl[2]===8);
+      test('round4 length=12', rl[3]===12);
+      // New tests for UI helpers
+      // renderSequence density class selection
+      seq = new Array(25); for(var i=0;i<25;i++){ seq[i] = 'ArrowLeft'; }
+      renderSequence();
+      test('sequence gets compact for >24', seqEl.classList.contains('compact'));
+      seq = new Array(61); for(var j=0;j<61;j++){ seq[j] = 'ArrowLeft'; }
+      renderSequence();
+      test('sequence gets xcompact for >60', seqEl.classList.contains('xcompact'));
+      // extra: msToText formatting sanity
+      test('msToText formats seconds with 2 decimals', (function(){ var s = msToText(1234); return s === '1.23s'; })());
+      // rndKey domain test
+      (function(){
+        var okKeys = {ArrowLeft:1, ArrowDown:1, ArrowUp:1, ArrowRight:1};
+        var seen = true;
+        for(var t=0;t<50;t++){ if(!okKeys[rndKey()]){ seen=false; break; } }
+        test('rndKey returns only allowed keys', seen===true);
+      })();
+      // DOM presence safety
+      test('#combo exists', !!document.getElementById('combo'));
+      test('#judge exists', !!document.getElementById('judge'));
+      test('#sequence exists', !!document.getElementById('sequence'));
+      test('#overlay exists', !!document.getElementById('overlay'));
+      console.log('Tests:', ok, 'passed /', (ok+failC), 'total');
+    })();
+
+    // === Tabs logic ===
+    (function(){
+      var tabGame = document.getElementById('tab-game');
+      var tabLeader = document.getElementById('tab-leader');
+      var vGame = document.getElementById('view-game');
+      var vBoards = document.getElementById('view-boards');
+      if(!tabGame || !tabLeader) return;
+      function activate(btn){ btn.classList.add('active'); }
+      function deactivate(btn){ btn.classList.remove('active'); }
+      function show(el){ el.classList.add('show'); }
+      function hide(el){ el.classList.remove('show'); }
+      tabGame.addEventListener('click', function(){
+        activate(tabGame); deactivate(tabLeader); show(vGame); hide(vBoards);
+      });
+      tabLeader.addEventListener('click', function(){
+        activate(tabLeader); deactivate(tabGame); show(vBoards); hide(vGame); ensureLeaderboards();
+      });
+    })();
+  </script>
+</body>
+</html>

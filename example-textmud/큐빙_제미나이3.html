@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Ancient Transmutation Altar</title>
+    <style>
+        /* 1. 제공된 main.css 변수 및 베이스 스타일 */
+        :root {
+            --bg: #070a10;
+            --panel: #0b0f18;
+            --txt: #d7e0ff;
+            --muted: #8fa2c6;
+            --border: rgba(255, 255, 255, .08);
+            --sys: #ffd56a;
+            --ok: #7CFF6B;
+            --bad: #ff6b7a;
+            --move: #32f6ff;
+            --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            --sans: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+
+            /* 등급별 색상 */
+            --r-common: #d6d6d6;
+            --r-magic: #4aa3ff;
+            --r-rare: #ffd84a;
+            --r-epic: #b68cff;
+            --r-legend: #ff9a3c;
+        }
+
+        body {
+            height: 100vh;
+            margin: 0;
+            background: var(--bg);
+            color: var(--txt);
+            font-family: var(--sans);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* 2. 메인 패널 디자인 */
+        .cubing-interface {
+            width: 440px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 30px;
+            box-shadow: 0 40px 100px rgba(0,0,0,0.8);
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+            position: relative;
+        }
+
+        /* 장식 라인 */
+        .cubing-interface::before {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border: 1px solid rgba(255,255,255,0.02);
+            pointer-events: none;
+        }
+
+        .header {
+            text-align: center;
+        }
+
+        .header h2 {
+            font-family: var(--mono);
+            font-size: 16px;
+            color: var(--muted);
+            letter-spacing: 4px;
+            margin: 0;
+            text-transform: uppercase;
+        }
+
+        /* 3. 상단: 결과물 연성 영역 (결과 슬롯) */
+        .forge-display {
+            height: 180px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            background: radial-gradient(circle, rgba(255, 213, 106, 0.03) 0%, transparent 70%);
+        }
+
+        .main-slot {
+            width: 100px;
+            height: 100px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            position: relative;
+            z-index: 2;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+        }
+
+        /* 4. 하단: 재료 선택 영역 */
+        .material-section {
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+        }
+
+        .section-label {
+            font-size: 11px;
+            color: var(--muted);
+            margin-bottom: 12px;
+            font-family: var(--mono);
+            text-align: center;
+        }
+
+        .material-grid {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .material-slot {
+            width: 54px;
+            height: 54px;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .material-slot:hover {
+            border-color: var(--muted);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .material-slot.active {
+            border-color: var(--sys);
+            box-shadow: inset 0 0 10px rgba(255, 213, 106, 0.1);
+        }
+
+        /* 5. 변환 버튼 */
+        .action-btn {
+            width: 100%;
+            background: transparent;
+            border: 1px solid #2e3c5a;
+            color: var(--txt);
+            padding: 15px;
+            font-family: var(--mono);
+            font-weight: bold;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .action-btn:hover:not(:disabled) {
+            border-color: var(--sys);
+            color: var(--sys);
+            background: rgba(255, 213, 106, 0.05);
+        }
+
+        /* 6. 애니메이션 연출 */
+        .is-processing .main-slot {
+            animation: forgeVibrate 0.1s infinite alternate;
+            border-color: var(--sys);
+        }
+
+        .is-processing .material-slot.active {
+            animation: materialDrain 1.5s ease-in-out infinite;
+        }
+
+        @keyframes forgeVibrate {
+            from { transform: translate(-1px, -1px); }
+            to { transform: translate(1px, 1px); }
+        }
+
+        @keyframes materialDrain {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.9); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        /* 결과 로그 */
+        .log-area {
+            height: 60px;
+            font-size: 12px;
+            color: var(--muted);
+            overflow: hidden;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .success-msg { animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    </style>
+</head>
+<body>
+
+<div class="cubing-interface" id="cubingUi">
+    <div class="header">
+        <h2>Transmutation</h2>
+    </div>
+
+    <div class="forge-display">
+        <div class="main-slot" id="resultSlot">
+            <span id="resultIcon">?</span>
+        </div>
+    </div>
+
+    <div class="material-section">
+        <div class="section-label">SELECT MATERIALS</div>
+        <div class="material-grid">
+            <div class="material-slot active" onclick="toggleSlot(this)">💎</div>
+            <div class="material-slot active" onclick="toggleSlot(this)">📜</div>
+            <div class="material-slot active" onclick="toggleSlot(this)">🔥</div>
+            <div class="material-slot" onclick="toggleSlot(this)">🌑</div>
+        </div>
+    </div>
+
+    <div class="action-btn-wrap">
+        <button class="action-btn" id="transmuteBtn">TRANSMUTE</button>
+    </div>
+
+    <div class="log-area" id="logArea">
+        재료를 선택하고 연성을 시작하십시오.
+    </div>
+</div>
+
+<script>
+    const transmuteBtn = document.getElementById('transmuteBtn');
+    const cubingUi = document.getElementById('cubingUi');
+    const resultIcon = document.getElementById('resultIcon');
+    const resultSlot = document.getElementById('resultSlot');
+    const logArea = document.getElementById('logArea');
+
+    const RESULTS = [
+        { name: "녹슨 파편", rarity: "common", icon: "🔩", chance: 60 },
+        { name: "강화된 칼날", rarity: "magic", icon: "⚔️", chance: 25 },
+        { name: "고결한 보석", rarity: "rare", icon: "💎", chance: 12 },
+        { name: "영웅의 유산", rarity: "legend", icon: "🏆", chance: 3 }
+    ];
+
+    function toggleSlot(el) {
+        if(cubingUi.classList.contains('is-processing')) return;
+        el.classList.toggle('active');
+    }
+
+    transmuteBtn.addEventListener('click', () => {
+        const activeMaterials = document.querySelectorAll('.material-slot.active');
+        
+        if(activeMaterials.length < 2) {
+            logArea.innerHTML = `<span style="color:var(--bad)">최소 2개 이상의 재료가 필요합니다.</span>`;
+            return;
+        }
+
+        // 연성 시작 연출
+        cubingUi.classList.add('is-processing');
+        transmuteBtn.disabled = true;
+        resultIcon.innerText = "⏳";
+        resultSlot.style.borderColor = "var(--border)";
+        logArea.innerText = "심연의 마력이 소용돌이칩니다...";
+
+        // 1.8초 후 결과 출력
+        setTimeout(() => {
+            cubingUi.classList.remove('is-processing');
+            const result = calculateResult();
+            showResult(result);
+            transmuteBtn.disabled = false;
+        }, 1800);
+    });
+
+    function calculateResult() {
+        const rand = Math.random() * 100;
+        let acc = 0;
+        for (let r of RESULTS) {
+            acc += r.chance;
+            if (rand <= acc) return r;
+        }
+        return RESULTS[0];
+    }
+
+    function showResult(item) {
+        const color = `var(--r-${item.rarity})`;
+        resultIcon.innerText = item.icon;
+        resultSlot.style.borderColor = color;
+        resultSlot.style.boxShadow = `0 0 30px ${color}33`;
+        
+        logArea.innerHTML = `
+            <div class="success-msg">
+                <span style="color:${color}">[${item.name}]</span> 연성 성공
+            </div>
+        `;
+    }
+</script>
+
+</body>
+</html>

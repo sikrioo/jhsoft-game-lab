@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>3D Dice Physics Puzzle</title>
+  <style>
+    body { margin: 0; overflow: hidden; background: #0f172a; font-family: sans-serif; }
+    #ui { position: absolute; top: 20px; left: 20px; color: white; pointer-events: none; }
+    .stat { font-size: 20px; margin-bottom: 5px; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+<div id="ui">
+  <div class="stat" id="coinText">Coins: 18</div>
+  <div class="stat" id="scoreText">Score: 0</div>
+  <div style="font-size: 14px; opacity: 0.8;">주사위 클릭: 굴리기 (비용 1)</div>
+</div>
+
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "cannon": "https://unpkg.com/cannon-es@0.20.0/dist/cannon-es.js"
+    }
+  }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import * as CANNON from 'cannon';
+
+// --- 설정 및 상수 ---
+const COLS = 3;
+const ROWS = 9;
+const DIE_SIZE = 1;
+const GAP = 0.2;
+
+// --- 상태 관리 ---
+let coins = 18;
+let score = 0;
+let isResolving = false;
+
+// --- 물리 & 그래픽 엔진 변수 ---
+let world, scene, camera, renderer;
+const diceObjects = []; // { mesh, body, data }
+
+// --- 초기화 ---
+function init() {
+  // 1. Cannon.js 물리 세계 설정
+  world = new CANNON.World();
+  world.gravity.set(0, -9.82, 0); // 아래 방향 중력
+
+  // 2. Three.js 그래픽 설정
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0f172a);
+
+  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+  camera.position.set(0, 5, 15);
+  camera.lookAt(0, 4, 0);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.shadowMap.enabled = true;
+  document.body.appendChild(renderer.domElement);
+
+  // 조명
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambientLight);
+  const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+  directionalLight.position.set(5, 10, 5);
+  directionalLight.castShadow = true;
+  scene.add(directionalLight);
+
+  // 바닥 및 벽 (주사위가 밖으로 나가지 않게 함)
+  createBoundaries();
+
+  // 초기 주사위 생성
+  for (let r = 0; r < ROWS; r++) {
+    for (let c = 0; c < COLS; c++) {
+      createDice(c, r);
+    }
+  }
+
+  animate();
+}
+
+function createBoundaries() {
+  // 바닥
+  const groundBody = new CANNON.Body({ mass: 0 });
+  groundBody.addShape(new CANNON.Plane());
+  groundBody.quaternion.setFromEuler(-Math.PI / 2, 0, 0);
+  world.addBody(groundBody);
+
+  const groundMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(10, 20),
+    new THREE.MeshPhongMaterial({ color: 0x1e293b })
+  );
+  groundMesh.rotation.x = -Math.PI / 2;
+  groundMesh.receiveShadow = true;
+  scene.add(groundMesh);
+
+  // 옆벽 (보이지 않는 투명 벽)
+  const leftWall = new CANNON.Body({ mass: 0 });
+  leftWall.addShape(new CANNON.Box(new CANNON.Vec3(0.1, 20, 5)));
+  leftWall.position.set(-(COLS * (DIE_SIZE + GAP)) / 2, 10, 0);
+  world.addBody(leftWall);
+
+  const rightWall = new CANNON.Body({ mass: 0 });
+  rightWall.addShape(new CANNON.Box(new CANNON.Vec3(0.1, 20, 5)));
+  rightWall.position.set((COLS * (DIE_SIZE + GAP)) / 2, 10, 0);
+  world.addBody(rightWall);
+}
+
+function createDice(col, row, isNew = false) {
+  const x = (col - (COLS - 1) / 2) * (DIE_SIZE + GAP);
+  const y = isNew ? 15 : row * (DIE_SIZE + GAP) + 0.5;
+
+  const value = Math.floor(Math.random() * 6) + 1;
+  
+  // Cannon Body
+  const shape = new CANNON.Box(new CANNON.Vec3(DIE_SIZE / 2, DIE_SIZE / 2, DIE_SIZE / 2));
+  const body = new CANNON.Body({
+    mass: 1,
+    shape: shape,
+    position: new CANNON.Vec3(x, y, 0),
+    allowSleep: true
+  });
+  world.addBody(body);
+
+  // Three.js Mesh
+  const geometry = new THREE.BoxGeometry(DIE_SIZE, DIE_SIZE, DIE_SIZE);
+  const material = new THREE.MeshPhongMaterial({ color: 0xffffff });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.castShadow = true;
+  scene.add(mesh);
+
+  // 주사위 눈금 텍스처 대신 간단한 점 생성 (여기서는 숫자 표시를 위해 색상만 다르게 처리)
+  const die = { mesh, body, data: { value, col, row } };
+  diceObjects.push(die);
+
+  // 텍스트 라벨 (주사위 숫자 확인용)
+  addNumberToMesh(mesh, value);
+}
+
+function addNumberToMesh(mesh, value) {
+  // 실제 주사위 눈금 텍스처를 입히는 대신 간단한 캔버스 텍스처 사용
+  const canvas = document.createElement('canvas');
+  canvas.width = 64; canvas.height = 64;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = 'white'; ctx.fillRect(0,0,64,64);
+  ctx.fillStyle = 'black'; ctx.font = 'bold 40px Arial';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(value, 32, 32);
+  
+  const texture = new THREE.CanvasTexture(canvas);
+  mesh.material = new THREE.MeshPhongMaterial({ map: texture });
+}
+
+// --- 클릭 이벤트 ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+window.addEventListener('mousedown', (event) => {
+  if (isResolving || coins <= 0) return;
+
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  const intersects = raycaster.intersectObjects(diceObjects.map(d => d.mesh));
+
+  if (intersects.length > 0) {
+    const hitMesh = intersects[0].object;
+    const die = diceObjects.find(d => d.mesh === hitMesh);
+    rollSingleDie(die);
+  }
+});
+
+function rollSingleDie(die) {
+  coins -= 1;
+  document.getElementById('coinText').innerText = `Coins: ${coins}`;
+
+  // 물리적인 충격 부여 (주사위를 굴리는 연출)
+  die.body.velocity.set((Math.random() - 0.5) * 2, 5, (Math.random() - 0.5) * 2);
+  die.body.angularVelocity.set(Math.random() * 10, Math.random() * 10, Math.random() * 10);
+
+  // 값 변경 (굴린 후 잠시 뒤 새 값 부여)
+  setTimeout(() => {
+    const newValue = Math.floor(Math.random() * 6) + 1;
+    die.data.value = newValue;
+    addNumberToMesh(die.mesh, newValue);
+    checkMatches();
+  }, 1000);
+}
+
+// --- 매칭 로직 ---
+function checkMatches() {
+  // 3D에서는 위치가 고정되지 않으므로 Y축 좌표를 기준으로 층(row)을 재계산합니다.
+  const sorted = [...diceObjects].sort((a, b) => a.body.position.y - b.body.position.y);
+  // 간단한 매칭 시뮬레이션 (동일한 높이에 있는 3개 체크)
+  // 실제 게임에서는 그리드 시스템을 엄격히 적용하거나 물리적 정지를 기다려야 합니다.
+  // 여기서는 3D 엔진 적용의 핵심인 물리 루프를 우선합니다.
+}
+
+// --- 애니메이션 루프 ---
+function animate() {
+  requestAnimationFrame(animate);
+
+  // 물리 세계 업데이트 (60fps 기준)
+  world.fixedStep();
+
+  // 물리 바디의 위치를 그래픽 메쉬에 동기화
+  diceObjects.forEach(die => {
+    die.mesh.position.copy(die.body.position);
+    die.mesh.quaternion.copy(die.body.quaternion);
+  });
+
+  renderer.render(scene, camera);
+}
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+init();
+</script>
+</body>
+</html>

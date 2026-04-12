@@ -1,0 +1,561 @@
+
+<div id="dice-app" style="position:relative;width:100%;height:800px;overflow:hidden;border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);">
+  <canvas id="c" style="width:100%;height:100%;display:block;"></canvas>
+  <div id="ui" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
+    <div id="result-display" style="position:absolute;top:20px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:500;color:var(--color-text-primary);background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);padding:8px 24px;border-radius:var(--border-radius-lg);opacity:0;transition:opacity 0.4s;">
+      <span id="result-text"></span>
+    </div>
+    <div style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:12px;pointer-events:all;">
+      <button id="roll-btn" style="padding:12px 32px;font-size:15px;font-weight:500;border-radius:var(--border-radius-lg);cursor:pointer;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);">주사위 굴리기</button>
+      <button id="reset-btn" style="padding:12px 20px;font-size:15px;font-weight:500;border-radius:var(--border-radius-lg);cursor:pointer;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);">리셋</button>
+    </div>
+    <div style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--color-text-secondary);">드래그로 시점 조정</div>
+    <div id="history" style="position:absolute;top:20px;right:20px;font-size:13px;color:var(--color-text-secondary);text-align:right;line-height:1.8;"></div>
+    <div id="reroll-controls" style="position:absolute;left:50%;bottom:108px;transform:translateX(-50%);display:flex;gap:8px;pointer-events:all;flex-wrap:wrap;justify-content:center;"></div>
+  </div>
+</div>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+(function(){
+const canvas = document.getElementById('c');
+const container = document.getElementById('dice-app');
+const FLOOR_Y = -3;
+const DIE_HALF = 1;
+const DIE_REST_Y = FLOOR_Y + DIE_HALF + 0.01;
+
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const W = container.clientWidth, H = container.clientHeight;
+renderer.setSize(W, H);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, W/H, 0.1, 100);
+camera.position.set(0, 12, 16);
+camera.lookAt(0, -2.5, 0);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.42));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.25);
+dirLight.position.set(6, 16, 10);
+dirLight.castShadow = true;
+dirLight.shadow.camera.near = 0.1;
+dirLight.shadow.camera.far = 50;
+dirLight.shadow.camera.left = -10;
+dirLight.shadow.camera.right = 10;
+dirLight.shadow.camera.top = 10;
+dirLight.shadow.camera.bottom = -10;
+dirLight.shadow.mapSize.width = 2048;
+dirLight.shadow.mapSize.height = 2048;
+scene.add(dirLight);
+
+const fillLight = new THREE.PointLight(0xffeedd, 0.32, 30);
+fillLight.position.set(-5, 6, -5);
+scene.add(fillLight);
+
+const floorTextureCanvas = document.createElement('canvas');
+floorTextureCanvas.width = floorTextureCanvas.height = 1024;
+const floorCtx = floorTextureCanvas.getContext('2d');
+const floorGrad = floorCtx.createRadialGradient(512, 512, 140, 512, 512, 512);
+floorGrad.addColorStop(0, 'rgba(255,255,255,0.28)');
+floorGrad.addColorStop(0.38, 'rgba(245,240,232,0.18)');
+floorGrad.addColorStop(0.72, 'rgba(235,228,220,0.10)');
+floorGrad.addColorStop(1, 'rgba(220,212,205,0.03)');
+floorCtx.fillStyle = floorGrad;
+floorCtx.fillRect(0, 0, 1024, 1024);
+for (let i = 0; i < 18; i++) {
+  floorCtx.strokeStyle = 'rgba(255,255,255,0.035)';
+  floorCtx.lineWidth = 1;
+  floorCtx.beginPath();
+  floorCtx.arc(512, 512, 120 + i * 34, 0, Math.PI * 2);
+  floorCtx.stroke();
+}
+const floorTexture = new THREE.CanvasTexture(floorTextureCanvas);
+
+const floorMesh = new THREE.Mesh(
+  new THREE.PlaneGeometry(30,30),
+  new THREE.MeshPhongMaterial({
+    map: floorTexture,
+    color: 0xf7f3ee,
+    transparent: true,
+    opacity: 0.72,
+    shininess: 12,
+    depthWrite: false
+  })
+);
+floorMesh.rotation.x = -Math.PI/2;
+floorMesh.position.y = FLOOR_Y;
+floorMesh.receiveShadow = true;
+scene.add(floorMesh);
+
+const shadowPlane = new THREE.Mesh(
+  new THREE.PlaneGeometry(18,18),
+  new THREE.MeshBasicMaterial({color:0x000000, transparent:true, opacity:0.08, depthWrite:false})
+);
+shadowPlane.rotation.x = -Math.PI/2;
+shadowPlane.position.y = FLOOR_Y + 0.005;
+scene.add(shadowPlane);
+
+const grid = new THREE.GridHelper(20,20,0xd8d0c7,0xd8d0c7);
+grid.position.y = FLOOR_Y + 0.002;
+grid.material.opacity = 0.12;
+grid.material.transparent = true;
+scene.add(grid);
+
+const world = new CANNON.World();
+world.gravity.set(0,-28,0);
+world.broadphase = new CANNON.NaiveBroadphase();
+world.solver.iterations = 20;
+world.solver.tolerance = 0.001;
+
+const groundMat = new CANNON.Material('ground');
+const diceMat = new CANNON.Material('dice');
+world.addContactMaterial(new CANNON.ContactMaterial(groundMat, diceMat, {
+  friction: 0.46,
+  restitution: 0.32
+}));
+
+const groundBody = new CANNON.Body({mass:0, material:groundMat});
+groundBody.addShape(new CANNON.Plane());
+groundBody.position.set(0, FLOOR_Y, 0);
+groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+world.addBody(groundBody);
+
+[
+  {p:[0,FLOOR_Y+5,-8],q:[0,0,0,1]},
+  {p:[0,FLOOR_Y+5,8],q:[0,1,0,0]},
+  {p:[-8,FLOOR_Y+5,0],q:[0,0.707,0,0.707]},
+  {p:[8,FLOOR_Y+5,0],q:[0,-0.707,0,0.707]}
+].forEach(w => {
+  const b = new CANNON.Body({mass:0, material:groundMat});
+  b.addShape(new CANNON.Plane());
+  b.position.set(...w.p);
+  b.quaternion.set(...w.q);
+  world.addBody(b);
+});
+
+function makeTex(n) {
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.roundRect(8,8,240,240,24);
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.08)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = '#cc2222';
+  const r = 22;
+  ({
+    1:[[128,128]],
+    2:[[80,80],[176,176]],
+    3:[[80,80],[128,128],[176,176]],
+    4:[[80,80],[176,80],[80,176],[176,176]],
+    5:[[80,80],[176,80],[128,128],[80,176],[176,176]],
+    6:[[80,75],[176,75],[80,128],[176,128],[80,181],[176,181]]
+  })[n].forEach(([x,y]) => {
+    ctx.beginPath();
+    ctx.arc(x,y,r,0,Math.PI*2);
+    ctx.fill();
+  });
+  return new THREE.CanvasTexture(cv);
+}
+
+const faceOrder = [2, 5, 1, 6, 3, 4];
+const faceMats = faceOrder.map(n => new THREE.MeshLambertMaterial({map:makeTex(n)}));
+
+// black dice materials
+function makeBlackTex(n){
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle='#111111';
+  ctx.beginPath(); ctx.roundRect(8,8,240,240,24); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle='#ffffff';
+  const r=22;
+  ({1:[[128,128]],2:[[80,80],[176,176]],3:[[80,80],[128,128],[176,176]],
+    4:[[80,80],[176,80],[80,176],[176,176]],5:[[80,80],[176,80],[128,128],[80,176],[176,176]],
+    6:[[80,75],[176,75],[80,128],[176,128],[80,181],[176,181]]})[n]
+  .forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();});
+  return new THREE.CanvasTexture(cv);
+}
+const blackFaceMats = faceOrder.map(n => new THREE.MeshLambertMaterial({map:makeBlackTex(n)}));
+
+function makeRedTex(n){
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle='#b31717';
+  ctx.beginPath(); ctx.roundRect(8,8,240,240,24); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.18)'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle='#ffffff';
+  const r=22;
+  ({1:[[128,128]],2:[[80,80],[176,176]],3:[[80,80],[128,128],[176,176]],
+    4:[[80,80],[176,80],[80,176],[176,176]],5:[[80,80],[176,80],[128,128],[80,176],[176,176]],
+    6:[[80,75],[176,75],[80,128],[176,128],[80,181],[176,181]]})[n]
+  .forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();});
+  return new THREE.CanvasTexture(cv);
+}
+const redFaceMats = faceOrder.map(n => new THREE.MeshLambertMaterial({map:makeRedTex(n)}));
+
+function makeBlueTex(n){
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle='#1e4fd1';
+  ctx.beginPath(); ctx.roundRect(8,8,240,240,24); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,0.2)'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle='#ffffff';
+  const r=22;
+  ({1:[[128,128]],2:[[80,80],[176,176]],3:[[80,80],[128,128],[176,176]],
+    4:[[80,80],[176,80],[80,176],[176,176]],5:[[80,80],[176,80],[128,128],[80,176],[176,176]],
+    6:[[80,75],[176,75],[80,128],[176,128],[80,181],[176,181]]})[n]
+  .forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();});
+  return new THREE.CanvasTexture(cv);
+}
+const blueFaceMats = faceOrder.map(n => new THREE.MeshLambertMaterial({map:makeBlueTex(n)}));
+
+const localAxes = [
+  new THREE.Vector3(1,0,0),
+  new THREE.Vector3(-1,0,0),
+  new THREE.Vector3(0,1,0),
+  new THREE.Vector3(0,-1,0),
+  new THREE.Vector3(0,0,1),
+  new THREE.Vector3(0,0,-1),
+];
+
+const stableOrientations = [];
+(function buildStableOrientations(){
+  const seen = new Set();
+  const quarterTurns = [0, Math.PI/2, Math.PI, Math.PI*1.5];
+  for (const x of quarterTurns) {
+    for (const y of quarterTurns) {
+      for (const z of quarterTurns) {
+        const e = new THREE.Euler(x, y, z, 'XYZ');
+        const q = new THREE.Quaternion().setFromEuler(e);
+        const key = [q.x, q.y, q.z, q.w].map(v => Math.round(v * 1000)).join(',');
+        if (!seen.has(key)) {
+          seen.add(key);
+          stableOrientations.push(q.clone());
+        }
+      }
+    }
+  }
+})();
+
+const labels=['','⚀','⚁','⚂','⚃','⚄','⚅'];
+let rolling = false;
+let rollHistory = [];
+let dice = [];
+
+function createDie(x, y, z, colorType='white', label='주사위') {
+  const mats = colorType === 'black' ? blackFaceMats : colorType === 'red' ? redFaceMats : colorType === 'blue' ? blueFaceMats : faceMats;
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), mats);
+  mesh.castShadow = true;
+  mesh.receiveShadow = true;
+  scene.add(mesh);
+
+  const body = new CANNON.Body({
+    mass: 1,
+    material: diceMat,
+    linearDamping: 0.1,
+    angularDamping: 0.1
+  });
+  body.addShape(new CANNON.Box(new CANNON.Vec3(1,1,1)));
+  body.position.set(x, y, z);
+  world.addBody(body);
+
+  return {
+    mesh,
+    body,
+    settled: false,
+    settleTimer: 0,
+    result: null,
+    colorType,
+    label
+  };
+}
+
+function clearDice() {
+  dice.forEach(d => {
+    scene.remove(d.mesh);
+    world.remove(d.body);
+  });
+  dice = [];
+}
+
+function createDicePair() {
+  clearDice();
+  dice = [
+    createDie(-3.8, FLOOR_Y + 8, 0, 'white', '흰색 1'),
+    createDie(-1.2, FLOOR_Y + 8, 0, 'blue', '파란색'),
+    createDie( 1.4, FLOOR_Y + 8, 0, 'black', '검은색'),
+    createDie( 4.0, FLOOR_Y + 8, 0, 'red', '붉은색')
+  ];
+  rolling = false;
+  document.getElementById('result-display').style.opacity = '0';
+  updateRerollControls();
+}
+
+function syncDieVisual(die) {
+  const p = die.body.position;
+  const q = die.body.quaternion;
+  die.mesh.position.set(p.x, p.y, p.z);
+  die.mesh.quaternion.set(q.x, q.y, q.z, q.w);
+}
+
+function getTopFace(mesh) {
+  const q = mesh.quaternion;
+  const up = new THREE.Vector3(0,1,0);
+  let best = -1;
+  let bestDot = -Infinity;
+  localAxes.forEach((axis, i) => {
+    const worldAxis = axis.clone().applyQuaternion(q);
+    const d = worldAxis.dot(up);
+    if (d > bestDot) {
+      bestDot = d;
+      best = i;
+    }
+  });
+  return faceOrder[best];
+}
+
+function snapDieToStableFace(die) {
+  const current = new THREE.Quaternion(
+    die.body.quaternion.x,
+    die.body.quaternion.y,
+    die.body.quaternion.z,
+    die.body.quaternion.w
+  );
+
+  let best = stableOrientations[0];
+  let bestDot = -Infinity;
+
+  for (const candidate of stableOrientations) {
+    const dot = Math.abs(current.dot(candidate));
+    if (dot > bestDot) {
+      bestDot = dot;
+      best = candidate;
+    }
+  }
+
+  die.body.quaternion.set(best.x, best.y, best.z, best.w);
+  die.body.angularVelocity.set(0,0,0);
+  die.body.velocity.set(0,0,0);
+  die.body.position.y = DIE_REST_Y;
+  die.body.sleep();
+
+  die.mesh.quaternion.copy(best);
+  die.mesh.position.set(die.body.position.x, die.body.position.y, die.body.position.z);
+  die.result = getTopFace(die.mesh);
+  die.settled = true;
+}
+
+function showResults() {
+  const values = dice.map(d => d.result ?? 0);
+  const sum = values.reduce((a,b) => a+b, 0);
+  document.getElementById('result-text').textContent =
+    `결과: ${values.map((v,i)=>`${dice[i].label} ${v} ${labels[v]}`).join(' + ')} = ${sum}`;
+  document.getElementById('result-display').style.opacity = '1';
+
+  const summary = `${dice.map((d,i)=>`${d.label} ${values[i]}${labels[values[i]]}`).join(' / ')} → 합계 ${sum}`;
+  rollHistory.unshift(summary);
+  if (rollHistory.length > 8) rollHistory.pop();
+  document.getElementById('history').innerHTML =
+    '<div style="margin-bottom:4px;font-size:11px;color:var(--color-text-tertiary);">최근 기록</div>' +
+    rollHistory.map(v => `<div style="font-size:13px;">${v}</div>`).join('');
+
+  updateRerollControls();
+}
+
+function resetDieForRoll(die, xBias) {
+  die.settled = false;
+  die.settleTimer = 0;
+  die.result = null;
+
+  die.body.wakeUp();
+  die.body.position.set(
+    xBias + (Math.random() - 0.5) * 1.2,
+    FLOOR_Y + 9 + Math.random() * 2,
+    (Math.random() - 0.5) * 2.4
+  );
+  die.body.quaternion.setFromEuler(
+    Math.random() * Math.PI * 2,
+    Math.random() * Math.PI * 2,
+    Math.random() * Math.PI * 2,
+    'XYZ'
+  );
+  die.body.velocity.set(
+    xBias * 1.5 + (Math.random() - 0.5) * 8,
+    -1 + Math.random() * 3,
+    (Math.random() - 0.5) * 8
+  );
+  die.body.angularVelocity.set(
+    (Math.random() - 0.5) * 32,
+    (Math.random() - 0.5) * 32,
+    (Math.random() - 0.5) * 32
+  );
+  die.body.force.set(0,0,0);
+  die.body.torque.set(0,0,0);
+}
+
+function updateRerollControls() {
+  const el = document.getElementById('reroll-controls');
+  if (!el) return;
+  el.innerHTML = dice.map((d, i) => {
+    const bg = d.colorType === 'black'
+      ? '#111111'
+      : d.colorType === 'red'
+      ? '#b31717'
+      : 'var(--color-background-primary)';
+    const color = (d.colorType === 'black' || d.colorType === 'red') ? '#ffffff' : 'var(--color-text-primary)';
+    const border = (d.colorType === 'black' || d.colorType === 'red')
+      ? 'rgba(255,255,255,0.18)'
+      : 'var(--color-border-secondary)';
+    const face = d.result ? ` (${d.result} ${labels[d.result]})` : '';
+    return `<button data-reroll-index="${i}" style="padding:8px 14px;font-size:13px;font-weight:600;border-radius:12px;cursor:pointer;background:${bg};border:0.5px solid ${border};color:${color};box-shadow:0 3px 10px rgba(0,0,0,0.08);">${d.label} 다시 굴리기${face}</button>`;
+  }).join('');
+}
+
+function rerollSingleDie(index) {
+  if (rolling) return;
+  const die = dice[index];
+  if (!die) return;
+
+  rolling = true;
+  document.getElementById('result-display').style.opacity = '0';
+  die.settled = false;
+  die.settleTimer = 0;
+  die.result = null;
+
+  const biases = [-3.6, -1.2, 1.4, 4.0];
+  resetDieForRoll(die, biases[index] ?? 0);
+
+  // 이미 멈춰 있던 다른 주사위는 결과 유지
+  for (let i = 0; i < dice.length; i++) {
+    if (i !== index && dice[i].result != null) {
+      dice[i].settled = true;
+    }
+  }
+  updateRerollControls();
+}
+
+function rollDice() {
+  if (rolling) return;
+  rolling = true;
+  document.getElementById('result-display').style.opacity = '0';
+  resetDieForRoll(dice[0], -3.6);
+  resetDieForRoll(dice[1], -1.2);
+  resetDieForRoll(dice[2],  1.4);
+  resetDieForRoll(dice[3],  4.0);
+}
+
+let orbitTheta = 0;
+let orbitPhi = 0.5;
+let isDragging = false;
+let prevMouse = {x:0,y:0};
+
+container.addEventListener('mousedown', e => {
+  isDragging = true;
+  prevMouse = {x:e.clientX, y:e.clientY};
+});
+window.addEventListener('mouseup', () => { isDragging = false; });
+window.addEventListener('mousemove', e => {
+  if (!isDragging) return;
+  orbitTheta -= (e.clientX - prevMouse.x) * 0.008;
+  orbitPhi = Math.max(0.1, Math.min(1.4, orbitPhi - (e.clientY - prevMouse.y) * 0.008));
+  prevMouse = {x:e.clientX, y:e.clientY};
+});
+container.addEventListener('touchstart', e => {
+  isDragging = true;
+  prevMouse = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+}, {passive:true});
+window.addEventListener('touchend', () => { isDragging = false; });
+window.addEventListener('touchmove', e => {
+  if (!isDragging) return;
+  orbitTheta -= (e.touches[0].clientX - prevMouse.x) * 0.008;
+  orbitPhi = Math.max(0.1, Math.min(1.4, orbitPhi - (e.touches[0].clientY - prevMouse.y) * 0.008));
+  prevMouse = {x:e.touches[0].clientX, y:e.touches[0].clientY};
+}, {passive:true});
+
+document.getElementById('roll-btn').onclick = rollDice;
+document.getElementById('reroll-controls').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-reroll-index]');
+  if (!btn) return;
+  rerollSingleDie(Number(btn.dataset.rerollIndex));
+});
+document.getElementById('reset-btn').onclick = () => {
+  createDicePair();
+  rollHistory = [];
+  document.getElementById('history').innerHTML = '';
+  updateRerollControls();
+};
+
+createDicePair();
+
+const fixedStep = 1/60;
+let lastTime = performance.now();
+
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+
+  if (rolling) {
+    world.step(fixedStep, dt, 3);
+
+    let allSettled = true;
+    for (const die of dice) {
+      syncDieVisual(die);
+      const p = die.body.position;
+      const speed = die.body.velocity.length() + die.body.angularVelocity.length();
+
+      if (!die.settled) {
+        if (speed < 0.3 && p.y < DIE_REST_Y + 0.8) {
+          die.settleTimer += dt;
+          if (die.settleTimer > 0.6) {
+            snapDieToStableFace(die);
+          } else {
+            allSettled = false;
+          }
+        } else {
+          die.settleTimer = 0;
+          allSettled = false;
+        }
+      }
+    }
+
+    if (allSettled && dice.every(d => d.settled)) {
+      rolling = false;
+      showResults();
+    }
+  } else {
+    for (const die of dice) syncDieVisual(die);
+  }
+
+  const cx = Math.sin(orbitTheta) * Math.cos(orbitPhi) * 18;
+  const cy = Math.sin(orbitPhi) * 18;
+  const cz = Math.cos(orbitTheta) * Math.cos(orbitPhi) * 18;
+  camera.position.set(cx, cy, cz);
+  camera.lookAt(0, -1.4, 0);
+
+  renderer.render(scene, camera);
+}
+
+animate(performance.now());
+
+window.addEventListener('resize', () => {
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+  renderer.setSize(w, h);
+});
+})();
+</script>

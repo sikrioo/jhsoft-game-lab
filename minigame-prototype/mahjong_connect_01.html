@@ -1,0 +1,931 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>사천성 - Arcade UI</title>
+  <style>
+    :root{
+      --bg:#070711;
+      --panel:#0d0d1c;
+      --panel2:#0b0b18;
+      --txt:#e9e9ff;
+
+      --neon-pink:#ff3edb;
+      --neon-cyan:#32f6ff;
+      --neon-purple:#8a5cff;
+      --neon-lime:#7CFF6B;
+
+      --grid-gap:10px;
+      --tile:56px; /* JS가 덮어씀 */
+      --radius:18px;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial, sans-serif;
+      background:
+        radial-gradient(1200px 800px at 20% 10%, rgba(255,62,219,.18), transparent 55%),
+        radial-gradient(1000px 700px at 80% 15%, rgba(50,246,255,.14), transparent 55%),
+        radial-gradient(900px 900px at 50% 85%, rgba(138,92,255,.16), transparent 55%),
+        linear-gradient(180deg, #05050d 0%, #070711 40%, #060610 100%);
+      color:var(--txt);
+      overflow-x:hidden;
+    }
+
+    /* ====== arcade frame ====== */
+    .wrap{
+      min-height:100%;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:28px 14px;
+    }
+
+    .cabinet{
+      width:min(980px, 100%);
+      border-radius:28px;
+      padding:18px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02));
+      box-shadow:
+        0 20px 80px rgba(0,0,0,.55),
+        0 0 40px rgba(255,62,219,.12),
+        0 0 60px rgba(50,246,255,.10);
+      position:relative;
+    }
+
+    .cabinet::before{
+      content:"";
+      position:absolute; inset:-2px;
+      border-radius:30px;
+      background: linear-gradient(90deg, rgba(255,62,219,.6), rgba(50,246,255,.55), rgba(138,92,255,.55));
+      filter: blur(10px);
+      opacity:.55;
+      z-index:-1;
+    }
+
+    .screen{
+      border-radius:22px;
+      background: linear-gradient(180deg, rgba(0,0,0,.55), rgba(0,0,0,.25));
+      border:1px solid rgba(255,255,255,.12);
+      overflow:hidden;
+    }
+
+    /* ====== top HUD ====== */
+    .hud{
+      display:flex;
+      gap:12px;
+      padding:14px 14px 10px;
+      background: linear-gradient(180deg, rgba(13,13,28,.92), rgba(13,13,28,.65));
+      border-bottom:1px solid rgba(255,255,255,.10);
+    }
+
+    .hud-left{
+      flex:1;
+      display:flex;
+      gap:10px;
+      align-items:stretch;
+      flex-wrap:wrap;
+    }
+
+    .brand{
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      padding:10px 14px;
+      border-radius:16px;
+      background: rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.10);
+      min-width:230px;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .brand::after{
+      content:"";
+      position:absolute; inset:-60px;
+      background: radial-gradient(circle at 30% 40%, rgba(255,62,219,.22), transparent 55%),
+                  radial-gradient(circle at 70% 55%, rgba(50,246,255,.18), transparent 55%);
+      transform: rotate(10deg);
+      opacity:.9;
+      pointer-events:none;
+    }
+
+    .brand .title{
+      font-weight:900;
+      letter-spacing:.5px;
+      font-size:18px;
+      text-shadow: 0 0 18px rgba(255,62,219,.25);
+      position:relative;
+    }
+
+    .brand .subtitle{
+      opacity:.8;
+      font-size:12px;
+      letter-spacing:.2px;
+      position:relative;
+    }
+
+    .pill{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-radius:16px;
+      background: rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.10);
+      min-width: 160px;
+    }
+
+    .pill .label{
+      font-size:11px;
+      opacity:.75;
+      letter-spacing:.35px;
+    }
+    .pill .value{
+      font-size:18px;
+      font-weight:800;
+      margin-left:auto;
+      letter-spacing:.6px;
+    }
+    .glow-pink{ text-shadow:0 0 18px rgba(255,62,219,.35); }
+    .glow-cyan{ text-shadow:0 0 18px rgba(50,246,255,.35); }
+    .glow-purple{ text-shadow:0 0 18px rgba(138,92,255,.35); }
+
+    .hud-right{
+      display:flex;
+      gap:10px;
+      align-items:stretch;
+      justify-content:flex-end;
+      flex-wrap:wrap;
+    }
+
+    .btn{
+      appearance:none;
+      border:none;
+      cursor:pointer;
+      border-radius:16px;
+      padding:10px 14px;
+      font-weight:800;
+      letter-spacing:.3px;
+      color:var(--txt);
+      background: rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.12);
+      transition: transform .08s ease, box-shadow .15s ease, border-color .15s ease;
+      user-select:none;
+    }
+    .btn:hover{
+      border-color: rgba(255,255,255,.22);
+      box-shadow: 0 0 22px rgba(50,246,255,.14);
+    }
+    .btn:active{ transform: translateY(1px) scale(.99); }
+
+    .btn.primary{
+      background: linear-gradient(90deg, rgba(255,62,219,.28), rgba(50,246,255,.22));
+      box-shadow: 0 0 26px rgba(255,62,219,.14), 0 0 30px rgba(50,246,255,.10);
+    }
+
+    /* ====== main area ====== */
+    .main{
+      display:grid;
+      grid-template-columns: 1fr 280px;
+      gap:14px;
+      padding:14px;
+      background: radial-gradient(1200px 700px at 50% 0%, rgba(255,255,255,.06), transparent 60%);
+    }
+
+    @media (max-width: 860px){
+      .main{ grid-template-columns: 1fr; }
+    }
+
+    .board{
+      display:flex;
+      flex-direction:column;
+      position:relative;
+      border-radius: var(--radius);
+      background: rgba(0,0,0,.30);
+      border:1px solid rgba(255,255,255,.10);
+      padding:14px;
+      min-height: 520px;
+      overflow:hidden;
+    }
+
+    .board::before{
+      content:"";
+      position:absolute; inset:-120px;
+      background:
+        radial-gradient(circle at 25% 25%, rgba(50,246,255,.16), transparent 60%),
+        radial-gradient(circle at 70% 35%, rgba(255,62,219,.14), transparent 62%),
+        radial-gradient(circle at 55% 75%, rgba(138,92,255,.13), transparent 62%);
+      opacity:.85;
+      pointer-events:none;
+    }
+
+    .board-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      margin-bottom:12px;
+      position:relative;
+      z-index:2;
+    }
+    .board-head .mode{
+      font-size:12px;
+      opacity:.85;
+      letter-spacing:.35px;
+    }
+    .board-head .hint{
+      font-size:12px;
+      opacity:.7;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.20);
+    }
+
+    /* ====== tile grid ====== */
+    .grid{
+      position:relative;
+      display:grid;
+      gap: var(--grid-gap);
+      justify-content:center;
+      align-content:center;
+      width:100%;
+      flex:1;
+      padding:10px;
+      z-index:1;
+    }
+
+    .tile{
+      width:var(--tile);
+      height:var(--tile);
+      border-radius:16px;
+      position:relative;
+      border:1px solid rgba(255,255,255,.12);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.02));
+      box-shadow:
+        0 10px 18px rgba(0,0,0,.35),
+        inset 0 0 0 1px rgba(0,0,0,.25);
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      transition: transform .08s ease, box-shadow .15s ease, border-color .15s ease, filter .15s ease, opacity .12s ease;
+      user-select:none;
+      overflow:hidden;
+    }
+
+    .tile::before{
+      content:"";
+      position:absolute; inset:-40px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.14), transparent 55%);
+      opacity:.9;
+      pointer-events:none;
+    }
+
+    .tile .icon{
+      font-size:20px;
+      filter: drop-shadow(0 0 12px rgba(255,255,255,.14));
+    }
+    .tile .mini{
+      position:absolute;
+      bottom:7px; right:9px;
+      font-size:10px;
+      opacity:.75;
+      letter-spacing:.3px;
+    }
+
+    .tile:hover{
+      border-color: rgba(255,255,255,.22);
+      box-shadow:
+        0 12px 22px rgba(0,0,0,.42),
+        0 0 26px rgba(50,246,255,.12);
+      transform: translateY(-1px);
+    }
+
+    .tile.edge{
+      outline: 1px dashed rgba(50,246,255,.35);
+      outline-offset: -6px;
+    }
+
+    .tile.selected{
+      border-color: rgba(50,246,255,.45);
+      box-shadow:
+        0 0 0 2px rgba(50,246,255,.22),
+        0 0 34px rgba(50,246,255,.18),
+        0 12px 22px rgba(0,0,0,.42);
+      transform: translateY(-2px) scale(1.01);
+    }
+
+    .tile.locked{
+      opacity:.5;
+      filter: saturate(.6);
+      cursor:not-allowed;
+    }
+
+    /* type colors via top glow bar */
+    .tile .bar{
+      position:absolute;
+      top:0; left:0; right:0;
+      height:6px;
+      opacity:.95;
+      filter: blur(.2px);
+    }
+    .bar.pink{ background: linear-gradient(90deg, rgba(255,62,219,.85), rgba(255,62,219,.25)); }
+    .bar.cyan{ background: linear-gradient(90deg, rgba(50,246,255,.85), rgba(50,246,255,.25)); }
+    .bar.purple{ background: linear-gradient(90deg, rgba(138,92,255,.85), rgba(138,92,255,.25)); }
+    .bar.lime{ background: linear-gradient(90deg, rgba(124,255,107,.85), rgba(124,255,107,.25)); }
+
+    .tile.removed{
+      opacity: 0;
+      transform: scale(.92);
+      pointer-events: none;
+    }
+
+    /* ====== side panel ====== */
+    .side{
+      border-radius: var(--radius);
+      background: rgba(0,0,0,.30);
+      border:1px solid rgba(255,255,255,.10);
+      padding:14px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+      min-height: 420px;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .side::before{
+      content:"";
+      position:absolute; inset:-120px;
+      background: radial-gradient(circle at 30% 25%, rgba(255,62,219,.12), transparent 62%),
+                  radial-gradient(circle at 75% 55%, rgba(50,246,255,.10), transparent 62%);
+      opacity:.9;
+      pointer-events:none;
+    }
+
+    .card{
+      position:relative;
+      z-index:1;
+      border-radius:16px;
+      background: rgba(0,0,0,.25);
+      border:1px solid rgba(255,255,255,.10);
+      padding:12px;
+    }
+
+    .card h3{
+      margin:0 0 10px;
+      font-size:12px;
+      letter-spacing:.4px;
+      opacity:.85;
+    }
+
+    .statline{
+      display:flex;
+      align-items:baseline;
+      justify-content:space-between;
+      padding:8px 10px;
+      border-radius:14px;
+      background: rgba(255,255,255,.03);
+      border:1px solid rgba(255,255,255,.08);
+      margin-bottom:8px;
+    }
+    .statline:last-child{ margin-bottom:0; }
+    .statline .k{ font-size:11px; opacity:.75; }
+    .statline .v{
+      font-size:16px;
+      font-weight:900;
+      letter-spacing:.4px;
+    }
+
+    /* ====== footer ====== */
+    .footer{
+      padding:12px 14px 16px;
+      border-top:1px solid rgba(255,255,255,.10);
+      background: linear-gradient(180deg, rgba(13,13,28,.35), rgba(13,13,28,.78));
+      display:flex;
+      gap:12px;
+      align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;
+    }
+
+    /* simple fake equalizer */
+    .eq{
+      display:flex;
+      gap:4px;
+      align-items:flex-end;
+      padding:6px 10px;
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.10);
+      background: rgba(0,0,0,.30);
+    }
+    .eq span{
+      width:6px;
+      height:18px;
+      border-radius:8px;
+      background: rgba(255,255,255,.16);
+      box-shadow: 0 0 14px rgba(255,62,219,.10);
+      animation: bounce 1.05s infinite ease-in-out;
+    }
+    .eq span:nth-child(2){ animation-delay:.12s; }
+    .eq span:nth-child(3){ animation-delay:.24s; }
+    .eq span:nth-child(4){ animation-delay:.36s; }
+    .eq span:nth-child(5){ animation-delay:.48s; }
+
+    @keyframes bounce{
+      0%,100%{ transform: translateY(0); height:12px; opacity:.65; }
+      50%{ transform: translateY(-6px); height:26px; opacity:1; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="cabinet">
+      <div class="screen">
+
+        <!-- HUD -->
+        <div class="hud">
+          <div class="hud-left">
+            <div class="brand">
+              <div class="title">사천성</div>
+              <div class="subtitle">Arcade Edge-only Tile Match</div>
+            </div>
+
+            <div class="pill">
+              <div>
+                <div class="label">SCORE</div>
+                <div class="value glow-pink" id="scoreText">0</div>
+              </div>
+            </div>
+
+            <div class="pill">
+              <div>
+                <div class="label">LEVEL</div>
+                <div class="value glow-cyan" id="levelText">1</div>
+              </div>
+            </div>
+
+            <div class="pill">
+              <div>
+                <div class="label">MOVES</div>
+                <div class="value glow-purple" id="movesText">0</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hud-right">
+            <button class="btn" id="optBtn">옵션</button>
+            <button class="btn" id="hintBtn">힌트</button>
+            <button class="btn primary" id="startBtn">START</button>
+          </div>
+        </div>
+
+        <!-- MAIN -->
+        <div class="main">
+          <div class="board">
+            <div class="board-head">
+              <div class="mode">MODE · EDGE-ONLY MATCH</div>
+              <div class="hint">노출(가장자리) 블록만 선택 가능</div>
+            </div>
+
+            <div class="grid" id="grid"></div>
+          </div>
+
+          <aside class="side">
+            <div class="card">
+              <h3>게임 규칙</h3>
+              <div style="font-size:12px;opacity:.82;line-height:1.6;">
+                • 노출(가장자리) 블록만 선택 가능<br/>
+                • 같은 블록 2개를 선택하면 제거<br/>
+                • 막히면 힌트 또는 RETRY로 재시작
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>상태</h3>
+              <div class="statline">
+                <div class="k">REMAIN</div>
+                <div class="v glow-cyan" id="remainText">0</div>
+              </div>
+              <div class="statline">
+                <div class="k">HINTS</div>
+                <div class="v glow-purple" id="hintsText">3</div>
+              </div>
+            </div>
+
+            <div class="card">
+              <h3>팁</h3>
+              <div style="font-size:12px;opacity:.82;line-height:1.6;">
+                • 먼저 바깥쪽을 넓게 비워두면 좋아요<br/>
+                • 같은 아이콘이라도 “노출”되어야 선택 가능
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        <!-- FOOTER -->
+        <div class="footer">
+          <div class="eq" aria-label="equalizer mock">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="btn" id="pauseBtn">PAUSE</button>
+            <button class="btn primary" id="retryBtn">RETRY</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+  (() => {
+    const gridEl = document.getElementById("grid");
+    const boardEl = document.querySelector(".board");
+
+    // HUD
+    const scoreText = document.getElementById("scoreText");
+    const levelText = document.getElementById("levelText");
+    const movesText = document.getElementById("movesText");
+    const remainText = document.getElementById("remainText");
+    const hintsText = document.getElementById("hintsText");
+
+    // Buttons
+    const startBtn = document.getElementById("startBtn");
+    const hintBtn = document.getElementById("hintBtn");
+    const retryBtn = document.getElementById("retryBtn");
+    const pauseBtn = document.getElementById("pauseBtn");
+
+    // ====== Levels ======
+    const LEVELS = [
+      { rows: 6, cols: 8, types: 10 },
+      { rows: 8, cols: 10, types: 14 },
+      { rows: 10, cols: 12, types: 18 }
+    ];
+    let level = 0;
+
+    const ICONS = ["🔷","🔶","⚡","💣","🕒","🌙","⭐","🍒","🧊","🔥","🎲","🎧","🎮","🧿","🍀","🪙","🛰️","🧪","🧩","🪐"];
+
+    // Game state
+    let tiles = [];
+    let tileMap = new Map(); // "r,c" -> element
+    let selected = [];
+    let score = 0;
+    let moves = 0;
+    let hints = 3;
+    let started = false;
+    let paused = false;
+
+    function key(r,c){ return `${r},${c}`; }
+    function getTile(r,c){ return tileMap.get(key(r,c)) || null; }
+    function isRemoved(t){ return !t || t.classList.contains("removed"); }
+
+    // "Edge-only" exposure rule (MVP): any side empty/outside -> selectable
+    function isExposed(tile){
+      if (isRemoved(tile)) return false;
+      const r = Number(tile.dataset.r);
+      const c = Number(tile.dataset.c);
+
+      const up = getTile(r-1,c);
+      const down = getTile(r+1,c);
+      const left = getTile(r,c-1);
+      const right = getTile(r,c+1);
+
+      return isRemoved(up) || isRemoved(down) || isRemoved(left) || isRemoved(right);
+    }
+
+    function refreshEdgeHints(){
+      for (const t of tiles) {
+        t.classList.remove("edge", "locked");
+        if (isRemoved(t)) continue;
+
+        if (isExposed(t)) t.classList.add("edge");
+        else t.classList.add("locked");
+      }
+    }
+
+    function updateHud(){
+      if (scoreText) scoreText.textContent = score.toLocaleString("en-US");
+      if (levelText) levelText.textContent = String(level + 1);
+      if (movesText) movesText.textContent = String(moves);
+
+      const remaining = tiles.filter(t => !t.classList.contains("removed")).length;
+      if (remainText) remainText.textContent = String(remaining);
+      if (hintsText) hintsText.textContent = String(hints);
+    }
+
+    function setTileSize(rows, cols){
+      const pad = 20;
+      const gap = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--grid-gap")) || 10;
+
+      const w = boardEl.clientWidth - pad * 2;
+      const h = boardEl.clientHeight - 80;
+
+      const tileW = Math.floor((w - gap * (cols - 1)) / cols);
+      const tileH = Math.floor((h - gap * (rows - 1)) / rows);
+      const tile = Math.max(34, Math.min(tileW, tileH, 64));
+
+      document.documentElement.style.setProperty("--tile", tile + "px");
+    }
+
+    function shuffle(arr){
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+      }
+      return arr;
+    }
+
+    function buildPairs(rows, cols, typeCount){
+      const total = rows * cols;
+      if (total % 2 !== 0) throw new Error("rows*cols must be even");
+      const neededPairs = total / 2;
+
+      const types = Math.min(typeCount, ICONS.length);
+      const pairTypes = [];
+      for (let i = 0; i < neededPairs; i++) pairTypes.push(i % types);
+
+      const typesLinear = [];
+      for (const t of pairTypes) typesLinear.push(t, t);
+
+      shuffle(typesLinear);
+      return typesLinear;
+    }
+
+    // Fast solvability check for this exposure rule (random removal simulation)
+    function isSolvable(rows, cols, typesLinear){
+      const removed = new Array(rows * cols).fill(false);
+      function idx(r,c){ return r * cols + c; }
+      function isRemovedAt(r,c){
+        if (r < 0 || c < 0 || r >= rows || c >= cols) return true;
+        return removed[idx(r,c)];
+      }
+      function isExposedAt(r,c){
+        if (removed[idx(r,c)]) return false;
+        return isRemovedAt(r-1,c) || isRemovedAt(r+1,c) || isRemovedAt(r,c-1) || isRemovedAt(r,c+1);
+      }
+
+      let remaining = rows * cols;
+
+      for (let step = 0; step < 20000; step++) {
+        if (remaining === 0) return true;
+
+        const buckets = new Map();
+        for (let r = 0; r < rows; r++) {
+          for (let c = 0; c < cols; c++) {
+            const i = idx(r,c);
+            if (removed[i]) continue;
+            if (!isExposedAt(r,c)) continue;
+
+            const t = typesLinear[i];
+            if (!buckets.has(t)) buckets.set(t, []);
+            buckets.get(t).push(i);
+          }
+        }
+
+        const candidates = [];
+        for (const [t, list] of buckets.entries()) {
+          if (list.length >= 2) candidates.push(t);
+        }
+        if (candidates.length === 0) return false;
+
+        const t = candidates[Math.floor(Math.random() * candidates.length)];
+        const list = buckets.get(t);
+        shuffle(list);
+
+        removed[list[0]] = true;
+        removed[list[1]] = true;
+        remaining -= 2;
+      }
+      return false;
+    }
+
+    function renderBoard(rows, cols, typeCount){
+      gridEl.style.gridTemplateColumns = `repeat(${cols}, var(--tile))`;
+
+      let typesLinear;
+      let tries = 0;
+      while (true) {
+        tries++;
+        typesLinear = buildPairs(rows, cols, typeCount);
+        if (isSolvable(rows, cols, typesLinear)) break;
+        if (tries > 80) break; // fallback
+      }
+
+      gridEl.innerHTML = "";
+      tiles = [];
+      tileMap = new Map();
+      selected = [];
+
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const i = r * cols + c;
+          const t = typesLinear[i];
+
+          const el = document.createElement("div");
+          el.className = "tile";
+          el.dataset.r = String(r);
+          el.dataset.c = String(c);
+          el.dataset.type = String(t);
+
+          const barClass =
+            (t % 4 === 0) ? "cyan" :
+            (t % 4 === 1) ? "pink" :
+            (t % 4 === 2) ? "purple" : "lime";
+
+          el.innerHTML = `
+            <div class="bar ${barClass}"></div>
+            <div class="icon">${ICONS[t] || "■"}</div>
+            <div class="mini">${t}</div>
+          `;
+
+          el.addEventListener("click", () => onTileClick(el));
+          tiles.push(el);
+          tileMap.set(key(r,c), el);
+          gridEl.appendChild(el);
+        }
+      }
+
+      setTileSize(rows, cols);
+      refreshEdgeHints();
+      updateHud();
+    }
+
+    function deselect(tile){
+      tile.classList.remove("selected");
+      selected = selected.filter(x => x !== tile);
+    }
+
+    function clearSelection(){
+      for (const t of selected) t.classList.remove("selected");
+      selected = [];
+    }
+
+    function onTileClick(tile){
+      if (!started || paused) return;
+      if (tile.classList.contains("removed")) return;
+
+      // selectable?
+      if (!isExposed(tile)) {
+        tile.animate(
+          [{ transform:"translateX(0)"},{ transform:"translateX(-2px)"},{ transform:"translateX(2px)"},{ transform:"translateX(0)"}],
+          { duration:160 }
+        );
+        return;
+      }
+
+      // toggle
+      if (tile.classList.contains("selected")) {
+        deselect(tile);
+        return;
+      }
+
+      if (selected.length >= 2) {
+        // keep it strict & clean
+        deselect(selected[0]);
+      }
+
+      tile.classList.add("selected");
+      selected.push(tile);
+
+      if (selected.length === 2) tryMatch();
+    }
+
+    function tryMatch(){
+      const [a,b] = selected;
+      if (!a || !b) return;
+
+      moves++;
+      updateHud();
+
+      if (a.dataset.type === b.dataset.type) {
+        a.classList.add("removed");
+        b.classList.add("removed");
+        a.classList.remove("selected");
+        b.classList.remove("selected");
+        selected = [];
+
+        score += 100;
+        refreshEdgeHints();
+        updateHud();
+
+        // clear check
+        if (tiles.every(t => t.classList.contains("removed"))) {
+          level = Math.min(level + 1, LEVELS.length - 1);
+          startLevel(level, true);
+        }
+      } else {
+        // mismatch
+        setTimeout(() => {
+          deselect(a);
+          deselect(b);
+          selected = [];
+        }, 220);
+      }
+    }
+
+    function findHintPair(){
+      // Find any exposed pair
+      const exposed = tiles.filter(t => !t.classList.contains("removed") && isExposed(t));
+      const buckets = new Map();
+      for (const t of exposed) {
+        const type = t.dataset.type;
+        if (!buckets.has(type)) buckets.set(type, []);
+        buckets.get(type).push(t);
+      }
+      for (const list of buckets.values()) {
+        if (list.length >= 2) return [list[0], list[1]];
+      }
+      return null;
+    }
+
+    function flashHint(a,b){
+      const anim = (el) => el.animate(
+        [
+          { boxShadow:"0 0 0 0 rgba(50,246,255,0)" },
+          { boxShadow:"0 0 0 2px rgba(50,246,255,.35), 0 0 26px rgba(50,246,255,.25)" },
+          { boxShadow:"0 0 0 0 rgba(50,246,255,0)" }
+        ],
+        { duration:420 }
+      );
+      anim(a); anim(b);
+    }
+
+    function startLevel(lv, keepScore=false){
+      const cfg = LEVELS[lv];
+
+      if (!keepScore) score = 0;
+      moves = 0;
+      hints = 3;
+
+      clearSelection();
+      renderBoard(cfg.rows, cfg.cols, cfg.types);
+
+      started = true;
+      paused = false;
+      if (startBtn) startBtn.textContent = "RUNNING";
+      updateHud();
+    }
+
+    // ====== Buttons ======
+    startBtn?.addEventListener("click", () => {
+      if (!started) startLevel(level, false);
+      else {
+        paused = !paused;
+        startBtn.textContent = paused ? "RESUME" : "RUNNING";
+      }
+    });
+
+    pauseBtn?.addEventListener("click", () => {
+      if (!started) return;
+      paused = !paused;
+      startBtn.textContent = paused ? "RESUME" : "RUNNING";
+    });
+
+    retryBtn?.addEventListener("click", () => {
+      level = 0;
+      started = false;
+      startLevel(level, false);
+    });
+
+    hintBtn?.addEventListener("click", () => {
+      if (!started || paused) return;
+      if (hints <= 0) return;
+
+      const pair = findHintPair();
+      if (!pair) {
+        // no available pair -> gentle shuffle by restarting same level
+        // (keeps score/moves if you want; here we keep score, reset moves/hints)
+        startLevel(level, true);
+        return;
+      }
+
+      hints--;
+      updateHud();
+      flashHint(pair[0], pair[1]);
+    });
+
+    // ====== Resize ======
+    let resizeTimer = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        const cfg = LEVELS[level];
+        setTileSize(cfg.rows, cfg.cols);
+      }, 120);
+    });
+
+    // Initial HUD
+    updateHud();
+  })();
+  </script>
+</body>
+</html>

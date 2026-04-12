@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>자석 물리 시뮬레이터</title>
+  <style>
+    :root{
+      --bg:#07131f;
+      --panel:rgba(9,24,39,0.82);
+      --panel-2:rgba(14,36,56,0.94);
+      --line:rgba(163,211,255,0.18);
+      --text:#ecf6ff;
+      --muted:#8ea9c2;
+      --north:#ff6b6b;
+      --south:#63c7ff;
+      --accent:#ffe082;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      color:var(--text);
+      font-family:"Segoe UI","Noto Sans KR",sans-serif;
+      background:
+        radial-gradient(circle at top, rgba(85,146,255,0.16), transparent 35%),
+        radial-gradient(circle at bottom, rgba(255,127,80,0.10), transparent 28%),
+        linear-gradient(180deg, #05101a, #081725 60%, #06131d);
+    }
+    .app{
+      width:min(1200px, calc(100vw - 24px));
+      margin:18px auto;
+      display:grid;
+      grid-template-columns:300px 1fr;
+      gap:16px;
+    }
+    .panel{
+      background:var(--panel);
+      border:1px solid var(--line);
+      border-radius:20px;
+      box-shadow:0 18px 48px rgba(0,0,0,0.28), inset 0 1px 0 rgba(255,255,255,0.03);
+      backdrop-filter:blur(10px);
+    }
+    .sidebar{
+      padding:18px;
+      display:flex;
+      flex-direction:column;
+      gap:14px;
+    }
+    .title{
+      font-size:28px;
+      font-weight:800;
+      line-height:1.1;
+      letter-spacing:-0.03em;
+    }
+    .desc,.stat,.hint{
+      font-size:13px;
+      line-height:1.6;
+      color:var(--muted);
+    }
+    .block{
+      padding:14px;
+      border:1px solid rgba(163,211,255,0.12);
+      border-radius:16px;
+      background:var(--panel-2);
+    }
+    .block h2{
+      margin:0 0 10px;
+      font-size:13px;
+      letter-spacing:0.06em;
+      text-transform:uppercase;
+      color:#c9e5ff;
+    }
+    .row{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      margin:8px 0;
+    }
+    label{
+      font-size:13px;
+      color:#dcecff;
+    }
+    input[type="range"]{
+      width:100%;
+      accent-color:#8fd3ff;
+    }
+    .value{
+      min-width:48px;
+      text-align:right;
+      font-size:12px;
+      color:var(--accent);
+      font-weight:700;
+    }
+    .actions{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:8px;
+    }
+    button{
+      padding:11px 12px;
+      border:none;
+      border-radius:12px;
+      color:var(--text);
+      background:linear-gradient(180deg, rgba(117,196,255,0.22), rgba(72,118,168,0.18));
+      border:1px solid rgba(163,211,255,0.16);
+      cursor:pointer;
+      font-weight:700;
+    }
+    button.secondary{
+      background:linear-gradient(180deg, rgba(255,138,101,0.18), rgba(160,84,59,0.16));
+    }
+    button.ghost{
+      background:rgba(255,255,255,0.04);
+    }
+    .stage{
+      padding:16px;
+      display:flex;
+      flex-direction:column;
+      gap:12px;
+    }
+    .topbar{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:12px;
+      flex-wrap:wrap;
+      padding:6px 4px 0;
+    }
+    .badge{
+      padding:7px 10px;
+      border-radius:999px;
+      font-size:12px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,0.04);
+      color:#cde5ff;
+    }
+    .canvas-wrap{
+      position:relative;
+      border-radius:22px;
+      overflow:hidden;
+      border:1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(12,30,47,0.78), rgba(8,20,32,0.96)),
+        radial-gradient(circle at center, rgba(146,204,255,0.06), transparent 45%);
+    }
+    canvas{
+      display:block;
+      width:100%;
+      height:min(76vh, 760px);
+    }
+    .legend{
+      display:flex;
+      gap:10px;
+      flex-wrap:wrap;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .chip{
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      padding:7px 10px;
+      border-radius:999px;
+      background:rgba(255,255,255,0.03);
+      border:1px solid rgba(163,211,255,0.1);
+    }
+    .dot{
+      width:10px;
+      height:10px;
+      border-radius:50%;
+    }
+    .north{ background:var(--north); }
+    .south{ background:var(--south); }
+    @media (max-width: 920px){
+      .app{ grid-template-columns:1fr; }
+      canvas{ height:62vh; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel sidebar">
+      <div>
+        <div class="title">자석 물리 시뮬레이터</div>
+        <p class="desc">같은 극끼리는 밀어내고, 다른 극끼리는 끌어당깁니다. 자석은 질량, 속도, 감쇠, 충돌을 가진 2D 물체로 움직입니다.</p>
+      </div>
+
+      <section class="block">
+        <h2>생성 설정</h2>
+        <div class="row">
+          <label for="strength">자력</label>
+          <span id="strengthValue" class="value">180</span>
+        </div>
+        <input id="strength" type="range" min="40" max="320" value="180" />
+        <div class="row">
+          <label for="radius">반지름</label>
+          <span id="radiusValue" class="value">24</span>
+        </div>
+        <input id="radius" type="range" min="14" max="42" value="24" />
+        <div class="row">
+          <label for="polarity">극성</label>
+          <span id="polarityValue" class="value">N</span>
+        </div>
+        <input id="polarity" type="range" min="0" max="1" value="0" />
+      </section>
+
+      <section class="block">
+        <h2>엔진 설정</h2>
+        <div class="row">
+          <label for="globalForce">자기 상수</label>
+          <span id="globalForceValue" class="value">1.4</span>
+        </div>
+        <input id="globalForce" type="range" min="0.2" max="3" step="0.1" value="1.4" />
+        <div class="row">
+          <label for="damping">감쇠</label>
+          <span id="dampingValue" class="value">0.992</span>
+        </div>
+        <input id="damping" type="range" min="0.94" max="0.999" step="0.001" value="0.992" />
+        <div class="row">
+          <label for="showField">자기장 표시</label>
+          <span id="fieldValue" class="value">ON</span>
+        </div>
+        <input id="showField" type="range" min="0" max="1" value="1" />
+      </section>
+
+      <section class="block">
+        <h2>조작</h2>
+        <div class="actions">
+          <button id="addMagnet">자석 추가</button>
+          <button id="toggleRun" class="ghost">일시정지</button>
+          <button id="burst">랜덤 임펄스</button>
+          <button id="reset" class="secondary">초기화</button>
+        </div>
+      </section>
+
+      <section class="block">
+        <h2>안내</h2>
+        <div class="hint">캔버스를 클릭하면 현재 설정으로 자석을 생성합니다. 자석을 직접 드래그해서 배치할 수 있고, 마우스를 놓으면 다시 물리 계산에 들어갑니다.</div>
+      </section>
+
+      <section class="block">
+        <h2>상태</h2>
+        <div id="stats" class="stat">자석 0개 · 평균 속도 0.00 · 총 에너지 0.00</div>
+      </section>
+    </aside>
+
+    <main class="panel stage">
+      <div class="topbar">
+        <div class="badge">물리 루프: 자기력 + 탄성 충돌 + 벽 반사 + 감쇠</div>
+        <div class="legend">
+          <div class="chip"><span class="dot north"></span>북극 중심 자석</div>
+          <div class="chip"><span class="dot south"></span>남극 중심 자석</div>
+        </div>
+      </div>
+      <div class="canvas-wrap">
+        <canvas id="world"></canvas>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const canvas = document.getElementById("world");
+    const ctx = canvas.getContext("2d");
+
+    const ui = {
+      strength: document.getElementById("strength"),
+      radius: document.getElementById("radius"),
+      polarity: document.getElementById("polarity"),
+      globalForce: document.getElementById("globalForce"),
+      damping: document.getElementById("damping"),
+      showField: document.getElementById("showField"),
+      strengthValue: document.getElementById("strengthValue"),
+      radiusValue: document.getElementById("radiusValue"),
+      polarityValue: document.getElementById("polarityValue"),
+      globalForceValue: document.getElementById("globalForceValue"),
+      dampingValue: document.getElementById("dampingValue"),
+      fieldValue: document.getElementById("fieldValue"),
+      addMagnet: document.getElementById("addMagnet"),
+      toggleRun: document.getElementById("toggleRun"),
+      burst: document.getElementById("burst"),
+      reset: document.getElementById("reset"),
+      stats: document.getElementById("stats")
+    };
+
+    const state = {
+      magnets: [],
+      width: 0,
+      height: 0,
+      running: true,
+      dragId: null,
+      nextId: 1,
+      lastTime: performance.now()
+    };
+
+    const engine = {
+      magneticConstant: Number(ui.globalForce.value),
+      damping: Number(ui.damping.value),
+      wallBounce: 0.92
+    };
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = Math.round(rect.width * dpr);
+      canvas.height = Math.round(rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      state.width = rect.width;
+      state.height = rect.height;
+    }
+
+    function currentPolarity() {
+      return Number(ui.polarity.value) === 0 ? 1 : -1;
+    }
+
+    function syncLabels() {
+      ui.strengthValue.textContent = ui.strength.value;
+      ui.radiusValue.textContent = ui.radius.value;
+      ui.polarityValue.textContent = currentPolarity() > 0 ? "N" : "S";
+      ui.globalForceValue.textContent = Number(ui.globalForce.value).toFixed(1);
+      ui.dampingValue.textContent = Number(ui.damping.value).toFixed(3);
+      ui.fieldValue.textContent = Number(ui.showField.value) ? "ON" : "OFF";
+      engine.magneticConstant = Number(ui.globalForce.value);
+      engine.damping = Number(ui.damping.value);
+    }
+
+    function makeMagnet(x, y, options = {}) {
+      const radius = Number(options.radius ?? ui.radius.value);
+      const strength = Number(options.strength ?? ui.strength.value);
+      const polarity = Number(options.polarity ?? currentPolarity());
+      return {
+        id: state.nextId++,
+        x,
+        y,
+        vx: options.vx ?? (Math.random() - 0.5) * 0.8,
+        vy: options.vy ?? (Math.random() - 0.5) * 0.8,
+        radius,
+        mass: radius * 0.9,
+        charge: polarity * strength,
+        polarity,
+        strength
+      };
+    }
+
+    function seedMagnets() {
+      state.magnets = [
+        makeMagnet(state.width * 0.33, state.height * 0.48, { polarity: 1, strength: 210, radius: 28 }),
+        makeMagnet(state.width * 0.64, state.height * 0.52, { polarity: -1, strength: 210, radius: 28 }),
+        makeMagnet(state.width * 0.50, state.height * 0.30, { polarity: 1, strength: 160, radius: 22 }),
+        makeMagnet(state.width * 0.50, state.height * 0.72, { polarity: -1, strength: 160, radius: 22 })
+      ];
+    }
+
+    function addMagnetAt(x, y) {
+      state.magnets.push(makeMagnet(x, y));
+    }
+
+    function applyMagneticForces(dt) {
+      const clampForce = 2200;
+      for (let i = 0; i < state.magnets.length; i++) {
+        for (let j = i + 1; j < state.magnets.length; j++) {
+          const a = state.magnets[i];
+          const b = state.magnets[j];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const minDist = a.radius + b.radius;
+          const distSq = dx * dx + dy * dy;
+          const safeDistSq = Math.max(distSq, minDist * minDist * 0.55);
+          const dist = Math.sqrt(safeDistSq);
+          const nx = dx / dist;
+          const ny = dy / dist;
+
+          // 다른 극은 인력, 같은 극은 척력으로 동작하도록 부호를 뒤집는다.
+          let force = -engine.magneticConstant * (a.charge * b.charge) / safeDistSq;
+          force = Math.max(-clampForce, Math.min(clampForce, force));
+
+          const ax = (force * nx) / a.mass;
+          const ay = (force * ny) / a.mass;
+          const bx = (force * nx) / b.mass;
+          const by = (force * ny) / b.mass;
+
+          a.vx -= ax * dt;
+          a.vy -= ay * dt;
+          b.vx += bx * dt;
+          b.vy += by * dt;
+        }
+      }
+    }
+
+    function resolveCollisions() {
+      for (let i = 0; i < state.magnets.length; i++) {
+        for (let j = i + 1; j < state.magnets.length; j++) {
+          const a = state.magnets[i];
+          const b = state.magnets[j];
+          const dx = b.x - a.x;
+          const dy = b.y - a.y;
+          const dist = Math.hypot(dx, dy) || 0.0001;
+          const overlap = a.radius + b.radius - dist;
+          if (overlap <= 0) continue;
+
+          const nx = dx / dist;
+          const ny = dy / dist;
+          const totalMass = a.mass + b.mass;
+          const separation = overlap + 0.5;
+          a.x -= nx * separation * (b.mass / totalMass);
+          a.y -= ny * separation * (b.mass / totalMass);
+          b.x += nx * separation * (a.mass / totalMass);
+          b.y += ny * separation * (a.mass / totalMass);
+
+          const rvx = b.vx - a.vx;
+          const rvy = b.vy - a.vy;
+          const velAlongNormal = rvx * nx + rvy * ny;
+          if (velAlongNormal > 0) continue;
+
+          const restitution = 0.92;
+          const impulse = -(1 + restitution) * velAlongNormal / ((1 / a.mass) + (1 / b.mass));
+          const ix = impulse * nx;
+          const iy = impulse * ny;
+
+          a.vx -= ix / a.mass;
+          a.vy -= iy / a.mass;
+          b.vx += ix / b.mass;
+          b.vy += iy / b.mass;
+        }
+      }
+    }
+
+    function integrate(dt) {
+      for (const magnet of state.magnets) {
+        if (state.dragId === magnet.id) continue;
+        magnet.vx *= engine.damping;
+        magnet.vy *= engine.damping;
+        magnet.x += magnet.vx * dt * 60;
+        magnet.y += magnet.vy * dt * 60;
+
+        if (magnet.x - magnet.radius < 0) {
+          magnet.x = magnet.radius;
+          magnet.vx *= -engine.wallBounce;
+        }
+        if (magnet.x + magnet.radius > state.width) {
+          magnet.x = state.width - magnet.radius;
+          magnet.vx *= -engine.wallBounce;
+        }
+        if (magnet.y - magnet.radius < 0) {
+          magnet.y = magnet.radius;
+          magnet.vy *= -engine.wallBounce;
+        }
+        if (magnet.y + magnet.radius > state.height) {
+          magnet.y = state.height - magnet.radius;
+          magnet.vy *= -engine.wallBounce;
+        }
+      }
+    }
+
+    function drawField() {
+      if (!Number(ui.showField.value)) return;
+      const spacing = 48;
+      for (let y = spacing * 0.5; y < state.height; y += spacing) {
+        for (let x = spacing * 0.5; x < state.width; x += spacing) {
+          let fx = 0;
+          let fy = 0;
+          for (const magnet of state.magnets) {
+            const dx = x - magnet.x;
+            const dy = y - magnet.y;
+            const distSq = Math.max(dx * dx + dy * dy, magnet.radius * magnet.radius * 0.8);
+            const dist = Math.sqrt(distSq);
+            const factor = magnet.charge / distSq;
+            fx += factor * (dx / dist);
+            fy += factor * (dy / dist);
+          }
+          const mag = Math.hypot(fx, fy);
+          if (mag < 0.02) continue;
+          const nx = fx / mag;
+          const ny = fy / mag;
+          const len = Math.min(18, 4 + mag * 260);
+          const alpha = Math.min(0.55, 0.08 + mag * 8);
+          ctx.strokeStyle = `rgba(173, 219, 255, ${alpha})`;
+          ctx.beginPath();
+          ctx.moveTo(x - nx * len * 0.3, y - ny * len * 0.3);
+          ctx.lineTo(x + nx * len, y + ny * len);
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawMagnet(magnet) {
+      const isNorth = magnet.polarity > 0;
+      const gradient = ctx.createRadialGradient(
+        magnet.x - magnet.radius * 0.35,
+        magnet.y - magnet.radius * 0.4,
+        magnet.radius * 0.2,
+        magnet.x,
+        magnet.y,
+        magnet.radius * 1.3
+      );
+      gradient.addColorStop(0, "rgba(255,255,255,0.92)");
+      gradient.addColorStop(0.18, isNorth ? "rgba(255,107,107,0.95)" : "rgba(99,199,255,0.95)");
+      gradient.addColorStop(1, isNorth ? "rgba(124,28,40,0.96)" : "rgba(24,75,118,0.96)");
+
+      ctx.fillStyle = gradient;
+      ctx.beginPath();
+      ctx.arc(magnet.x, magnet.y, magnet.radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = isNorth ? "rgba(255,180,180,0.9)" : "rgba(173,227,255,0.9)";
+      ctx.stroke();
+
+      ctx.fillStyle = "rgba(255,255,255,0.95)";
+      ctx.font = `${Math.max(13, magnet.radius * 0.9)}px Segoe UI`;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(isNorth ? "N" : "S", magnet.x, magnet.y);
+
+      ctx.fillStyle = "rgba(255,255,255,0.72)";
+      ctx.font = "11px Segoe UI";
+      ctx.fillText(Math.round(magnet.strength), magnet.x, magnet.y + magnet.radius + 14);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, state.width, state.height);
+
+      const bg = ctx.createLinearGradient(0, 0, 0, state.height);
+      bg.addColorStop(0, "rgba(13,31,49,0.84)");
+      bg.addColorStop(1, "rgba(7,18,29,0.98)");
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, state.width, state.height);
+
+      drawField();
+      for (const magnet of state.magnets) {
+        drawMagnet(magnet);
+      }
+    }
+
+    function updateStats() {
+      const speeds = state.magnets.map((magnet) => Math.hypot(magnet.vx, magnet.vy));
+      const avgSpeed = speeds.length ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0;
+      const energy = state.magnets.reduce((sum, magnet) => sum + 0.5 * magnet.mass * (magnet.vx ** 2 + magnet.vy ** 2), 0);
+      ui.stats.textContent = `자석 ${state.magnets.length}개 · 평균 속도 ${avgSpeed.toFixed(2)} · 총 에너지 ${energy.toFixed(2)}`;
+    }
+
+    function animate(now) {
+      const dt = Math.min(0.024, (now - state.lastTime) / 1000 || 0.016);
+      state.lastTime = now;
+
+      if (state.running) {
+        applyMagneticForces(dt);
+        integrate(dt);
+        resolveCollisions();
+      }
+
+      draw();
+      updateStats();
+      requestAnimationFrame(animate);
+    }
+
+    function pointerPosition(event) {
+      const rect = canvas.getBoundingClientRect();
+      return {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top
+      };
+    }
+
+    function findMagnet(x, y) {
+      for (let i = state.magnets.length - 1; i >= 0; i--) {
+        const magnet = state.magnets[i];
+        if (Math.hypot(x - magnet.x, y - magnet.y) <= magnet.radius) {
+          return magnet;
+        }
+      }
+      return null;
+    }
+
+    canvas.addEventListener("pointerdown", (event) => {
+      const pos = pointerPosition(event);
+      const picked = findMagnet(pos.x, pos.y);
+      if (picked) {
+        state.dragId = picked.id;
+        picked.vx = 0;
+        picked.vy = 0;
+        canvas.setPointerCapture(event.pointerId);
+        return;
+      }
+      addMagnetAt(pos.x, pos.y);
+    });
+
+    canvas.addEventListener("pointermove", (event) => {
+      if (!state.dragId) return;
+      const pos = pointerPosition(event);
+      const magnet = state.magnets.find((item) => item.id === state.dragId);
+      if (!magnet) return;
+      magnet.x = Math.max(magnet.radius, Math.min(state.width - magnet.radius, pos.x));
+      magnet.y = Math.max(magnet.radius, Math.min(state.height - magnet.radius, pos.y));
+    });
+
+    function releaseDrag() {
+      state.dragId = null;
+    }
+
+    canvas.addEventListener("pointerup", releaseDrag);
+    canvas.addEventListener("pointercancel", releaseDrag);
+    canvas.addEventListener("pointerleave", releaseDrag);
+
+    for (const input of [ui.strength, ui.radius, ui.polarity, ui.globalForce, ui.damping, ui.showField]) {
+      input.addEventListener("input", syncLabels);
+    }
+
+    ui.addMagnet.addEventListener("click", () => {
+      addMagnetAt(
+        80 + Math.random() * Math.max(120, state.width - 160),
+        80 + Math.random() * Math.max(120, state.height - 160)
+      );
+    });
+
+    ui.toggleRun.addEventListener("click", () => {
+      state.running = !state.running;
+      ui.toggleRun.textContent = state.running ? "일시정지" : "재생";
+    });
+
+    ui.burst.addEventListener("click", () => {
+      for (const magnet of state.magnets) {
+        magnet.vx += (Math.random() - 0.5) * 8;
+        magnet.vy += (Math.random() - 0.5) * 8;
+      }
+    });
+
+    ui.reset.addEventListener("click", () => {
+      seedMagnets();
+    });
+
+    window.addEventListener("resize", () => {
+      resize();
+      draw();
+    });
+
+    syncLabels();
+    resize();
+    seedMagnets();
+    requestAnimationFrame((time) => {
+      state.lastTime = time;
+      animate(time);
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,473 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+#wrap{display:grid;grid-template-columns:1fr 320px;min-height:680px;background:#0d1f13;border-radius:var(--border-radius-lg);overflow:hidden;border:0.5px solid #2a5a3a;}
+#canvas-wrap{position:relative;display:flex;align-items:center;justify-content:center;background:#0d1f13;}
+#c{display:block;}
+#result-banner{position:absolute;top:16px;left:50%;transform:translateX(-50%);background:rgba(10,30,18,0.92);border:1px solid #c8a826;border-radius:8px;padding:8px 24px;font-size:20px;font-weight:500;color:#f0c040;white-space:nowrap;opacity:0;transition:opacity 0.4s;pointer-events:none;}
+#panel{background:#091510;border-left:1px solid #1e4a2a;padding:16px;display:flex;flex-direction:column;gap:12px;overflow-y:auto;}
+.lbl{font-size:10px;color:#5a9a6a;text-transform:uppercase;letter-spacing:1.2px;font-weight:500;}
+.stat-row{display:flex;justify-content:space-between;font-size:13px;color:#aaa;}
+.stat-val{color:#f0c040;font-weight:500;}
+.chips{display:flex;gap:6px;}
+.chip{width:40px;height:40px;border-radius:50%;border:2px dashed rgba(255,255,255,0.35);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:500;cursor:pointer;color:#fff;transition:transform 0.1s;}
+.chip:hover{transform:scale(1.1);}
+.chip.on{border:2px solid #f0c040;}
+.chip[data-v="1"]{background:#2a5ab8;}
+.chip[data-v="5"]{background:#a0291b;}
+.chip[data-v="10"]{background:#1e7a40;}
+.chip[data-v="25"]{background:#6e2490;}
+.chip[data-v="100"]{background:#b05010;}
+.ngrid{display:grid;grid-template-columns:repeat(13,1fr);gap:2px;}
+.ngrid button{padding:5px 1px;font-size:10px;font-weight:500;border:1px solid #1e4a2a;background:#0d2a18;color:#bbb;cursor:pointer;border-radius:2px;position:relative;}
+.ngrid button:hover{background:#1a4a28;color:#fff;}
+.ngrid button.on{background:#1a4040;border-color:#3a9a6a;}
+.bc{position:absolute;top:1px;right:1px;font-size:8px;color:#f0c040;}
+.ogrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;}
+.ogrid button,.cgrid button{padding:7px 3px;font-size:11px;font-weight:500;border:1px solid #1e4a2a;background:#0d2a18;color:#bbb;cursor:pointer;border-radius:4px;position:relative;}
+.ogrid button:hover,.cgrid button:hover{background:#1a4a28;color:#fff;}
+.ogrid button.on,.cgrid button.on{background:#1a4040;border-color:#3a9a6a;}
+.cgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:3px;}
+.sub{font-size:9px;color:#5a9a6a;display:block;}
+.abtn{width:100%;padding:11px;font-size:14px;font-weight:500;border-radius:8px;cursor:pointer;border:none;}
+.spin{background:#c8a826;color:#0d1f13;}
+.spin:disabled{opacity:0.35;cursor:not-allowed;}
+.clr{background:#1a3a22;color:#5a9a6a;border:1px solid #1e4a2a;}
+#msg{font-size:12px;min-height:16px;text-align:center;color:#f0c040;}
+#hist{display:flex;flex-wrap:wrap;gap:3px;}
+.hc{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:500;color:#fff;border:1px solid rgba(255,255,255,0.15);}
+</style>
+
+<div id="wrap">
+<div id="canvas-wrap">
+  <canvas id="c"></canvas>
+  <div id="result-banner" id="rb"></div>
+</div>
+<div id="panel">
+  <div class="lbl">잔액 / 베팅</div>
+  <div class="stat-row"><span>잔액</span><span class="stat-val" id="bal">₩10,000</span></div>
+  <div class="stat-row"><span>총 베팅</span><span class="stat-val" id="tbet">₩0</span></div>
+
+  <div class="lbl">칩</div>
+  <div class="chips">
+    <div class="chip" data-v="1">1</div>
+    <div class="chip" data-v="5">5</div>
+    <div class="chip" data-v="10">10</div>
+    <div class="chip on" data-v="25">25</div>
+    <div class="chip" data-v="100">100</div>
+  </div>
+
+  <div class="lbl">숫자 (0–36)</div>
+  <div class="ngrid" id="ng"></div>
+
+  <div class="lbl">열</div>
+  <div class="cgrid">
+    <button data-bet="col1" onclick="pb(this)">1열<span class="sub">2:1</span></button>
+    <button data-bet="col2" onclick="pb(this)">2열<span class="sub">2:1</span></button>
+    <button data-bet="col3" onclick="pb(this)">3열<span class="sub">2:1</span></button>
+  </div>
+
+  <div class="lbl">외부 베팅</div>
+  <div class="ogrid">
+    <button data-bet="lo" onclick="pb(this)">1–18<span class="sub">1:1</span></button>
+    <button data-bet="hi" onclick="pb(this)">19–36<span class="sub">1:1</span></button>
+    <button data-bet="even" onclick="pb(this)">짝수<span class="sub">1:1</span></button>
+    <button data-bet="odd" onclick="pb(this)">홀수<span class="sub">1:1</span></button>
+    <button data-bet="red" onclick="pb(this)" style="color:#ff9090;">빨강<span class="sub">1:1</span></button>
+    <button data-bet="blk" onclick="pb(this)" style="color:#888;">검정<span class="sub">1:1</span></button>
+    <button data-bet="d1" onclick="pb(this)">1–12<span class="sub">2:1</span></button>
+    <button data-bet="d2" onclick="pb(this)">13–24<span class="sub">2:1</span></button>
+    <button data-bet="d3" onclick="pb(this)">25–36<span class="sub">2:1</span></button>
+  </div>
+
+  <div style="display:flex;gap:6px;">
+    <button class="abtn spin" id="sb" onclick="doSpin()">스핀</button>
+    <button class="abtn clr" style="width:auto;padding:11px 14px;" onclick="clrBets()">초기화</button>
+  </div>
+  <div id="msg"></div>
+
+  <div class="lbl">최근 결과</div>
+  <div id="hist"></div>
+  <div class="stat-row"><span style="font-size:12px;">총 수익</span><span class="stat-val" id="profit" style="font-size:12px;">₩0</span></div>
+</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function(){
+const NUMS=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+const REDS=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+const C1=[1,4,7,10,13,16,19,22,25,28,31,34];
+const C2=[2,5,8,11,14,17,20,23,26,29,32,35];
+const C3=[3,6,9,12,15,18,21,24,27,30,33,36];
+
+let balance=10000, bets={}, chip=25, spinning=false, history=[];
+let wheelAngle=0, ballAngle=0, ballR=0, ballVel=0, wheelVel=0;
+let phase='idle'; // idle | spinning | settling | done
+let targetIdx=0, frameCount=0, totalFrames=0;
+
+const wrap=document.getElementById('canvas-wrap');
+const renderer=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,alpha:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio,2));
+renderer.shadowMap.enabled=true;
+renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+
+const W=()=>wrap.clientWidth, H=()=>wrap.clientHeight;
+renderer.setSize(W(),H());
+
+const scene=new THREE.Scene();
+scene.background=new THREE.Color(0x0d1f13);
+
+const camera=new THREE.PerspectiveCamera(40,W()/H(),0.1,100);
+camera.position.set(0,11,7);
+camera.lookAt(0,0,0);
+
+scene.add(new THREE.AmbientLight(0xffffff,0.5));
+const spot=new THREE.SpotLight(0xfff5dd,1.2,30,Math.PI/5,0.3);
+spot.position.set(0,14,0);spot.castShadow=true;
+spot.shadow.mapSize.width=spot.shadow.mapSize.height=2048;
+scene.add(spot);
+const side=new THREE.PointLight(0xffddaa,0.3,20);
+side.position.set(-6,5,4);scene.add(side);
+
+// ── 룰렛 휠 구조 ──
+const N=NUMS.length;
+const sliceAng=(Math.PI*2)/N;
+
+// 바깥 림 (토러스)
+const rimGeo=new THREE.TorusGeometry(3.5,0.22,16,80);
+const rimMat=new THREE.MeshLambertMaterial({color:0xb8900a});
+const rim=new THREE.Mesh(rimGeo,rimMat);
+rim.rotation.x=Math.PI/2;rim.castShadow=true;
+scene.add(rim);
+
+// 휠 디스크
+const discGeo=new THREE.CylinderGeometry(3.48,3.48,0.18,80);
+const discMat=new THREE.MeshLambertMaterial({color:0x1a3a22});
+const disc=new THREE.Mesh(discGeo,discMat);
+disc.receiveShadow=true;
+scene.add(disc);
+
+// 숫자 슬롯 (캔버스 텍스처)
+function makeWheelTex(){
+  const cv=document.createElement('canvas');cv.width=cv.height=1024;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#1a3a22';ctx.fillRect(0,0,1024,1024);
+  const cx=512,cy=512,r=490,ir=150;
+  for(let i=0;i<N;i++){
+    const a=i*sliceAng-Math.PI/2;
+    const a2=(i+1)*sliceAng-Math.PI/2;
+    ctx.beginPath();ctx.moveTo(cx,cy);
+    ctx.arc(cx,cy,r,a,a2);ctx.closePath();
+    const n=NUMS[i];
+    ctx.fillStyle=n===0?'#1a6a2a':REDS.has(n)?'#8a1515':'#111';
+    ctx.fill();
+    ctx.strokeStyle='#2d5a3d';ctx.lineWidth=2;ctx.stroke();
+    // 숫자
+    const mid=a+(a2-a)/2;
+    const tx=cx+(r-80)*Math.cos(mid);
+    const ty=cy+(r-80)*Math.sin(mid);
+    ctx.save();ctx.translate(tx,ty);ctx.rotate(mid+Math.PI/2);
+    ctx.fillStyle='#fff';ctx.font='bold 28px sans-serif';
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(n,0,0);ctx.restore();
+  }
+  // 분리선 (금색)
+  for(let i=0;i<N;i++){
+    const a=i*sliceAng-Math.PI/2;
+    ctx.beginPath();ctx.moveTo(cx+ir*Math.cos(a),cy+ir*Math.sin(a));
+    ctx.lineTo(cx+r*Math.cos(a),cy+r*Math.sin(a));
+    ctx.strokeStyle='#c8a826';ctx.lineWidth=2;ctx.stroke();
+  }
+  // 내부 원
+  ctx.beginPath();ctx.arc(cx,cy,ir,0,Math.PI*2);
+  ctx.strokeStyle='#c8a826';ctx.lineWidth=4;ctx.stroke();
+  return new THREE.CanvasTexture(cv);
+}
+
+const topGeo=new THREE.CylinderGeometry(3.48,3.48,0.01,80);
+const topMat=new THREE.MeshLambertMaterial({map:makeWheelTex()});
+const top=new THREE.Mesh(topGeo,topMat);top.position.y=0.095;
+scene.add(top);
+
+// 센터 보스
+const bossGeo=new THREE.CylinderGeometry(0.5,0.5,0.3,32);
+const bossMat=new THREE.MeshLambertMaterial({color:0xb8900a});
+const boss=new THREE.Mesh(bossGeo,bossMat);boss.position.y=0.24;
+scene.add(boss);
+
+// 포켓 구분 핀
+for(let i=0;i<N;i++){
+  const a=i*sliceAng;
+  const pg=new THREE.CylinderGeometry(0.04,0.04,0.25,6);
+  const pm=new THREE.MeshLambertMaterial({color:0xd4aa20});
+  const pin=new THREE.Mesh(pg,pm);
+  pin.position.set(Math.cos(a)*3.1,0.2,Math.sin(a)*3.1);
+  scene.add(pin);
+}
+
+// 바깥 트랙 (볼이 굴러다니는 경사면)
+const trackGeo=new THREE.TorusGeometry(3.9,0.35,8,80);
+const trackMat=new THREE.MeshLambertMaterial({color:0x2a1a0a});
+const track=new THREE.Mesh(trackGeo,trackMat);
+track.rotation.x=Math.PI/2;
+scene.add(track);
+
+// 바닥 그릇
+const bowlGeo=new THREE.CylinderGeometry(4.3,4.0,0.5,80,1,true);
+const bowlMat=new THREE.MeshLambertMaterial({color:0x1a0e06,side:THREE.DoubleSide});
+const bowl=new THREE.Mesh(bowlGeo,bowlMat);bowl.position.y=-0.1;
+scene.add(bowl);
+
+// 테이블
+const tableGeo=new THREE.CylinderGeometry(5,5,0.15,64);
+const tableMat=new THREE.MeshLambertMaterial({color:0x0a2010});
+const table=new THREE.Mesh(tableGeo,tableMat);table.position.y=-0.42;table.receiveShadow=true;
+scene.add(table);
+
+// 볼 (Three.js Mesh)
+const ballGeo=new THREE.SphereGeometry(0.13,16,16);
+const ballMat=new THREE.MeshLambertMaterial({color:0xffffff});
+const ballMesh=new THREE.Mesh(ballGeo,ballMat);ballMesh.castShadow=true;
+scene.add(ballMesh);
+
+// 볼 초기 위치
+ballR=3.9; ballAngle=0;
+function updateBallPos(){
+  ballMesh.position.set(Math.cos(ballAngle)*ballR, 0.28+Math.max(0,(ballR-3.5)*0.4), Math.sin(ballAngle)*ballR);
+}
+updateBallPos();
+
+// 휠 그룹 (disc + top + boss + pins)
+const wheelGroup=new THREE.Group();
+scene.add(wheelGroup);
+[disc,top,boss].forEach(m=>{scene.remove(m);wheelGroup.add(m);});
+// pins
+const pins=[];
+scene.children.filter(c=>c!==wheelGroup&&c!==rim&&c!==track&&c!==bowl&&c!==table&&c!==ballMesh&&!(c instanceof THREE.Light))
+.forEach(c=>{if(c.geometry&&c.geometry.type==='CylinderGeometry'&&c.geometry.parameters&&c.geometry.parameters.radiusTop===0.04){pins.push(c);scene.remove(c);wheelGroup.add(c);}});
+
+// ── UI 초기화 ──
+const ng=document.getElementById('ng');
+const z=document.createElement('button');
+z.textContent='0';z.dataset.bet='n0';z.style.gridColumn='span 2';z.style.background='#0d3a18';z.style.color='#5ddd8a';
+z.onclick=function(){pb(this);};ng.appendChild(z);
+for(let i=1;i<=36;i++){
+  const b=document.createElement('button');b.textContent=i;b.dataset.bet='n'+i;
+  if(REDS.has(i))b.style.color='#ff8080';
+  b.onclick=function(){pb(this);};ng.appendChild(b);
+}
+document.querySelectorAll('.chip').forEach(c=>{
+  c.onclick=function(){
+    document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+    this.classList.add('on');chip=+this.dataset.v;
+  };
+});
+
+function pb(btn){
+  if(spinning)return;
+  const k=btn.dataset.bet,cost=chip;
+  if(balance<cost){setMsg('잔액 부족!');return;}
+  balance-=cost;bets[k]=(bets[k]||0)+cost;
+  btn.classList.add('on');
+  let sp=btn.querySelector('.bc');
+  if(!sp){sp=document.createElement('span');sp.className='bc';btn.appendChild(sp);}
+  sp.textContent=bets[k];
+  updUI();
+}
+function clrBets(){
+  if(spinning)return;
+  Object.values(bets).forEach(v=>{balance+=v;});
+  bets={};
+  document.querySelectorAll('.on').forEach(b=>{
+    if(!b.classList.contains('chip')){b.classList.remove('on');const s=b.querySelector('.bc');if(s)s.remove();}
+  });
+  updUI();setMsg('');
+}
+function updUI(){
+  document.getElementById('bal').textContent='₩'+balance.toLocaleString();
+  const tb=Object.values(bets).reduce((a,b)=>a+b,0);
+  document.getElementById('tbet').textContent='₩'+tb.toLocaleString();
+  const p=balance-10000;
+  const pe=document.getElementById('profit');
+  pe.textContent=(p>=0?'+':'')+'₩'+p.toLocaleString();
+  pe.style.color=p>=0?'#6ddd9d':'#ff7070';
+}
+function setMsg(m,c){const e=document.getElementById('msg');e.textContent=m;e.style.color=c||'#f0c040';}
+function showBanner(txt){
+  const b=document.getElementById('result-banner');b.textContent=txt;b.style.opacity='1';
+  setTimeout(()=>{b.style.opacity='0';},3200);
+}
+
+function calcPayout(r){
+  let w=0;const isR=REDS.has(r);
+  Object.entries(bets).forEach(([k,a])=>{
+    if(k==='n'+r)w+=a*36;
+    else if(k==='red'&&isR)w+=a*2;
+    else if(k==='blk'&&r>0&&!isR)w+=a*2;
+    else if(k==='even'&&r>0&&r%2===0)w+=a*2;
+    else if(k==='odd'&&r%2===1)w+=a*2;
+    else if(k==='lo'&&r>=1&&r<=18)w+=a*2;
+    else if(k==='hi'&&r>=19&&r<=36)w+=a*2;
+    else if(k==='d1'&&r>=1&&r<=12)w+=a*3;
+    else if(k==='d2'&&r>=13&&r<=24)w+=a*3;
+    else if(k==='d3'&&r>=25&&r<=36)w+=a*3;
+    else if(k==='col1'&&C1.includes(r))w+=a*3;
+    else if(k==='col2'&&C2.includes(r))w+=a*3;
+    else if(k==='col3'&&C3.includes(r))w+=a*3;
+  });return w;
+}
+function addHist(n){
+  history.unshift(n);if(history.length>18)history.pop();
+  document.getElementById('hist').innerHTML=history.map(h=>{
+    const col=h===0?'#1a6a2a':REDS.has(h)?'#8a1515':'#222';
+    return `<div class="hc" style="background:${col};">${h}</div>`;
+  }).join('');
+}
+
+// ── 물리 애니메이션 ──
+// 볼 물리 상태
+let bVel=0; // 볼 각속도 (rad/frame)
+let wVel=0; // 휠 각속도 (rad/frame)
+let bRadius=3.9; // 볼 현재 반지름
+let settling=false;
+let targetWheelFinal=0, resultNum=0;
+let pocketAngle=0; // 결과 포켓 위치
+
+function doSpin(){
+  if(spinning)return;
+  const tb=Object.values(bets).reduce((a,b)=>a+b,0);
+  if(tb===0){setMsg('베팅을 먼저 하세요!');return;}
+  spinning=true;settling=false;
+  document.getElementById('sb').disabled=true;
+  setMsg('');
+  document.getElementById('result-banner').style.opacity='0';
+
+  // 결과 결정
+  const ri=Math.floor(Math.random()*N);
+  resultNum=NUMS[ri];
+
+  // 결과 포켓의 각도 (휠 로컬 기준)
+  pocketAngle=ri*sliceAng+sliceAng/2;
+
+  // 휠은 시계방향 천천히
+  wVel=0.008+Math.random()*0.004;
+  // 볼은 반시계방향 빠르게
+  bVel=-(0.12+Math.random()*0.06);
+  bRadius=3.9;
+  phase='spinning';
+
+  // 볼 초기 높이 (트랙 위)
+  ballMesh.position.y=0.38;
+}
+
+let tick=0;
+function animate(){
+  requestAnimationFrame(animate);
+
+  if(phase==='spinning'){
+    tick++;
+    // 휠 회전
+    wheelGroup.rotation.y+=wVel;
+    wheelAngle+=wVel;
+
+    // 볼 각도 업데이트
+    ballAngle+=bVel;
+
+    // 볼 감속 (마찰)
+    bVel*=0.9985;
+    // 볼 반지름: 속도 줄수록 안쪽으로 낙하
+    const speed=Math.abs(bVel);
+    const targetR=speed>0.06?3.9:speed>0.025?3.5:speed>0.01?3.1:2.85;
+    bRadius+=(targetR-bRadius)*0.04;
+
+    // 볼 높이: 반지름 따라 경사
+    const h=0.1+(bRadius-2.85)*0.22+Math.max(0,(bRadius-3.5)*0.3);
+    ballMesh.position.set(Math.cos(ballAngle)*bRadius, h, Math.sin(ballAngle)*bRadius);
+
+    // 볼이 포켓에 충분히 가까워지면 settling
+    if(speed<0.008&&bRadius<3.0){
+      phase='settling';
+      tick=0;
+    }
+  }
+  else if(phase==='settling'){
+    tick++;
+    // 휠 계속 회전 (서서히 감속)
+    wVel*=0.992;
+    wheelGroup.rotation.y+=wVel;
+    wheelAngle+=wVel;
+
+    // 볼: 포켓 위치로 흡수
+    // 현재 포켓의 월드 각도 = wheelAngle + pocketAngle
+    const targetBallAngle=wheelAngle+pocketAngle;
+
+    // 각도 차이 최소화
+    let diff=targetBallAngle-ballAngle;
+    while(diff>Math.PI)diff-=Math.PI*2;
+    while(diff<-Math.PI)diff+=Math.PI*2;
+
+    ballAngle+=diff*0.06+bVel;
+    bVel*=0.88;
+    bRadius+=(2.85-bRadius)*0.06;
+
+    const h=0.05+(bRadius-2.85)*0.15;
+    ballMesh.position.set(Math.cos(ballAngle)*bRadius, Math.max(h,0.08), Math.sin(ballAngle)*bRadius);
+
+    if(tick>90&&Math.abs(bVel)<0.0005&&Math.abs(wVel)<0.001){
+      phase='done';
+      finish();
+    }
+  }
+  else if(phase==='idle'||phase==='done'){
+    // 아이들: 휠 천천히 회전, 볼 정지
+    wheelGroup.rotation.y+=0.003;
+    wheelAngle+=0.003;
+  }
+
+  renderer.render(scene,camera);
+}
+
+function finish(){
+  spinning=false;
+  document.getElementById('sb').disabled=false;
+  const betTotal=Object.values(bets).reduce((a,b)=>a+b,0);
+  const payout=calcPayout(resultNum);
+  balance+=payout;
+  const net=payout-betTotal;
+  const col=resultNum===0?'초록':REDS.has(resultNum)?'빨강':'검정';
+  showBanner(`${resultNum} (${col})`);
+  if(payout>0)setMsg(`+₩${net.toLocaleString()} 획득!`,'#6ddd9d');
+  else setMsg(`₩${betTotal.toLocaleString()} 잃었습니다.`,'#ff7070');
+  addHist(resultNum);
+  bets={};
+  document.querySelectorAll('.ngrid button.on,.ogrid button.on,.cgrid button.on').forEach(b=>{
+    b.classList.remove('on');const s=b.querySelector('.bc');if(s)s.remove();
+  });
+  updUI();
+  if(balance<=0){balance=10000;setTimeout(()=>setMsg('₩10,000 충전!','#f0c040'),200);updUI();}
+}
+
+// 카메라 orbit
+let isDrag=false,pm={x:0,y:0},theta=0,phi=0.88;
+const cw=document.getElementById('canvas-wrap');
+cw.addEventListener('mousedown',e=>{isDrag=true;pm={x:e.clientX,y:e.clientY};});
+window.addEventListener('mouseup',()=>isDrag=false);
+window.addEventListener('mousemove',e=>{
+  if(!isDrag)return;
+  theta-=(e.clientX-pm.x)*0.007;
+  phi=Math.max(0.3,Math.min(1.4,phi-(e.clientY-pm.y)*0.007));
+  pm={x:e.clientX,y:e.clientY};
+  const r=16;
+  camera.position.set(Math.sin(theta)*Math.cos(phi)*r,Math.sin(phi)*r,Math.cos(theta)*Math.cos(phi)*r);
+  camera.lookAt(0,0,0);
+});
+
+window.addEventListener('resize',()=>{
+  renderer.setSize(W(),H());camera.aspect=W()/H();camera.updateProjectionMatrix();
+});
+
+updUI();
+animate();
+})();
+</script>

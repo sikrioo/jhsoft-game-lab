@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <title>Gals Panic – Join-to-Land Capture</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    html, body {height:100%;margin:0;background:#0f1220;color:#e7e9f1;font-family:system-ui,-apple-system,Segoe UI,Roboto,Pretendard,Noto Sans KR,sans-serif}
+    .wrap{display:grid;place-content:center;gap:10px;padding:18px}
+    .tip{opacity:.8}
+    .frame{border:2px solid #3a3e6b;border-radius:12px;box-shadow:0 10px 30px rgba(0,0,0,.35);overflow:hidden}
+    button{background:#1f2340;color:#e7e9f1;border:1px solid #2f335a;padding:6px 10px;border-radius:10px;cursor:pointer}
+    button:active{transform:translateY(1px)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <strong>Gals Panic – 스무스 & 홀드 이동 (랜드 연결 캡쳐)</strong>
+    <div class="tip">방향키를 누르고 있는 동안만 이동 · R: 리셋 · 빈칸에서 선 시작 · 선이 LAND에 닿으면 둘러싸인 영역 캡쳐 · 자기 선 재진입/시작점 인접 시 닫힘 · 직전칸 되돌기=언두</div>
+  </div>
+  <canvas id="game" class="frame"></canvas>
+  <div><button id="resetBtn">리셋(R)</button></div>
+</div>
+
+<script>
+/* ===== 보드/상태 ===== */
+const COLS = 48, ROWS = 32, CELL = 16;
+const W = COLS * CELL, H = ROWS * CELL;
+const EMPTY = 0, LAND = 1;
+
+let grid, player, dir, desiredDir;
+let tracing = false;
+let tracePath = [];      // 논리 경로(셀 중심 좌표)
+let edgeSegments = [];   // 논리 기록(표시는 tracePath만 사용)
+let canvas, ctx;
+
+/* ===== 입력(홀드) ===== */
+const holding = { left:false, right:false, up:false, down:false };
+function updateDesiredDirFromHolding() {
+  if (holding.left && !holding.right)      desiredDir = {x:-1,y:0};
+  else if (holding.right && !holding.left) desiredDir = {x: 1,y:0};
+  else if (holding.up && !holding.down)    desiredDir = {x:0,y:-1};
+  else if (holding.down && !holding.up)    desiredDir = {x:0,y: 1};
+  else                                     desiredDir = null;
+}
+
+/* ===== 하이라이트 ===== */
+let lastCaptured = new Set();
+const capKey = (x,y)=> `${x},${y}`;
+let hiPhase = 'none';       // 'fill' | 'outline' | 'none'
+let hiStart = 0;
+
+/* ===== 임시 벽 ===== */
+let vWalls, hWalls;
+
+/* ===== 이동(애니메이션) ===== */
+let moving = false;
+let moveFrom = null, moveTo = null;
+let moveT = 1;
+let lastTs = 0;
+const STEP_MS_NORMAL  = 110; // 일반 이동 속도
+const STEP_MS_TRACING = 90;  // 트레이싱 중 속도
+
+/* ===== 유틸 ===== */
+const inBounds = (x,y)=> x>=0 && x<COLS && y>=0 && y<ROWS;
+
+/* ===== 렌더 ===== */
+function drawCell(x,y){
+  if (grid[y][x] === LAND) {
+    const INSET = 0; // 내 땅은 빈틈 없이 꽉 채움 (내부 선/틈 제거)
+    ctx.fillStyle = (hiPhase==='fill' && lastCaptured.has(capKey(x,y))) ? '#2bd3b8' : '#1e7a5e';
+    ctx.fillRect(x*CELL+INSET, y*CELL+INSET, CELL-2*INSET, CELL-2*INSET);
+  } else {
+    ctx.fillStyle = '#0a0c18';
+    ctx.fillRect(x*CELL, y*CELL, CELL, CELL);
+  }
+}
+
+function drawCapturedOutlinePulse(){
+  if (lastCaptured.size===0 || hiPhase!=='outline') return;
+  const t = performance.now() - hiStart;
+  const alpha = 0.35 + 0.35 * Math.sin(t * 0.02 * Math.PI);
+  ctx.save();
+  ctx.strokeStyle = '#42ff8a';
+  ctx.lineWidth = 2;
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.beginPath();
+  const S = lastCaptured;
+  for (const key of S) {
+    const [xs, ys] = key.split(','); const x = +xs, y = +ys;
+    if (y-1 < 0 || !S.has(capKey(x, y-1))) { ctx.moveTo(x*CELL, y*CELL); ctx.lineTo((x+1)*CELL, y*CELL); }
+    if (x+1 >= COLS || !S.has(capKey(x+1, y))) { ctx.moveTo((x+1)*CELL, y*CELL); ctx.lineTo((x+1)*CELL, (y+1)*CELL); }
+    if (y+1 >= ROWS || !S.has(capKey(x, y+1))) { ctx.moveTo((x+1)*CELL, (y+1)*CELL); ctx.lineTo(x*CELL, (y+1)*CELL); }
+    if (x-1 < 0 || !S.has(capKey(x-1, y))) { ctx.moveTo(x*CELL, (y+1)*CELL); ctx.lineTo(x*CELL, y*CELL); }
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* === 스무스 프리뷰: 라운드 코너 곡선 === */
+function drawTraceRounded(r = Math.max(2, CELL * 0.28)) {
+  if (!tracing || tracePath.length < 2) return;
+
+  const toPix = (c) => ({ x: c.x * CELL + CELL / 2, y: c.y * CELL + CELL / 2 });
+//   const pts = tracePath.map(toPix);
+  let pts = tracePath.map(toPix);
+  // LAND에 바로 붙는 시작/끝이면 경계까지 살짝 연장
+  pts = extendEndToLandEdge(pts, 'head');
+  pts = extendEndToLandEdge(pts, 'tail');
+  
+  ctx.save();
+  ctx.strokeStyle = '#ffd44d';
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+
+  ctx.moveTo(pts[0].x, pts[0].y);
+
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p0 = pts[i - 1], p1 = pts[i], p2 = pts[i + 1];
+
+    const v1x = p1.x - p0.x, v1y = p1.y - p0.y;
+    const v2x = p2.x - p1.x, v2y = p2.y - p1.y;
+    const len1 = Math.hypot(v1x, v1y) || 1;
+    const len2 = Math.hypot(v2x, v2y) || 1;
+    const u1x = v1x / len1, u1y = v1y / len1;
+    const u2x = v2x / len2, u2y = v2y / len2;
+
+    const t1 = Math.min(r, len1 / 2);
+    const t2 = Math.min(r, len2 / 2);
+    const pA = { x: p1.x - u1x * t1, y: p1.y - u1y * t1 };
+    const pB = { x: p1.x + u2x * t2, y: p1.y + u2y * t2 };
+
+    ctx.lineTo(pA.x, pA.y);
+    ctx.quadraticCurveTo(p1.x, p1.y, pB.x, pB.y);
+  }
+
+  ctx.lineTo(pts[pts.length - 1].x, pts[pts.length - 1].y);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/* === 플레이어(보간 렌더) === */
+function getPlayerRenderCenter(){
+  const center = (c)=> ({ x: c.x * CELL + CELL/2, y: c.y * CELL + CELL/2 });
+  if (moving && moveFrom && moveTo) {
+    const a = center(moveFrom), b = center(moveTo);
+    return { x: a.x + (b.x - a.x) * moveT, y: a.y + (b.y - a.y) * moveT };
+  } else {
+    return center(player);
+  }
+}
+function drawPlayer(){
+  const p = getPlayerRenderCenter();
+
+  ctx.save();
+  ctx.globalAlpha = 0.25;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y + 2, CELL*0.42, 0, Math.PI*2);
+  ctx.fillStyle = '#000';
+  ctx.fill();
+  ctx.restore();
+
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, CELL*0.42, 0, Math.PI*2);
+  ctx.fillStyle = '#e9eefc';
+  ctx.fill();
+
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.stroke();
+}
+
+/* ===== 메인 렌더 ===== */
+function commitDraw(){
+  for (let y=0;y<ROWS;y++) for (let x=0;x<COLS;x++) drawCell(x,y);
+  drawCapturedOutlinePulse();
+  drawTraceRounded();
+  drawPlayer();
+}
+
+/* ===== 하이라이트 타이밍 ===== */
+function startHighlight(cells){
+  lastCaptured = new Set(cells.map(p => capKey(p.x,p.y)));
+  hiPhase = 'fill';
+  commitDraw();
+  setTimeout(()=>{ hiPhase='outline'; hiStart=performance.now(); }, 1000);
+  setTimeout(()=>{ hiPhase='none'; commitDraw(); }, 1600);
+}
+
+/* ===== 초기화 ===== */
+function makeGrid(){ return Array.from({length: ROWS}, ()=>Array(COLS).fill(EMPTY)); }
+function reset(){
+  grid = makeGrid();
+  vWalls = Array.from({length: ROWS}, ()=> Array(COLS+1).fill(false));
+  hWalls = Array.from({length: ROWS+1}, ()=> Array(COLS).fill(false));
+  player = {x: Math.floor(COLS*0.15), y: Math.floor(ROWS*0.15)};
+  dir        = {x: 0, y: 0};
+  desiredDir = null;
+  tracing = false; tracePath = [];
+  edgeSegments = [];
+  lastCaptured = new Set(); hiPhase='none';
+  moving = false; moveFrom = null; moveTo = null; moveT = 1;
+  lastTs = performance.now();
+  holding.left = holding.right = holding.up = holding.down = false;
+  commitDraw();
+}
+
+/* ===== 트레이스 제어 ===== */
+function startTraceAt(x,y){
+  tracing = true;
+  tracePath = [{x,y}];
+  edgeSegments = [];
+}
+function extendTraceTo(x,y){
+  const last = tracePath[tracePath.length-1];
+  if (last && last.x===x && last.y===y) return;
+  if (last) {
+    if (last.x === x && Math.abs(last.y - y) === 1) {
+      const segY = Math.min(last.y, y);
+      const segX = x;
+      edgeSegments.push({ type: 'V', x: segX, y: segY });
+    } else if (last.y === y && Math.abs(last.x - x) === 1) {
+      const segX = Math.min(last.x, x);
+      const segY = y;
+      edgeSegments.push({ type: 'H', x: segX, y: segY });
+    }
+  }
+  tracePath.push({x,y});
+}
+function undoLastTraceStep(){
+  if (tracePath.length<=1){
+    tracePath.pop();
+    tracing=false;
+    edgeSegments = [];
+    return;
+  }
+  tracePath.pop();
+  if (edgeSegments.length) edgeSegments.pop();
+}
+function cancelCurrentTrace(){
+  tracing = false;
+  tracePath = [];
+  edgeSegments = [];
+}
+
+/* ===== 벽/플러드 ===== */
+function clearWalls(){
+  for (let y=0;y<ROWS;y++) vWalls[y].fill(false);
+  for (let y=0;y<ROWS+1;y++) hWalls[y].fill(false);
+}
+function blockEdge(a, b, block = true) {
+  if (a.x === b.x && Math.abs(a.y - b.y) === 1) {
+    const x = a.x;
+    const y = Math.min(a.y, b.y);
+    vWalls[y][x] = block;
+  } else if (a.y === b.y && Math.abs(a.x - b.x) === 1) {
+    const y = a.y;
+    const x = Math.min(a.x, b.x);
+    hWalls[y][x] = block;
+  }
+}
+
+/* 기존: 루프 기반 채우기 (자기선 재진입/시작점 인접) */
+function normalizeLoop(loop){
+  if (loop.length>=2){
+    const f = loop[0], l = loop[loop.length-1];
+    if (f.x===l.x && f.y===l.y) loop = loop.slice(0, loop.length-1);
+  }
+  const cleaned = [];
+  for (let i=0;i<loop.length;i++){
+    if (i>0 && loop[i].x===loop[i-1].x && loop[i].y===loop[i-1].y) continue;
+    cleaned.push(loop[i]);
+  }
+  return cleaned;
+}
+function buildWallsFromLoop(loopNodes){
+  loopNodes = normalizeLoop(loopNodes);
+  if (loopNodes.length < 3) return false;
+  clearWalls();
+  for (let i=0;i<loopNodes.length;i++){
+    const a = loopNodes[i];
+    const b = (i===loopNodes.length-1) ? loopNodes[0] : loopNodes[i+1];
+    blockEdge(a,b,true);
+  }
+  return true;
+}
+function floodOutsideViaWalls(){
+  const seen = Array.from({length: ROWS}, ()=> Array(COLS).fill(false));
+  const q=[];
+  const push=(x,y)=>{ if(!inBounds(x,y))return; if(seen[y][x])return; if(grid[y][x]===LAND)return; seen[y][x]=true; q.push({x,y}); };
+  for (let x=0;x<COLS;x++){ push(x,0); push(x,ROWS-1); }
+  for (let y=0;y<ROWS;y++){ push(0,y); push(COLS-1,y); }
+  const canPass=(x,y,nx,ny)=>{
+    if (!inBounds(nx,ny)) return false;
+    if (grid[ny][nx]===LAND) return false;
+    if (x===nx && ny===y+1) return !hWalls[ny][x];
+    if (x===nx && ny===y-1) return !hWalls[y][x];
+    if (y===ny && nx===x+1) return !vWalls[y][nx];
+    if (y===ny && nx===x-1) return !vWalls[y][x];
+    return false;
+  };
+  while(q.length){
+    const {x,y}=q.shift();
+    const N=[[x+1,y],[x-1,y],[x,y+1],[x,y-1]];
+    for (const [nx,ny] of N){
+      if (!inBounds(nx,ny)) continue;
+      if (seen[ny][nx]) continue;
+      if (!canPass(x,y,nx,ny)) continue;
+      seen[ny][nx]=true; q.push({x:nx,y:ny});
+    }
+  }
+  return seen;
+}
+
+/* 루프 채우기 */
+function fillInteriorGivenLoop(loopNodes){
+  if (!buildWallsFromLoop(loopNodes)) return [];
+  const outside = floodOutsideViaWalls();
+  const captured = [];
+  for (let y=0;y<ROWS;y++){
+    for (let x=0;x<COLS;x++){
+      if (grid[y][x]===EMPTY && !outside[y][x]){ grid[y][x]=LAND; captured.push({x,y}); }
+    }
+  }
+  clearWalls();
+  return captured;
+}
+
+/* === NEW: 선이 LAND에 닿으면, 선 + LAND 경계를 벽으로 보고 캡쳐 === */
+function addWallsAlongLandPerimeter(){
+  // LAND와 EMPTY 사이의 모든 경계를 벽으로 처리
+  // 수직 경계
+  for (let y=0; y<ROWS; y++){
+    for (let x=0; x<COLS-1; x++){
+      const a = grid[y][x], b = grid[y][x+1];
+      if ((a===LAND) !== (b===LAND)) {
+        // 셀 (x,y) ↔ (x+1,y) 사이의 수직벽은 vWalls[y][x+1]
+        vWalls[y][x+1] = true;
+      }
+    }
+  }
+  // 수평 경계
+  for (let y=0; y<ROWS-1; y++){
+    for (let x=0; x<COLS; x++){
+      const a = grid[y][x], b = grid[y+1][x];
+      if ((a===LAND) !== (b===LAND)) {
+        // 셀 (x,y) ↔ (x,y+1) 사이의 수평벽은 hWalls[y+1][x]
+        hWalls[y+1][x] = true;
+      }
+    }
+  }
+}
+function captureByJoiningLand(landCell){
+  // 1) 현재 트레이스 선분들을 벽으로
+  clearWalls();
+  for (let i=0;i<tracePath.length-1;i++){
+    blockEdge(tracePath[i], tracePath[i+1], true);
+  }
+  // 마지막 빈칸 → LAND로 들어온 한 칸도 벽으로 닫아줌
+  if (tracePath.length){
+    const last = tracePath[tracePath.length-1];
+    blockEdge(last, landCell, true);
+  }
+  // 2) 기존 LAND 둘레를 모두 벽으로 추가
+  addWallsAlongLandPerimeter();
+
+  // 3) 바깥에서 플러드 → 닿지 않는 EMPTY = 캡쳐
+  const outside = floodOutsideViaWalls();
+  const captured = [];
+  for (let y=0;y<ROWS;y++){
+    for (let x=0;x<COLS;x++){
+      if (grid[y][x]===EMPTY && !outside[y][x]) { grid[y][x]=LAND; captured.push({x,y}); }
+    }
+  }
+  clearWalls();
+  return captured;
+}
+
+/* ===== 닫힘/완료 처리 ===== */
+function isAdjacentToStart(nx,ny){
+  if (tracePath.length<2) return false;
+  const s = tracePath[0];
+  return Math.abs(nx-s.x)+Math.abs(ny-s.y)===1;
+}
+function indexInTrace(x,y){
+  for (let i=0;i<tracePath.length;i++){
+    if (tracePath[i].x===x && tracePath[i].y===y) return i;
+  }
+  return -1;
+}
+function polygonArea(cycle){
+  if (cycle.length < 3) return 0;
+  let s = 0;
+  for (let i=0;i<cycle.length;i++){
+    const a = cycle[i], b = cycle[(i+1)%cycle.length];
+    s += (a.x * b.y - b.x * a.y);
+  }
+  return Math.abs(s)/2;
+}
+function finalizeLoop(loop){
+  const norm = normalizeLoop(loop);
+  const area = polygonArea(norm);
+  if (area === 0) return [];
+  return fillInteriorGivenLoop(norm);
+}
+function closeIfLoop(nx,ny){
+  const idx = indexInTrace(nx,ny);
+  if (idx !== -1) {
+    const loop = tracePath.slice(idx).concat([{x:nx, y:ny}]);
+    return finalizeLoop(loop);
+  }
+  if (isAdjacentToStart(nx,ny)){
+    const loop = tracePath.concat([{x:nx,y:ny}]);
+    return finalizeLoop(loop);
+  }
+  return [];
+}
+
+/* ===== 도착 처리(셀 단위 규칙) ===== */
+function arriveAndResolve(nx, ny){
+  if (!inBounds(nx,ny)) return;
+
+  if (!tracing){
+    player = {x:nx,y:ny};
+    if (grid[ny][nx]===EMPTY){ startTraceAt(nx,ny); }
+    return;
+
+  } else {
+    if (grid[ny][nx] === LAND) {
+      // ✅ NEW: LAND에 닿으면 “선 + LAND 경계”로 캡쳐
+      player = {x:nx, y:ny};
+      const captured = captureByJoiningLand({x:nx, y:ny});
+      cancelCurrentTrace();          // 선/프리뷰 완전 제거
+      if (captured.length) startHighlight(captured);
+      return;
+    }
+
+    // 직전칸 되돌기 = 언두
+    if (tracePath.length>=2){
+      const prev = tracePath[tracePath.length-2];
+      if (nx===prev.x && ny===prev.y){ undoLastTraceStep(); player={x:nx,y:ny}; return; }
+    }
+
+    // 자기 선으로 닫힘/시작점 인접 닫힘
+    const capturedByLoop = closeIfLoop(nx,ny);
+    if (capturedByLoop.length){
+      player={x:nx,y:ny};
+      cancelCurrentTrace();
+      startHighlight(capturedByLoop);
+      return;
+    }
+
+    // 일반 연장
+    extendTraceTo(nx,ny);
+    player = {x:nx,y:ny};
+    return;
+  }
+}
+
+/* ===== 애니메이션 루프 & 이동 제어 ===== */
+function getStepMs(){ return tracing ? STEP_MS_TRACING : STEP_MS_NORMAL; }
+
+function tryStartMove(){
+  if (moving || !desiredDir) return false;
+  const nx = player.x + desiredDir.x;
+  const ny = player.y + desiredDir.y;
+  if (!inBounds(nx, ny)) return false;
+
+  moveFrom = {x: player.x, y: player.y};
+  moveTo   = {x: nx, y: ny};
+  moveT    = 0;
+  dir      = {...desiredDir};
+  moving   = true;
+  return true;
+}
+
+function loop(ts){
+  const dt = Math.min(50, ts - lastTs);
+  lastTs = ts;
+
+  if (moving && moveFrom && moveTo){
+    moveT += dt / getStepMs();
+    if (moveT >= 1){
+      moveT = 1; moving = false;
+      arriveAndResolve(moveTo.x, moveTo.y);
+
+      if (desiredDir) tryStartMove(); // 홀드 중이면 다음 칸 이어서
+    }
+  } else {
+    if (desiredDir) tryStartMove();
+  }
+
+  commitDraw();
+  requestAnimationFrame(loop);
+}
+
+// 셀 중심 → 픽셀 중심
+const centerPix = (c) => ({ x: c.x * CELL + CELL/2, y: c.y * CELL + CELL/2 });
+
+// 프리뷰 렌더용: 경로의 "머리/꼬리"가 LAND와 맞닿아 있으면 경계(mid-edge)까지 살짝 연장
+function extendEndToLandEdge(pts, end /* 'head' | 'tail' */) {
+  if (tracePath.length < 1) return pts;
+  const idx = (end === 'head') ? 0 : tracePath.length - 1;
+  const curr = tracePath[idx];
+  const prev = tracePath[idx + (end === 'head' ? +1 : -1)] || curr;
+
+  // 이동 방향(마지막 구간) 추정
+  const dx = Math.sign(curr.x - prev.x);
+  const dy = Math.sign(curr.y - prev.y);
+  if (dx === 0 && dy === 0) return pts;
+
+  const nx = curr.x + dx;
+  const ny = curr.y + dy;
+  if (!inBounds(nx, ny) || grid[ny][nx] !== LAND) return pts;
+
+  // curr(빈칸) ↔ LAND 사이 경계의 "중점" 픽셀 좌표
+  const a = centerPix(curr), b = centerPix({x:nx, y:ny});
+  const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+
+  // 안티앨리어싱 틈 메우기용, LAND쪽으로 아주 살짝(0.75px) 밀어넣기
+  const eps = 0.75;
+  const touch = { x: mid.x + dx * eps, y: mid.y + dy * eps };
+
+  const out = pts.slice();
+  if (end === 'head') out.unshift(touch); else out.push(touch);
+  return out;
+}
+
+/* ===== 입력 처리 (keydown/keyup: 홀드 기반) ===== */
+function handleKeyDown(e){
+  if (e.key === 'ArrowLeft')  { holding.left  = true; e.preventDefault(); }
+  if (e.key === 'ArrowRight') { holding.right = true; e.preventDefault(); }
+  if (e.key === 'ArrowUp')    { holding.up    = true; e.preventDefault(); }
+  if (e.key === 'ArrowDown')  { holding.down  = true; e.preventDefault(); }
+  if (e.key.toLowerCase() === 'r') { reset(); return; }
+
+  const before = desiredDir;
+  updateDesiredDirFromHolding();
+  if (desiredDir && !moving) tryStartMove();
+}
+function handleKeyUp(e){
+  if (e.key === 'ArrowLeft')  { holding.left  = false; e.preventDefault(); }
+  if (e.key === 'ArrowRight') { holding.right = false; e.preventDefault(); }
+  if (e.key === 'ArrowUp')    { holding.up    = false; e.preventDefault(); }
+  if (e.key === 'ArrowDown')  { holding.down  = false; e.preventDefault(); }
+  updateDesiredDirFromHolding();
+}
+
+/* ===== 부트스트랩 ===== */
+canvas = document.getElementById('game');
+canvas.width=W; canvas.height=H;
+ctx = canvas.getContext('2d');
+
+document.getElementById('resetBtn').addEventListener('click', reset);
+window.addEventListener('keydown', handleKeyDown, {passive:false});
+window.addEventListener('keyup', handleKeyUp, {passive:false});
+
+reset();
+lastTs = performance.now();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

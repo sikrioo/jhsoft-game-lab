@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tavern Blackjack - Pro Gamblers Edition</title>
+<style>
+  :root{
+    --bg:#0f1115; --fg:#e6e6e6; --dim:#9aa0a6; --line:#2a2f3a;
+    --win:#4caf50; --lose:#e53935; --tie:#9aa0a6; --fx:#f5d66b;
+    --master:#9c27b0; --pro:#ff7043; --noob:#81d4fa;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    padding:16px; display:flex; justify-content:center;
+  }
+  .wrap{ width:min(1000px, 100%); }
+  .panel{
+    border:1px solid var(--line); padding:16px; border-radius:12px;
+    background:rgba(255,255,255,.02); box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .header-ui { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 10px; }
+
+  .settings { display: flex; gap: 15px; font-size: 13px; background: rgba(0,0,0,0.3); padding: 10px 15px; border-radius: 8px; border: 1px solid var(--line); }
+  select, input[type="checkbox"] { cursor: pointer; background: #1a1d23; color: white; border: 1px solid var(--line); border-radius: 4px; }
+
+  .hud{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:15px; }
+  .pill{
+    border:1px solid var(--line); border-radius:999px;
+    padding:8px 16px; background:rgba(0,0,0,.4); min-width: 120px; text-align: center;
+  }
+  .active-turn { border-color: var(--fx); box-shadow: 0 0 10px rgba(245,214,107,0.2); }
+  .master-turn { border-color: var(--master); color: #e1bee7; }
+
+  .table{ border:1px solid var(--line); border-radius:10px; overflow:hidden; background:rgba(0,0,0,0.3); }
+  .row, .head{ display:grid; grid-template-columns: 140px 1fr 80px 120px; }
+  .head{ background:rgba(255,255,255,.05); color:var(--dim); border-bottom:1px solid var(--line); font-size:12px; font-weight: bold; }
+  .cell{ padding:12px 15px; border-bottom:1px solid rgba(42,47,58,.5); display: flex; align-items: center; min-height: 60px; }
+  .row:last-child .cell { border-bottom: none; }
+  .row.is-player { background: rgba(245, 214, 107, 0.05); border-left: 3px solid var(--fx); }
+  .row.is-pro { color: var(--pro); }
+  .row.is-noob { color: var(--noob); }
+
+  .card-slot {
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-right: 5px; width: 42px; height: 30px;
+    border: 1px solid var(--line); border-radius: 4px;
+    background: #1a1d23; font-size: 14px; font-weight: bold;
+    animation: cardIn 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+  .win{ color:var(--win); font-weight:bold; }
+  .lose{ color:var(--lose); font-weight:bold; }
+
+  .controls{ display:flex; gap:12px; flex-wrap:wrap; margin-top:15px; align-items:center; }
+  input[type="number"], button{ background:#12151c; color:var(--fg); border:1px solid var(--line); border-radius:8px; padding:10px 15px; font:inherit; }
+  button:hover:not(:disabled) { border-color: var(--fx); background: #1e222d; }
+  button:disabled{ opacity:.3; cursor:not-allowed; }
+
+  .counting-bar { font-size: 11px; color: #555; margin-top: 12px; text-align: right; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <div class="header-ui">
+      <div class="settings">
+        <div>
+          인원:
+          <select id="playerCount">
+            <option value="1">1:1 대결</option>
+            <option value="2">나 + 하수 1</option>
+            <option value="3" selected>나 + 하수1 + 고수1</option>
+            <option value="5">나 + 하수1,2 + 고수1,2</option>
+          </select>
+        </div>
+
+        <div>
+          딜러:
+          <select id="dealerMode">
+            <option value="NORMAL" selected>일반(카지노 룰)</option>
+            <option value="SMART">스마트(현실적)</option>
+            <option value="CHEAT">치트(EV 최대)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="pill">보유: <b id="gold">300</b>G</div>
+    </div>
+
+    <div class="hud">
+      <div class="pill" id="msg" style="flex-grow:1; text-align:left;">판돈을 걸고 Deal을 누르십시오.</div>
+    </div>
+
+    <div class="table" id="gameTable"></div>
+
+    <div class="controls">
+      <input id="bet" type="number" min="1" value="25" style="width:100px" />
+      <button id="btnDeal">게임 시작 (Deal)</button>
+      <button id="btnHit" disabled>Hit</button>
+      <button id="btnStand" disabled>Stand</button>
+      <button id="btnReset">초기화</button>
+    </div>
+
+    <div id="debugInfo" class="counting-bar">덱 정보 분석 중...</div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  let playerGold = 300;
+  let phase = "IDLE";
+  let deck = [];
+  let runningCount = 0;
+  let seats = [];
+  let dHand = [];
+  let dealerHoleHidden = true;
+
+  // NPC 이름 및 AI 유형 정의
+  const NPC_DATA = [
+    { name: "하수 1", type: "noob" },
+    { name: "고수 1", type: "pro" },
+    { name: "하수 2", type: "noob" },
+    { name: "고수 2", type: "pro" }
+  ];
+
+  function buildDeck() {
+    runningCount = 0;
+    const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+    const d = [];
+    for (let s=0; s<8; s++) for (const r of ranks) d.push(r);
+    for (let i=d.length-1; i>0; i--) {
+      const j = Math.floor(Math.random()*(i+1));
+      [d[i], d[j]] = [d[j], d[i]];
+    }
+    return d;
+  }
+
+  function draw() {
+    if (deck.length < 20) deck = buildDeck();
+    const card = deck.pop();
+    if (["2","3","4","5","6"].includes(card)) runningCount++;
+    else if (["10","J","Q","K","A"].includes(card)) runningCount--;
+    updateDebug();
+    return card;
+  }
+
+  function updateDebug() {
+    const mode = $("dealerMode") ? $("dealerMode").value : "NORMAL";
+    const show = (mode !== "NORMAL"); // SMART/CHEAT일 때 진하게
+    $("debugInfo").style.opacity = show ? "1" : "0.2";
+    $("debugInfo").textContent = `[시스템] 카운트: ${runningCount} | 남은 카드: ${deck.length}장`;
+  }
+
+  function handTotal(hand) {
+    if (!hand || hand.length === 0) return 0;
+    let total = 0, aces = 0;
+    for (const r of hand) {
+      if (r === "A") { total += 11; aces++; }
+      else if (["K","Q","J"].includes(r)) total += 10;
+      else total += parseInt(r);
+    }
+    while (total > 21 && aces > 0) { total -= 10; aces--; }
+    return total;
+  }
+
+  function initTableUI() {
+    const count = parseInt($("playerCount").value);
+    let html = `<div class="head"><div class="cell">참가자</div><div class="cell">패</div><div class="cell">합계</div><div class="cell">결과</div></div>`;
+    html += `<div class="row"><div class="cell">딜러</div><div id="dCards" class="cell">-</div><div id="dTotal" class="cell">?</div><div id="dResult" class="cell">-</div></div>`;
+
+    for(let i=0; i<count; i++) {
+      const isUser = i === 0;
+      const npcInfo = isUser ? null : NPC_DATA[i-1];
+      const rowClass = isUser ? 'is-player' : `is-${npcInfo.type}`;
+      html += `<div class="row ${rowClass}">
+        <div class="cell">${isUser?'당신':npcInfo.name}</div>
+        <div id="cards-${i}" class="cell">-</div>
+        <div id="total-${i}" class="cell">0</div>
+        <div id="result-${i}" class="cell">-</div>
+      </div>`;
+    }
+    $("gameTable").innerHTML = html;
+  }
+
+  function render() {
+    const dCardsShow = dealerHoleHidden
+      ? (dHand.length > 1 ? ['??', dHand[1]] : (dHand.length === 1 ? ['??'] : []))
+      : dHand;
+
+    $("dCards").innerHTML = dCardsShow.map(c => `<div class="card-slot">${c}</div>`).join("");
+    $("dTotal").textContent = dealerHoleHidden ? "?" : handTotal(dHand);
+
+    seats.forEach((s, i) => {
+      if ($(`cards-${i}`)) {
+        $(`cards-${i}`).innerHTML = s.hand.map(c => `<div class="card-slot">${c}</div>`).join("");
+        $(`total-${i}`).textContent = handTotal(s.hand);
+        $(`result-${i}`).textContent = s.result || "-";
+        $(`result-${i}`).className = `cell ${s.result.includes('승')?'win':(s.result.includes('패')?'lose':'')}`;
+      }
+    });
+    $("gold").textContent = playerGold;
+  }
+
+  function setMsg(text) {
+    const mode = $("dealerMode") ? $("dealerMode").value : "NORMAL";
+    $("msg").textContent = text;
+    $("msg").className = (mode === "CHEAT") ? "pill master-turn" : "pill active-turn";
+  }
+
+  async function deal() {
+    const bet = parseInt($("bet").value);
+    if (bet > playerGold) return setMsg("보유한 골드가 부족합니다.");
+
+    playerGold -= bet;
+    phase = "ANIMATING";
+    dealerHoleHidden = true;
+    updateButtons();
+
+    const count = parseInt($("playerCount").value);
+    seats = Array.from({length: count}, (_, i) => ({
+      type: i===0?'player':NPC_DATA[i-1].type,
+      name: i===0?'당신':NPC_DATA[i-1].name,
+      hand: [], result: ''
+    }));
+    dHand = [];
+    initTableUI();
+
+    // 카드 배분 연출
+    for(let r=0; r<2; r++) {
+      for(let i=0; i<count; i++) {
+        seats[i].hand.push(draw());
+        render(); await sleep(250);
+      }
+      dHand.push(draw());
+      render(); await sleep(250);
+    }
+
+    if(handTotal(seats[0].hand) === 21) {
+      setMsg("블랙잭! 운이 좋으시군요.");
+      await sleep(600);
+      await stand(); // 자동 진행
+    } else {
+      phase = "PLAYER_TURN";
+      setMsg("당신의 차례입니다.");
+      updateButtons();
+    }
+  }
+
+  async function hit() {
+    if (phase !== "PLAYER_TURN") return;
+    seats[0].hand.push(draw());
+    render();
+    if (handTotal(seats[0].hand) > 21) {
+      seats[0].result = "버스트 패배";
+      await stand();
+    }
+  }
+
+  async function stand() {
+    if (phase !== "PLAYER_TURN" && phase !== "ANIMATING") return;
+    phase = "NPC_TURN";
+    updateButtons();
+
+    // NPC 자동 플레이
+    for(let i=1; i<seats.length; i++) {
+      const s = seats[i];
+      setMsg(`${s.name}의 차례입니다...`);
+      await sleep(700);
+
+      while(true) {
+        const total = handTotal(s.hand);
+        if (total >= 21) break;
+
+        let shouldHit = false;
+        if (s.type === "noob") {
+          shouldHit = total < 16; // 하수는 무조건 16까지 Hit
+        } else {
+          const dealerUp = dHand[1]; // 공개된 딜러 카드
+          shouldHit = decideProHit(s.hand, dealerUp, runningCount, deck.length);
+        }
+
+        if (shouldHit) {
+          s.hand.push(draw());
+          render();
+          await sleep(700);
+        } else break;
+      }
+    }
+
+    // 딜러 플레이 (3모드)
+    phase = "DEALER_TURN";
+    dealerHoleHidden = false;
+    render();
+    setMsg("딜러가 카드를 공개합니다.");
+    await sleep(800);
+
+    const mode = $("dealerMode") ? $("dealerMode").value : "NORMAL";
+
+    if (mode === "NORMAL") {
+      // 일반 딜러: 고정 룰(17 스탠드)
+      while (handTotal(dHand) < 17) {
+        dHand.push(draw());
+        render();
+        setMsg("딜러가 카드를 더 뽑습니다.");
+        await sleep(800);
+      }
+    } else if (mode === "SMART") {
+      // 스마트 딜러(현실적)
+      setMsg("스마트 딜러가 상황을 계산합니다...");
+      await sleep(600);
+
+      for (let step = 0; step < 6; step++) {
+        const dT = handTotal(dHand);
+        if (dT >= 21) break;
+
+        const action = decideDealerActionSmartHuman(dHand, seats, runningCount, deck.length);
+
+        setMsg(`스마트 딜러 판단: ${action}`);
+        await sleep(650);
+
+        if (action === "HIT") {
+          dHand.push(draw());
+          render();
+          setMsg("스마트 딜러가 카드를 더 뽑습니다.");
+          await sleep(800);
+          continue;
+        }
+        break; // STAND
+      }
+    } else {
+      // 치트 딜러(EV 최대): 비현실/사기급
+      setMsg("치트 딜러가 테이블을 읽고 있습니다...");
+      await sleep(600);
+
+      for (let step = 0; step < 6; step++) {
+        const dT = handTotal(dHand);
+        if (dT >= 21) break;
+
+        const { action, evHit, evStand } = decideDealerActionMaxEV(dHand, seats, deck, 320);
+
+        setMsg(`치트 딜러 판단: ${action} (Hit=${evHit.toFixed(2)} / Stand=${evStand.toFixed(2)})`);
+        await sleep(700);
+
+        if (action === "HIT") {
+          dHand.push(draw());
+          render();
+          setMsg("치트 딜러가 카드를 더 뽑습니다.");
+          await sleep(800);
+          continue;
+        }
+        break;
+      }
+    }
+
+    settle();
+  }
+
+  function settle() {
+    const dT = handTotal(dHand);
+    const bet = parseInt($("bet").value);
+
+    seats.forEach((s, i) => {
+      const pT = handTotal(s.hand);
+
+      if (pT > 21) s.result = "버스트 패배";
+      else if (dT > 21) s.result = "승리 (딜러 버스트)";
+      else if (pT > dT) s.result = "승리!";
+      else if (pT < dT) s.result = "패배";
+      else s.result = "무승부";
+
+      if(i === 0) {
+        if (s.result.includes("승리")) playerGold += Math.floor(bet * 2);
+        else if (s.result === "무승부") playerGold += bet;
+      }
+    });
+
+    setMsg("정산 완료. 다음 판을 준비하세요.");
+    phase = "SETTLED";
+    render();
+    updateButtons();
+  }
+
+  function updateButtons() {
+    $("btnDeal").disabled = phase !== "IDLE" && phase !== "SETTLED";
+    $("btnHit").disabled = phase !== "PLAYER_TURN";
+    $("btnStand").disabled = phase !== "PLAYER_TURN";
+  }
+
+  // ===== Pro(고수) 플레이어 AI =====
+  function cardValueForUpcard(r) {
+    if (r === "A") return 11;
+    if (["K","Q","J"].includes(r)) return 10;
+    return parseInt(r, 10);
+  }
+
+  function isSoftHand(hand) {
+    let total = 0, aces = 0;
+    for (const r of hand) {
+      if (r === "A") { total += 11; aces++; }
+      else if (["K","Q","J"].includes(r)) total += 10;
+      else total += parseInt(r, 10);
+    }
+    return aces > 0 && total <= 21;
+  }
+
+  function getTrueCount(runningCount, deckLen) {
+    const decksRemaining = Math.max(1, deckLen / 52);
+    return runningCount / decksRemaining;
+  }
+
+  function decideProHit(hand, dealerUpRank, runningCount, deckLen) {
+    const total = handTotal(hand);
+    if (total >= 21) return false;
+
+    const up = cardValueForUpcard(dealerUpRank);
+    const tc = getTrueCount(runningCount, deckLen);
+    const soft = isSoftHand(hand);
+
+    const dealerWeak = (up >= 2 && up <= 6);
+    const dealerStrong = !dealerWeak;
+
+    if (total <= 11) return true;
+
+    if (soft) {
+      if (total <= 17) return dealerStrong;
+      if (total === 18) return (up === 9 || up === 11);
+      return false;
+    }
+
+    if (dealerWeak) {
+      if (total >= 17) return false;
+      if (total === 12) {
+        if (tc >= 2) return false;
+        return (up === 2 || up === 3);
+      }
+      if (total >= 13 && total <= 16) {
+        if (tc >= 1.5) return false;
+        return (total === 13 && up === 2 && tc <= -1);
+      }
+      return false;
+    } else {
+      if (total >= 17) return false;
+      if (total === 16 && tc >= 3 && (up === 10 || up === 11)) return false;
+      return true;
+    }
+  }
+
+  // ===== Dealer SMART (현실적) =====
+  function dealerNeedsToChase(dHandNow, seatList) {
+    const dT = handTotal(dHandNow);
+    let target = -1;
+    for (const s of seatList) {
+      const pT = handTotal(s.hand);
+      if (pT <= 21 && pT > dT) target = Math.max(target, pT);
+    }
+    return target;
+  }
+
+  function decideDealerActionSmartHuman(dHandNow, seatList, runningCount, deckLen) {
+    const dT = handTotal(dHandNow);
+    if (dT >= 21) return "STAND";
+    if (dT <= 16) return "HIT";
+
+    const target = dealerNeedsToChase(dHandNow, seatList);
+    if (target === -1) return "STAND";
+
+    const tc = getTrueCount(runningCount, deckLen);
+
+    if (target === 21) {
+      if (dT === 17 && tc >= 2.5) return "STAND";
+      return "HIT";
+    }
+
+    if (target === 20) {
+      if (dT === 17) return (tc <= 0.5) ? "HIT" : "STAND";
+      if (dT === 18) return (tc <= -1.0) ? "HIT" : "STAND";
+      if (dT === 19) return (tc <= -2.5) ? "HIT" : "STAND";
+      return "STAND";
+    }
+
+    if (target === 19) {
+      if (dT === 17) return (tc <= 1.0) ? "HIT" : "STAND";
+      if (dT === 18) return (tc <= -1.5) ? "HIT" : "STAND";
+      return "STAND";
+    }
+
+    if (dT === 17 && target === 18) {
+      return (tc <= -0.5) ? "HIT" : "STAND";
+    }
+
+    return "STAND";
+  }
+
+  // ===== Dealer CHEAT (EV 최대) =====
+  function cloneHand(hand) { return hand.slice(); }
+
+  function simDraw(simDeck) {
+    return simDeck.pop();
+  }
+
+  function dealerOutcomeVsPlayer(playerTotal, dealerTotal) {
+    if (playerTotal > 21) return +1;
+    if (dealerTotal > 21) return -1;
+    if (dealerTotal > playerTotal) return +1;
+    if (dealerTotal < playerTotal) return -1;
+    return 0;
+  }
+
+  function decideDealerActionMaxEV(dHandNow, seatList, liveDeck, samples = 320) {
+    const playerTotals = seatList.map(s => handTotal(s.hand));
+
+    const dealerTotalNow = handTotal(dHandNow);
+    let standSum = 0;
+    for (const pT of playerTotals) standSum += dealerOutcomeVsPlayer(pT, dealerTotalNow);
+    const evStand = standSum;
+
+    let hitSum = 0;
+
+    for (let k = 0; k < samples; k++) {
+      const simDeck = liveDeck.slice();
+      for (let i = simDeck.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [simDeck[i], simDeck[j]] = [simDeck[j], simDeck[i]];
+      }
+
+      const d1 = cloneHand(dHandNow);
+      d1.push(simDraw(simDeck));
+
+      const tStand1 = handTotal(d1);
+      let evIfStand1 = 0;
+      for (const pT of playerTotals) evIfStand1 += dealerOutcomeVsPlayer(pT, tStand1);
+
+      const d2 = cloneHand(d1);
+      d2.push(simDraw(simDeck));
+      const tStand2 = handTotal(d2);
+      let evIfHitAgain = 0;
+      for (const pT of playerTotals) evIfHitAgain += dealerOutcomeVsPlayer(pT, tStand2);
+
+      hitSum += Math.max(evIfStand1, evIfHitAgain);
+    }
+
+    const evHit = hitSum / samples;
+    const action = (evHit > evStand) ? "HIT" : "STAND";
+    return { action, evHit, evStand };
+  }
+
+  // ===== UI wiring =====
+  $("btnDeal").onclick = deal;
+  $("btnHit").onclick = hit;
+  $("btnStand").onclick = stand;
+  $("playerCount").onchange = initTableUI;
+  $("dealerMode").onchange = updateDebug;
+  $("btnReset").onclick = () => location.reload();
+
+  deck = buildDeck();
+  initTableUI();
+  updateDebug();
+</script>
+</body>
+</html>

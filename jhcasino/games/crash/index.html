@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crash</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at top,rgba(255,255,255,.74),transparent 24%),
+    radial-gradient(circle at 18% 18%,rgba(75,184,255,.22),transparent 18%),
+    radial-gradient(circle at 82% 14%,rgba(255,111,88,.18),transparent 18%),
+    linear-gradient(180deg,#ffd95f 0%,#ff9c60 100%);
+  font-family:"Trebuchet MS","Malgun Gothic",sans-serif;
+  color:#1b1412;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.18;
+  background:
+    radial-gradient(circle,rgba(27,20,18,.12) 2px,transparent 2px) 0 0/24px 24px,
+    repeating-conic-gradient(from 0deg,rgba(255,255,255,.14) 0 8deg,transparent 8deg 16deg);
+}
+.app{
+  width:min(1380px,calc(100vw - 24px));
+  min-height:min(900px,calc(100vh - 24px));
+  border:5px solid #1b1412;
+  border-radius:34px;
+  overflow:hidden;
+  background:#fff3d0;
+  box-shadow:0 18px 0 #4d2f25,0 34px 86px rgba(0,0,0,.25);
+}
+.stage{
+  position:relative;
+  padding:24px;
+  background:
+    radial-gradient(circle at center,rgba(255,255,255,.22),transparent 28%),
+    linear-gradient(180deg,#fff0b9 0%,#ffca83 48%,#ff9f6c 100%);
+}
+.stage::before{
+  content:"";
+  position:absolute;
+  inset:18px;
+  border:4px solid rgba(27,20,18,.92);
+  border-radius:30px;
+  pointer-events:none;
+  box-shadow:inset 0 0 0 4px rgba(255,255,255,.24);
+}
+.stage::after{
+  content:"";
+  position:absolute;
+  inset:8% 10%;
+  border-radius:50%;
+  opacity:.28;
+  pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,rgba(255,255,255,.28) 0 8deg,transparent 8deg 17deg);
+}
+.panel{
+  position:relative;
+  z-index:1;
+  border:4px solid #1b1412;
+  border-radius:24px;
+  background:#fffaf0;
+  box-shadow:0 8px 0 rgba(27,20,18,.14);
+}
+.status{
+  margin-bottom:18px;
+  padding:16px 18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.65),transparent 100%),#fffdf3;
+}
+.status-label{
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#6f5138;
+}
+#message{
+  margin-top:8px;
+  min-height:60px;
+  font-size:24px;
+  font-weight:900;
+  line-height:1.15;
+}
+.arena{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 300px;
+  gap:18px;
+}
+.table{
+  position:relative;
+  padding:18px;
+  border:5px solid #1b1412;
+  border-radius:30px;
+  background:linear-gradient(180deg,rgba(255,255,255,.28),transparent 100%),linear-gradient(180deg,#ff6f58 0%,#ffa056 52%,#ffd44f 100%);
+  box-shadow:0 12px 0 rgba(27,20,18,.16);
+}
+.table::before{
+  content:"";
+  position:absolute;
+  inset:12px;
+  border:4px solid rgba(27,20,18,.82);
+  border-radius:24px;
+  pointer-events:none;
+}
+.table-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:14px;
+}
+.jackpot{
+  padding:10px 14px;
+  border:4px solid #1b1412;
+  border-radius:18px;
+  background:#fff4b0;
+  font-size:20px;
+  font-weight:900;
+  box-shadow:0 6px 0 rgba(27,20,18,.14);
+}
+.lights{display:flex;gap:8px}
+.light{
+  width:18px;height:18px;border:3px solid #1b1412;border-radius:50%;
+  background:#fff7d9;box-shadow:0 0 0 4px rgba(255,255,255,.18);
+  transition:transform .18s ease,background .18s ease,box-shadow .18s ease;
+}
+.light.active{
+  transform:scale(1.12);
+  background:#fff159;
+  box-shadow:0 0 0 4px rgba(255,255,255,.16),0 0 24px rgba(255,241,89,.65);
+}
+.runway{
+  position:relative;
+  min-height:640px;
+  border:5px solid #1b1412;
+  border-radius:26px;
+  overflow:hidden;
+  background:
+    radial-gradient(circle at center,rgba(255,255,255,.09),transparent 34%),
+    linear-gradient(180deg,#2d1831 0%,#1c1324 100%);
+  transition:transform .08s linear, box-shadow .12s ease, filter .12s ease;
+}
+.runway::before{
+  content:"";
+  position:absolute;
+  inset:18px;
+  border:3px dashed rgba(255,255,255,.18);
+  border-radius:22px;
+  pointer-events:none;
+}
+.runway.danger{
+  box-shadow:0 0 0 4px rgba(255,104,87,.18) inset, 0 0 42px rgba(255,104,87,.24);
+  filter:saturate(1.08);
+}
+.runway.shake{
+  animation:shake .16s linear infinite;
+}
+.runway.crash{
+  animation:crash-hit .42s ease;
+}
+.chart-wrap{
+  position:absolute;
+  inset:20px 20px 110px;
+  border:3px solid rgba(255,255,255,.12);
+  border-radius:22px;
+  background:linear-gradient(180deg,rgba(255,255,255,.04),transparent 100%);
+  overflow:hidden;
+}
+.chart-grid{
+  position:absolute;
+  inset:0;
+  background:
+    linear-gradient(rgba(255,255,255,.08) 1px, transparent 1px) 0 0/100% 25%,
+    linear-gradient(90deg, rgba(255,255,255,.08) 1px, transparent 1px) 0 0/12.5% 100%;
+}
+#chart{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+}
+.multiplier{
+  position:absolute;
+  left:50%;
+  top:50%;
+  transform:translate(-50%,-54%);
+  min-width:260px;
+  text-align:center;
+  padding:18px 20px;
+  border:4px solid #1b1412;
+  border-radius:28px;
+  background:#fffdf3;
+  box-shadow:0 10px 0 rgba(27,20,18,.16);
+}
+.multiplier .value{
+  font-size:72px;
+  font-weight:900;
+  line-height:.92;
+  transition:transform .08s linear, color .12s ease, text-shadow .12s ease;
+}
+.multiplier .state{
+  margin-top:8px;
+  font-size:14px;
+  font-weight:900;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+}
+.launchpad{
+  position:absolute;
+  left:50%;
+  bottom:36px;
+  transform:translateX(-50%);
+  width:min(86%, 720px);
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:16px;
+  align-items:center;
+}
+.recent-bar{
+  padding:12px 14px;
+  border:4px solid #1b1412;
+  border-radius:18px;
+  background:#fff8e4;
+  box-shadow:0 6px 0 rgba(27,20,18,.12);
+}
+.recent-title{
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+}
+.recent-list{
+  margin-top:8px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+.recent-pill{
+  min-width:58px;
+  padding:8px 10px;
+  border:3px solid #1b1412;
+  border-radius:999px;
+  background:#fff7d8;
+  text-align:center;
+  font-size:12px;
+  font-weight:900;
+}
+.rocket{
+  width:84px;
+  height:84px;
+  display:grid;
+  place-items:center;
+  border:4px solid #1b1412;
+  border-radius:24px;
+  background:#fff4be;
+  font-size:40px;
+  box-shadow:0 8px 0 rgba(27,20,18,.14);
+  transition:transform .1s linear;
+}
+.flash{
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  opacity:0;
+  background:
+    radial-gradient(circle at center, rgba(255,255,255,.85) 0%, rgba(255,255,255,.12) 28%, rgba(255,104,87,.18) 48%, transparent 70%);
+}
+.flash.show{
+  animation:flash-burst .42s ease;
+}
+.side{display:grid;gap:12px}
+.box{padding:14px}
+.stat{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  font-size:14px;
+  font-weight:800;
+}
+.stat + .stat{margin-top:8px}
+.stat strong{font-size:18px}
+.bet-grid{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+  margin-top:10px;
+}
+.bet-btn,.action-btn{
+  appearance:none;
+  border:4px solid #1b1412;
+  border-radius:18px;
+  cursor:pointer;
+  font-weight:900;
+  box-shadow:0 6px 0 rgba(27,20,18,.14);
+  transition:transform .12s ease,box-shadow .12s ease;
+}
+.bet-btn:hover,.action-btn:hover{transform:translateY(-2px)}
+.bet-btn:active,.action-btn:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(27,20,18,.12)}
+.bet-btn{
+  min-height:56px;
+  background:#fff8e4;
+  font-size:15px;
+  line-height:1;
+}
+.bet-btn small{
+  display:block;
+  margin-top:4px;
+  font-size:10px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  opacity:.82;
+}
+.bet-btn.selected{background:#ff8454;color:#fffdf6}
+.action-stack{display:grid;gap:10px;margin-top:10px}
+.action-btn{
+  min-height:58px;
+  font-size:17px;
+}
+#startBtn{background:#58d88e;color:#14301d}
+#cashBtn{background:#4bb8ff;color:#fffdf6}
+#chargeBtn{background:#ffd453;color:#1b1412}
+.action-btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.odds-list{
+  display:grid;
+  gap:8px;
+  margin-top:10px;
+}
+.odds-item{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:10px 12px;
+  border:3px solid #1b1412;
+  border-radius:16px;
+  background:#fff7de;
+  font-size:14px;
+  font-weight:900;
+}
+@media (max-width:1180px){
+  .arena{grid-template-columns:1fr}
+  .launchpad{grid-template-columns:1fr;justify-items:center}
+}
+@keyframes shake{
+  0%{transform:translate(0,0)}
+  25%{transform:translate(-3px,2px)}
+  50%{transform:translate(3px,-2px)}
+  75%{transform:translate(-2px,-3px)}
+  100%{transform:translate(2px,3px)}
+}
+@keyframes crash-hit{
+  0%{transform:scale(1)}
+  35%{transform:scale(1.012)}
+  100%{transform:scale(1)}
+}
+@keyframes flash-burst{
+  0%{opacity:0}
+  25%{opacity:1}
+  100%{opacity:0}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <section class="stage">
+    <div class="status panel">
+      <div class="status-label">Status</div>
+      <div id="message">Choose your bet, start the run, and cash out before the crash.</div>
+    </div>
+
+    <div class="arena">
+      <div class="table">
+        <div class="table-head">
+          <div class="jackpot">CRASH</div>
+          <div class="lights" id="lights"></div>
+        </div>
+
+        <div class="runway">
+          <div class="chart-wrap">
+            <div class="chart-grid"></div>
+            <canvas id="chart"></canvas>
+          </div>
+          <div class="flash" id="flash"></div>
+
+          <div class="multiplier panel">
+            <div class="value" id="multiplier">1.00x</div>
+            <div class="state" id="roundState">READY</div>
+          </div>
+
+          <div class="launchpad">
+            <div class="recent-bar">
+              <div class="recent-title">Recent Crashes</div>
+              <div class="recent-list" id="history"></div>
+            </div>
+            <div class="rocket" id="rocket">🚀</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="side">
+        <div class="panel box">
+          <div class="status-label">Run Data</div>
+          <div class="stat" style="margin-top:10px"><span>Balance</span><strong id="balance">1000</strong></div>
+          <div class="stat"><span>Bet</span><strong id="bet">25</strong></div>
+          <div class="stat"><span>Last Win</span><strong id="lastWin">0</strong></div>
+          <div class="stat"><span>Crash Point</span><strong id="crashPeek">Hidden</strong></div>
+        </div>
+
+        <div class="panel box">
+          <div class="status-label">Bet Select</div>
+          <div class="bet-grid" id="betGrid"></div>
+          <div class="action-stack">
+            <button class="action-btn" id="startBtn" type="button">START RUN</button>
+            <button class="action-btn" id="cashBtn" type="button">CASH OUT</button>
+            <button class="action-btn" id="chargeBtn" type="button">+500 COINS</button>
+          </div>
+        </div>
+
+        <div class="panel box">
+          <div class="status-label">Rules</div>
+          <div class="odds-list">
+            <div class="odds-item"><span>Start</span><span>x1.00</span></div>
+            <div class="odds-item"><span>Growth</span><span>Accelerates</span></div>
+            <div class="odds-item"><span>Crash</span><span>Random</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  const state = {
+    balance: 1000,
+    bet: 25,
+    lastWin: 0,
+    running: false,
+    cashed: false,
+    crashPoint: 1,
+    multiplier: 1,
+    elapsed: 0,
+    history: []
+  };
+
+  const balanceEl = document.getElementById("balance");
+  const betEl = document.getElementById("bet");
+  const lastWinEl = document.getElementById("lastWin");
+  const crashPeekEl = document.getElementById("crashPeek");
+  const messageEl = document.getElementById("message");
+  const multiplierEl = document.getElementById("multiplier");
+  const roundStateEl = document.getElementById("roundState");
+  const historyEl = document.getElementById("history");
+  const rocketEl = document.getElementById("rocket");
+  const flashEl = document.getElementById("flash");
+  const startBtn = document.getElementById("startBtn");
+  const cashBtn = document.getElementById("cashBtn");
+  const chargeBtn = document.getElementById("chargeBtn");
+  const betGridEl = document.getElementById("betGrid");
+  const chart = document.getElementById("chart");
+  const ctx = chart.getContext("2d");
+  const lightsEl = document.getElementById("lights");
+  const runwayEl = document.querySelector(".runway");
+
+  const points = [];
+  const lightEls = [];
+  let lightTimer = null;
+  let lastFrame = performance.now();
+  let audioCtx = null;
+  let lastTickBucket = 1;
+  let dangerMode = false;
+
+  function ensureAudio() {
+    if (!audioCtx) {
+      const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextCtor) audioCtx = new AudioContextCtor();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+  }
+
+  function beep(freq, duration, type = "sine", gainValue = 0.025) {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(gainValue, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start(now);
+    osc.stop(now + duration);
+  }
+
+  function createLights() {
+    for (let i = 0; i < 8; i += 1) {
+      const light = document.createElement("div");
+      light.className = "light";
+      lightsEl.appendChild(light);
+      lightEls.push(light);
+    }
+  }
+
+  function startLights(speed = 220) {
+    if (lightTimer) clearInterval(lightTimer);
+    let index = 0;
+    lightTimer = setInterval(() => {
+      lightEls.forEach((light, i) => light.classList.toggle("active", i === index || i === (index + 4) % lightEls.length));
+      index = (index + 1) % lightEls.length;
+    }, speed);
+  }
+
+  function pulseCrashLights() {
+    if (lightTimer) clearInterval(lightTimer);
+    lightEls.forEach((light, i) => {
+      light.classList.add("active");
+      light.style.background = i % 2 ? "#ff6857" : "#fff159";
+    });
+    setTimeout(() => {
+      lightEls.forEach((light) => {
+        light.classList.remove("active");
+        light.style.background = "#fff7d9";
+      });
+      startLights();
+    }, 900);
+  }
+
+  function renderStats() {
+    balanceEl.textContent = state.balance.toLocaleString();
+    betEl.textContent = state.bet.toLocaleString();
+    lastWinEl.textContent = state.lastWin.toLocaleString();
+    crashPeekEl.textContent = state.running ? "Live" : "Hidden";
+    cashBtn.disabled = !state.running || state.cashed;
+    startBtn.disabled = state.running;
+  }
+
+  function setMessage(text, tone = "normal") {
+    messageEl.textContent = text;
+    messageEl.style.color = tone === "win" ? "#1f8d55" : tone === "alert" ? "#b93a3a" : "#1b1412";
+  }
+
+  function renderHistory() {
+    if (state.history.length === 0) {
+      historyEl.innerHTML = `<div class="recent-pill">READY</div>`;
+      return;
+    }
+    historyEl.innerHTML = state.history.map((item) => `<div class="recent-pill">${item}</div>`).join("");
+  }
+
+  function renderBetButtons() {
+    [10, 25, 50, 100].forEach((value) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "bet-btn" + (state.bet === value ? " selected" : "");
+      button.innerHTML = `${value}<small>BET</small>`;
+      button.addEventListener("click", () => {
+        if (state.running) return;
+        state.bet = value;
+        betGridEl.querySelectorAll(".bet-btn").forEach((item) => item.classList.remove("selected"));
+        button.classList.add("selected");
+        renderStats();
+      });
+      betGridEl.appendChild(button);
+    });
+  }
+
+  function resizeChart() {
+    chart.width = chart.clientWidth * devicePixelRatio;
+    chart.height = chart.clientHeight * devicePixelRatio;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  }
+
+  function resetRunVisual() {
+    points.length = 0;
+    points.push({ x: 0, y: 1 });
+    multiplierEl.textContent = "1.00x";
+    roundStateEl.textContent = "READY";
+    rocketEl.style.transform = "translate(0, 0)";
+    multiplierEl.style.color = "#1b1412";
+    multiplierEl.style.textShadow = "none";
+    multiplierEl.style.transform = "scale(1)";
+    runwayEl.classList.remove("danger", "shake", "crash");
+    dangerMode = false;
+    lastTickBucket = 1;
+  }
+
+  function randomCrashPoint() {
+    const r = Math.random();
+    if (r < 0.38) return +(1 + Math.random() * 1.1).toFixed(2);
+    if (r < 0.72) return +(2.2 + Math.random() * 2.5).toFixed(2);
+    if (r < 0.92) return +(4.8 + Math.random() * 5.5).toFixed(2);
+    return +(10.5 + Math.random() * 18).toFixed(2);
+  }
+
+  function startRun() {
+    ensureAudio();
+    if (state.running) return;
+    if (state.balance < state.bet) {
+      setMessage("Not enough coins. Recharge and try again.", "alert");
+      return;
+    }
+    state.balance -= state.bet;
+    state.lastWin = 0;
+    state.running = true;
+    state.cashed = false;
+    state.elapsed = 0;
+    state.multiplier = 1;
+    state.crashPoint = randomCrashPoint();
+    roundStateEl.textContent = "FLYING";
+    setMessage("The multiplier is climbing. Cash out before the crash.");
+    resetRunVisual();
+    renderStats();
+    startLights(90);
+    beep(420, 0.16, "triangle", 0.03);
+  }
+
+  function cashOut() {
+    if (!state.running || state.cashed) return;
+    ensureAudio();
+    state.cashed = true;
+    const payout = Math.round(state.bet * state.multiplier);
+    state.balance += payout;
+    state.lastWin = payout - state.bet;
+    setMessage(`Cashed out at ${state.multiplier.toFixed(2)}x. +${payout.toLocaleString()} coins`, "win");
+    roundStateEl.textContent = "CASHED";
+    beep(660, 0.12, "triangle", 0.04);
+    beep(880, 0.18, "triangle", 0.035);
+    renderStats();
+  }
+
+  function finishCrash() {
+    state.running = false;
+    const crashedAt = state.multiplier;
+    state.history.unshift(`${crashedAt.toFixed(2)}x`);
+    state.history = state.history.slice(0, 10);
+    renderHistory();
+    pulseCrashLights();
+    flashEl.classList.remove("show");
+    void flashEl.offsetWidth;
+    flashEl.classList.add("show");
+    runwayEl.classList.add("crash");
+    runwayEl.classList.remove("shake");
+    multiplierEl.style.color = "#ff6857";
+    multiplierEl.style.textShadow = "0 0 18px rgba(255,104,87,.45)";
+    beep(180, 0.18, "sawtooth", 0.05);
+    setTimeout(() => beep(110, 0.28, "sawtooth", 0.04), 60);
+    if (state.cashed) {
+      setMessage(`Crash at ${crashedAt.toFixed(2)}x. Your cash out survived.`, "win");
+    } else {
+      state.lastWin = 0;
+      setMessage(`Crash at ${crashedAt.toFixed(2)}x. Too late to cash out.`, "alert");
+      renderStats();
+    }
+    roundStateEl.textContent = "CRASH";
+  }
+
+  function updateRun(dt) {
+    if (!state.running) return;
+    state.elapsed += dt;
+    state.multiplier = +(1 + state.elapsed * 0.72 + Math.pow(state.elapsed, 2.05) * 0.35).toFixed(2);
+    const crashRatio = state.multiplier / state.crashPoint;
+    if (crashRatio > 0.72 && !dangerMode) {
+      dangerMode = true;
+      runwayEl.classList.add("danger");
+      beep(520, 0.08, "triangle", 0.025);
+    }
+    if (crashRatio > 0.84) {
+      runwayEl.classList.add("shake");
+      multiplierEl.style.color = "#ffef9e";
+      multiplierEl.style.textShadow = "0 0 18px rgba(255,239,158,.42)";
+      multiplierEl.style.transform = `scale(${1 + Math.min(0.12, (crashRatio - 0.84) * 0.55)})`;
+    }
+    const tickBucket = Math.floor(state.multiplier * 2);
+    if (tickBucket > lastTickBucket) {
+      lastTickBucket = tickBucket;
+      if (crashRatio > 0.75) {
+        beep(420 + Math.min(420, state.multiplier * 30), 0.05, "square", 0.018);
+      }
+    }
+    if (state.multiplier >= state.crashPoint) {
+      state.multiplier = state.crashPoint;
+      multiplierEl.textContent = `${state.multiplier.toFixed(2)}x`;
+      finishCrash();
+      return;
+    }
+    multiplierEl.textContent = `${state.multiplier.toFixed(2)}x`;
+    points.push({ x: state.elapsed, y: state.multiplier });
+  }
+
+  function drawChart() {
+    const w = chart.clientWidth;
+    const h = chart.clientHeight;
+    ctx.clearRect(0, 0, w, h);
+
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(255,255,255,.18)";
+    ctx.beginPath();
+    ctx.moveTo(24, h - 24);
+    ctx.lineTo(w - 24, h - 24);
+    ctx.moveTo(24, h - 24);
+    ctx.lineTo(24, 24);
+    ctx.stroke();
+
+    if (points.length < 2) return;
+
+    const maxX = Math.max(3, points[points.length - 1].x + 0.4);
+    const maxY = Math.max(3, Math.max(...points.map((p) => p.y)) + 0.8);
+
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const x = 24 + (point.x / maxX) * (w - 48);
+      const y = h - 24 - (point.y / maxY) * (h - 48);
+      if (index === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = state.running ? "#58d88e" : "#ff6857";
+    ctx.shadowColor = state.running ? "rgba(88,216,142,.55)" : "rgba(255,104,87,.55)";
+    ctx.shadowBlur = 16;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+
+    const last = points[points.length - 1];
+    const rocketX = 24 + (last.x / maxX) * (w - 48);
+    const rocketY = h - 24 - (last.y / maxY) * (h - 48);
+    rocketEl.style.transform = `translate(${Math.min(220, rocketX * 0.18)}px, ${Math.max(-60, (rocketY - h + 40) * 0.18)}px) rotate(${Math.min(18, state.multiplier * 2)}deg)`;
+  }
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min((now - lastFrame) / 1000, 0.05);
+    lastFrame = now;
+    updateRun(dt);
+    drawChart();
+  }
+
+  document.getElementById("startBtn").addEventListener("click", startRun);
+  document.getElementById("cashBtn").addEventListener("click", cashOut);
+  document.getElementById("chargeBtn").addEventListener("click", () => {
+    if (state.running) return;
+    state.balance += 500;
+    renderStats();
+    setMessage("Added 500 coins.");
+  });
+
+  window.addEventListener("resize", resizeChart);
+
+  createLights();
+  renderBetButtons();
+  renderStats();
+  renderHistory();
+  resizeChart();
+  resetRunVisual();
+  startLights();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

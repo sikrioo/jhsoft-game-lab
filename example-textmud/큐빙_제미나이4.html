@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Horadric Altar</title>
+    <style>
+        /* 1. CSS 변수 및 베이스 (제공된 스타일 완벽 반영) */
+        :root {
+            --bg: #070a10;
+            --panel: #0b0f18;
+            --txt: #d7e0ff;
+            --muted: #8fa2c6;
+            --border: rgba(255, 255, 255, .08);
+            --sys: #ffd56a;
+            --ok: #7CFF6B;
+            --bad: #ff6b7a;
+            --move: #32f6ff;
+            --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            --sans: ui-sans-serif, system-ui, -apple-system, "Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+
+            --r-common: #d6d6d6;
+            --r-magic:  #4aa3ff;
+            --r-rare:   #ffd84a;
+            --r-epic:   #b68cff;
+            --r-legend: #ff9a3c;
+        }
+
+        body {
+            height: 100vh;
+            margin: 0;
+            background: var(--bg);
+            color: var(--txt);
+            font-family: var(--sans);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 2. 메인 컨테이너 */
+        .cubing-window {
+            width: 480px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            padding: 30px;
+            box-shadow: 0 50px 100px rgba(0,0,0,0.9);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .window-title {
+            text-align: center;
+            font-family: var(--mono);
+            font-size: 14px;
+            color: var(--muted);
+            letter-spacing: 5px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 15px;
+        }
+
+        /* 3. 상단: 큐브 슬롯 (재료가 쌓이는 곳) */
+        .cube-area {
+            height: 160px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.03);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 8px;
+            padding: 15px;
+            position: relative;
+        }
+
+        /* 연성 중 효과 */
+        .is-working .cube-area {
+            animation: cubeVibrate 0.1s infinite alternate;
+        }
+
+        .is-working .cube-area::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: radial-gradient(circle, rgba(255, 213, 106, 0.1) 0%, transparent 80%);
+            animation: pulseGlow 0.5s infinite alternate;
+        }
+
+        .cube-slot {
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.02);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-family: var(--mono);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            padding: 4px;
+        }
+        .cube-slot:hover { background: rgba(255,255,255,0.05); }
+        .cube-slot:empty::before { content: 'EMPTY'; opacity: 0.1; }
+
+        /* 4. 중단: 버튼 */
+        .action-btn {
+            width: 100%;
+            padding: 15px;
+            background: transparent;
+            border: 1px solid #2e3c5a;
+            color: var(--txt);
+            font-family: var(--mono);
+            font-weight: bold;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .action-btn:hover:not(:disabled) {
+            border-color: var(--sys);
+            background: rgba(255, 213, 106, 0.05);
+            color: var(--sys);
+        }
+        .action-btn:disabled { opacity: 0.3; cursor: wait; }
+
+        /* 5. 하단: 인벤토리 (재료 리스트) */
+        .inventory-section {
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+        }
+
+        .inventory-grid {
+            height: 140px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            padding-right: 5px;
+        }
+
+        .inventory-item {
+            padding: 8px 12px;
+            background: rgba(255,255,255,0.03);
+            border-radius: 4px;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            transition: 0.2s;
+        }
+        .inventory-item:hover { background: rgba(255,255,255,0.08); transform: translateX(5px); }
+
+        /* 스크롤바 커스텀 */
+        .inventory-grid::-webkit-scrollbar { width: 4px; }
+        .inventory-grid::-webkit-scrollbar-thumb { background: var(--border); }
+
+        /* 6. 결과 팝업 연출 */
+        .result-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 100;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes cubeVibrate { from { transform: translate(-1px, 0); } to { transform: translate(1px, 0); } }
+        @keyframes pulseGlow { from { opacity: 0.2; } to { opacity: 0.8; } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+    </style>
+</head>
+<body>
+
+<div class="cubing-window" id="altarWindow">
+    <div class="window-title">HORADRIC ALTAR</div>
+
+    <div class="cube-area" id="cubeArea">
+        <div class="cube-slot" onclick="removeFromCube(0)"></div>
+        <div class="cube-slot" onclick="removeFromCube(1)"></div>
+        <div class="cube-slot" onclick="removeFromCube(2)"></div>
+        <div class="cube-slot" onclick="removeFromCube(3)"></div>
+        <div class="cube-slot" onclick="removeFromCube(4)"></div>
+        <div class="cube-slot" onclick="removeFromCube(5)"></div>
+        <div class="cube-slot" onclick="removeFromCube(6)"></div>
+        <div class="cube-slot" onclick="removeFromCube(7)"></div>
+    </div>
+
+    <button class="action-btn" id="transmuteBtn">TRANSMUTE</button>
+
+    <div class="inventory-section">
+        <div style="font-size:11px; color:var(--muted); margin-bottom:10px; font-family:var(--mono);">MATERIALS</div>
+        <div class="inventory-grid" id="inventoryGrid">
+            </div>
+    </div>
+
+    <div class="result-overlay" id="resultOverlay">
+        <div style="font-size:12px; color:var(--sys); margin-bottom:10px;">연성 결과</div>
+        <div id="resultName" style="font-size:20px; font-weight:bold;"></div>
+        <button onclick="closeResult()" style="margin-top:20px; background:none; border:1px solid var(--muted); color:var(--muted); cursor:pointer; padding:5px 15px;">확인</button>
+    </div>
+</div>
+
+<script>
+    // 1. 샘플 데이터
+    const MATERIALS = [
+        { id: 1, name: "부서진 칼날", rarity: "common" },
+        { id: 2, name: "마력이 깃든 실타래", rarity: "magic" },
+        { id: 3, name: "고결한 보석 조각", rarity: "rare" },
+        { id: 4, name: "용의 비늘", rarity: "epic" },
+        { id: 5, name: "심연의 정수", rarity: "legend" },
+        { id: 6, name: "고대인의 뼛가루", rarity: "rare" },
+        { id: 7, name: "빛나는 가루", rarity: "magic" }
+    ];
+
+    let cubeItems = []; // 큐브에 담긴 재료 (최대 8개)
+
+    // 2. 인벤토리 렌더링
+    function renderInventory() {
+        const grid = document.getElementById('inventoryGrid');
+        grid.innerHTML = MATERIALS.map(item => `
+            <div class="inventory-item" onclick="addToCube(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+                <span style="color: var(--r-${item.rarity})">${item.name}</span>
+                <span style="color: var(--muted); font-size:10px;">LV.${getRarityLevel(item.rarity)}</span>
+            </div>
+        `).join('');
+    }
+
+    function getRarityLevel(r) {
+        const levels = { common: 1, magic: 2, rare: 3, epic: 4, legend: 5 };
+        return levels[r];
+    }
+
+    // 3. 큐브 로직
+    function addToCube(item) {
+        if (cubeItems.length >= 8) return alert("큐브가 가득 찼습니다.");
+        cubeItems.push(item);
+        updateCubeUI();
+    }
+
+    function removeFromCube(index) {
+        if (!cubeItems[index]) return;
+        cubeItems.splice(index, 1);
+        updateCubeUI();
+    }
+
+    function updateCubeUI() {
+        const slots = document.querySelectorAll('.cube-slot');
+        slots.forEach((slot, i) => {
+            if (cubeItems[i]) {
+                slot.style.color = `var(--r-${cubeItems[i].rarity})`;
+                slot.innerText = cubeItems[i].name;
+            } else {
+                slot.innerText = "";
+            }
+        });
+    }
+
+    // 4. 연성 연출
+    const transmuteBtn = document.getElementById('transmuteBtn');
+    const altarWindow = document.getElementById('altarWindow');
+
+    transmuteBtn.addEventListener('click', () => {
+        if (cubeItems.length === 0) return;
+
+        altarWindow.classList.add('is-working');
+        transmuteBtn.disabled = true;
+
+        // 묵직한 2초 딜레이
+        setTimeout(() => {
+            altarWindow.classList.remove('is-working');
+            showResult();
+            cubeItems = []; // 재료 소모
+            updateCubeUI();
+            transmuteBtn.disabled = false;
+        }, 2000);
+    });
+
+    function showResult() {
+        const overlay = document.getElementById('resultOverlay');
+        const nameDisplay = document.getElementById('resultName');
+        
+        // 간단한 결과 결정 로직 (가장 높은 등급 재료 기반 등)
+        const resultItem = { name: "강화된 고대 무기", color: "var(--r-legend)" };
+        
+        nameDisplay.innerText = resultItem.name;
+        nameDisplay.style.color = resultItem.color;
+        overlay.style.display = 'flex';
+    }
+
+    function closeResult() {
+        document.getElementById('resultOverlay').style.display = 'none';
+    }
+
+    // 초기화
+    renderInventory();
+</script>
+
+</body>
+</html>

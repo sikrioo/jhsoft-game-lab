@@ -1,0 +1,127 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>인생 시뮬레이터 v6 — 완성판</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="./인생_시뮬레이터.css">
+
+</head>
+<body>
+<div class="app">
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="logo">인생 시뮬레이터 <span>v6</span></div>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div style="font-size:11px;color:var(--t3)">한국 기준 · 57변수 · 200직업 · 동적 시뮬레이션</div>
+    <div class="topbar-meta">완성판 · 2024</div>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="showTab('t-era',this)">시대/기본</button>
+    <button class="tab-btn" onclick="showTab('t-talent',this)">재능</button>
+    <button class="tab-btn" onclick="showTab('t-ability',this)">능력</button>
+    <button class="tab-btn" onclick="showTab('t-social',this)">사회/기술</button>
+    <button class="tab-btn" onclick="showTab('t-trait',this)">성향</button>
+    <button class="tab-btn" onclick="showTab('t-charm',this)">매력</button>
+    <button class="tab-btn" onclick="showTab('t-env',this)">환경</button>
+    <button class="tab-btn" onclick="showTab('t-tags',this)">태그</button>
+  </div>
+
+  <!-- TAB: 시대/기본 -->
+  <div id="t-era" class="tab-panel active">
+    <div class="vgroup">
+      <div class="vgroup-label"><span class="dot" style="background:var(--gold)"></span><span style="color:var(--gold)">출생 연대</span></div>
+      <div class="dgrid" id="decade-grid"></div>
+      <div style="font-size:10px;color:var(--t3);margin-top:7px;line-height:1.5;font-style:italic" id="era-note"></div>
+      <div class="era-events" id="era-events"></div>
+    </div>
+    <div class="vgroup">
+      <div class="vgroup-label"><span class="dot" style="background:var(--pnk)"></span><span style="color:var(--pnk)">성별</span></div>
+      <div class="ggrid" id="gender-grid"></div>
+    </div>
+    <div class="vgroup">
+      <div class="vgroup-label"><span class="dot" style="background:var(--gold)"></span><span style="color:var(--gold)">프리셋</span></div>
+      <div class="pgrid" id="preset-grid"></div>
+    </div>
+    <div class="vgroup">
+      <div class="vgroup-label"><span class="dot" style="background:var(--gold)"></span><span style="color:var(--gold)">출발 레이어 · 고정값</span></div>
+      <div id="sliders-start"></div>
+    </div>
+    <button class="run-btn" onclick="runSim()">⚡ 시뮬레이션 실행</button>
+  </div>
+
+  <!-- TAB: 재능 -->
+  <div id="t-talent" class="tab-panel">
+    <div id="sliders-talent"></div>
+    <button class="run-btn" onclick="runSim()">⚡ 시뮬레이션 실행</button>
+  </div>
+
+  <!-- TAB: 능력 -->
+  <div id="t-ability" class="tab-panel">
+    <div id="sliders-ability"></div>
+    <button class="run-btn" onclick="runSim()">⚡ 시뮬레이션 실행</button>
+  </div>
+
+  <!-- TAB: 사회/기술 -->
+  <div id="t-social" class="tab-panel">
+    <div id="sliders-social"></div>
+    <button class="run-btn" onclick="runSim()">⚡ 시뮬레이션 실행</button>
+  </div>
+
+  <!-- TAB: 성향 -->
+  <div id="t-trait" class="tab-panel">
+    <div id="sliders-trait"></div>
+    <button class="run-btn" onclick="runSim()">⚡ 시뮬레이션 실행</button>
+  </div>
+
+  <!-- TAB: 매력 -->
+  <div id="t-charm" class="tab-panel">
+    <div id="sliders-charm"></div>
+    <div style="font-size:10px;color:var(--t3);line-height:1.6;margin-top:8px;padding:8px;border-radius:6px;background:rgba(124,106,240,0.05);border:0.5px solid rgba(124,106,240,0.15)">
+      매력 아키타입은 변수 조합으로 자동 계산됩니다.<br>자신감+존재감→카리스마, 친화력+공감→친근함
+    </div>
+    <button class="run-btn" onclick="runSim()">⚡ 시뮬레이션 실행</button>
+  </div>
+
+  <!-- TAB: 환경 -->
+  <div id="t-env" class="tab-panel">
+    <div id="sliders-env"></div>
+    <div style="font-size:10px;color:var(--t3);line-height:1.6;margin-top:8px;padding:8px;border-radius:6px;background:rgba(201,168,76,0.05);border:0.5px solid rgba(201,168,76,0.15)">
+      운 변수는 시뮬레이션 실행마다 일부가 랜덤으로 결정됩니다.<br>출생운은 고정, 환경운·타이밍운·사건운은 매회 변동됩니다.
+    </div>
+    <button class="run-btn" onclick="runSim()">⚡ 시뮬레이션 실행</button>
+  </div>
+
+  <!-- TAB: 태그 -->
+  <div id="t-tags" class="tab-panel">
+    <div id="tag-controls"></div>
+    <div style="font-size:10px;color:var(--t3);line-height:1.6;margin-top:8px;padding:8px;border-radius:6px;background:rgba(78,184,122,0.05);border:0.5px solid rgba(78,184,122,0.15)">
+      태그는 습관과 경험의 누적 효과입니다.<br>기본 스탯은 그대로 두고, 실제 인생에서 쌓인 버프를 추가 반영합니다.
+    </div>
+    <button class="run-btn" onclick="runSim()">⚡ 시뮬레이션 실행</button>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main" id="main-panel">
+  <div class="empty-state">
+    <div style="font-size:40px;margin-bottom:8px;opacity:0.3">◎</div>
+    <div style="font-size:14px;margin-bottom:4px;color:var(--t2)">변수를 설정하고 시뮬레이션을 실행하세요</div>
+    <div style="font-size:12px">57개 변수 · 200개 직업 · 동적 이벤트 · 조합 시너지 분석</div>
+  </div>
+</div>
+
+</div><!-- .app -->
+
+<script src="./인생_시뮬레이터.data.js"></script>
+<script src="./인생_시뮬레이터.domain.js"></script>
+<script src="./인생_시뮬레이터.ui.js"></script>
+<script src="./인생_시뮬레이터.app.js"></script>
+</body>
+</html>

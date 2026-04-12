@@ -1,0 +1,220 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plinko</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at top,rgba(255,255,255,.74),transparent 24%),
+    radial-gradient(circle at 18% 18%,rgba(75,184,255,.22),transparent 18%),
+    radial-gradient(circle at 82% 14%,rgba(255,111,88,.18),transparent 18%),
+    linear-gradient(180deg,#ffd95f 0%,#ff9c60 100%);
+  font-family:"Trebuchet MS","Malgun Gothic",sans-serif;
+  color:#1b1412;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.18;
+  background:
+    radial-gradient(circle,rgba(27,20,18,.12) 2px,transparent 2px) 0 0/24px 24px,
+    repeating-conic-gradient(from 0deg,rgba(255,255,255,.14) 0 8deg,transparent 8deg 16deg);
+}
+.app{
+  width:min(1380px,calc(100vw - 24px));
+  min-height:min(920px,calc(100vh - 24px));
+  border:5px solid #1b1412;
+  border-radius:34px;
+  overflow:hidden;
+  background:#fff3d0;
+  box-shadow:0 18px 0 #4d2f25,0 34px 86px rgba(0,0,0,.25);
+}
+.stage{
+  position:relative;
+  padding:24px;
+  background:
+    radial-gradient(circle at center,rgba(255,255,255,.22),transparent 28%),
+    linear-gradient(180deg,#fff0b9 0%,#ffca83 48%,#ff9f6c 100%);
+  transition:transform .18s ease,filter .18s ease;
+}
+.stage::before{
+  content:"";
+  position:absolute;
+  inset:18px;
+  border:4px solid rgba(27,20,18,.92);
+  border-radius:30px;
+  pointer-events:none;
+  box-shadow:inset 0 0 0 4px rgba(255,255,255,.24);
+}
+.stage::after{
+  content:"";
+  position:absolute;
+  inset:8% 10%;
+  border-radius:50%;
+  opacity:.28;
+  pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,rgba(255,255,255,.28) 0 8deg,transparent 8deg 17deg);
+}
+.stage.win-flash{animation:stage-pop .5s ease}
+.panel{
+  position:relative;
+  z-index:1;
+  border:4px solid #1b1412;
+  border-radius:24px;
+  background:#fffaf0;
+  box-shadow:0 8px 0 rgba(27,20,18,.14);
+}
+.status{
+  margin-bottom:18px;
+  padding:16px 18px;
+  background:linear-gradient(180deg,rgba(255,255,255,.65),transparent 100%),#fffdf3;
+}
+.status-label{
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#6f5138;
+}
+#message{
+  margin-top:8px;
+  min-height:60px;
+  font-size:24px;
+  font-weight:900;
+  line-height:1.15;
+}
+.arena{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 320px;
+  gap:18px;
+}
+.table{
+  position:relative;
+  padding:18px;
+  border:5px solid #1b1412;
+  border-radius:30px;
+  background:linear-gradient(180deg,rgba(255,255,255,.28),transparent 100%),linear-gradient(180deg,#ff6f58 0%,#ffa056 52%,#ffd44f 100%);
+  box-shadow:0 12px 0 rgba(27,20,18,.16);
+}
+.table::before{
+  content:"";
+  position:absolute;
+  inset:12px;
+  border:4px solid rgba(27,20,18,.82);
+  border-radius:24px;
+  pointer-events:none;
+}
+.table-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  margin-bottom:14px;
+}
+.jackpot{
+  padding:10px 14px;
+  border:4px solid #1b1412;
+  border-radius:18px;
+  background:#fff4b0;
+  font-size:20px;
+  font-weight:900;
+  box-shadow:0 6px 0 rgba(27,20,18,.14);
+}
+.lights{display:flex;gap:8px}.light{width:18px;height:18px;border:3px solid #1b1412;border-radius:50%;background:#fff7d9;box-shadow:0 0 0 4px rgba(255,255,255,.18);transition:transform .18s ease,background .18s ease,box-shadow .18s ease}.light.active{transform:scale(1.12);background:#fff159;box-shadow:0 0 0 4px rgba(255,255,255,.16),0 0 24px rgba(255,241,89,.65)}
+.board{
+  position:relative;
+  min-height:680px;
+  border:5px solid #1b1412;
+  border-radius:26px;
+  overflow:hidden;
+  background:radial-gradient(circle at center,rgba(255,255,255,.09),transparent 34%),linear-gradient(180deg,#2d1831 0%,#1c1324 100%);
+  transition:transform .18s ease,filter .18s ease,box-shadow .18s ease;
+}
+.board::before{content:"";position:absolute;inset:18px;border:3px dashed rgba(255,255,255,.18);border-radius:22px;pointer-events:none}
+.board.burst{animation:board-burst .5s ease;box-shadow:inset 0 0 0 4px rgba(255,255,255,.18),0 0 50px rgba(255,215,88,.5)}
+#boardCanvas{display:block;width:100%;height:100%}
+.drop-zone{position:absolute;left:50%;top:26px;transform:translateX(-50%);padding:10px 16px;border:4px solid #1b1412;border-radius:18px;background:#fffdf3;font-size:16px;font-weight:900;box-shadow:0 8px 0 rgba(27,20,18,.14)}
+.result-pop{position:absolute;left:50%;top:46%;transform:translate(-50%,-50%) scale(.84) rotate(-2deg);min-width:240px;text-align:center;padding:16px 18px;border:4px solid #1b1412;border-radius:24px;background:#fffdf3;font-size:34px;font-weight:900;box-shadow:0 10px 0 rgba(27,20,18,.16);opacity:0;transition:opacity .2s ease,transform .2s ease}
+.result-pop.show{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-2deg)}
+.result-pop.jackpot{background:#fff18e;color:#6a2600;animation:jackpot-pop .55s ease}
+.slot-strip{position:absolute;left:24px;right:24px;bottom:22px;display:grid;grid-template-columns:repeat(9,1fr);gap:8px}
+.slot{min-height:64px;display:grid;place-items:center;border:4px solid #1b1412;border-radius:18px;background:#fff8e4;font-size:16px;font-weight:900;box-shadow:0 6px 0 rgba(27,20,18,.12);transition:transform .14s ease,background .14s ease,color .14s ease,box-shadow .14s ease}
+.slot.hot{background:#ff8454;color:#fffdf6}.slot.mid{background:#ffd453}.slot.active{transform:translateY(-6px) scale(1.05);box-shadow:0 12px 0 rgba(27,20,18,.1),0 0 20px rgba(255,241,89,.55)}
+.sparkles,.confetti-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.spark,.confetti{position:absolute;border:3px solid #1b1412;opacity:0}
+.spark{width:16px;height:16px;border-radius:5px;transform:rotate(45deg);animation:spark-fly .9s ease forwards}
+.confetti{width:18px;height:24px;border-radius:8px;animation:confetti-fall 1.2s ease forwards}
+.side{display:grid;gap:12px}.box{padding:14px}
+.stat{display:flex;justify-content:space-between;gap:10px;font-size:14px;font-weight:800}.stat + .stat{margin-top:8px}.stat strong{font-size:18px}
+.bet-grid,.risk-grid{display:grid;gap:8px;margin-top:10px}.bet-grid{grid-template-columns:repeat(4,1fr)}.risk-grid{grid-template-columns:repeat(3,1fr)}
+.bet-btn,.risk-btn,.action-btn,.nav-link{appearance:none;border:4px solid #1b1412;border-radius:18px;cursor:pointer;font-weight:900;box-shadow:0 6px 0 rgba(27,20,18,.14);transition:transform .12s ease,box-shadow .12s ease,background .12s ease,color .12s ease;text-decoration:none;text-align:center}
+.bet-btn:hover,.risk-btn:hover,.action-btn:hover,.nav-link:hover{transform:translateY(-2px)}.bet-btn:active,.risk-btn:active,.action-btn:active,.nav-link:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(27,20,18,.12)}
+.bet-btn,.risk-btn{min-height:56px;background:#fff8e4;font-size:15px;line-height:1}.bet-btn small,.risk-btn small{display:block;margin-top:4px;font-size:10px;letter-spacing:.08em;text-transform:uppercase;opacity:.82}
+.bet-btn.selected{background:#ff8454;color:#fffdf6}.risk-btn.selected{background:#4bb8ff;color:#fffdf6}
+.action-stack,.nav-stack{display:grid;gap:10px;margin-top:10px}.action-btn,.nav-link{min-height:58px;display:grid;place-items:center;font-size:17px}
+#dropBtn{background:#58d88e;color:#14301d}#chargeBtn{background:#ffd453;color:#1b1412}.nav-link{background:#fff8e4;color:#1b1412}.action-btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+.odds-list{display:grid;gap:8px;margin-top:10px}.odds-item{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border:3px solid #1b1412;border-radius:16px;background:#fff7de;font-size:14px;font-weight:900}
+.history-list{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}.history-pill{min-width:58px;padding:8px 10px;border:3px solid #1b1412;border-radius:999px;background:#fff7d8;text-align:center;font-size:12px;font-weight:900}
+@keyframes spark-fly{0%{opacity:0;transform:translate(0,0) rotate(45deg) scale(.4)}20%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(225deg) scale(1.3)}}
+@keyframes confetti-fall{0%{opacity:0;transform:translate(0,-24px) rotate(0deg) scale(.7)}15%{opacity:1}100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(var(--rot)) scale(1.05)}}
+@keyframes board-burst{0%,100%{transform:translate(0,0) scale(1)}18%{transform:translate(-6px,3px) scale(1.015)}36%{transform:translate(7px,-4px) scale(1.02)}54%{transform:translate(-5px,3px) scale(1.015)}72%{transform:translate(5px,-3px) scale(1.01)}}
+@keyframes stage-pop{0%,100%{filter:none}30%{filter:saturate(1.18) brightness(1.08)}65%{filter:saturate(1.08) brightness(1.04)}}
+@keyframes jackpot-pop{0%{transform:translate(-50%,-50%) scale(.72) rotate(-3deg)}55%{transform:translate(-50%,-50%) scale(1.12) rotate(1deg)}100%{transform:translate(-50%,-50%) scale(1) rotate(-2deg)}}
+@media (max-width:1180px){.arena{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app"><section class="stage" id="stage"><div class="status panel"><div class="status-label">Status</div><div id="message">Choose your bet, pick a risk, and drop the ball.</div></div><div class="arena"><div class="table"><div class="table-head"><div class="jackpot">PLINKO</div><div class="lights" id="lights"></div></div><div class="board" id="board"><canvas id="boardCanvas"></canvas><div class="drop-zone" id="dropZone">MEDIUM RISK</div><div class="result-pop" id="resultPop">READY</div><div class="slot-strip" id="slotStrip"></div><div class="sparkles" id="sparkles"></div><div class="confetti-layer" id="confetti"></div></div></div><div class="side"><div class="panel box"><div class="status-label">Board Data</div><div class="stat" style="margin-top:10px"><span>Balance</span><strong id="balance">1000</strong></div><div class="stat"><span>Bet</span><strong id="bet">25</strong></div><div class="stat"><span>Last Win</span><strong id="lastWin">0</strong></div><div class="stat"><span>Risk Shape</span><strong id="riskLabel">Medium</strong></div></div><div class="panel box"><div class="status-label">Bet Select</div><div class="bet-grid" id="betGrid"></div><div class="status-label" style="margin-top:14px">Risk Select</div><div class="risk-grid" id="riskGrid"></div><div class="action-stack"><button class="action-btn" id="dropBtn" type="button">DROP BALL</button><button class="action-btn" id="chargeBtn" type="button">+500 COINS</button></div><div class="nav-stack"><a class="nav-link" href="./physics.html">PHYSICS VERSION</a></div></div><div class="panel box"><div class="status-label">Payouts</div><div class="odds-list" id="payouts"></div></div><div class="panel box"><div class="status-label">Recent</div><div class="history-list" id="history"></div></div></div></div></section></div>
+<script>
+(() => {
+const rows=8;
+const RISK_PRESETS={low:{label:"Low",color:"#58d88e",banner:"LOW RISK",wobble:7,payouts:[0.5,0.8,1,1.5,3,1.5,1,0.8,0.5],weights:[4,8,13,17,20,17,13,8,4]},medium:{label:"Medium",color:"#4bb8ff",banner:"MEDIUM RISK",wobble:12,payouts:[0,0.5,1,2,5,2,1,0.5,0],weights:[1,4,8,14,18,14,8,4,1]},high:{label:"High",color:"#ff8454",banner:"HIGH RISK",wobble:17,payouts:[0,0.2,0.5,2,9,2,0.5,0.2,0],weights:[1,2,4,7,10,7,4,2,1]}};
+const state={balance:1000,bet:25,risk:"medium",lastWin:0,dropping:false,history:[]};
+const balanceEl=document.getElementById("balance"); const betEl=document.getElementById("bet"); const lastWinEl=document.getElementById("lastWin"); const riskLabelEl=document.getElementById("riskLabel"); const messageEl=document.getElementById("message"); const resultPopEl=document.getElementById("resultPop"); const historyEl=document.getElementById("history"); const slotStripEl=document.getElementById("slotStrip"); const payoutsEl=document.getElementById("payouts"); const sparklesEl=document.getElementById("sparkles"); const confettiEl=document.getElementById("confetti"); const betGridEl=document.getElementById("betGrid"); const riskGridEl=document.getElementById("riskGrid"); const dropBtn=document.getElementById("dropBtn"); const chargeBtn=document.getElementById("chargeBtn"); const dropZoneEl=document.getElementById("dropZone"); const canvas=document.getElementById("boardCanvas"); const ctx=canvas.getContext("2d"); const lightsEl=document.getElementById("lights"); const boardEl=document.getElementById("board"); const stageEl=document.getElementById("stage");
+const slots=[]; const pegs=[]; const lightEls=[]; let lightTimer=null; let audioCtx=null; let deviceRatio=Math.min(window.devicePixelRatio||1,2); let boardWidth=0; let boardHeight=0; let currentBall=null; let lastFrame=performance.now();
+const getPreset=()=>RISK_PRESETS[state.risk]; const getPayouts=()=>getPreset().payouts;
+function ensureAudio(){if(!audioCtx){const C=window.AudioContext||window.webkitAudioContext; if(C) audioCtx=new C()} if(audioCtx&&audioCtx.state==="suspended") audioCtx.resume()}
+function beep({frequency=440,duration=.08,type="square",volume=.035,delay=0}={}){if(!audioCtx) return; const time=audioCtx.currentTime+delay; const osc=audioCtx.createOscillator(); const gain=audioCtx.createGain(); osc.type=type; osc.frequency.setValueAtTime(frequency,time); gain.gain.setValueAtTime(.0001,time); gain.gain.exponentialRampToValueAtTime(volume,time+.01); gain.gain.exponentialRampToValueAtTime(.0001,time+duration); osc.connect(gain).connect(audioCtx.destination); osc.start(time); osc.stop(time+duration+.03)}
+function playDropSound(){beep({frequency:220,duration:.09,type:"triangle",volume:.03});beep({frequency:260,duration:.08,type:"triangle",volume:.025,delay:.06})}
+function playWinSound(payout){const tones=payout>=5?[440,620,820,1020]:[360,520,700]; tones.forEach((value,index)=>beep({frequency:value,duration:payout>=5?.16:.11,type:payout>=5?"square":"triangle",volume:payout>=5?.05:.035,delay:index*.07}))}
+function playLoseSound(){beep({frequency:180,duration:.12,type:"sawtooth",volume:.028});beep({frequency:130,duration:.18,type:"sawtooth",volume:.022,delay:.08})}
+function createLights(){for(let i=0;i<8;i+=1){const light=document.createElement("div"); light.className="light"; lightsEl.appendChild(light); lightEls.push(light)}}
+function startLights(speed=220){if(lightTimer) clearInterval(lightTimer); let index=0; lightTimer=setInterval(()=>{lightEls.forEach((light,i)=>{light.classList.toggle("active",i===index||i===(index+4)%lightEls.length); light.style.background="#fff7d9"}); index=(index+1)%lightEls.length},speed)}
+function flashWinLights(bigWin=false){if(lightTimer) clearInterval(lightTimer); lightEls.forEach((light,i)=>{light.classList.add("active"); light.style.background=bigWin?(i%3===0?"#ff8454":i%2?"#58d88e":"#fff159"):(i%2?"#58d88e":"#fff159")}); setTimeout(()=>startLights(bigWin?90:180),bigWin?1100:850)}
+function renderStats(){balanceEl.textContent=state.balance.toLocaleString(); betEl.textContent=state.bet.toLocaleString(); lastWinEl.textContent=state.lastWin.toLocaleString(); riskLabelEl.textContent=getPreset().label; dropZoneEl.textContent=getPreset().banner; dropZoneEl.style.background=getPreset().color; dropZoneEl.style.color="#fffdf6"; dropBtn.disabled=state.dropping}
+function setMessage(text,tone="normal"){messageEl.textContent=text; messageEl.style.color=tone==="win"?"#1f8d55":tone==="alert"?"#b93a3a":"#1b1412"}
+function showPop(text,tone="normal"){resultPopEl.textContent=text; resultPopEl.classList.add("show"); resultPopEl.classList.toggle("jackpot",tone==="jackpot"); resultPopEl.style.background=tone==="jackpot"?"#fff18e":tone==="win"?"#dbffe9":"#ffdada"; resultPopEl.style.color=tone==="jackpot"?"#6a2600":"#1b1412"; clearTimeout(showPop.timer); showPop.timer=setTimeout(()=>resultPopEl.classList.remove("show","jackpot"),tone==="jackpot"?1800:1300)}
+function renderHistory(){historyEl.innerHTML=state.history.length===0?'<div class="history-pill">READY</div>':state.history.map(item=>`<div class="history-pill">${item}</div>`).join("")}
+function renderBetButtons(){betGridEl.innerHTML=""; [10,25,50,100].forEach(value=>{const button=document.createElement("button"); button.type="button"; button.className="bet-btn"+(state.bet===value?" selected":""); button.innerHTML=`${value}<small>BET</small>`; button.addEventListener("click",()=>{if(state.dropping) return; ensureAudio(); state.bet=value; renderBetButtons(); renderStats(); beep({frequency:320,duration:.05,type:"triangle",volume:.02})}); betGridEl.appendChild(button)})}
+function renderRiskButtons(){riskGridEl.innerHTML=""; Object.entries(RISK_PRESETS).forEach(([key,preset])=>{const button=document.createElement("button"); button.type="button"; button.className="risk-btn"+(state.risk===key?" selected":""); button.innerHTML=`${preset.label}<small>RISK</small>`; button.addEventListener("click",()=>{if(state.dropping) return; ensureAudio(); state.risk=key; renderRiskButtons(); renderPayouts(); renderSlots(); renderStats(); setMessage(`${preset.label} risk selected. The board is ready.`); beep({frequency:390,duration:.05,type:"triangle",volume:.02})}); riskGridEl.appendChild(button)})}
+function renderPayouts(){payoutsEl.innerHTML=getPayouts().map((value,index)=>`<div class="odds-item"><span>Slot ${index+1}</span><span>x${value}</span></div>`).join("")}
+function renderSlots(){slotStripEl.innerHTML=""; slots.length=0; getPayouts().forEach(value=>{const el=document.createElement("div"); el.className="slot"+(value>=5?" hot":value>=2?" mid":""); el.textContent=`x${value}`; slotStripEl.appendChild(el); slots.push(el)})}
+function resizeBoard(){const rect=canvas.parentElement.getBoundingClientRect(); boardWidth=rect.width; boardHeight=rect.height; canvas.width=boardWidth*deviceRatio; canvas.height=boardHeight*deviceRatio; ctx.setTransform(deviceRatio,0,0,deviceRatio,0,0); buildPegMap()}
+function buildPegMap(){pegs.length=0; const usableWidth=boardWidth-120; const startY=96; const rowGap=54; const colGap=usableWidth/rows; for(let row=0;row<rows;row+=1){const count=row+1; const rowWidth=colGap*row; const startX=(boardWidth-rowWidth)/2; for(let col=0;col<count;col+=1){pegs.push({x:startX+col*colGap,y:startY+row*rowGap})}}}
+function weightedPick(weights){const total=weights.reduce((sum,value)=>sum+value,0); let roll=Math.random()*total; for(let i=0;i<weights.length;i+=1){roll-=weights[i]; if(roll<=0) return i} return weights.length-1}
+function shuffle(array){for(let i=array.length-1;i>0;i-=1){const j=Math.floor(Math.random()*(i+1)); [array[i],array[j]]=[array[j],array[i]]} return array}
+function createPath(){const preset=getPreset(); const finalIndex=weightedPick(preset.weights); const rights=Array.from({length:rows},(_,index)=>index<finalIndex); shuffle(rights); const path=[{x:boardWidth/2,y:44}]; let x=boardWidth/2; const startY=96; const rowGap=54; const colGap=(boardWidth-120)/rows; rights.forEach((goRight,row)=>{x+=goRight?colGap/2:-colGap/2; path.push({x,y:startY+row*rowGap+8,wobble:goRight?1:-1})}); const slotWidth=(boardWidth-48)/getPayouts().length; path.push({x:24+finalIndex*slotWidth+slotWidth/2,y:boardHeight-58}); return {path,finalIndex}}
+function dropBall(){ensureAudio(); if(state.dropping) return; if(state.balance<state.bet){setMessage("Not enough coins. Recharge and try again.","alert"); playLoseSound(); return} state.balance-=state.bet; state.lastWin=0; renderStats(); setMessage(`${getPreset().label} risk in motion. Follow the bounce.`); slots.forEach(slot=>slot.classList.remove("active")); const rollout=createPath(); currentBall={path:rollout.path,index:0,progress:0,x:rollout.path[0].x,y:rollout.path[0].y,finalIndex:rollout.finalIndex}; state.dropping=true; startLights(100); playDropSound()}
+function pulseBoard(bigWin){boardEl.classList.remove("burst"); stageEl.classList.remove("win-flash"); void boardEl.offsetWidth; boardEl.classList.add("burst"); stageEl.classList.add("win-flash"); clearTimeout(pulseBoard.timer); pulseBoard.timer=setTimeout(()=>{boardEl.classList.remove("burst"); stageEl.classList.remove("win-flash")},bigWin?900:550)}
+function finishDrop(index){state.dropping=false; const payout=getPayouts()[index]; const reward=Math.round(state.bet*payout); const profit=reward-state.bet; state.balance+=reward; state.lastWin=profit; renderStats(); slots[index].classList.add("active"); state.history.unshift(`x${payout}`); state.history=state.history.slice(0,10); renderHistory(); if(reward>0){const bigWin=payout>=5; setMessage(`Ball landed on x${payout}. ${profit>=0?"+":""}${profit.toLocaleString()} net`,`win`); showPop(bigWin?`JACKPOT x${payout}`:`x${payout}`,bigWin?"jackpot":"win"); flashWinLights(bigWin); pulseBoard(bigWin); createSparkBurst(index,bigWin); createConfetti(bigWin?28:16); playWinSound(payout)} else {setMessage("Edge slot. Better luck on the next drop.","alert"); showPop(`x${payout}`,"lose"); playLoseSound()}}
+function createSparkBurst(index,bigWin){sparklesEl.innerHTML=""; const slotRect=slots[index].getBoundingClientRect(); const boardRect=sparklesEl.getBoundingClientRect(); const cx=slotRect.left-boardRect.left+slotRect.width/2; const cy=slotRect.top-boardRect.top+slotRect.height/2; const count=bigWin?28:18; for(let i=0;i<count;i+=1){const spark=document.createElement("div"); spark.className="spark"; spark.style.left=`${cx}px`; spark.style.top=`${cy}px`; spark.style.background=i%3===0?"#fff159":i%3===1?"#58d88e":"#4bb8ff"; spark.style.setProperty("--dx",`${-160+Math.random()*320}px`); spark.style.setProperty("--dy",`${-150+Math.random()*210}px`); sparklesEl.appendChild(spark)}}
+function createConfetti(count){confettiEl.innerHTML=""; for(let i=0;i<count;i+=1){const item=document.createElement("div"); item.className="confetti"; item.style.left=`${12+Math.random()*76}%`; item.style.top=`${20+Math.random()*14}%`; item.style.background=i%4===0?"#fff159":i%4===1?"#ff8454":i%4===2?"#58d88e":"#4bb8ff"; item.style.setProperty("--dx",`${-180+Math.random()*360}px`); item.style.setProperty("--dy",`${120+Math.random()*240}px`); item.style.setProperty("--rot",`${-240+Math.random()*480}deg`); confettiEl.appendChild(item)}}
+function drawBoard(){ctx.clearRect(0,0,boardWidth,boardHeight); pegs.forEach((peg,index)=>{ctx.beginPath(); ctx.fillStyle=index%2===0?"#fff2b1":"#ffd07e"; ctx.strokeStyle="#1b1412"; ctx.lineWidth=3; ctx.arc(peg.x,peg.y,9,0,Math.PI*2); ctx.fill(); ctx.stroke()}); if(!currentBall) return; ctx.beginPath(); ctx.fillStyle="#4bb8ff"; ctx.strokeStyle="#1b1412"; ctx.lineWidth=4; ctx.arc(currentBall.x,currentBall.y,12,0,Math.PI*2); ctx.fill(); ctx.stroke()}
+function updateBall(dt){if(!currentBall) return; const speed=3.15; const wobbleStrength=getPreset().wobble; currentBall.progress+=dt*speed; while(currentBall.progress>=1&&currentBall.index<currentBall.path.length-1){currentBall.progress-=1; currentBall.index+=1; beep({frequency:480+Math.random()*160,duration:.03,type:"triangle",volume:.012})} const from=currentBall.path[Math.min(currentBall.index,currentBall.path.length-1)]; const to=currentBall.path[Math.min(currentBall.index+1,currentBall.path.length-1)]; const t=Math.min(1,currentBall.progress); const eased=1-Math.pow(1-t,2); const wobble=to.wobble?Math.sin(t*Math.PI)*wobbleStrength*to.wobble:0; currentBall.x=from.x+(to.x-from.x)*eased+wobble; currentBall.y=from.y+(to.y-from.y)*eased; if(currentBall.index>=currentBall.path.length-1){const landed=currentBall.finalIndex; currentBall=null; finishDrop(landed)}}
+function loop(now){requestAnimationFrame(loop); const dt=Math.min((now-lastFrame)/1000,.05); lastFrame=now; updateBall(dt); drawBoard()}
+dropBtn.addEventListener("click",dropBall); chargeBtn.addEventListener("click",()=>{ensureAudio(); if(state.dropping) return; state.balance+=500; renderStats(); setMessage("Added 500 coins."); beep({frequency:300,duration:.07,type:"square",volume:.025})}); window.addEventListener("resize",resizeBoard); window.addEventListener("pointerdown",ensureAudio,{once:true}); createLights(); renderBetButtons(); renderRiskButtons(); renderPayouts(); renderSlots(); renderStats(); renderHistory(); resizeBoard(); startLights(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

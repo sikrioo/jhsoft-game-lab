@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root {
+            --bg: #0a0c10;
+            --panel: #15181d;
+            --gold: #ffcc00;
+            --poison: #9d00ff;
+            --danger: #ef4444;
+        }
+
+        body { background: var(--bg); color: #d1d5db; font-family: 'serif'; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+
+        .game-board { 
+            width: 450px; background: var(--panel); border: 2px solid #2d3035; 
+            padding: 30px; border-radius: 4px; box-shadow: 0 50px 100px rgba(0,0,0,0.8);
+            text-align: center;
+        }
+
+        .status-bar { display: flex; justify-content: space-between; font-size: 0.9rem; margin-bottom: 25px; color: #8b949e; border-bottom: 1px solid #2d3035; padding-bottom: 10px; }
+
+        /* 술잔 영역 */
+        .cups-container { display: flex; justify-content: space-around; margin: 40px 0; height: 120px; position: relative; }
+        
+        .cup { 
+            width: 80px; cursor: pointer; transition: 0.3s; position: relative;
+            filter: drop-shadow(0 10px 10px rgba(0,0,0,0.5));
+        }
+        .cup:hover:not(.disabled) { transform: translateY(-10px); filter: drop-shadow(0 20px 20px rgba(0,0,0,0.8)); }
+        .cup.disabled { cursor: default; opacity: 0.5; }
+
+        /* 술잔 이미지 대신 폰트/도형으로 표현 */
+        .cup-shape { 
+            width: 60px; height: 80px; background: #2d3035; margin: 0 auto;
+            clip-path: polygon(10% 0%, 90% 0%, 80% 80%, 100% 100%, 0% 100%, 20% 80%);
+            border-top: 4px solid #444;
+        }
+
+        /* 섞기 애니메이션 */
+        @keyframes shuffle {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(100px); }
+            75% { transform: translateX(-100px); }
+        }
+        .shuffling { animation: shuffle 0.4s infinite alternate; }
+
+        /* 결과 연출 */
+        .win { background: var(--gold) !important; box-shadow: 0 0 30px var(--gold); }
+        .lose { background: var(--poison) !important; box-shadow: 0 0 30px var(--poison); }
+
+        /* 컨트롤 영역 */
+        .bet-info { font-size: 1.2rem; font-weight: bold; color: var(--gold); margin-bottom: 10px; }
+        .info-text { height: 40px; font-size: 0.9rem; color: #8b949e; margin-bottom: 20px; line-height: 1.4; }
+
+        .btn-start { 
+            width: 100%; background: #1a1c1e; color: var(--gold); border: 1px solid var(--gold); 
+            padding: 15px; cursor: pointer; font-weight: bold; transition: 0.3s;
+        }
+        .btn-start:hover:not(:disabled) { background: var(--gold); color: #000; }
+        .btn-start:disabled { opacity: 0.2; }
+    </style>
+</head>
+<body>
+
+<div class="game-board">
+    <div class="status-bar">
+        <span>[ 선술집 주인 루카스 ]</span>
+        <span>금화: <span id="user-gold" style="color:var(--gold)">1000</span> G</span>
+    </div>
+
+    <div class="info-text" id="master-talk">
+        "이보게, 여기 독이 든 잔이 하나 있네. <br>피해갈 수 있겠나? 맞추면 판돈의 두 배를 주지."
+    </div>
+
+    <div class="cups-container" id="cups-area">
+        <div class="cup" onclick="selectCup(0)"><div class="cup-shape" id="cup-0"></div></div>
+        <div class="cup" onclick="selectCup(1)"><div class="cup-shape" id="cup-1"></div></div>
+        <div class="cup" onclick="selectCup(2)"><div class="cup-shape" id="cup-2"></div></div>
+    </div>
+
+    <div class="bet-info">BETS: <span id="bet-display">100</span> G</div>
+    
+    <div style="display: flex; gap: 10px;">
+        <button class="btn-start" id="bet-minus" onclick="changeBet(-50)">- 50</button>
+        <button class="btn-start" id="start-btn" onclick="startGame()">도전 (금화 걸기)</button>
+        <button class="btn-start" id="bet-plus" onclick="changeBet(50)">+ 50</button>
+    </div>
+</div>
+
+<script>
+    let gold = 1000;
+    let bet = 100;
+    let poisonIndex = -1;
+    let isPlaying = false;
+
+    function changeBet(v) {
+        if(isPlaying) return;
+        if(bet + v < 50) return;
+        bet += v;
+        document.getElementById('bet-display').innerText = bet;
+    }
+
+    function startGame() {
+        if (gold < bet) {
+            updateTalk("주인: \"자네 주머니가 비었구만. 돈을 더 가져오게나.\"", "#ef4444");
+            return;
+        }
+
+        gold -= bet;
+        updateUI();
+        isPlaying = true;
+        setControls(true);
+
+        // 잔 초기화
+        for(let i=0; i<3; i++) {
+            const c = document.getElementById(`cup-${i}`);
+            c.className = 'cup-shape';
+            c.parentElement.classList.remove('disabled');
+        }
+
+        updateTalk("주인이 잔을 빠르게 뒤섞습니다... <br>어떤 게 독배일까요?");
+        
+        // 섞는 애니메이션 (시각적 효과)
+        const area = document.getElementById('cups-area');
+        area.classList.add('shuffling');
+
+        setTimeout(() => {
+            area.classList.remove('shuffling');
+            updateTalk("주인: \"자, 골라보게. 죽거나 혹은 부자가 되거나.\"", "#fff");
+            poisonIndex = Math.floor(Math.random() * 3);
+        }, 1500);
+    }
+
+    function selectCup(idx) {
+        if (!isPlaying || poisonIndex === -1) return;
+
+        isPlaying = false;
+        const selected = document.getElementById(`cup-${idx}`);
+        const poison = document.getElementById(`cup-${poisonIndex}`);
+
+        if (idx === poisonIndex) {
+            // 꽝 (독배 선택)
+            selected.classList.add('lose');
+            updateTalk("윽! 목이 타들어갑니다... 독배였습니다.", "#9d00ff");
+        } else {
+            // 승리
+            selected.classList.add('win');
+            gold += bet * 2;
+            updateTalk(`주인: "운이 좋군! 약속대로 금화 ${bet * 2}G를 주지."`, varGold());
+        }
+
+        // 나머지 잔도 결과 공개
+        poison.classList.add('lose');
+        setControls(false);
+        updateUI();
+    }
+
+    function updateTalk(txt, color = "#8b949e") {
+        const el = document.getElementById('master-talk');
+        el.innerHTML = txt;
+        el.style.color = color;
+    }
+
+    function setControls(disabled) {
+        document.getElementById('start-btn').disabled = disabled;
+        document.getElementById('bet-plus').disabled = disabled;
+        document.getElementById('bet-minus').disabled = disabled;
+        
+        const cups = document.querySelectorAll('.cup');
+        cups.forEach(c => {
+            if(disabled) c.classList.remove('disabled');
+            else c.classList.add('disabled');
+        });
+    }
+
+    function updateUI() {
+        document.getElementById('user-gold').innerText = gold;
+    }
+
+    function varGold() { return "#ffcc00"; }
+    
+    // 초기 잔 비활성화
+    setControls(false);
+</script>
+</body>
+</html>

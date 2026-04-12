@@ -1,0 +1,752 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Meteor Dodge - Planning & Impact (Matter.js)</title>
+  <style>
+    html, body { margin:0; height:100%; overflow:hidden; background:#05060a; }
+    canvas { display:block; width:100vw; height:100vh; }
+    /* 선택 막지 않도록 포인터 이벤트 off */
+    .hud {
+      position: fixed; left: 12px; top: 12px; z-index: 10;
+      color: rgba(255,255,255,0.92);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif;
+      pointer-events: none;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+    }
+    .hud .row { margin-bottom: 6px; }
+    .badge {
+      display:inline-block; padding: 4px 8px; border-radius: 10px;
+      background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12);
+      margin-right: 8px;
+    }
+    .help {
+      position: fixed; right: 12px; top: 12px; z-index: 10;
+      color: rgba(255,255,255,0.8);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", sans-serif;
+      pointer-events: none;
+      text-align: right;
+      text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+    }
+  </style>
+</head>
+<body>
+  <!-- Matter.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.20.0/matter.min.js"></script>
+  <canvas id="c"></canvas>
+
+  <div class="hud" id="hud">
+    <div class="row">
+      <span class="badge" id="phaseBadge">PHASE</span>
+      <span class="badge" id="timerBadge">TIMER</span>
+      <span class="badge" id="roundBadge">ROUND</span>
+    </div>
+    <div class="row" id="statusLine">status</div>
+  </div>
+
+  <div class="help">
+    <div class="row"><span class="badge">← → / A D 이동</span> <span class="badge">↑ / W / Space 점프</span></div>
+    <div class="row"><span class="badge">집/동굴 안(파란 라인) = 안전</span></div>
+  </div>
+
+  <script>
+    const {
+      Engine, Runner, World, Bodies, Body, Composite, Events
+    } = Matter;
+
+    // ===== Canvas =====
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+
+    function resizeCanvas() {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      canvas.width  = Math.floor(window.innerWidth * dpr);
+      canvas.height = Math.floor(window.innerHeight * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+    // ===== HUD =====
+    const phaseBadge = document.getElementById("phaseBadge");
+    const timerBadge = document.getElementById("timerBadge");
+    const roundBadge = document.getElementById("roundBadge");
+    const statusLine = document.getElementById("statusLine");
+
+    // ===== Game Config =====
+    const CFG = {
+      groundHeight: 90,
+
+      planTimeSec: 7.0,
+      impactTimeSec: 4.0,      // 운석 떨어지는 시간(이 동안 버티면 성공)
+
+      // 플레이어 움직임
+      moveSpeed: 6.0,
+      jumpSpeed: 13.5,
+
+      // 운석
+      baseMeteorCount: 6,
+      meteorCountPerRound: 2,
+      meteorRadiusMin: 7,
+      meteorRadiusMax: 16,
+      meteorVelYMin: 12,
+      meteorVelYMax: 20,
+      meteorVelXMin: -2,
+      meteorVelXMax: 2,
+
+      // 파편
+      sparkLifeMin: 16,
+      sparkLifeMax: 34,
+
+      // 억까 방지(플레이어 근처 낙하 금지 반경) - 너무 크게 하면 운빨이 사라짐
+      noDropRadius: 80,
+      noDropChance: 0.75, // 0~1: 높을수록 "플레이어 바로 위 억까"가 줄어듦
+    };
+
+    function rand(min, max) { return min + Math.random() * (max - min); }
+    function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+
+    // ===== Physics =====
+    const engine = Engine.create();
+    engine.gravity.y = 1.15;
+    const runner = Runner.create();
+    Runner.run(runner, engine);
+
+    // ===== World objects =====
+    let ground = null;
+
+    // shelter: static body + coverZone sensor
+    const shelters = [];
+
+    // player
+    let player = null;
+    const playerState = {
+      coverCount: 0,
+      onGround: false,
+      alive: true,
+      win: false
+    };
+
+    // meteors / sparks
+    const meteors = new Set();
+    const sparks = new Set();
+
+    // ===== Game state =====
+    const game = {
+      phase: "plan", // "plan" | "impact" | "result"
+      round: 1,
+      timer: CFG.planTimeSec,
+      impactTimer: CFG.impactTimeSec,
+      spawnDone: false,
+      message: "움직여서 안전한 위치를 선택하세요!"
+    };
+
+    // ===== Input =====
+    const keys = new Set();
+    window.addEventListener("keydown", (e) => keys.add(e.code));
+    window.addEventListener("keyup", (e) => keys.delete(e.code));
+
+    function isDown(...codes) {
+      return codes.some(c => keys.has(c));
+    }
+
+    // ===== Create / Reset World =====
+    function clearDynamic() {
+      // remove meteors
+      for (const m of meteors) World.remove(engine.world, m);
+      meteors.clear();
+      for (const p of sparks) World.remove(engine.world, p);
+      sparks.clear();
+    }
+
+    function resetWorld() {
+      Composite.clear(engine.world, false);
+      shelters.length = 0;
+      clearDynamic();
+
+      // ground
+      ground = Bodies.rectangle(
+        window.innerWidth / 2,
+        window.innerHeight - CFG.groundHeight / 2,
+        window.innerWidth,
+        CFG.groundHeight,
+        { isStatic: true, friction: 0.9, restitution: 0.05, label: "ground" }
+      );
+      World.add(engine.world, ground);
+
+      // shelters
+      createShelters();
+
+      // player
+      player = Bodies.rectangle(
+        window.innerWidth * 0.2,
+        window.innerHeight - CFG.groundHeight - 70,
+        34, 52,
+        { friction: 0.1, restitution: 0.0, frictionAir: 0.02, label: "player" }
+      );
+      // 회전 방지(플랫포머 느낌)
+      Body.setInertia(player, Infinity);
+      World.add(engine.world, player);
+
+      playerState.coverCount = 0;
+      playerState.onGround = false;
+      playerState.alive = true;
+      playerState.win = false;
+
+      // game phase
+      game.phase = "plan";
+      game.timer = CFG.planTimeSec;
+      game.impactTimer = CFG.impactTimeSec;
+      game.spawnDone = false;
+      game.message = "움직여서 안전한 위치를 선택하세요!";
+    }
+
+    function createShelters() {
+      const w = window.innerWidth;
+      const h = window.innerHeight;
+      const gy = h - CFG.groundHeight;
+
+      // (1) House: 간단한 직사각형 집 + 내부 coverZone
+      // 집 바닥은 땅 위에 붙이기
+      const houseW = 220, houseH = 150;
+      const houseX = w * 0.55, houseY = gy - houseH / 2;
+
+      const houseBody = Bodies.rectangle(houseX, houseY, houseW, houseH, {
+        isStatic: true,
+        label: "shelter_house"
+      });
+
+      // 내부 센서 존(벽 두께 고려해서 약간 작게)
+      const houseZone = Bodies.rectangle(houseX, houseY + 8, houseW - 40, houseH - 40, {
+        isStatic: true,
+        isSensor: true,
+        label: "coverZone"
+      });
+
+      shelters.push({ id: "house1", type: "house", body: houseBody, zone: houseZone });
+      World.add(engine.world, [houseBody, houseZone]);
+
+      // (2) Cave: 바위/동굴 모양은 단순화(외벽) + 내부 zone
+      const caveW = 260, caveH = 130;
+      const caveX = w * 0.82, caveY = gy - caveH / 2;
+
+      const caveOuter = Bodies.rectangle(caveX, caveY, caveW, caveH, {
+        isStatic: true,
+        label: "shelter_cave"
+      });
+
+      // 동굴 "입구" 느낌: zone은 오른쪽 깊숙한 곳에 배치 (입구쪽은 위험하게)
+      const caveZone = Bodies.rectangle(caveX + 55, caveY + 8, caveW - 130, caveH - 45, {
+        isStatic: true,
+        isSensor: true,
+        label: "coverZone"
+      });
+
+      shelters.push({ id: "cave1", type: "cave", body: caveOuter, zone: caveZone });
+      World.add(engine.world, [caveOuter, caveZone]);
+
+      // (3) Rock: 방향 엄폐(그냥 장식 + 충돌체)
+      const rock = Bodies.polygon(w * 0.35, gy - 55, 6, 65, {
+        isStatic: true,
+        label: "rock"
+      });
+      World.add(engine.world, rock);
+      shelters.push({ id: "rock1", type: "rock", body: rock, zone: null });
+    }
+
+    window.addEventListener("resize", () => {
+      // 리사이즈 시 월드 다시 만드는 게 제일 안전/간단
+      resetWorld();
+    });
+
+    // ===== Collision logic =====
+    Events.on(engine, "collisionStart", (evt) => {
+      for (const pair of evt.pairs) {
+        const a = pair.bodyA, b = pair.bodyB;
+
+        // 플레이어가 땅에 닿음
+        if ((a.label === "player" && b.label === "ground") || (b.label === "player" && a.label === "ground")) {
+          playerState.onGround = true;
+        }
+
+        // cover zone enter
+        if ((a.label === "coverZone" && b.label === "player") || (b.label === "coverZone" && a.label === "player")) {
+          playerState.coverCount += 1;
+        }
+
+        // 피격 판정 (impact 단계에서만)
+        if (game.phase === "impact" && playerState.alive) {
+          const playerHit =
+            (a.label === "player" && (b.label === "meteor" || b.label === "spark")) ||
+            (b.label === "player" && (a.label === "meteor" || a.label === "spark"));
+
+          if (playerHit) {
+            // 엄폐 중이면 무시
+            if (playerState.coverCount > 0) {
+              // safe
+            } else {
+              playerState.alive = false;
+              game.phase = "result";
+              game.message = "💥 맞았다! 다음엔 더 좋은 자리로!";
+            }
+          }
+        }
+
+        // meteor hits ground/shelter => sparks
+        const meteor = (a.label === "meteor") ? a : (b.label === "meteor") ? b : null;
+        const hitSurface =
+          (a.label === "ground" || b.label === "ground" ||
+           a.label.startsWith("shelter_") || b.label.startsWith("shelter_") ||
+           a.label === "rock" || b.label === "rock");
+
+        if (meteor && hitSurface) {
+          spawnSparks(meteor.position.x, meteor.position.y, Math.floor(rand(10, 22)));
+          // 운석은 충돌 후 제거(게임 느낌상 "쾅" 하고 끝)
+          meteors.delete(meteor);
+          World.remove(engine.world, meteor);
+        }
+      }
+    });
+
+    Events.on(engine, "collisionEnd", (evt) => {
+      for (const pair of evt.pairs) {
+        const a = pair.bodyA, b = pair.bodyB;
+
+        // cover zone exit
+        if ((a.label === "coverZone" && b.label === "player") || (b.label === "coverZone" && a.label === "player")) {
+          playerState.coverCount = Math.max(0, playerState.coverCount - 1);
+        }
+
+        // 플레이어 땅에서 떨어짐(간단 추정)
+        if ((a.label === "player" && b.label === "ground") || (b.label === "player" && a.label === "ground")) {
+          // 너무 바로 false 하면 계단/미끄럼에서 튀므로, 아래에서 속도/위치로 재판정도 함
+          playerState.onGround = false;
+        }
+      }
+    });
+
+    // ===== Meteors / Sparks =====
+    function spawnMeteorAt(x, y, r) {
+      const m = Bodies.circle(x, y, r, {
+        density: 0.0026,
+        frictionAir: 0.015,
+        restitution: 0.1,
+        label: "meteor"
+      });
+
+      Body.setVelocity(m, {
+        x: rand(CFG.meteorVelXMin, CFG.meteorVelXMax),
+        y: rand(CFG.meteorVelYMin, CFG.meteorVelYMax)
+      });
+      Body.setAngularVelocity(m, rand(-0.15, 0.15));
+
+      m.plugin = {
+        trail: [],
+        maxTrail: 22,
+        glow: rand(0.6, 1.0)
+      };
+
+      meteors.add(m);
+      World.add(engine.world, m);
+    }
+
+    function spawnMeteorWave() {
+      const w = window.innerWidth;
+      const count = CFG.baseMeteorCount + (game.round - 1) * CFG.meteorCountPerRound;
+
+      for (let i = 0; i < count; i++) {
+        let x = rand(40, w - 40);
+
+        // 억까 방지: 일정 확률로 플레이어 근처 낙하 금지
+        const dx = Math.abs(x - player.position.x);
+        if (dx < CFG.noDropRadius && Math.random() < CFG.noDropChance) {
+          // 플레이어 근처면 다른 위치로 한 번 더 뽑기
+          x = (x < w/2) ? rand(w*0.55, w-40) : rand(40, w*0.45);
+        }
+
+        const y = rand(-220, -80);
+        const r = rand(CFG.meteorRadiusMin, CFG.meteorRadiusMax);
+        spawnMeteorAt(x, y, r);
+      }
+    }
+
+    function spawnSparks(x, y, count = 14) {
+      for (let i = 0; i < count; i++) {
+        const p = Bodies.circle(x, y, rand(1.4, 2.8), {
+          density: 0.0008,
+          frictionAir: 0.05,
+          restitution: 0.25,
+          label: "spark"
+        });
+        Body.setVelocity(p, { x: rand(-6, 6), y: rand(-11, -3) });
+        p.plugin = { life: rand(CFG.sparkLifeMin, CFG.sparkLifeMax) };
+        sparks.add(p);
+        World.add(engine.world, p);
+      }
+    }
+
+    // ===== Player control =====
+    function updatePlayerControl() {
+      if (!player || !playerState.alive) return;
+
+      // 간단한 onGround 보정(속도/위치 기준)
+      const h = window.innerHeight;
+      const gy = h - CFG.groundHeight;
+      const nearGround = (player.position.y > gy - 70);
+      if (nearGround && Math.abs(player.velocity.y) < 1.2) {
+        playerState.onGround = true;
+      }
+
+      let vx = player.velocity.x;
+      if (isDown("ArrowLeft", "KeyA")) vx = -CFG.moveSpeed;
+      else if (isDown("ArrowRight", "KeyD")) vx = CFG.moveSpeed;
+      else vx = player.velocity.x * 0.85; // 마찰 느낌
+
+      // 속도 적용
+      Body.setVelocity(player, { x: vx, y: player.velocity.y });
+
+      // 점프(Planning에서만 가능하게 할 수도 있음. 여기선 둘 다 가능)
+      const jumpPressed = isDown("ArrowUp", "KeyW", "Space");
+      if (jumpPressed && playerState.onGround) {
+        Body.setVelocity(player, { x: player.velocity.x, y: -CFG.jumpSpeed });
+        playerState.onGround = false;
+      }
+
+      // 화면 밖 못 나가게 (간단 클램프)
+      const w = window.innerWidth;
+      const px = clamp(player.position.x, 18, w - 18);
+      if (px !== player.position.x) Body.setPosition(player, { x: px, y: player.position.y });
+    }
+
+    // ===== Game phase update =====
+    let lastTs = 0;
+
+    function updateGame(dt) {
+      if (!playerState.alive) return;
+
+      if (game.phase === "plan") {
+        game.timer -= dt;
+        game.message = (playerState.coverCount > 0)
+          ? "✅ 엄폐 중! (안전)"
+          : "⚠️ 엄폐물 안으로 들어가면 안전!";
+
+        if (game.timer <= 0) {
+          game.phase = "impact";
+          game.impactTimer = CFG.impactTimeSec;
+          game.spawnDone = false;
+          game.message = "☄️ 운석이 떨어진다!";
+        }
+      }
+      else if (game.phase === "impact") {
+        if (!game.spawnDone) {
+          spawnMeteorWave();
+          game.spawnDone = true;
+        }
+
+        game.impactTimer -= dt;
+        game.message = (playerState.coverCount > 0)
+          ? "✅ 엄폐 중! 버텨!"
+          : "🏃‍♂️ 피하자! (엄폐 없으면 위험)";
+
+        if (game.impactTimer <= 0) {
+          // 생존 성공
+          game.phase = "result";
+          playerState.win = true;
+          game.message = "🎉 생존 성공! 다음 라운드!";
+        }
+      }
+      else if (game.phase === "result") {
+        // result는 아래에서 자동으로 다음 라운드/리셋 처리
+      }
+    }
+
+    function proceedAfterResult(dt) {
+      if (game.phase !== "result") return;
+
+      // 잠깐 보여주고 다음 라운드
+      // (시간 누적 대신 단순하게 프레임 기반으로)
+      game._resultHold = (game._resultHold || 0) + dt;
+
+      if (game._resultHold >= 1.2) {
+        game._resultHold = 0;
+
+        if (!playerState.alive) {
+          // 게임 오버 -> 1라운드부터
+          game.round = 1;
+          resetWorld();
+          return;
+        }
+
+        // win
+        game.round += 1;
+        clearDynamic();
+
+        // 플레이어 위치는 유지하고 싶으면 유지 가능.
+        // 여기선 다음 라운드 시작할 때 planning으로 돌아가고, 낙하만 초기화.
+        game.phase = "plan";
+        game.timer = CFG.planTimeSec;
+        game.impactTimer = CFG.impactTimeSec;
+        game.spawnDone = false;
+        playerState.win = false;
+
+        // 살짝 보상 느낌: 다음 라운드 시작시 플레이어 속도 안정화
+        Body.setVelocity(player, { x: 0, y: 0 });
+        game.message = "다음 라운드! 위치를 다시 선택!";
+      }
+    }
+
+    // ===== Rendering =====
+    function drawBackground() {
+      const w = window.innerWidth, h = window.innerHeight;
+
+      const g = ctx.createLinearGradient(0, 0, 0, h);
+      g.addColorStop(0.00, "#02030a");
+      g.addColorStop(0.55, "#0b1030");
+      g.addColorStop(1.00, "#191428");
+      ctx.fillStyle = g;
+      ctx.fillRect(0, 0, w, h);
+
+      // 별
+      ctx.globalAlpha = 0.55;
+      for (let i = 0; i < 70; i++) {
+        const sx = (i * 997) % w;
+        const sy = ((i * 577) % (h - CFG.groundHeight - 140)) + 40;
+        ctx.fillStyle = "white";
+        ctx.fillRect(sx, sy, 1, 1);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function fadeFrame() {
+      // 잔상
+      ctx.globalAlpha = 0.20;
+      ctx.fillStyle = "#05060a";
+      ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+      ctx.globalAlpha = 1;
+    }
+
+    function drawGround() {
+      const w = window.innerWidth, h = window.innerHeight;
+      const gy = h - CFG.groundHeight;
+
+      const gg = ctx.createLinearGradient(0, gy, 0, h);
+      gg.addColorStop(0, "#0b0c10");
+      gg.addColorStop(1, "#050509");
+      ctx.fillStyle = gg;
+      ctx.fillRect(0, gy, w, CFG.groundHeight);
+
+      // 지평선 라인
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = "#6aa0ff";
+      ctx.fillRect(0, gy, w, 2);
+      ctx.globalAlpha = 1;
+    }
+
+    function drawBodyRect(body, fill, stroke = null, alpha = 1) {
+      const v = body.vertices;
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.moveTo(v[0].x, v[0].y);
+      for (let i = 1; i < v.length; i++) ctx.lineTo(v[i].x, v[i].y);
+      ctx.closePath();
+      ctx.fillStyle = fill;
+      ctx.fill();
+      if (stroke) {
+        ctx.strokeStyle = stroke;
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function drawShelters() {
+      for (const s of shelters) {
+        if (s.type === "house") {
+          drawBodyRect(s.body, "rgba(0,0,0,0.35)", "rgba(255,255,255,0.08)", 1);
+          // 지붕(장식)
+          const b = s.body;
+          const topY = b.position.y - 75;
+          ctx.globalAlpha = 0.9;
+          ctx.fillStyle = "rgba(0,0,0,0.45)";
+          ctx.beginPath();
+          ctx.moveTo(b.position.x - 120, topY + 20);
+          ctx.lineTo(b.position.x, topY - 45);
+          ctx.lineTo(b.position.x + 120, topY + 20);
+          ctx.closePath();
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        } else if (s.type === "cave") {
+          drawBodyRect(s.body, "rgba(0,0,0,0.40)", "rgba(255,255,255,0.08)", 1);
+          // 입구 그림자(장식)
+          const b = s.body;
+          ctx.globalAlpha = 0.7;
+          ctx.fillStyle = "rgba(0,0,0,0.55)";
+          ctx.fillRect(b.position.x - 110, b.position.y - 30, 90, 90);
+          ctx.globalAlpha = 1;
+        } else if (s.type === "rock") {
+          // rock은 polygon
+          const v = s.body.vertices;
+          ctx.beginPath();
+          ctx.moveTo(v[0].x, v[0].y);
+          for (let i = 1; i < v.length; i++) ctx.lineTo(v[i].x, v[i].y);
+          ctx.closePath();
+          ctx.fillStyle = "rgba(0,0,0,0.38)";
+          ctx.fill();
+          ctx.strokeStyle = "rgba(255,255,255,0.06)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+
+        // cover zone을 아주 은은한 라인으로 표시(학습용)
+        if (s.zone) {
+          const z = s.zone.vertices;
+          ctx.beginPath();
+          ctx.moveTo(z[0].x, z[0].y);
+          for (let i = 1; i < z.length; i++) ctx.lineTo(z[i].x, z[i].y);
+          ctx.closePath();
+          ctx.strokeStyle = "rgba(90,160,255,0.35)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+    }
+
+    function drawPlayer() {
+      if (!player) return;
+      const safe = playerState.coverCount > 0;
+      drawBodyRect(
+        player,
+        safe ? "rgba(120,200,255,0.85)" : "rgba(255,255,255,0.85)",
+        "rgba(0,0,0,0.25)",
+        1
+      );
+      // 머리 표시(방향감)
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = "rgba(0,0,0,0.25)";
+      ctx.beginPath();
+      ctx.arc(player.position.x + 8, player.position.y - 14, 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    function drawMeteor(m) {
+      const { x, y } = m.position;
+      const r = m.circleRadius;
+
+      // trail update
+      const trail = m.plugin.trail;
+      trail.push({ x, y });
+      if (trail.length > m.plugin.maxTrail) trail.shift();
+
+      // trail
+      for (let i = 0; i < trail.length; i++) {
+        const t = trail[i];
+        const a = i / trail.length;
+        ctx.globalAlpha = a * 0.45 * m.plugin.glow;
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, r * (0.35 + a * 0.9), 0, Math.PI * 2);
+        ctx.fillStyle = "#ffb86b";
+        ctx.fill();
+      }
+
+      // glow
+      ctx.globalAlpha = 0.9;
+      const g = ctx.createRadialGradient(x, y, 0, x, y, r * 3.2);
+      g.addColorStop(0, "rgba(255,230,170,1)");
+      g.addColorStop(0.4, "rgba(255,140,60,0.7)");
+      g.addColorStop(1, "rgba(255,80,20,0)");
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      ctx.arc(x, y, r * 3.2, 0, Math.PI * 2);
+      ctx.fill();
+
+      // core
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = "#ffd8a8";
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawSpark(p) {
+      const { x, y } = p.position;
+      const life = p.plugin.life;
+
+      ctx.globalAlpha = Math.max(0, Math.min(1, life / CFG.sparkLifeMax));
+      ctx.fillStyle = "#ffcf7a";
+      ctx.beginPath();
+      ctx.arc(x, y, p.circleRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    function updateParticlesCleanup() {
+      const h = window.innerHeight;
+      // sparks life
+      for (const p of sparks) {
+        p.plugin.life -= 1;
+        if (p.plugin.life <= 0 || p.position.y > h + 200) {
+          sparks.delete(p);
+          World.remove(engine.world, p);
+        }
+      }
+
+      // meteors out of screen cleanup(혹시)
+      const w = window.innerWidth;
+      for (const m of meteors) {
+        if (m.position.x < -400 || m.position.x > w + 400 || m.position.y > h + 500) {
+          meteors.delete(m);
+          World.remove(engine.world, m);
+        }
+      }
+    }
+
+    function updateHUD() {
+      const safe = playerState.coverCount > 0;
+      phaseBadge.textContent = `PHASE: ${game.phase.toUpperCase()}`;
+      roundBadge.textContent = `ROUND: ${game.round}`;
+
+      if (game.phase === "plan") timerBadge.textContent = `TIME: ${Math.max(0, game.timer).toFixed(1)}s`;
+      else if (game.phase === "impact") timerBadge.textContent = `SURVIVE: ${Math.max(0, game.impactTimer).toFixed(1)}s`;
+      else timerBadge.textContent = safe ? "SAFE" : "DANGER";
+
+      statusLine.textContent =
+        `${game.message}  |  ${safe ? "엄폐: YES" : "엄폐: NO"}  |  (운석:${meteors.size}, 파편:${sparks.size})`;
+    }
+
+    // ===== Main loop =====
+    function tick(ts) {
+      const dt = (lastTs === 0) ? 0 : (ts - lastTs) / 1000;
+      lastTs = ts;
+
+      // physics-driven input
+      updatePlayerControl();
+
+      // game phase update
+      if (playerState.alive) updateGame(dt);
+      proceedAfterResult(dt);
+
+      // render
+      fadeFrame();
+      drawBackground();
+      drawGround();
+      drawShelters();
+
+      // meteors & sparks
+      for (const m of meteors) drawMeteor(m);
+      for (const p of sparks) drawSpark(p);
+
+      drawPlayer();
+      updateParticlesCleanup();
+      updateHUD();
+
+      requestAnimationFrame(tick);
+    }
+
+    // ===== Start =====
+    resetWorld();
+    requestAnimationFrame(tick);
+  </script>
+</body>
+</html>

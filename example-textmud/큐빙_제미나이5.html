@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Ancient Horadric Altar</title>
+    <style>
+        /* 1. 기본 스타일 시스템 (main.css 완벽 연동) */
+        :root {
+            --bg: #070a10;
+            --panel: #0b0f18;
+            --txt: #d7e0ff;
+            --muted: #5c6b89;
+            --border: rgba(255, 255, 255, .05);
+            --sys: #ffd56a;
+            --move: #32f6ff;
+
+            /* 등급별 색상 (Glow 효과를 위해 shadow 값 추가) */
+            --r-common: #d6d6d6;
+            --r-magic:  #4aa3ff;
+            --r-rare:   #ffd84a;
+            --r-epic:   #b68cff;
+            --r-legend: #ff9a3c;
+            
+            --font-heavy: "Times New Roman", serif; /* 묵직한 서체 대용 */
+        }
+
+        body {
+            height: 100vh;
+            margin: 0;
+            background: var(--bg);
+            color: var(--txt);
+            font-family: var(--sans);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 2. 메인 윈도우 - 더 깊은 그림자와 두꺼운 테두리 */
+        .cubing-altar {
+            width: 520px;
+            background: #090d16;
+            border: 2px solid #1a2235;
+            padding: 40px;
+            box-shadow: 0 0 100px rgba(0,0,0,1), inset 0 0 20px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .altar-title {
+            text-align: center;
+            font-family: var(--font-heavy);
+            font-size: 11px;
+            letter-spacing: 6px;
+            color: var(--muted);
+            margin-bottom: 30px;
+            text-transform: uppercase;
+        }
+
+        /* 3. 큐브 영역 - 텍스트가 박히는 느낌 */
+        .forge-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 30px;
+            min-height: 200px;
+        }
+
+        .forge-slot {
+            height: 44px;
+            background: rgba(0, 0, 0, 0.4);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--font-heavy);
+            font-size: 13px;
+            font-weight: bold;
+            letter-spacing: 1px;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+        }
+
+        .forge-slot:empty::after {
+            content: '---';
+            color: #1a2235;
+        }
+
+        /* 4. 변환 버튼 - 묵직한 금속 바 느낌 */
+        .transmute-trigger {
+            width: 100%;
+            height: 54px;
+            background: #0d1421;
+            border: 1px solid #2e3c5a;
+            color: var(--muted);
+            font-family: var(--font-heavy);
+            letter-spacing: 4px;
+            font-weight: 900;
+            cursor: pointer;
+            transition: 0.4s;
+            margin-bottom: 30px;
+        }
+
+        .transmute-trigger:hover:not(:disabled) {
+            color: var(--sys);
+            border-color: var(--sys);
+            text-shadow: 0 0 10px rgba(255, 213, 106, 0.5);
+            background: rgba(255, 213, 106, 0.02);
+        }
+
+        /* 5. 하단 인벤토리 - 리스트 형태 */
+        .inventory-list {
+            max-height: 200px;
+            overflow-y: auto;
+            border-top: 1px solid var(--border);
+            padding-top: 20px;
+        }
+
+        .item-row {
+            padding: 10px 15px;
+            margin-bottom: 4px;
+            background: rgba(255,255,255,0.01);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: 0.2s;
+            border-left: 2px solid transparent;
+        }
+
+        .item-row:hover {
+            background: rgba(255,255,255,0.04);
+            border-left-color: var(--muted);
+        }
+
+        .item-name {
+            font-family: var(--font-heavy);
+            font-weight: bold;
+            font-size: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        /* 6. 연출 (묵직한 암전 및 진동) */
+        .is-animating .forge-slot {
+            filter: blur(1px);
+            opacity: 0.5;
+        }
+
+        .is-animating .cubing-altar {
+            animation: heavyShake 0.2s infinite alternate;
+        }
+
+        @keyframes heavyShake {
+            from { transform: translate(-0.5px, 0); }
+            to { transform: translate(0.5px, 0.5px); }
+        }
+
+        /* 등급별 텍스트 그림자 효과 (무게감의 핵심) */
+        .rarity-text {
+            text-shadow: 0 0 8px rgba(0,0,0,0.8), 0 0 2px rgba(255,255,255,0.1);
+        }
+        
+        /* 스크롤바 정갈하게 */
+        .inventory-list::-webkit-scrollbar { width: 2px; }
+        .inventory-list::-webkit-scrollbar-thumb { background: #1a2235; }
+
+        /* 결과 알림 */
+        .reveal-overlay {
+            position: absolute;
+            inset: 0;
+            background: #05070a;
+            z-index: 100;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.8s;
+        }
+    </style>
+</head>
+<body>
+
+<div class="cubing-altar" id="altar">
+    <div class="altar-title">SACRED TRANSMUTATION</div>
+
+    <div class="forge-grid" id="forgeGrid">
+        <div class="forge-slot" onclick="removeAt(0)"></div>
+        <div class="forge-slot" onclick="removeAt(1)"></div>
+        <div class="forge-slot" onclick="removeAt(2)"></div>
+        <div class="forge-slot" onclick="removeAt(3)"></div>
+        <div class="forge-slot" onclick="removeAt(4)"></div>
+        <div class="forge-slot" onclick="removeAt(5)"></div>
+        <div class="forge-slot" onclick="removeAt(6)"></div>
+        <div class="forge-slot" onclick="removeAt(7)"></div>
+    </div>
+
+    <button class="transmute-trigger" id="btnTransmute">BEGIN RITUAL</button>
+
+    <div class="inventory-list" id="invList">
+        </div>
+
+    <div class="reveal-overlay" id="revealOverlay">
+        <div style="font-family: var(--font-heavy); font-size: 11px; color: var(--muted); letter-spacing: 3px; margin-bottom: 20px;">RESULT UNVEILED</div>
+        <div id="resName" class="rarity-text" style="font-family: var(--font-heavy); font-size: 24px; letter-spacing: 2px;"></div>
+        <button onclick="hideResult()" style="margin-top:40px; background:none; border:1px solid #2e3c5a; color:var(--muted); padding:10px 30px; cursor:pointer; font-family:var(--mono);">DISMISS</button>
+    </div>
+</div>
+
+<script>
+    const ITEMS = [
+        { name: "Shattered Blade", rarity: "common" },
+        { name: "Witch's Thread", rarity: "magic" },
+        { name: "Ancient Relic", rarity: "rare" },
+        { name: "Dragon Heart", rarity: "epic" },
+        { name: "Abyssal Essence", rarity: "legend" },
+        { name: "Cursed Bone", rarity: "rare" },
+        { name: "Void Fragment", rarity: "epic" }
+    ];
+
+    let cube = [];
+
+    function renderInv() {
+        const list = document.getElementById('invList');
+        list.innerHTML = ITEMS.map(item => `
+            <div class="item-row" onclick="addCube(${JSON.stringify(item).replace(/"/g, '&quot;')})">
+                <span class="item-name rarity-text" style="color: var(--r-${item.rarity})">${item.name.toUpperCase()}</span>
+                <span style="font-family: var(--mono); font-size: 10px; color: #3e4c6a;">${item.rarity.toUpperCase()}</span>
+            </div>
+        `).join('');
+    }
+
+    function addCube(item) {
+        if(cube.length >= 8) return;
+        cube.push(item);
+        drawCube();
+    }
+
+    function removeAt(idx) {
+        cube.splice(idx, 1);
+        drawCube();
+    }
+
+    function drawCube() {
+        const slots = document.querySelectorAll('.forge-slot');
+        slots.forEach((s, i) => {
+            if(cube[i]) {
+                s.innerText = cube[i].name;
+                s.style.color = `var(--r-${cube[i].rarity})`;
+                s.classList.add('rarity-text');
+            } else {
+                s.innerText = "";
+                s.classList.remove('rarity-text');
+            }
+        });
+    }
+
+    const btn = document.getElementById('btnTransmute');
+    btn.onclick = () => {
+        if(cube.length === 0) return;
+        document.getElementById('altar').classList.add('is-animating');
+        btn.disabled = true;
+
+        setTimeout(() => {
+            document.getElementById('altar').classList.remove('is-animating');
+            showResult();
+            cube = [];
+            drawCube();
+            btn.disabled = false;
+        }, 2000);
+    };
+
+    function showResult() {
+        const overlay = document.getElementById('revealOverlay');
+        const resName = document.getElementById('resName');
+        resName.innerText = "HEAVENLY JUDGEMENT";
+        resName.style.color = "var(--r-legend)";
+        overlay.style.display = 'flex';
+    }
+
+    function hideResult() {
+        document.getElementById('revealOverlay').style.display = 'none';
+    }
+
+    renderInv();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,58 @@
+export const STAGES = [
+  {
+    id: 'stage_1',
+    floor: 1,
+    name: '탑의 입구',
+    subtitle: '망자의 묘역',
+    waves: ['grave_rat', 'grave_zombie', 'bone_scout', 'crypt_keeper', 'grave_lord'],
+  },
+  {
+    id: 'stage_2',
+    floor: 2,
+    name: '잿불 회랑',
+    subtitle: '불길한 협곡',
+    waves: ['ash_imp', 'cinder_hound', 'ash_imp', 'flame_shaman', 'lava_brute', 'ember_tyrant'],
+  },
+  {
+    id: 'stage_3',
+    floor: 3,
+    name: '천뢰 계단',
+    subtitle: '폭풍 절벽',
+    waves: ['storm_wisp', 'thunder_raptor', 'storm_wisp', 'volt_hunter', 'thunder_raptor', 'tempest_golem', 'sky_serpent'],
+  },
+  {
+    id: 'stage_4',
+    floor: 4,
+    name: '부패의 온실',
+    subtitle: '역병 습지',
+    waves: ['bog_slime', 'venom_spider', 'bog_slime', 'rot_druid', 'venom_spider', 'rot_druid', 'swamp_behemoth', 'plague_queen'],
+  },
+  {
+    id: 'stage_5',
+    floor: 5,
+    name: '서리의 성소',
+    subtitle: '한기의 장막',
+    waves: ['frost_bat', 'ice_sentry', 'frost_bat', 'frost_witch', 'ice_sentry', 'frost_witch', 'frost_bat', 'glacier_titan', 'winter_monarch'],
+  },
+  {
+    id: 'stage_6',
+    floor: 6,
+    name: '황금 사구층',
+    subtitle: '태양의 무덤길',
+    waves: ['sand_raider', 'scarab_swarm', 'sand_raider', 'sun_priest', 'scarab_swarm', 'sand_raider', 'sun_priest', 'scarab_swarm', 'dune_colossus', 'pharaoh_wraith'],
+  },
+  {
+    id: 'stage_7',
+    floor: 7,
+    name: '식월의 정원',
+    subtitle: '그림자 성채',
+    waves: ['moon_assassin', 'shade_archer', 'moon_assassin', 'night_blade', 'shade_archer', 'night_blade', 'moon_assassin', 'shade_archer', 'night_blade', 'void_reaper', 'eclipse_duke'],
+  },
+  {
+    id: 'stage_8',
+    floor: 8,
+    name: '심연의 옥좌',
+    subtitle: '균열 최심부',
+    waves: ['abyss_eye', 'rift_stalker', 'abyss_eye', 'void_magus', 'rift_stalker', 'void_magus', 'abyss_eye', 'rift_stalker', 'void_magus', 'abyss_colossus', 'void_magus', 'world_eater'],
+  },
+];

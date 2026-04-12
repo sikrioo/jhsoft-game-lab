@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>성좌의 각인판 - 단일 파일 프리뷰</title>
+  <style>
+    :root{
+      --bg:#071018;
+      --bg2:#0b1520;
+      --panel:rgba(10,18,28,.88);
+      --panel-2:rgba(255,255,255,.03);
+      --txt:#dbe6ff;
+      --muted:#8ea3c2;
+      --dim:#6e7f99;
+      --border:rgba(255,255,255,.10);
+      --cyan:rgba(50,246,255,.35);
+      --cyan-soft:rgba(50,246,255,.10);
+      --gold:#ffd46a;
+      --gold-2:#ffb85c;
+      --red:#ff8d9b;
+      --blue:#7cb8ff;
+      --green:#95f0b8;
+      --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+    }
+
+    *{box-sizing:border-box;}
+    html,body{height:100%;}
+    body{
+      margin:0;
+      color:var(--txt);
+      background:
+        radial-gradient(circle at 20% 10%, rgba(124,184,255,.10), transparent 24%),
+        radial-gradient(circle at 78% 18%, rgba(255,212,106,.10), transparent 22%),
+        radial-gradient(circle at 50% 120%, rgba(70,120,255,.08), transparent 28%),
+        linear-gradient(180deg, #04080d 0%, #08111a 45%, #09131d 100%);
+      font-family:var(--mono);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+      overflow:hidden;
+    }
+
+    body::before{
+      content:"";
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      background:
+        linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+      background-size: 100% 3px, 3px 100%;
+      opacity:.04;
+      mix-blend-mode:screen;
+    }
+
+    .screen{
+      width:min(980px, 100%);
+      border:1px solid var(--border);
+      border-radius:18px;
+      overflow:hidden;
+      background:rgba(3,7,12,.78);
+      box-shadow:
+        0 25px 80px rgba(0,0,0,.45),
+        0 0 0 1px rgba(255,255,255,.03) inset,
+        0 0 40px rgba(50,246,255,.04);
+      backdrop-filter: blur(8px);
+    }
+
+    .header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:12px;
+      padding:14px 16px;
+      border-bottom:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(255,255,255,.04), transparent);
+    }
+
+    .titleBox{
+      display:grid;
+      gap:5px;
+    }
+
+    .eyebrow{
+      font-size:11px;
+      color:var(--muted);
+      letter-spacing:.4px;
+    }
+
+    .title{
+      font-size:15px;
+      font-weight:700;
+      color:#edf4ff;
+      letter-spacing:.3px;
+    }
+
+    .subtitle{
+      font-size:11px;
+      color:var(--dim);
+      line-height:1.45;
+    }
+
+    .headMeta{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      color:var(--muted);
+      font-size:11px;
+      white-space:nowrap;
+    }
+
+    .pill.gold{
+      color:var(--gold);
+      border-color:rgba(255,212,106,.26);
+      background:rgba(255,212,106,.08);
+      text-shadow:0 0 12px rgba(255,212,106,.10);
+    }
+
+    .content{
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap:14px;
+      padding:14px;
+    }
+
+    .block{
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:12px;
+      background:rgba(0,0,0,.20);
+      box-shadow:0 0 0 1px rgba(255,255,255,.02) inset;
+    }
+
+    .hd{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      margin-bottom:10px;
+      color:var(--muted);
+      font-size:12px;
+    }
+
+    .lore{
+      color:#c8d5ea;
+      font-size:12px;
+      line-height:1.7;
+      padding:10px 11px;
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      background:rgba(255,255,255,.02);
+    }
+
+    .altar{
+      display:grid;
+      gap:12px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:16px;
+      padding:12px;
+      background:
+        radial-gradient(circle at 50% 0%, rgba(255,212,106,.08), transparent 34%),
+        radial-gradient(circle at 50% 100%, rgba(124,184,255,.05), transparent 35%),
+        linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.01));
+    }
+
+    .resourceRow{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+
+    .resourceCard{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      background:rgba(255,255,255,.02);
+      padding:10px 11px;
+      display:grid;
+      gap:4px;
+    }
+
+    .resourceCard .k{font-size:11px;color:var(--muted);}
+    .resourceCard .v{font-size:16px;font-weight:700;color:var(--gold);text-shadow:0 0 10px rgba(255,212,106,.10);}
+
+    .viewport{
+      position:relative;
+      height:126px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,212,106,.08), transparent 32%),
+        linear-gradient(180deg, rgba(0,0,0,.72), rgba(8,14,22,.94));
+      box-shadow:
+        inset 0 0 40px rgba(0,0,0,.6),
+        inset 0 0 20px rgba(255,212,106,.04);
+    }
+
+    .viewport::before{
+      content:"";
+      position:absolute;
+      inset:0;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(124,184,255,.06), transparent 45%),
+        linear-gradient(180deg, rgba(255,255,255,.03), transparent 18%, transparent 82%, rgba(255,255,255,.02));
+      pointer-events:none;
+      z-index:1;
+    }
+
+    .focusLine{
+      position:absolute;
+      left:10px;
+      right:10px;
+      top:50%;
+      transform:translateY(-50%);
+      height:0;
+      border-top:1px solid rgba(255,212,106,.22);
+      box-shadow:0 0 12px rgba(255,212,106,.12);
+      z-index:4;
+      pointer-events:none;
+    }
+
+    .mask{
+      position:absolute;
+      left:0; width:100%; height:32px; z-index:3; pointer-events:none;
+    }
+
+    .mask.top{top:0;background:linear-gradient(180deg, rgba(7,12,18,.98), rgba(7,12,18,0));}
+    .mask.bottom{bottom:0;background:linear-gradient(0deg, rgba(7,12,18,.98), rgba(7,12,18,0));}
+
+    .runeTrack{
+      position:absolute;
+      top:0;
+      left:0;
+      width:100%;
+      transform:translateY(0);
+      z-index:2;
+    }
+
+    .runeTrack.resonating{
+      animation: rune-stop 5.3s cubic-bezier(.2,0,.1,1) forwards;
+    }
+
+    @keyframes rune-stop{
+      0%{transform:translateY(0); filter:blur(0px);}
+      12%{filter:blur(1.5px);}
+      78%{filter:blur(.2px);}
+      85%{transform:translateY(var(--target));}
+      92%{transform:translateY(calc(var(--target) - 30px));}
+      97%{transform:translateY(calc(var(--target) + 10px));}
+      100%{transform:translateY(var(--target)); filter:blur(0px);}
+    }
+
+    .rune{
+      height:126px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:5px;
+      color:#7386a3;
+      text-align:center;
+      text-shadow:0 0 10px rgba(0,0,0,.85);
+      transition:.35s ease;
+      padding:0 12px;
+    }
+
+    .runeMark{font-size:29px;line-height:1;}
+    .runeName{font-size:15px;font-weight:700;letter-spacing:.2px;}
+    .runeDesc{font-size:10px;color:#92a6c7;}
+
+    .is-jackpot{color:var(--gold-2);text-shadow:0 0 18px rgba(255,184,92,.26);}
+    .is-gold{color:#ffe39e;text-shadow:0 0 16px rgba(255,212,106,.20);}
+    .is-item{color:#dbe8ff;text-shadow:0 0 12px rgba(124,184,255,.18);}
+    .is-fail{color:#846671;text-shadow:none;}
+
+    .win-focus{transform:scale(1.06);filter:saturate(1.08);}
+    .win-focus.is-jackpot{animation:pulse 1.5s ease-in-out infinite;}
+    @keyframes pulse{0%,100%{transform:scale(1.04)}50%{transform:scale(1.10)}}
+
+    .controlRow{
+      display:grid;
+      grid-template-columns:repeat(4,1fr);
+      gap:8px;
+    }
+
+    button{
+      appearance:none;
+      border:1px solid var(--border);
+      background:rgba(255,255,255,.03);
+      color:#cdd9ee;
+      border-radius:10px;
+      padding:9px 10px;
+      font:600 11px var(--mono);
+      cursor:pointer;
+      transition:.18s ease;
+    }
+
+    button:hover{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.18);color:#edf4ff;}
+    button:active{transform:translateY(1px);}
+    button:disabled{opacity:.45;cursor:not-allowed;}
+
+    .spinBtn{
+      width:100%;
+      border-radius:12px;
+      padding:13px 14px;
+      color:var(--gold);
+      border-color:rgba(255,212,106,.30);
+      background:linear-gradient(180deg, rgba(255,212,106,.12), rgba(255,212,106,.04));
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+      font-size:13px;
+      font-weight:700;
+      letter-spacing:.2px;
+    }
+
+    .spinBtn:hover:not(:disabled){
+      border-color:rgba(255,212,106,.44);
+      background:linear-gradient(180deg, rgba(255,212,106,.18), rgba(255,212,106,.07));
+      box-shadow:0 0 20px rgba(255,212,106,.10);
+    }
+
+    .msg{
+      min-height:18px;
+      text-align:center;
+      font-size:11px;
+      font-weight:700;
+      color:#bac8de;
+    }
+    .msg.good{color:var(--gold);text-shadow:0 0 10px rgba(255,212,106,.14);}
+    .msg.item{color:#dce8ff;}
+    .msg.bad{color:#95a2b6;}
+
+    .sideCol{
+      display:grid;
+      gap:14px;
+      align-content:start;
+    }
+
+    .oddsGrid{
+      display:grid;
+      gap:8px;
+    }
+
+    .oddsCard{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      padding:10px;
+      background:rgba(255,255,255,.02);
+      display:grid;
+      gap:4px;
+    }
+
+    .oddsTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+    }
+
+    .oddsName{font-size:12px;font-weight:700;color:#ebf2ff;}
+    .oddsDesc{font-size:10px;color:var(--muted);line-height:1.45;}
+    .oddsRate{font-size:10px;color:var(--dim);}
+    .jackpot{border-color:rgba(255,184,92,.28);background:rgba(255,184,92,.05);}
+    .gold{border-color:rgba(255,212,106,.18);}
+    .item{border-color:rgba(124,184,255,.18);}
+    .fail{border-color:rgba(255,141,155,.16);}
+
+    .note{
+      font-size:11px;
+      color:var(--muted);
+      line-height:1.6;
+    }
+
+    .quote{
+      padding:10px 12px;
+      border-left:3px solid rgba(255,212,106,.34);
+      background:rgba(255,255,255,.02);
+      border-radius:0 10px 10px 0;
+      color:#cfdcf0;
+      font-size:12px;
+      line-height:1.65;
+    }
+
+    @media (max-width: 860px){
+      .content{grid-template-columns:1fr;}
+      .resourceRow{grid-template-columns:1fr;}
+    }
+  </style>
+</head>
+<body>
+  <div class="screen">
+    <div class="header">
+      <div class="titleBox">
+        <div class="eyebrow">MUD UI PREVIEW · GAMBLING TAB</div>
+        <div class="title">성좌의 각인판</div>
+        <div class="subtitle">도박장 깊숙한 곳에 놓인 고대 점성 유물. 구슬은 떨어지고, 사람들은 그것을 운이라 부른다.</div>
+      </div>
+      <div class="headMeta">
+        <span class="pill">도박장</span>
+        <span class="pill gold">판타지 재해석</span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="block">
+        <div class="hd"><span>ALTAR / PLAY</span><span>single-file prototype</span></div>
+        <div class="lore">
+          검은 성운암을 깎아 만든 세로 석판이다. 표면에는 별자리의 홈과 작은 못들이 촘촘히 박혀 있어,
+          성운석 구슬이 부딪힐 때마다 얇은 금속성 울림이 퍼진다. 도박사들은 이 장치가 단순한 놀이기구가 아니라
+          잠시 미래의 결을 드러내는 관측기라고 믿는다.
+        </div>
+
+        <div class="altar" style="margin-top:12px;">
+          <div class="resourceRow">
+            <div class="resourceCard">
+              <div class="k">보유 금화</div>
+              <div class="v"><span id="goldTxt">1000</span> G</div>
+            </div>
+            <div class="resourceCard">
+              <div class="k">현재 공헌량</div>
+              <div class="v"><span id="betTxt">100</span> G</div>
+            </div>
+          </div>
+
+          <div class="viewport">
+            <div id="runeTrack" class="runeTrack"></div>
+            <div class="mask top"></div>
+            <div class="mask bottom"></div>
+            <div class="focusLine"></div>
+          </div>
+
+          <div class="controlRow">
+            <button type="button" data-bet="-50">-50</button>
+            <button type="button" data-bet="-10">-10</button>
+            <button type="button" data-bet="10">+10</button>
+            <button type="button" data-bet="50">+50</button>
+          </div>
+
+          <button id="spinBtn" type="button" class="spinBtn">성운석 공헌하기</button>
+          <div id="msg" class="msg">석판은 아직 잠잠하다.</div>
+        </div>
+      </div>
+
+      <div class="sideCol">
+        <div class="block">
+          <div class="hd"><span>RESULT TABLE</span><span>theme fit</span></div>
+          <div class="oddsGrid">
+            <div class="oddsCard jackpot">
+              <div class="oddsTop"><div class="oddsName">왕성의 징조</div><div class="oddsRate">10x</div></div>
+              <div class="oddsDesc">드물게 나타나는 최상위 징조. 강한 황금빛과 함께 크게 반응한다.</div>
+            </div>
+            <div class="oddsCard gold">
+              <div class="oddsTop"><div class="oddsName">황금 성좌</div><div class="oddsRate">2x</div></div>
+              <div class="oddsDesc">금화가 되돌아온다. 도박장 손님들이 가장 좋아하는 무난한 결과.</div>
+            </div>
+            <div class="oddsCard gold">
+              <div class="oddsTop"><div class="oddsName">미약한 회수</div><div class="oddsRate">1x</div></div>
+              <div class="oddsDesc">잃지도 벌지도 않는다. 석판이 잠시 눈을 뜨고 다시 감는 수준.</div>
+            </div>
+            <div class="oddsCard item">
+              <div class="oddsTop"><div class="oddsName">달이슬 약초 / 별숨 환약</div><div class="oddsRate">ITEM</div></div>
+              <div class="oddsDesc">순수 금화 대신 소모 아이템이 걸린다. MUD 인벤토리 연동용으로 어울린다.</div>
+            </div>
+            <div class="oddsCard fail">
+              <div class="oddsTop"><div class="oddsName">침묵의 배열</div><div class="oddsRate">FAIL</div></div>
+              <div class="oddsDesc">석판이 아무 반응도 보이지 않는다. 연출상 가장 무난한 꽝 처리.</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="block">
+          <div class="hd"><span>WORLD NOTE</span><span>fantasy tone</span></div>
+          <div class="quote">“이건 돈을 거는 자리가 아니지. 네가 오늘 어느 별 아래에 서 있는지를 확인하는 자리다.”</div>
+          <div class="note" style="margin-top:10px;">
+            룰렛이나 파칭코를 그대로 부르면 현대적 냄새가 강해지는데,
+            이 버전은 <b>도박장 내부의 고대 점성 장치</b>처럼 보이게 잡았다.
+            나중에 middle.html 탭 안으로 넣을 때도 기존 모노톤 UI와 큰 이질감 없이 붙을 수 있게 의도했다.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const outcomes = [
+      { key:'jackpot', mark:'✦', name:'왕성의 징조', desc:'10배 배당', payout:10, item:null, css:'is-jackpot', msgType:'good' },
+      { key:'gold2', mark:'☼', name:'황금 성좌', desc:'2배 배당', payout:2, item:null, css:'is-gold', msgType:'good' },
+      { key:'gold1', mark:'☽', name:'미약한 회수', desc:'1배 회수', payout:1, item:null, css:'is-gold', msgType:'good' },
+      { key:'herb', mark:'☘', name:'달이슬 약초', desc:'아이템 획득', payout:0, item:'달이슬 약초', css:'is-item', msgType:'item' },
+      { key:'pill', mark:'◈', name:'별숨 환약', desc:'아이템 획득', payout:0, item:'별숨 환약', css:'is-item', msgType:'item' },
+      { key:'fail', mark:'☍', name:'침묵의 배열', desc:'무효', payout:0, item:null, css:'is-fail', msgType:'bad' }
+    ];
+
+    const runeTrack = document.getElementById('runeTrack');
+    const goldTxt = document.getElementById('goldTxt');
+    const betTxt = document.getElementById('betTxt');
+    const msg = document.getElementById('msg');
+    const spinBtn = document.getElementById('spinBtn');
+    const slotH = 126;
+
+    let gold = 1000;
+    let bet = 100;
+    let pool = [];
+
+    function initRunes(){
+      let html = '';
+      for(let i=0;i<15;i++){
+        outcomes.forEach(o => {
+          html += `
+            <div class="rune ${o.css}" data-key="${o.key}">
+              <div class="runeMark">${o.mark}</div>
+              <div class="runeName">${o.name}</div>
+              <div class="runeDesc">${o.desc}</div>
+            </div>
+          `;
+        });
+      }
+      runeTrack.innerHTML = html;
+      pool = Array.from(runeTrack.querySelectorAll('.rune'));
+    }
+
+    function updateUI(){
+      goldTxt.textContent = gold;
+      betTxt.textContent = bet;
+    }
+
+    function showMsg(text, kind=''){
+      msg.textContent = text;
+      msg.className = 'msg';
+      if(kind) msg.classList.add(kind);
+    }
+
+    function changeBet(delta){
+      const next = bet + delta;
+      if(next < 10) return;
+      if(next > 500) return;
+      bet = next;
+      updateUI();
+    }
+
+    function spin(){
+      if(gold < bet){
+        showMsg('금화가 부족하다.', 'bad');
+        return;
+      }
+
+      gold -= bet;
+      updateUI();
+      spinBtn.disabled = true;
+      pool.forEach(el => el.classList.remove('win-focus'));
+
+      const randIdx = Math.floor(Math.random() * outcomes.length);
+      const result = outcomes[randIdx];
+      const targetIdx = (outcomes.length * 12) + randIdx;
+      const offset = -(targetIdx * slotH);
+
+      runeTrack.style.setProperty('--target', `${offset}px`);
+      runeTrack.classList.remove('resonating');
+      void runeTrack.offsetWidth;
+      runeTrack.classList.add('resonating');
+
+      setTimeout(() => {
+        const winner = pool[targetIdx];
+        if(winner) winner.classList.add('win-focus');
+
+        if(result.payout > 0){
+          const gained = bet * result.payout;
+          gold += gained;
+          showMsg(`+ ${gained} G · ${result.name}`, result.msgType);
+        } else if(result.item){
+          showMsg(`[${result.item}] 획득`, result.msgType);
+        } else {
+          showMsg('석판이 침묵한다.', result.msgType);
+        }
+
+        updateUI();
+        spinBtn.disabled = false;
+      }, 5300);
+    }
+
+    document.querySelectorAll('[data-bet]').forEach(btn => {
+      btn.addEventListener('click', () => changeBet(Number(btn.dataset.bet)));
+    });
+
+    spinBtn.addEventListener('click', spin);
+
+    initRunes();
+    updateUI();
+  </script>
+</body>
+</html>

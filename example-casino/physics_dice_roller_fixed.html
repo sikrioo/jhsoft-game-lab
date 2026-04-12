@@ -1,0 +1,207 @@
+
+<div id="dice-app" style="position:relative;width:100%;height:600px;overflow:hidden;border-radius:var(--border-radius-lg);border:0.5px solid var(--color-border-tertiary);">
+  <canvas id="c" style="width:100%;height:100%;display:block;"></canvas>
+  <div id="ui" style="position:absolute;top:0;left:0;right:0;bottom:0;pointer-events:none;">
+    <div id="result-display" style="position:absolute;top:20px;left:50%;transform:translateX(-50%);font-size:18px;font-weight:500;color:var(--color-text-primary);background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);padding:8px 24px;border-radius:var(--border-radius-lg);opacity:0;transition:opacity 0.4s;">
+      <span id="result-text"></span>
+    </div>
+    <div style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);display:flex;gap:12px;pointer-events:all;">
+      <button id="roll-btn" style="padding:12px 32px;font-size:15px;font-weight:500;border-radius:var(--border-radius-lg);cursor:pointer;background:var(--color-background-primary);border:0.5px solid var(--color-border-secondary);color:var(--color-text-primary);">주사위 굴리기</button>
+      <button id="reset-btn" style="padding:12px 20px;font-size:15px;font-weight:500;border-radius:var(--border-radius-lg);cursor:pointer;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);color:var(--color-text-secondary);">리셋</button>
+    </div>
+    <div style="position:absolute;bottom:72px;left:50%;transform:translateX(-50%);font-size:12px;color:var(--color-text-secondary);">드래그로 시점 조정</div>
+    <div id="history" style="position:absolute;top:20px;right:20px;font-size:13px;color:var(--color-text-secondary);text-align:right;line-height:1.8;"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+(function(){
+const canvas = document.getElementById('c');
+const container = document.getElementById('dice-app');
+
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true, alpha:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const W = container.clientWidth, H = container.clientHeight;
+renderer.setSize(W, H);
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(45, W/H, 0.1, 100);
+camera.position.set(0, 10, 14);
+camera.lookAt(0, 0, 0);
+
+scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
+dirLight.position.set(5, 12, 8);
+dirLight.castShadow = true;
+dirLight.shadow.camera.near = 0.1;
+dirLight.shadow.camera.far = 50;
+dirLight.shadow.camera.left = -8; dirLight.shadow.camera.right = 8;
+dirLight.shadow.camera.top = 8; dirLight.shadow.camera.bottom = -8;
+dirLight.shadow.mapSize.width = 2048; dirLight.shadow.mapSize.height = 2048;
+scene.add(dirLight);
+const fillLight = new THREE.PointLight(0xffeedd, 0.4, 30);
+fillLight.position.set(-5, 5, -5);
+scene.add(fillLight);
+
+const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(30,30), new THREE.MeshLambertMaterial({color:0xf0ede8}));
+floorMesh.rotation.x = -Math.PI/2; floorMesh.position.y = -0.01; floorMesh.receiveShadow = true;
+scene.add(floorMesh);
+const grid = new THREE.GridHelper(20,20,0xcccccc,0xcccccc);
+grid.position.y = 0.001; grid.material.opacity = 0.3; grid.material.transparent = true;
+scene.add(grid);
+
+const world = new CANNON.World();
+world.gravity.set(0,-25,0);
+world.broadphase = new CANNON.NaiveBroadphase();
+world.solver.iterations = 20;
+world.solver.tolerance = 0.001;
+
+const groundMat = new CANNON.Material('ground');
+const diceMat = new CANNON.Material('dice');
+world.addContactMaterial(new CANNON.ContactMaterial(groundMat, diceMat, {friction:0.4, restitution:0.35}));
+
+const groundBody = new CANNON.Body({mass:0, material:groundMat});
+groundBody.addShape(new CANNON.Plane());
+groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0), -Math.PI/2);
+world.addBody(groundBody);
+
+[{p:[0,5,-8],q:[0,0,0,1]},{p:[0,5,8],q:[0,1,0,0]},{p:[-8,5,0],q:[0,0.707,0,0.707]},{p:[8,5,0],q:[0,-0.707,0,0.707]}]
+.forEach(w => {
+  const b = new CANNON.Body({mass:0, material:groundMat});
+  b.addShape(new CANNON.Plane());
+  b.position.set(...w.p); b.quaternion.set(...w.q);
+  world.addBody(b);
+});
+
+function makeTex(n) {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 256;
+  const ctx = cv.getContext('2d');
+  ctx.fillStyle='#ffffff';
+  ctx.beginPath(); ctx.roundRect(8,8,240,240,24); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.08)'; ctx.lineWidth=2; ctx.stroke();
+  ctx.fillStyle='#cc2222';
+  const r=22;
+  ({1:[[128,128]],2:[[80,80],[176,176]],3:[[80,80],[128,128],[176,176]],
+    4:[[80,80],[176,80],[80,176],[176,176]],5:[[80,80],[176,80],[128,128],[80,176],[176,176]],
+    6:[[80,75],[176,75],[80,128],[176,128],[80,181],[176,181]]})[n]
+  .forEach(([x,y])=>{ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fill();});
+  return new THREE.CanvasTexture(cv);
+}
+
+// Three.js BoxGeometry face order: +X, -X, +Y, -Y, +Z, -Z
+// Standard dice: opposite faces sum to 7
+// We assign: +X=2, -X=5, +Y=1, -Y=6, +Z=3, -Z=4
+// So getTopFace checks which local axis points most upward in world space
+// and returns the face number on that local face.
+const faceOrder = [2, 5, 1, 6, 3, 4]; // +X,-X,+Y,-Y,+Z,-Z
+const faceMats = faceOrder.map(n => new THREE.MeshLambertMaterial({map:makeTex(n)}));
+
+// Local axes for each material slot
+const localAxes = [
+  new THREE.Vector3(1,0,0),   // +X → face index 0 → faceOrder[0]=2
+  new THREE.Vector3(-1,0,0),  // -X → face index 1 → faceOrder[1]=5
+  new THREE.Vector3(0,1,0),   // +Y → face index 2 → faceOrder[2]=1
+  new THREE.Vector3(0,-1,0),  // -Y → face index 3 → faceOrder[3]=6
+  new THREE.Vector3(0,0,1),   // +Z → face index 4 → faceOrder[4]=3
+  new THREE.Vector3(0,0,-1),  // -Z → face index 5 → faceOrder[5]=4
+];
+
+let diceMesh=null, diceBody=null, rolling=false, settled=false, settleTimer=0, rollHistory=[];
+
+function createDice() {
+  if(diceMesh){scene.remove(diceMesh); world.remove(diceBody);}
+  diceMesh = new THREE.Mesh(new THREE.BoxGeometry(2,2,2), faceMats);
+  diceMesh.castShadow=true; diceMesh.receiveShadow=true;
+  scene.add(diceMesh);
+  diceBody = new CANNON.Body({mass:1, material:diceMat, linearDamping:0.1, angularDamping:0.1});
+  diceBody.addShape(new CANNON.Box(new CANNON.Vec3(1,1,1)));
+  diceBody.position.set(0,5,0);
+  world.addBody(diceBody);
+  rolling=false; settled=false; settleTimer=0;
+  document.getElementById('result-display').style.opacity='0';
+}
+createDice();
+
+function rollDice() {
+  if(rolling) return;
+  rolling=true; settled=false; settleTimer=0;
+  document.getElementById('result-display').style.opacity='0';
+  diceBody.position.set((Math.random()-.5)*4, 6+Math.random()*2, (Math.random()-.5)*4);
+  diceBody.velocity.set((Math.random()-.5)*8, -2+Math.random()*2, (Math.random()-.5)*8);
+  diceBody.angularVelocity.set((Math.random()-.5)*30,(Math.random()-.5)*30,(Math.random()-.5)*30);
+  diceBody.wakeUp();
+}
+
+function getTopFace() {
+  // Get the dice quaternion from Three.js mesh (already synced)
+  const q = diceMesh.quaternion;
+  const up = new THREE.Vector3(0,1,0);
+  let best=-1, bestDot=-Infinity;
+  localAxes.forEach((axis, i) => {
+    const world = axis.clone().applyQuaternion(q);
+    const d = world.dot(up);
+    if(d > bestDot){ bestDot=d; best=i; }
+  });
+  return faceOrder[best];
+}
+
+const labels=['','⚀','⚁','⚂','⚃','⚄','⚅'];
+function showResult(face) {
+  document.getElementById('result-text').textContent=`결과: ${face} ${labels[face]}`;
+  document.getElementById('result-display').style.opacity='1';
+  rollHistory.unshift(face);
+  if(rollHistory.length>8) rollHistory.pop();
+  document.getElementById('history').innerHTML=
+    '<div style="margin-bottom:4px;font-size:11px;color:var(--color-text-tertiary);">최근 기록</div>'+
+    rollHistory.map(n=>`<div style="font-size:13px;">${n} ${labels[n]}</div>`).join('');
+}
+
+let orbitTheta=0, orbitPhi=0.5, isDragging=false, prevMouse={x:0,y:0};
+container.addEventListener('mousedown',e=>{isDragging=true;prevMouse={x:e.clientX,y:e.clientY};});
+window.addEventListener('mouseup',()=>{isDragging=false;});
+window.addEventListener('mousemove',e=>{
+  if(!isDragging)return;
+  orbitTheta-=(e.clientX-prevMouse.x)*0.008;
+  orbitPhi=Math.max(0.1,Math.min(1.4,orbitPhi-(e.clientY-prevMouse.y)*0.008));
+  prevMouse={x:e.clientX,y:e.clientY};
+});
+container.addEventListener('touchstart',e=>{isDragging=true;prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};},{passive:true});
+window.addEventListener('touchend',()=>{isDragging=false;});
+window.addEventListener('touchmove',e=>{
+  if(!isDragging)return;
+  orbitTheta-=(e.touches[0].clientX-prevMouse.x)*0.008;
+  orbitPhi=Math.max(0.1,Math.min(1.4,orbitPhi-(e.touches[0].clientY-prevMouse.y)*0.008));
+  prevMouse={x:e.touches[0].clientX,y:e.touches[0].clientY};
+},{passive:true});
+
+document.getElementById('roll-btn').onclick=rollDice;
+document.getElementById('reset-btn').onclick=()=>{createDice();rollHistory=[];document.getElementById('history').innerHTML='';};
+
+const fixedStep=1/60; let lastTime=performance.now();
+function animate(now){
+  requestAnimationFrame(animate);
+  const dt=Math.min((now-lastTime)/1000,0.05); lastTime=now;
+  if(rolling&&diceBody){
+    world.step(fixedStep,dt,3);
+    const p=diceBody.position, q=diceBody.quaternion;
+    diceMesh.position.set(p.x,Math.max(p.y,1),p.z);
+    diceMesh.quaternion.set(q.x,q.y,q.z,q.w);
+    const speed=diceBody.velocity.length()+diceBody.angularVelocity.length();
+    if(speed<0.3&&p.y<2){ settleTimer+=dt; if(settleTimer>0.6&&!settled){settled=true;rolling=false;showResult(getTopFace());} }
+    else settleTimer=0;
+  } else if(diceMesh) diceMesh.rotation.y+=0.005;
+  const cx=Math.sin(orbitTheta)*Math.cos(orbitPhi)*18;
+  const cy=Math.sin(orbitPhi)*18;
+  const cz=Math.cos(orbitTheta)*Math.cos(orbitPhi)*18;
+  camera.position.set(cx,cy,cz); camera.lookAt(0,1,0);
+  renderer.render(scene,camera);
+}
+animate(performance.now());
+window.addEventListener('resize',()=>{const w=container.clientWidth,h=container.clientHeight;camera.aspect=w/h;camera.updateProjectionMatrix();renderer.setSize(w,h);});
+})();
+</script>

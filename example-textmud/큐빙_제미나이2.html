@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Ancient Transmutation Cube</title>
+    <style>
+        /* 1. CSS 변수 및 베이스 (제공된 스타일 기반) */
+        :root {
+            --bg: #05070a;
+            --panel: #0b0f18;
+            --txt: #d7e0ff;
+            --muted: #5c6b89;
+            --border: rgba(255, 255, 255, 0.05);
+            --sys: #ffd56a;
+            --move: #4aa3ff;
+            
+            /* 등급 색상 */
+            --r-common: #999;
+            --r-magic: #4aa3ff;
+            --r-rare: #ffd84a;
+            --r-legend: #ff9a3c;
+            
+            --gold-gradient: linear-gradient(145deg, #ffd56a, #b58916);
+        }
+
+        body {
+            height: 100vh;
+            margin: 0;
+            background: var(--bg);
+            background-image: 
+                radial-gradient(circle at 50% 50%, rgba(15, 22, 35, 1) 0%, rgba(5, 7, 10, 1) 100%);
+            color: var(--txt);
+            font-family: "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* 2. 메인 컨테이너 - 정갈한 사각형 박스 모델 */
+        .altar-container {
+            width: 460px;
+            background: #0d121d;
+            border: 1px solid #1e2636;
+            padding: 40px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.8);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 30px;
+        }
+
+        /* 모서리 장식 */
+        .altar-container::before, .altar-container::after {
+            content: '';
+            position: absolute;
+            width: 15px;
+            height: 15px;
+            border: 1px solid var(--muted);
+        }
+        .altar-container::before { top: 10px; left: 10px; border-right: 0; border-bottom: 0; }
+        .altar-container::after { bottom: 10px; right: 10px; border-left: 0; border-top: 0; }
+
+        .title-section {
+            text-align: center;
+        }
+
+        .title-section h1 {
+            font-size: 14px;
+            letter-spacing: 5px;
+            color: var(--muted);
+            margin: 0;
+            font-weight: 400;
+            text-transform: uppercase;
+        }
+
+        /* 3. 연성 영역 - 중앙 집중식 구조 */
+        .transmute-core {
+            height: 220px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        /* 중앙 슬롯 - 묵직한 금속 느낌 */
+        .main-forge {
+            width: 110px;
+            height: 110px;
+            background: #05070a;
+            border: 1px solid #2e3c5a;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 5;
+            transition: all 0.5s cubic-bezier(0.2, 1, 0.3, 1);
+        }
+
+        .main-forge img, .main-forge span {
+            font-size: 40px;
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.8));
+        }
+
+        /* 슬롯 하단 반사광 */
+        .forge-shadow {
+            position: absolute;
+            bottom: -20px;
+            width: 80px;
+            height: 10px;
+            background: rgba(0,0,0,0.5);
+            filter: blur(8px);
+            border-radius: 50%;
+        }
+
+        /* 주변 재료 슬롯 - 정갈한 배치 */
+        .material-grid {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            pointer-events: none;
+        }
+
+        .m-slot {
+            width: 48px;
+            height: 48px;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.05);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            opacity: 0.4;
+            transition: opacity 0.5s;
+        }
+
+        /* 4. 애니메이션 효과 (진동 대신 압축되는 느낌) */
+        .is-working .main-forge {
+            transform: scale(0.95);
+            border-color: var(--sys);
+            box-shadow: 0 0 40px rgba(255, 213, 106, 0.1);
+        }
+
+        /* 연성 중일 때 나타나는 기운 */
+        .energy-line {
+            position: absolute;
+            width: 1px;
+            height: 0%;
+            background: var(--sys);
+            opacity: 0;
+            transition: all 0.5s;
+        }
+        .is-working .energy-line {
+            height: 150px;
+            opacity: 0.5;
+            animation: energyFlow 1.5s infinite;
+        }
+
+        @keyframes energyFlow {
+            0% { transform: scaleY(0); opacity: 0; }
+            50% { transform: scaleY(1); opacity: 0.5; }
+            100% { transform: scaleY(0); opacity: 0; }
+        }
+
+        /* 5. 컨트롤 영역 */
+        .action-area {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .transmute-btn {
+            background: transparent;
+            border: 1px solid #3e4c6a;
+            padding: 16px;
+            color: var(--txt);
+            font-family: var(--mono);
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .transmute-btn:hover {
+            border-color: var(--sys);
+            color: var(--sys);
+            background: rgba(255, 213, 106, 0.03);
+        }
+
+        .transmute-btn:disabled {
+            opacity: 0.3;
+            cursor: wait;
+        }
+
+        /* 6. 로그 - 정갈한 텍스트 리스트 */
+        .history-log {
+            height: 80px;
+            border-top: 1px solid var(--border);
+            padding-top: 15px;
+            font-size: 12px;
+            color: var(--muted);
+            overflow-y: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .log-line {
+            display: flex;
+            justify-content: space-between;
+            animation: slideIn 0.4s ease-out;
+        }
+
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-5px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+
+        /* 결과 강조 애니메이션 */
+        .result-reveal {
+            animation: reveal 0.8s ease-out;
+        }
+        @keyframes reveal {
+            0% { filter: brightness(5); transform: scale(1.2); }
+            100% { filter: brightness(1); transform: scale(1); }
+        }
+    </style>
+</head>
+<body>
+
+<div class="altar-container" id="altar">
+    <div class="title-section">
+        <h1>Ancient Transmutation</h1>
+    </div>
+
+    <div class="transmute-core">
+        <div class="energy-line"></div>
+        
+        <div class="material-grid">
+            <div class="m-slot">🌑</div>
+            <div class="m-slot">🌑</div>
+        </div>
+
+        <div class="main-forge" id="mainForge">
+            <span id="itemIcon">?</span>
+        </div>
+        <div class="forge-shadow"></div>
+    </div>
+
+    <div class="action-area">
+        <button class="transmute-btn" id="cubeBtn">TRANSMUTE</button>
+        
+        <div class="history-log" id="logBox">
+            <div class="log-line"><span>연성 준비 완료</span><span>Ready</span></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const cubeBtn = document.getElementById('cubeBtn');
+    const altar = document.getElementById('altar');
+    const mainForge = document.getElementById('mainForge');
+    const itemIcon = document.getElementById('itemIcon');
+    const logBox = document.getElementById('logBox');
+
+    const ITEMS = [
+        { name: "무딘 납덩이", rarity: "common", icon: "🪙", chance: 60 },
+        { name: "정제된 강철", rarity: "magic", icon: "⛓️", chance: 25 },
+        { name: "심연의 칼날", rarity: "rare", icon: "⚔️", chance: 12 },
+        { name: "태양의 파편", rarity: "legend", icon: "☀️", chance: 3 }
+    ];
+
+    cubeBtn.addEventListener('click', () => {
+        // 연성 상태 시작
+        altar.classList.add('is-working');
+        cubeBtn.disabled = true;
+        itemIcon.style.opacity = "0.2";
+        
+        addLog("심연의 기운을 모으는 중...", "#5c6b89");
+
+        // 2초간 묵직한 딜레이 (진동 대신 정적인 에너지 응축)
+        setTimeout(() => {
+            altar.classList.remove('is-working');
+            const result = executeTransmutation();
+            displayResult(result);
+            cubeBtn.disabled = false;
+        }, 2000);
+    });
+
+    function executeTransmutation() {
+        const rand = Math.random() * 100;
+        let acc = 0;
+        for (let item of ITEMS) {
+            acc += item.chance;
+            if (rand <= acc) return item;
+        }
+        return ITEMS[0];
+    }
+
+    function displayResult(item) {
+        const color = `var(--r-${item.rarity})`;
+        
+        // 아이콘 교체 및 강렬한 등장 연출
+        itemIcon.innerText = item.icon;
+        itemIcon.style.opacity = "1";
+        mainForge.style.borderColor = color;
+        mainForge.classList.add('result-reveal');
+        
+        setTimeout(() => mainForge.classList.remove('result-reveal'), 800);
+
+        // 로그 기록
+        addLog(`${item.name} 연성 성공`, color);
+    }
+
+    function addLog(msg, color) {
+        const line = document.createElement('div');
+        line.className = 'log-line';
+        line.innerHTML = `<span style="color:${color}">${msg}</span><span>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit', second:'2-digit'})}</span>`;
+        
+        logBox.prepend(line);
+        if (logBox.children.length > 3) logBox.lastChild.remove();
+    }
+</script>
+
+</body>
+</html>

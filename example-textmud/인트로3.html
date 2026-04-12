@@ -1,0 +1,993 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Text MUD - Cinematic Prophets → Wakeup</title>
+  <style>
+    :root{
+      --bg:#000;
+      --fg:#e5e7eb; --dim:#9ca3af; --sys:#fbbf24; --blood:rgba(239,68,68,.92);
+
+      --line: rgba(255,255,255,.10);
+      --panelBg: rgba(0,0,0,.52);
+      --panelDim: rgba(0,0,0,.74);
+      --hl: rgba(251,191,36,.95);
+
+      --priest: rgba(251,191,36,.24);
+      --witch:  rgba(147,197,253,.20);
+      --black:  rgba(239,68,68,.22);
+    }
+
+    *{ box-sizing:border-box; }
+    body{ margin:0; background:var(--bg); color:var(--fg); overflow:hidden; }
+    .root{
+      position:relative; width:100vw; height:100vh; overflow:hidden;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      background:#000;
+    }
+
+    /* ===== Cinematic dressing ===== */
+    .grain{
+      position:absolute; inset:0; pointer-events:none; z-index:90;
+      opacity:.10; mix-blend-mode: overlay;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+    }
+    .vignette{
+      position:absolute; inset:-12%; pointer-events:none; z-index:80;
+      background: radial-gradient(circle, rgba(0,0,0,0) 36%, rgba(0,0,0,.86) 78%, rgba(0,0,0,1) 100%);
+      opacity:.95;
+    }
+    .letterboxTop, .letterboxBot{
+      position:absolute; left:0; right:0; height:9vh; z-index:95;
+      background:#000;
+      box-shadow: 0 14px 40px rgba(0,0,0,.65);
+      pointer-events:none;
+    }
+    .letterboxTop{ top:0; }
+    .letterboxBot{ bottom:0; }
+
+    /* ===== Fade / blackout ===== */
+    #fade{
+      position:absolute; inset:0; z-index:200;
+      background:#000; opacity:0; pointer-events:none;
+      transition: opacity 1100ms cubic-bezier(.2,.7,.2,1);
+    }
+    #fade.show{ opacity:1; }
+
+    /* ====== PART 1: Prophets Split Scene ====== */
+    #prophetsScene{
+      position:absolute; inset:0; z-index:30;
+      display:flex; flex-direction:column;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255,255,255,.06), rgba(0,0,0,0) 58%),
+        radial-gradient(circle at 16% 72%, rgba(239,68,68,.06), rgba(0,0,0,0) 62%),
+        radial-gradient(circle at 84% 72%, rgba(251,191,36,.06), rgba(0,0,0,0) 62%),
+        linear-gradient(180deg, rgba(0,0,0,.25), rgba(0,0,0,.82)),
+        #000;
+      padding-top: 9vh;
+      padding-bottom: 9vh;
+    }
+
+    #prophetsGrid{
+      flex: 1 1 auto;
+      display:grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 12px;
+      padding: 16px 16px 10px;
+      min-height:0;
+    }
+
+    .panel{
+      position:relative;
+      border:1px solid var(--line);
+      border-radius: 18px;
+      overflow:hidden;
+      background: var(--panelBg);
+      backdrop-filter: blur(8px);
+      box-shadow: 0 18px 55px rgba(0,0,0,.62);
+      transition: transform 900ms cubic-bezier(.2,.8,.2,1),
+                  filter 900ms cubic-bezier(.2,.8,.2,1),
+                  opacity 900ms cubic-bezier(.2,.8,.2,1),
+                  background 900ms cubic-bezier(.2,.8,.2,1);
+      min-height: 0;
+    }
+
+    .panel::before{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255,255,255,.08), rgba(0,0,0,0) 62%),
+        linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.78));
+      pointer-events:none;
+      opacity:.92;
+    }
+
+    .panelGlow{
+      position:absolute; inset:-20%;
+      pointer-events:none;
+      filter: blur(18px);
+      opacity:.40;
+      transform: translateZ(0);
+    }
+    .panel[data-role="priest"] .panelGlow{ background: radial-gradient(circle at 50% 30%, var(--priest), rgba(0,0,0,0) 62%); }
+    .panel[data-role="witch"]  .panelGlow{ background: radial-gradient(circle at 50% 30%, var(--witch),  rgba(0,0,0,0) 62%); }
+    .panel[data-role="black"]  .panelGlow{ background: radial-gradient(circle at 50% 30%, var(--black),  rgba(0,0,0,0) 62%); }
+
+    .panelInner{
+      position:relative;
+      height:100%;
+      padding: 16px 16px 14px;
+      display:flex; flex-direction:column;
+      gap: 12px;
+      min-height:0;
+    }
+
+    .panelHeader{
+      display:flex; align-items:flex-start; justify-content:space-between;
+      gap:10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(255,255,255,.08);
+    }
+
+    .role{
+      font-weight: 900;
+      letter-spacing:.14em;
+      font-size: 11px;
+      color: rgba(229,231,235,.62);
+      text-transform: uppercase;
+    }
+    .name{
+      margin-top: 5px;
+      font-size: 18px;
+      font-weight: 900;
+      letter-spacing:.02em;
+    }
+    .tag{
+      font-size:12px;
+      padding: 7px 11px;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:999px;
+      color: rgba(229,231,235,.68);
+      background: rgba(0,0,0,.25);
+      white-space:nowrap;
+    }
+
+    .panelBody{
+      flex:1 1 auto;
+      display:flex; flex-direction:column; gap: 12px;
+      min-height:0;
+    }
+
+    .visionBox{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius: 14px;
+      padding: 12px 12px;
+      background: rgba(0,0,0,.34);
+      line-height: 1.75;
+      color: rgba(229,231,235,.88);
+      min-height: 0;
+    }
+    .visionLine{
+      white-space: pre-wrap;
+      text-shadow: 0 0 18px rgba(0,0,0,.55);
+      font-size: 14px;
+      opacity:.0;
+      transform: translateY(6px);
+      transition: opacity 900ms ease, transform 900ms ease;
+    }
+    .visionLine.show{
+      opacity:1;
+      transform: translateY(0);
+    }
+
+    .clueBox{
+      border-left: 3px solid rgba(251,191,36,.55);
+      border-radius: 12px;
+      padding: 10px 12px;
+      background: rgba(251,191,36,.08);
+      color: rgba(251,191,36,.92);
+      line-height:1.65;
+      font-size: 13px;
+      opacity:.0;
+      transform: translateY(6px);
+      transition: opacity 900ms ease, transform 900ms ease;
+    }
+    .clueBox.show{ opacity:1; transform: translateY(0); }
+
+    .clueLabel{
+      letter-spacing:.12em;
+      font-size: 11px;
+      opacity:.85;
+      margin-bottom: 6px;
+    }
+
+    /* focus states */
+    .panel.dim{
+      opacity:.36;
+      filter: saturate(.75) brightness(.80);
+      background: var(--panelDim);
+      transform: scale(.985);
+    }
+    .panel.active{
+      opacity:1;
+      filter: saturate(1.15) brightness(1.05);
+      transform: scale(1.015);
+      box-shadow: 0 22px 70px rgba(0,0,0,.78);
+    }
+
+    /* Bottom caption area (cinematic subtitle) */
+    #prophetsCaption{
+      flex: 0 0 auto;
+      padding: 6px 16px 14px;
+    }
+    #pCapBox{
+      max-width: 980px;
+      margin: 0 auto;
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 18px;
+      padding: 14px 14px;
+      background: rgba(0,0,0,.58);
+      box-shadow: 0 18px 55px rgba(0,0,0,.55);
+      backdrop-filter: blur(8px);
+    }
+    #pCapTitle{
+      font-size: 12px;
+      color: rgba(229,231,235,.55);
+      letter-spacing:.14em;
+      margin-bottom: 8px;
+    }
+    #pCapText{
+      font-size: 18px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+      text-shadow: 0 0 18px rgba(0,0,0,.55);
+      min-height: 2.2em;
+    }
+    .blinkCursor::after{
+      content:"▍"; margin-left: 2px; opacity: .9;
+      animation: blink 1.1s step-end infinite;
+    }
+    @keyframes blink{ 50%{ opacity:0; } }
+
+    #skipHint{
+      margin-top: 10px;
+      font-size: 12px;
+      color: rgba(229,231,235,.50);
+      letter-spacing:.06em;
+      text-align:right;
+      user-select:none;
+    }
+
+    /* ====== PART 2: Wakeup Scene (your existing) ====== */
+    #wakeupScene{ position:absolute; inset:0; z-index:1; }
+    #wakeupScene.hidden{ display:none; }
+
+    .scene2{
+      position:relative; height:100vh; overflow:hidden;
+      background:#000; color:var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    #view{
+      position:absolute;
+      inset:0;
+      z-index:1;
+      transform: translateY(0px) scale(1.02);
+      will-change: transform;
+    }
+    #view.standUp{ animation: standUpAnim 2400ms ease-out forwards; }
+    @keyframes standUpAnim{
+      0%   { transform: translateY(0px)   scale(1.02); }
+      30%  { transform: translateY(-10px) scale(1.015); }
+      65%  { transform: translateY(-28px) scale(1.005); }
+      100% { transform: translateY(-44px) scale(1.0); }
+    }
+    .bg{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(circle at 50% 35%, rgba(40,10,10,.62), rgba(0,0,0,1) 62%),
+        radial-gradient(circle at 75% 60%, rgba(90,20,10,.22), rgba(0,0,0,0) 55%),
+        radial-gradient(circle at 25% 70%, rgba(70,10,20,.16), rgba(0,0,0,0) 55%),
+        linear-gradient(180deg, rgba(0,0,0,.12), rgba(0,0,0,.7));
+      filter: saturate(1.25) contrast(1.12);
+      transform: scale(1.02);
+    }
+    .noise{
+      position:absolute; inset:0; pointer-events:none; opacity:.10; mix-blend-mode: overlay;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+    }
+    #sub{
+      position:absolute; left:18px; top:16px; z-index:6;
+      font-size:12px; color: rgba(229,231,235,.55);
+      letter-spacing:.08em; opacity:0;
+      transition: opacity 1000ms ease;
+      pointer-events:none;
+    }
+    #sub.show{ opacity:1; }
+    #camera{
+      position:relative; z-index:2; height:100%;
+      filter: blur(0px);
+      transition: filter 2400ms ease;
+      will-change: filter;
+    }
+    #camera.maxBlur{ filter: blur(10px); }
+    #world.panLeft{ animation: panLeft 1600ms ease-in-out 1; }
+    #world.panRight{ animation: panRight 1600ms ease-in-out 1; }
+    @keyframes panLeft{
+      0%{ transform: translate(0,0); }
+      35%{ transform: translate(-14px, 2px); }
+      70%{ transform: translate(-6px, -1px); }
+      100%{ transform: translate(0,0); }
+    }
+    @keyframes panRight{
+      0%{ transform: translate(0,0); }
+      35%{ transform: translate(14px, 2px); }
+      70%{ transform: translate(6px, -1px); }
+      100%{ transform: translate(0,0); }
+    }
+    #world.shake{ animation: shake .32s linear 1; }
+    @keyframes shake{
+      0%{ transform: translate(0,0); }
+      20%{ transform: translate(-6px,2px); }
+      40%{ transform: translate(5px,-4px); }
+      60%{ transform: translate(-4px,-2px); }
+      80%{ transform: translate(6px,2px); }
+      100%{ transform: translate(0,0); }
+    }
+    .world{
+      max-width: 900px; margin: 0 auto;
+      padding: 56px 20px;
+      transform: translateY(22px);
+      transition: transform 1800ms ease, opacity 1400ms ease;
+      opacity:.88;
+      will-change: transform;
+    }
+    .world.rise{ transform: translateY(-10px); opacity:1; }
+
+    #overlayLayer{ position:absolute; inset:0; z-index:4; pointer-events:none; }
+    .overlayShard{
+      position:absolute;
+      transform: translate(-50%,-50%);
+      white-space: nowrap;
+      font-weight: 900;
+      letter-spacing: .06em;
+      color: rgba(239,68,68,0);
+      text-shadow: 0 0 16px rgba(239,68,68,.22);
+      opacity:0;
+      mix-blend-mode: screen;
+      filter: blur(1px);
+    }
+    .overlayShard.far{ text-shadow: 0 0 10px rgba(239,68,68,.18); }
+    .overlayShard.near{ text-shadow: 0 0 22px rgba(239,68,68,.30); }
+    .overlayShard.show{ animation: shard var(--dur, 2600ms) ease 1; }
+    @keyframes shard{
+      0%   { opacity:0; color: rgba(239,68,68,0); transform: translate(-50%,-50%) scale(.98); filter: blur(2px); }
+      18%  { opacity:1; color: var(--blood); filter: blur(0); }
+      78%  { opacity:.86; }
+      100% { opacity:0; color: rgba(239,68,68,0); transform: translate(-50%,-50%) scale(1.02); filter: blur(2px); }
+    }
+    .overlayShard.whisper{
+      text-shadow: 0 0 20px rgba(239,68,68,.35);
+      letter-spacing: .14em;
+    }
+
+    #centerCaption{
+      position:absolute; inset:0; z-index:5; pointer-events:none;
+      display:flex; align-items:center; justify-content:center;
+      padding: 0 18px;
+      opacity:0; transform: translateY(10px);
+      transition: opacity 360ms ease, transform 360ms ease;
+    }
+    #centerCaption.show{ opacity:1; transform: translateY(0); }
+    .captionBox{
+      max-width: 820px; width: 100%;
+      background: rgba(0,0,0,.58);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 16px;
+      padding: 18px 18px;
+      backdrop-filter: blur(7px);
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+      will-change: transform, opacity;
+    }
+    .captionBox.lift{ animation: captionLift 2200ms ease-out forwards; }
+    @keyframes captionLift{
+      0%   { transform: translateY(0px);   opacity:1; }
+      35%  { transform: translateY(-10px); opacity:1; }
+      80%  { transform: translateY(-22px); opacity:.96; }
+      100% { transform: translateY(-26px); opacity:.94; }
+    }
+    .captionText{
+      font-size: 18px; line-height: 1.65;
+      text-shadow: 0 0 18px rgba(0,0,0,.55);
+      white-space: pre-wrap;
+    }
+    .captionSmall{ font-size: 14px; color: rgba(229,231,235,.72); margin-top: 10px; }
+    #hint{
+      position:absolute; left:18px; bottom:18px; z-index:6;
+      font-size:13px; color:var(--sys);
+      opacity:0; transform: translateY(8px);
+      transition: opacity 900ms ease, transform 900ms ease;
+      pointer-events:none;
+    }
+    #hint.show{ opacity:.95; transform: translateY(0); }
+    #systemHUD{
+      position:absolute;
+      left:0; right:0; bottom:0;
+      z-index:7;
+      padding:14px 20px;
+      background: linear-gradient(to top, rgba(0,0,0,.85), rgba(0,0,0,.65), rgba(0,0,0,0));
+      backdrop-filter: blur(6px);
+      border-top: 1px solid rgba(255,255,255,.06);
+    }
+    #systemLog{
+      max-width: 900px;
+      margin: 0 auto;
+      font-size: 14px;
+      line-height: 1.6;
+      color: #fbbf24;
+      white-space: pre-wrap;
+      opacity: .95;
+    }
+  </style>
+</head>
+
+<body>
+<div class="root">
+
+  <!-- Cinematic overlays -->
+  <div class="letterboxTop"></div>
+  <div class="letterboxBot"></div>
+  <div class="vignette"></div>
+  <div class="grain"></div>
+
+  <div id="fade"></div>
+
+  <!-- ===== Wakeup scene behind ===== -->
+  <div id="wakeupScene" class="hidden">
+    <div class="scene2">
+      <div id="view">
+        <div class="bg"></div>
+        <div class="vignette"></div>
+        <div class="noise"></div>
+
+        <div id="sub">CHAPTER 0 — SACRIFICE CITY</div>
+
+        <div id="camera" class="maxBlur">
+          <div id="world" class="world"></div>
+        </div>
+
+        <div id="overlayLayer"></div>
+      </div>
+
+      <div id="centerCaption">
+        <div class="captionBox" id="captionBox">
+          <div id="captionText" class="captionText blinkCursor"></div>
+          <div id="captionSub" class="captionSmall"></div>
+        </div>
+      </div>
+
+      <div id="hint">[시스템] look / move / search</div>
+
+      <div id="systemHUD">
+        <div id="systemLog"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Prophets scene front ===== -->
+  <div id="prophetsScene">
+    <div id="prophetsGrid">
+
+      <div class="panel dim" id="panelPriest" data-role="priest">
+        <div class="panelGlow"></div>
+        <div class="panelInner">
+          <div class="panelHeader">
+            <div>
+              <div class="role">ORACLE</div>
+              <div class="name">사제</div>
+            </div>
+            <div class="tag">계시</div>
+          </div>
+          <div class="panelBody">
+            <div class="visionBox">
+              <div class="visionLine" id="vPriest"></div>
+            </div>
+            <div class="clueBox" id="boxPriest">
+              <div class="clueLabel">단서</div>
+              <div id="cPriest"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel dim" id="panelWitch" data-role="witch">
+        <div class="panelGlow"></div>
+        <div class="panelInner">
+          <div class="panelHeader">
+            <div>
+              <div class="role">FORBIDDEN</div>
+              <div class="name">금지된 마녀</div>
+            </div>
+            <div class="tag">환시</div>
+          </div>
+          <div class="panelBody">
+            <div class="visionBox">
+              <div class="visionLine" id="vWitch"></div>
+            </div>
+            <div class="clueBox" id="boxWitch">
+              <div class="clueLabel">단서</div>
+              <div id="cWitch"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel dim" id="panelBlack" data-role="black">
+        <div class="panelGlow"></div>
+        <div class="panelInner">
+          <div class="panelHeader">
+            <div>
+              <div class="role">PACT</div>
+              <div class="name">흑마녀</div>
+            </div>
+            <div class="tag">계약</div>
+          </div>
+          <div class="panelBody">
+            <div class="visionBox">
+              <div class="visionLine" id="vBlack"></div>
+            </div>
+            <div class="clueBox" id="boxBlack">
+              <div class="clueLabel">단서</div>
+              <div id="cBlack"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <div id="prophetsCaption">
+      <div id="pCapBox">
+        <div id="pCapTitle">CUTSCENE — THREE PROPHECIES</div>
+        <div id="pCapText" class="blinkCursor"></div>
+        <div id="skipHint">[SPACE] 문장 완성/다음  ·  [R] 처음부터</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  /* =========================================================
+     Cinematic pacing controls
+     ========================================================= */
+  const PACE = {
+    // 문장 타이핑 느낌을 최소화: "글자" 타이핑보단 "문장" 페이싱
+    captionCharDelay: 30,      // 하단 자막(대사)용
+    visionRevealDelay: 28,     // 패널 비전 텍스트(조금 더 빠르게)
+    clueRevealDelay: 26,       // 단서
+    preFocusHold: 700,         // 인물 전환 후 잠깐 정적
+    afterVisionHold: 850,      // 비전 보여준 뒤 숨 고르기
+    afterClueHold: 1000,       // 단서 보여준 뒤 여운
+    betweenProphets: 900,      // 다음 인물로 넘어가기 전 정적
+    fadeToWake: 1100,
+    blackoutHold: 600
+  };
+
+  const sleep = (ms)=>new Promise(r=>setTimeout(r, ms));
+
+  // ===== Two-stage skip state =====
+  // Space 1: 현재 타이핑 즉시 완성
+  // Space 2: 다음 단계로 진행(다음 인물/다음 파트)
+  let skipNow = false;
+  let advanceNow = false;
+
+  function requestSkipOrAdvance(){
+    if(!skipNow){
+      skipNow = true;
+    }else{
+      advanceNow = true;
+    }
+  }
+
+  async function typeText(el, text, delay){
+    el.textContent = "";
+    skipNow = false; // 새 타이핑 시작 시 "skip" 1단계 리셋
+    for(const ch of text){
+      if(skipNow){
+        el.textContent = text;
+        return;
+      }
+      el.textContent += ch;
+      await sleep(delay);
+    }
+  }
+
+  async function waitHold(ms){
+    const start = performance.now();
+    while(performance.now() - start < ms){
+      if(advanceNow) return; // 두 번째 스페이스(advance)면 홀드 스킵
+      await sleep(30);
+    }
+  }
+
+  function setPanelFocus(active, others){
+    active.classList.remove("dim");
+    active.classList.add("active");
+    for(const o of others){
+      o.classList.remove("active");
+      o.classList.add("dim");
+    }
+  }
+
+  /* =========================================================
+     Prophets Scene Script
+     ========================================================= */
+  const prophetsScene = document.getElementById("prophetsScene");
+  const fade = document.getElementById("fade");
+
+  const panelPriest = document.getElementById("panelPriest");
+  const panelWitch  = document.getElementById("panelWitch");
+  const panelBlack  = document.getElementById("panelBlack");
+
+  const vPriest = document.getElementById("vPriest");
+  const vWitch  = document.getElementById("vWitch");
+  const vBlack  = document.getElementById("vBlack");
+
+  const boxPriest = document.getElementById("boxPriest");
+  const boxWitch  = document.getElementById("boxWitch");
+  const boxBlack  = document.getElementById("boxBlack");
+
+  const cPriest = document.getElementById("cPriest");
+  const cWitch  = document.getElementById("cWitch");
+  const cBlack  = document.getElementById("cBlack");
+
+  const pCapText = document.getElementById("pCapText");
+
+  function resetProphetsUI(){
+    advanceNow = false;
+    skipNow = false;
+
+    [panelPriest, panelWitch, panelBlack].forEach(p=>{
+      p.classList.remove("active");
+      p.classList.add("dim");
+    });
+
+    [vPriest, vWitch, vBlack].forEach(v=>{
+      v.textContent = "";
+      v.classList.remove("show");
+    });
+
+    [boxPriest, boxWitch, boxBlack].forEach(b=>{
+      b.classList.remove("show");
+    });
+
+    [cPriest, cWitch, cBlack].forEach(c=> c.textContent="");
+
+    pCapText.textContent = "";
+  }
+
+  const PROPHETS = [
+    {
+      panel: panelPriest,
+      others: [panelWitch, panelBlack],
+      vEl: vPriest,
+      boxEl: boxPriest,
+      cEl: cPriest,
+      vision:
+`불타는 성문.
+무릎 꿇은 군중.
+빛이 내려오고… 종이 울린다.`,
+      clue:
+`‘일곱 번째 종’이 울리기 전에,
+제단 아래 봉인을 열어라.`,
+      caption:
+`사제: “도시는 정화될 것이다.
+하지만… 종이 일곱 번 울리면,
+그때는 되돌릴 수 없다.”`
+    },
+    {
+      panel: panelWitch,
+      others: [panelPriest, panelBlack],
+      vEl: vWitch,
+      boxEl: boxWitch,
+      cEl: cWitch,
+      vision:
+`도시 위에 떠 있는 검은 눈.
+사람들의 그림자가 어긋난다.
+바닥의 문양이 숨을 쉰다.`,
+      clue:
+`도시 전체가 마법진이야.
+‘우물’과 ‘시장’의 룬을 끊어.`,
+      caption:
+`금지된 마녀: “제물은 사람만이 아니야.
+도시는… 이미 한 덩어리의 제물로 묶였어.”`
+    },
+    {
+      panel: panelBlack,
+      others: [panelPriest, panelWitch],
+      vEl: vBlack,
+      boxEl: boxBlack,
+      cEl: cBlack,
+      vision:
+`하늘이 갈라진다.
+무언가가 내려오고,
+단 한 명만 남는다.`,
+      clue:
+`핵은 ‘살아 있다’.
+핵을 바꾸지 않으면,
+강림은 멈추지 않아.`,
+      caption:
+`흑마녀: “막는 건 어려워.
+하지만… 바꾸는 건 가능하지.
+대가만 치르면.”`
+    }
+  ];
+
+  async function playOneProphet(s){
+    advanceNow = false;
+
+    // 1) 포커스 전환 + 정적
+    setPanelFocus(s.panel, s.others);
+    await waitHold(PACE.preFocusHold);
+    if(advanceNow){ advanceNow=false; return; }
+
+    // 2) 패널 비전: 은은히 등장 + 내용은 천천히 채움
+    s.vEl.classList.add("show");
+    await typeText(s.vEl, s.vision, PACE.visionRevealDelay);
+    await waitHold(PACE.afterVisionHold);
+    if(advanceNow){ advanceNow=false; return; }
+
+    // 3) 단서: 박스 먼저 스르륵 등장
+    s.boxEl.classList.add("show");
+    await typeText(s.cEl, s.clue, PACE.clueRevealDelay);
+    await waitHold(PACE.afterClueHold);
+    if(advanceNow){ advanceNow=false; return; }
+
+    // 4) 하단 자막(대사): “영화 자막” 느낌으로 천천히
+    pCapText.textContent = "";
+    await typeText(pCapText, s.caption, PACE.captionCharDelay);
+    await waitHold(PACE.betweenProphets);
+    advanceNow = false;
+  }
+
+  async function playProphets(){
+    resetProphetsUI();
+
+    // 첫 진입에 아주 짧게 암전 후 등장(집중도)
+    fade.classList.add("show");
+    await sleep(500);
+    fade.classList.remove("show");
+    await sleep(600);
+
+    for(const s of PROPHETS){
+      await playOneProphet(s);
+    }
+
+    await transitionToWakeup();
+  }
+
+  async function transitionToWakeup(){
+    fade.classList.add("show");
+    await sleep(PACE.fadeToWake);
+
+    prophetsScene.style.display = "none";
+    document.getElementById("wakeupScene").classList.remove("hidden");
+
+    await sleep(PACE.blackoutHold);
+    fade.classList.remove("show");
+
+    await sleep(350);
+    await playIntro();
+  }
+
+  /* =========================================================
+     Your Wakeup Script (unchanged logic, just wired)
+     ========================================================= */
+  const view = document.getElementById("view");
+  const systemLog = document.getElementById("systemLog");
+  const overlayLayer = document.getElementById("overlayLayer");
+  const camera = document.getElementById("camera");
+  const world = document.getElementById("world");
+  const hint = document.getElementById("hint");
+  const sub = document.getElementById("sub");
+
+  const centerCaption = document.getElementById("centerCaption");
+  const captionBoxEl = document.getElementById("captionBox");
+  const captionText = document.getElementById("captionText");
+  const captionSub = document.getElementById("captionSub");
+
+  const rand = (a,b)=> a + Math.random()*(b-a);
+  const pick = (arr)=> arr[Math.floor(Math.random()*arr.length)];
+
+  const TEMPO = {
+    captionSpeed: 88,
+    captionHold: 1350,
+    between: 420,
+    farInterval: 420,
+    nearInterval: 520,
+  };
+
+  function resetSystemLog(){ systemLog.textContent = ""; }
+  function showSystemMessage(text){ systemLog.textContent += text + "\n"; }
+  function showMainSystem(){
+    showSystemMessage("[시스템] 당신은 깨어났다.");
+    showSystemMessage("[시스템] 입력 가능: look / move / search");
+  }
+
+  function resetMotion(){
+    view.classList.remove("standUp");
+    captionBoxEl.classList.remove("lift");
+    world.classList.remove("panLeft","panRight","shake");
+    camera.classList.remove("maxBlur");
+    void view.offsetWidth;
+    void world.offsetWidth;
+    void captionBoxEl.offsetWidth;
+  }
+
+  function cameraShake(){
+    world.classList.remove("shake");
+    void world.offsetWidth;
+    world.classList.add("shake");
+  }
+  function pan(dir){
+    world.classList.remove("panLeft","panRight");
+    void world.offsetWidth;
+    world.classList.add(dir === "L" ? "panLeft" : "panRight");
+  }
+
+  async function showCaption(line, subline="", opt={}){
+    const speed = opt.speed ?? TEMPO.captionSpeed;
+    const hold  = opt.hold  ?? TEMPO.captionHold;
+
+    captionText.textContent = "";
+    captionSub.textContent = subline || "";
+    centerCaption.classList.add("show");
+
+    for(const ch of line){
+      captionText.textContent += ch;
+      await sleep(speed);
+    }
+    await sleep(hold);
+
+    centerCaption.classList.remove("show");
+    await sleep(260);
+  }
+
+  const DIRECTIONS = {
+    LEFT_FAR:   { x:[12, 30], y:[28, 55], size:[18, 26], dur:[2400, 3400], cls:"far"  },
+    RIGHT_FAR:  { x:[70, 88], y:[28, 55], size:[18, 26], dur:[2400, 3400], cls:"far"  },
+    BACK_FAR:   { x:[35, 65], y:[18, 32], size:[16, 24], dur:[2600, 3600], cls:"far"  },
+    NEAR_LEFT:  { x:[18, 38], y:[58, 78], size:[26, 40], dur:[2700, 3800], cls:"near" },
+    NEAR_RIGHT: { x:[62, 82], y:[58, 78], size:[26, 40], dur:[2700, 3800], cls:"near" },
+    OVERHEAD:   { x:[42, 58], y:[10, 18], size:[18, 28], dur:[2400, 3200], cls:"far"  },
+    CENTER:     { x:[42, 58], y:[38, 62], size:[26, 40], dur:[2500, 3400], cls:"near" }
+  };
+
+  function spawnOverlay(text, dirKey, opts={}){
+    const d = DIRECTIONS[dirKey] || DIRECTIONS.CENTER;
+    const el = document.createElement("div");
+    el.className = `overlayShard ${d.cls || ""} ${opts.whisper ? "whisper" : ""}`;
+
+    el.style.left = (opts.x ?? rand(d.x[0], d.x[1])) + "%";
+    el.style.top  = (opts.y ?? rand(d.y[0], d.y[1])) + "%";
+    el.style.fontSize = (opts.size ?? rand(d.size[0], d.size[1])) + "px";
+    const dur = (opts.dur ?? rand(d.dur[0], d.dur[1]));
+    el.style.setProperty("--dur", dur + "ms");
+    el.textContent = text;
+
+    overlayLayer.appendChild(el);
+    requestAnimationFrame(()=> el.classList.add("show"));
+    setTimeout(()=> el.remove(), dur + 160);
+  }
+
+  async function screamWaveCinematic(){
+    const farWords  = ["비명", "도와줘", "여기야", "살려줘"];
+    const nearWords = ["도와줘!", "살려줘!", "여기야!"];
+
+    await showCaption("…소리가 들린다.", "멀리서, 여러 겹의 비명이 겹친다.");
+    await sleep(TEMPO.between);
+
+    for(let i=0;i<6;i++){
+      spawnOverlay(pick(farWords), pick(["LEFT_FAR","RIGHT_FAR","BACK_FAR"]));
+      await sleep(TEMPO.farInterval + Math.random()*220);
+    }
+
+    pan("L");
+    await showCaption("어디서…?", "");
+    await sleep(TEMPO.between);
+
+    for(let i=0;i<5;i++){
+      spawnOverlay(pick(nearWords), pick(["NEAR_LEFT","NEAR_RIGHT"]));
+      await sleep(TEMPO.nearInterval + Math.random()*260);
+    }
+
+    pan("R");
+    await showCaption("가까워진다.", "숨이 순간 얼어붙는다.");
+    await sleep(260);
+
+    spawnOverlay("비명", "OVERHEAD", { size: 24 });
+    await sleep(320);
+    spawnOverlay("…", "CENTER", { size: 34 });
+
+    await showCaption("피 냄새.", "입 안에 철맛이 돈다.");
+  }
+
+  async function demonWhisper(){
+    await sleep(520);
+    spawnOverlay("무릎 꿇어라", "BACK_FAR", { whisper:true, size: 22 });
+    await showCaption("…누군가, 웃는다.", "");
+    await sleep(420);
+    spawnOverlay("…", "LEFT_FAR", { whisper:true, size: 18 });
+    await sleep(420);
+  }
+
+  async function playIntro(){
+    resetSystemLog();
+    resetMotion();
+
+    sub.classList.add("show");
+    camera.classList.add("maxBlur");
+    hint.classList.remove("show");
+    centerCaption.classList.remove("show");
+
+    await sleep(700);
+    await showCaption("…어둠.", "");
+    await sleep(TEMPO.between);
+
+    await showCaption("숨이 막힌다.", "");
+    await sleep(TEMPO.between);
+
+    await showCaption("눈을 뜬 것 같은데…", "아무것도 보이지 않는다.");
+    await sleep(TEMPO.between);
+
+    await showCaption("초점이 잡히지 않는다.", "");
+    await sleep(TEMPO.between);
+
+    await screamWaveCinematic();
+
+    cameraShake();
+    await showCaption("무언가가 무너진다.", "");
+    await sleep(TEMPO.between);
+
+    await showCaption("고개를 돌린다.", "불빛… 연기… 무너진 벽.");
+    camera.classList.remove("maxBlur");
+    pan("L");
+    await sleep(1400);
+
+    await demonWhisper();
+
+    await sleep(800);
+
+    world.classList.add("rise");
+    view.classList.add("standUp");
+    captionBoxEl.classList.add("lift");
+
+    await showCaption("몸을 일으킨다.", "근육이 떨린다.", { hold: 1600 });
+
+    await sleep(1200);
+
+    showMainSystem();
+    hint.classList.add("show");
+  }
+
+  /* =========================================================
+     Controls
+     ========================================================= */
+  window.addEventListener("keydown", (e)=>{
+    if(e.code === "KeyR"){
+      e.preventDefault();
+      location.reload();
+      return;
+    }
+    if(e.code === "Space"){
+      e.preventDefault();
+      requestSkipOrAdvance();
+    }
+  });
+
+  // start
+  playProphets();
+</script>
+</body>
+</html>

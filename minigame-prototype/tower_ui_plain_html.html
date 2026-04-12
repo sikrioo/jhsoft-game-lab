@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tower UI Plain HTML</title>
+  <style>
+    :root {
+      --bg: #070a10;
+      --panel: rgba(255,255,255,0.04);
+      --panel2: rgba(255,255,255,0.025);
+      --border: rgba(255,255,255,0.10);
+      --text: #dde7ff;
+      --muted: #90a2c4;
+      --cyan: #77ebff;
+      --gold: #f0cf78;
+      --emerald: #7df5b0;
+      --rose: #ff6677;
+      --orange: #ff9e54;
+      --cell: 16px;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      background:
+        radial-gradient(900px 500px at 50% 0%, rgba(240,207,120,0.08), transparent 55%),
+        radial-gradient(700px 420px at 50% 100%, rgba(119,235,255,0.08), transparent 55%),
+        linear-gradient(180deg, #0a0f18, #070a10 40%, #06080d);
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .18;
+      background-image:
+        linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      width: min(1180px, calc(100% - 24px));
+      margin: 0 auto;
+      padding: 16px 0;
+    }
+
+    .shell {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));
+      box-shadow: 0 24px 70px rgba(0,0,0,.45);
+      backdrop-filter: blur(10px);
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: .24em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: monospace;
+    }
+
+    .title {
+      margin-top: 6px;
+      font-size: 28px;
+      font-weight: 700;
+      color: #f8fbff;
+    }
+
+    .meta {
+      display: flex;
+      gap: 18px;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: monospace;
+    }
+
+    .meta strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 17px;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    .main {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 20px;
+      padding: 20px;
+    }
+
+    .panel {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
+    }
+
+    .panel-hd {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 11px;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: monospace;
+    }
+
+    .tower-panel {
+      position: relative;
+      min-height: 760px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      padding: 24px 16px;
+      background:
+        radial-gradient(circle at 50% 10%, rgba(240,207,120,0.08), transparent 28%),
+        radial-gradient(circle at 50% 90%, rgba(119,235,255,0.08), transparent 28%),
+        linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    }
+
+    .tower-core {
+      position: absolute;
+      top: 20px;
+      bottom: 20px;
+      width: 94px;
+      border-radius: 999px;
+      background: linear-gradient(90deg,
+        rgba(255,255,255,.04) 0%,
+        rgba(255,255,255,.13) 18%,
+        rgba(119,235,255,.12) 50%,
+        rgba(255,255,255,.13) 82%,
+        rgba(255,255,255,.04) 100%);
+      box-shadow: inset 0 0 30px rgba(0,0,0,.35), 0 0 40px rgba(119,235,255,.08);
+    }
+
+    .floors {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .floor-node {
+      position: relative;
+      width: 170px;
+      min-height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,.04);
+      box-shadow: 0 10px 30px rgba(0,0,0,.22);
+    }
+
+    .floor-node::before {
+      content: "";
+      position: absolute;
+      inset: 4px;
+      border: 1px solid rgba(255,255,255,.04);
+      border-radius: 999px;
+    }
+
+    .floor-node.cleared {
+      border-color: rgba(125,245,176,.30);
+      background: linear-gradient(180deg, rgba(125,245,176,.10), rgba(255,255,255,.03));
+    }
+
+    .floor-node.current {
+      border-color: rgba(119,235,255,.50);
+      background: linear-gradient(180deg, rgba(119,235,255,.15), rgba(255,255,255,.04));
+      box-shadow: 0 0 28px rgba(119,235,255,.16), 0 14px 34px rgba(0,0,0,.3);
+    }
+
+    .floor-node.current::after {
+      content: "";
+      position: absolute;
+      inset: -5px;
+      border: 1px solid rgba(119,235,255,.35);
+      border-radius: 999px;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+
+    .floor-node.locked {
+      opacity: .55;
+    }
+
+    .floor-node.boss { width: 186px; border-color: rgba(255,158,84,.35); }
+    .floor-node.event { border-color: rgba(240,207,120,.25); }
+
+    .badge {
+      position: absolute;
+      top: -10px;
+      padding: 2px 8px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(8,12,18,.92);
+      font-size: 9px;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      font-family: monospace;
+    }
+    .badge.boss { color: var(--orange); border-color: rgba(255,158,84,.25); }
+    .badge.event { color: var(--gold); border-color: rgba(240,207,120,.20); }
+    .badge.rest { color: var(--emerald); border-color: rgba(125,245,176,.20); }
+
+    .floor-num { font-size: 16px; font-weight: 700; font-family: monospace; color: #f8fbff; }
+    .floor-name { margin-top: 4px; font-size: 11px; color: var(--muted); }
+
+    .right {
+      display: grid;
+      grid-template-rows: auto 1fr;
+      gap: 20px;
+    }
+
+    .cards {
+      display: grid;
+      gap: 12px;
+      padding: 16px;
+      grid-template-columns: repeat(4, 1fr);
+    }
+
+    .card {
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.025));
+    }
+
+    .card .k {
+      font-size: 10px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: monospace;
+    }
+
+    .card .v {
+      margin-top: 8px;
+      font-size: 20px;
+      font-weight: 700;
+      color: #f8fbff;
+    }
+
+    .card .d {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    .map-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .map-title {
+      margin-top: 4px;
+      font-size: 22px;
+      font-weight: 700;
+      color: #f8fbff;
+    }
+
+    .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+    .chip {
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,.03);
+      font-size: 10px;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-family: monospace;
+    }
+
+    .map-wrap { padding: 16px; }
+
+    .map-shell {
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
+      padding: 16px;
+    }
+
+    .map-frame {
+      position: relative;
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 16px;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,.03), transparent 58%),
+        linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,.01));
+    }
+
+    .map-frame::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(circle at 50% 50%, transparent 0%, rgba(5,8,14,.08) 58%, rgba(5,8,14,.45) 100%);
+    }
+
+    .map-frame::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: .20;
+      background-image:
+        linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+      background-size: 24px 24px;
+    }
+
+    .map-grid {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(28, var(--cell));
+      gap: 0;
+      width: max-content;
+      margin: 0 auto;
+    }
+
+    .cell {
+      position: relative;
+      width: var(--cell);
+      height: var(--cell);
+    }
+
+    .seen-fill {
+      position: absolute;
+      inset: 3px;
+      border-radius: 1px;
+      background: rgba(220,245,255,.05);
+      box-shadow: 0 0 4px rgba(180,220,255,.08);
+    }
+
+    .edge-top,.edge-right,.edge-bottom,.edge-left {
+      position: absolute;
+      background: rgba(220,245,255,.75);
+      box-shadow: 0 0 6px rgba(160,220,255,.55);
+    }
+    .edge-top { left: 2px; right: 2px; top: 1px; height: 2px; }
+    .edge-right { top: 2px; bottom: 2px; right: 1px; width: 2px; }
+    .edge-bottom { left: 2px; right: 2px; bottom: 1px; height: 2px; }
+    .edge-left { top: 2px; bottom: 2px; left: 1px; width: 2px; }
+
+    .inner-fill {
+      position: absolute;
+      inset: 5px;
+      border-radius: 1px;
+      background: rgba(255,255,255,.04);
+    }
+
+    .marker, .player {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .dot {
+      border-radius: 999px;
+    }
+    .dot.down { width: 6px; height: 6px; background: var(--emerald); box-shadow: 0 0 8px rgba(125,245,176,.85); }
+    .dot.event { width: 6px; height: 6px; background: var(--cyan); box-shadow: 0 0 8px rgba(119,235,255,.85); }
+    .dot.boss { width: 8px; height: 8px; background: var(--rose); box-shadow: 0 0 10px rgba(255,102,119,.95); }
+    .dot.up { width: 6px; height: 6px; background: var(--gold); box-shadow: 0 0 8px rgba(240,207,120,.9); }
+
+    .player-glow {
+      position: absolute;
+      inset: -5px;
+      border-radius: 999px;
+      border: 1px solid rgba(220,245,255,.2);
+      background: rgba(119,235,255,.03);
+      filter: blur(2px);
+    }
+
+    .player-core {
+      position: absolute;
+      inset: 3px;
+      border-radius: 2px;
+      border: 1px solid rgba(220,245,255,.9);
+      background: rgba(255,255,255,.95);
+      box-shadow: 0 0 16px rgba(119,235,255,.98);
+    }
+
+    .legend, .controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .legend-list, .control-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(255,255,255,.025);
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+      font-family: monospace;
+    }
+
+    .legend-swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+      border: 1px solid rgba(255,255,255,.1);
+    }
+
+    .btn {
+      appearance: none;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 14px;
+      background: rgba(255,255,255,.04);
+      color: var(--text);
+      font-size: 12px;
+      font-family: monospace;
+      cursor: pointer;
+    }
+
+    .btn:hover { background: rgba(255,255,255,.08); border-color: rgba(119,235,255,.2); }
+
+    @keyframes pulse {
+      0% { opacity: .35; transform: scale(.98); }
+      50% { opacity: 1; transform: scale(1.03); }
+      100% { opacity: .35; transform: scale(.98); }
+    }
+
+    @media (max-width: 980px) {
+      .main { grid-template-columns: 1fr; }
+      .cards { grid-template-columns: repeat(2, 1fr); }
+      .tower-panel { min-height: 540px; }
+    }
+
+    @media (max-width: 640px) {
+      .topbar { flex-direction: column; align-items: flex-start; }
+      .cards { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <section class="shell">
+      <div class="topbar">
+        <div>
+          <div class="eyebrow">Tower Observation Interface</div>
+          <div class="title">Obsidian Tower</div>
+        </div>
+        <div class="meta">
+          <div>Current Floor<strong id="currentFloorTop">4F</strong></div>
+          <div>Theme<strong>Dust Chapel</strong></div>
+          <div>Danger<strong>Medium</strong></div>
+        </div>
+      </div>
+
+      <div class="main">
+        <section class="panel">
+          <div class="panel-hd">Vertical Floor Structure</div>
+          <div class="tower-panel">
+            <div class="tower-core"></div>
+            <div class="floors" id="floors"></div>
+          </div>
+        </section>
+
+        <section class="right">
+          <section class="panel">
+            <div class="panel-hd">Current Expedition State</div>
+            <div class="cards">
+              <div class="card"><div class="k">Progress</div><div class="v">63%</div><div class="d">현재 층 내부 탐험 진행도</div></div>
+              <div class="card"><div class="k">Enemy</div><div class="v">14</div><div class="d">남은 일반 적 및 엘리트</div></div>
+              <div class="card"><div class="k">Objective</div><div class="v">Reach Lift</div><div class="d">X 타일에서 상층 이동, S 타일에서 하층 이동</div></div>
+              <div class="card"><div class="k">Map Mode</div><div class="v">Overlay Map</div><div class="d">디아블로풍 윤곽선 미니맵 시야 표시</div></div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="map-head">
+              <div>
+                <div class="eyebrow">Current Floor Map</div>
+                <div class="map-title" id="mapTitle">4F · Floor Interior</div>
+              </div>
+              <div class="chips">
+                <span class="chip">overlay minimap</span>
+                <span class="chip">visited / unknown</span>
+                <span class="chip">diablo-inspired</span>
+              </div>
+            </div>
+
+            <div class="map-wrap">
+              <div class="map-shell">
+                <div class="map-frame">
+                  <div class="map-grid" id="mapGrid"></div>
+                </div>
+              </div>
+
+              <div class="legend">
+                <div class="legend-list">
+                  <div class="legend-item"><span class="legend-swatch" style="background:#fff; box-shadow:0 0 10px rgba(119,235,255,.55)"></span>player</div>
+                  <div class="legend-item"><span class="legend-swatch" style="background:#7df5b0"></span>stairs down</div>
+                  <div class="legend-item"><span class="legend-swatch" style="background:#f0cf78"></span>stairs up</div>
+                  <div class="legend-item"><span class="legend-swatch" style="background:#77ebff"></span>event</div>
+                  <div class="legend-item"><span class="legend-swatch" style="background:#ff6677"></span>boss</div>
+                  <div class="legend-item"><span class="legend-swatch" style="background:rgba(119,235,255,.40)"></span>explored</div>
+                  <div class="legend-item"><span class="legend-swatch" style="background:#070a10"></span>fog</div>
+                </div>
+              </div>
+
+              <div class="controls">
+                <div class="control-buttons">
+                  <button class="btn" id="btnFloorDown">⬇ FLOOR</button>
+                  <button class="btn" id="btnFloorUp">⬆ FLOOR</button>
+                </div>
+                <div class="eyebrow" style="letter-spacing:.08em; text-transform:none;">Move: WASD / Arrow Keys · X tile = up · S tile = down · Reset: R</div>
+                <div class="control-buttons">
+                  <button class="btn" id="btnUp">MOVE UP</button>
+                  <button class="btn" id="btnDown">MOVE DOWN</button>
+                  <button class="btn" id="btnLeft">MOVE LEFT</button>
+                  <button class="btn" id="btnRight">MOVE RIGHT</button>
+                  <button class="btn" id="btnReset">RESET</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </section>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const FLOORS = [
+      { floor: 1, name: "Outer Gate", type: "normal" },
+      { floor: 2, name: "Ash Passage", type: "normal" },
+      { floor: 3, name: "Hall of Echoes", type: "event" },
+      { floor: 4, name: "Dust Chapel", type: "normal" },
+      { floor: 5, name: "Bone Elevator", type: "rest" },
+      { floor: 6, name: "Black Cloister", type: "normal" },
+      { floor: 7, name: "Pyre Archive", type: "event" },
+      { floor: 8, name: "Chain Sanctum", type: "normal" },
+      { floor: 9, name: "Crimson Span", type: "normal" },
+      { floor: 10, name: "Infernal Court", type: "boss" },
+      { floor: 11, name: "Veil Terrace", type: "event" },
+      { floor: 12, name: "Crown Pinnacle", type: "boss" },
+    ];
+
+    const RAW_MAP = [
+      "############################",
+      "##################....B#####",
+      "##################.....#####",
+      "#############...........####",
+      "##########.......##.....####",
+      "#######....E.....##.....####",
+      "##S.....................####",
+      "##......######..........####",
+      "##......######......########",
+      "##.................#########",
+      "####....######....##########",
+      "####....######....##########",
+      "####...........X..##########",
+      "############################",
+    ];
+
+    const START = { x: 2, y: 6 };
+    const MAX_FLOOR = 12;
+    const MIN_FLOOR = 1;
+
+    let currentFloor = 4;
+    let player = { ...START };
+    let visited = new Set();
+
+    const floorsEl = document.getElementById('floors');
+    const mapGridEl = document.getElementById('mapGrid');
+    const currentFloorTopEl = document.getElementById('currentFloorTop');
+    const mapTitleEl = document.getElementById('mapTitle');
+
+    function key(x, y) {
+      return `${x},${y}`;
+    }
+
+    function inBounds(x, y) {
+      return y >= 0 && y < RAW_MAP.length && x >= 0 && x < RAW_MAP[0].length;
+    }
+
+    function tileAt(x, y) {
+      return RAW_MAP[y][x];
+    }
+
+    function isPassable(x, y) {
+      return inBounds(x, y) && tileAt(x, y) !== '#';
+    }
+
+    function revealAround(cx, cy, radius = 1) {
+      for (let y = cy - radius; y <= cy + radius; y += 1) {
+        for (let x = cx - radius; x <= cx + radius; x += 1) {
+          if (isPassable(x, y)) visited.add(key(x, y));
+        }
+      }
+    }
+
+    function resetMapState() {
+      player = { ...START };
+      visited = new Set();
+      revealAround(player.x, player.y, 1);
+    }
+
+    function getFloorState(floor) {
+      if (floor === currentFloor) return 'current';
+      if (floor < currentFloor) return 'cleared';
+      return 'locked';
+    }
+
+    function getBadge(type) {
+      if (type === 'boss') return 'boss';
+      if (type === 'event') return 'event';
+      if (type === 'rest') return 'rest';
+      return null;
+    }
+
+    function renderFloors() {
+      floorsEl.innerHTML = '';
+      FLOORS.forEach((item) => {
+        const state = getFloorState(item.floor);
+        const node = document.createElement('div');
+        node.className = `floor-node ${state} ${item.type}`;
+
+        const badgeType = getBadge(item.type);
+        if (badgeType) {
+          const badge = document.createElement('div');
+          badge.className = `badge ${badgeType}`;
+          badge.textContent = badgeType.toUpperCase();
+          node.appendChild(badge);
+        }
+
+        const inner = document.createElement('div');
+        inner.innerHTML = `<div class="floor-num">${item.floor}F</div><div class="floor-name">${item.name}</div>`;
+        node.appendChild(inner);
+        floorsEl.appendChild(node);
+      });
+    }
+
+    function edgeMask(x, y) {
+      if (!visited.has(key(x, y)) || tileAt(x, y) === '#') return '0000';
+      const top = !isPassable(x, y - 1) || !visited.has(key(x, y - 1));
+      const right = !isPassable(x + 1, y) || !visited.has(key(x + 1, y));
+      const bottom = !isPassable(x, y + 1) || !visited.has(key(x, y + 1));
+      const left = !isPassable(x - 1, y) || !visited.has(key(x - 1, y));
+      return `${top ? 1 : 0}${right ? 1 : 0}${bottom ? 1 : 0}${left ? 1 : 0}`;
+    }
+
+    function markerClass(tile) {
+      if (tile === 'S') return 'down';
+      if (tile === 'E') return 'event';
+      if (tile === 'B') return 'boss';
+      if (tile === 'X') return 'up';
+      return null;
+    }
+
+    function renderMap() {
+      mapGridEl.innerHTML = '';
+      for (let y = 0; y < RAW_MAP.length; y += 1) {
+        for (let x = 0; x < RAW_MAP[0].length; x += 1) {
+          const tile = tileAt(x, y);
+          const seen = visited.has(key(x, y));
+          const wall = tile === '#';
+          const here = player.x === x && player.y === y;
+          const special = ['S', 'E', 'B', 'X'].includes(tile);
+          const mask = edgeMask(x, y);
+
+          const cell = document.createElement('div');
+          cell.className = 'cell';
+
+          if (seen && !wall) {
+            const fill = document.createElement('div');
+            fill.className = 'seen-fill';
+            cell.appendChild(fill);
+
+            if (mask[0] === '1') { const e = document.createElement('div'); e.className = 'edge-top'; cell.appendChild(e); }
+            if (mask[1] === '1') { const e = document.createElement('div'); e.className = 'edge-right'; cell.appendChild(e); }
+            if (mask[2] === '1') { const e = document.createElement('div'); e.className = 'edge-bottom'; cell.appendChild(e); }
+            if (mask[3] === '1') { const e = document.createElement('div'); e.className = 'edge-left'; cell.appendChild(e); }
+
+            if (!special) {
+              const inner = document.createElement('div');
+              inner.className = 'inner-fill';
+              cell.appendChild(inner);
+            }
+          }
+
+          if (seen && !wall && special) {
+            const marker = document.createElement('div');
+            marker.className = 'marker';
+            const dot = document.createElement('div');
+            dot.className = `dot ${markerClass(tile)}`;
+            marker.appendChild(dot);
+            cell.appendChild(marker);
+          }
+
+          if (here) {
+            const playerWrap = document.createElement('div');
+            playerWrap.className = 'player';
+            const glow = document.createElement('div');
+            glow.className = 'player-glow';
+            const core = document.createElement('div');
+            core.className = 'player-core';
+            playerWrap.appendChild(glow);
+            playerWrap.appendChild(core);
+            cell.appendChild(playerWrap);
+          }
+
+          mapGridEl.appendChild(cell);
+        }
+      }
+    }
+
+    function renderHeader() {
+      currentFloorTopEl.textContent = `${currentFloor}F`;
+      mapTitleEl.textContent = `${currentFloor}F · Floor Interior`;
+    }
+
+    function rerender() {
+      renderHeader();
+      renderFloors();
+      renderMap();
+    }
+
+    function goUpFloor() {
+      currentFloor = Math.min(MAX_FLOOR, currentFloor + 1);
+      resetMapState();
+      rerender();
+    }
+
+    function goDownFloor() {
+      currentFloor = Math.max(MIN_FLOOR, currentFloor - 1);
+      resetMapState();
+      rerender();
+    }
+
+    function move(dx, dy) {
+      const nx = player.x + dx;
+      const ny = player.y + dy;
+      if (!isPassable(nx, ny)) return;
+
+      const nextTile = tileAt(nx, ny);
+      if (nextTile === 'X') {
+        goUpFloor();
+        return;
+      }
+      if (nextTile === 'S') {
+        goDownFloor();
+        return;
+      }
+
+      player = { x: nx, y: ny };
+      revealAround(nx, ny, 1);
+      rerender();
+    }
+
+    document.getElementById('btnFloorUp').addEventListener('click', goUpFloor);
+    document.getElementById('btnFloorDown').addEventListener('click', goDownFloor);
+    document.getElementById('btnUp').addEventListener('click', () => move(0, -1));
+    document.getElementById('btnDown').addEventListener('click', () => move(0, 1));
+    document.getElementById('btnLeft').addEventListener('click', () => move(-1, 0));
+    document.getElementById('btnRight').addEventListener('click', () => move(1, 0));
+    document.getElementById('btnReset').addEventListener('click', () => { resetMapState(); rerender(); });
+
+    window.addEventListener('keydown', (e) => {
+      const k = e.key.toLowerCase();
+
+      // ✅ 스크롤 방지
+      if (
+        ['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd', 'r']
+          .includes(k)
+      ) {
+        e.preventDefault();
+      }
+
+      if (e.key === 'ArrowUp' || k === 'w') move(0, -1);
+      if (e.key === 'ArrowDown' || k === 's') move(0, 1);
+      if (e.key === 'ArrowLeft' || k === 'a') move(-1, 0);
+      if (e.key === 'ArrowRight' || k === 'd') move(1, 0);
+
+      if (k === 'r') {
+        resetMapState();
+        rerender();
+      }
+    });
+
+    resetMapState();
+    rerender();
+  </script>
+</body>
+</html>

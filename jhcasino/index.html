@@ -1,0 +1,623 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JHCasino</title>
+<style>
+  * { box-sizing: border-box; }
+
+  :root {
+    --ink: #1b1412;
+    --paper: #fff3d0;
+    --paper-2: #fffaf0;
+    --warm: #ff9c60;
+    --warm-2: #ffca83;
+    --gold: #ffd45a;
+    --red: #ff6f58;
+    --red-2: #ff8454;
+    --blue: #4bb8ff;
+    --green: #58d88e;
+    --forest: #31584a;
+    --purple: #6c63ff;
+    --shadow: rgba(27, 20, 18, 0.15);
+  }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(circle at top, rgba(255,255,255,.78), transparent 24%),
+      radial-gradient(circle at 18% 18%, rgba(75,184,255,.20), transparent 18%),
+      radial-gradient(circle at 82% 14%, rgba(255,111,88,.18), transparent 18%),
+      linear-gradient(180deg, #ffd95f 0%, #ff9c60 100%);
+    color: var(--ink);
+    font-family: "Trebuchet MS", "Malgun Gothic", sans-serif;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    opacity: .18;
+    background:
+      radial-gradient(circle, rgba(27,20,18,.12) 2px, transparent 2px) 0 0 / 24px 24px,
+      repeating-conic-gradient(from 0deg, rgba(255,255,255,.14) 0 8deg, transparent 8deg 16deg);
+  }
+
+  .shell {
+    width: min(1380px, calc(100vw - 24px));
+    margin: 12px auto;
+    border: 5px solid var(--ink);
+    border-radius: 34px;
+    overflow: hidden;
+    background: var(--paper);
+    box-shadow: 0 18px 0 #4d2f25, 0 34px 86px rgba(0,0,0,.25);
+  }
+
+  .hero {
+    position: relative;
+    padding: 24px;
+    background:
+      radial-gradient(circle at center, rgba(255,255,255,.22), transparent 28%),
+      linear-gradient(180deg, #fff0b9 0%, #ffca83 48%, #ff9f6c 100%);
+  }
+
+  .hero::before {
+    content: "";
+    position: absolute;
+    inset: 18px;
+    border: 4px solid rgba(27,20,18,.92);
+    border-radius: 30px;
+    pointer-events: none;
+    box-shadow: inset 0 0 0 4px rgba(255,255,255,.24);
+  }
+
+  .hero::after {
+    content: "";
+    position: absolute;
+    inset: 6% 8%;
+    border-radius: 50%;
+    opacity: .28;
+    pointer-events: none;
+    background: repeating-conic-gradient(from 0deg, rgba(255,255,255,.28) 0 8deg, transparent 8deg 17deg);
+  }
+
+  .hero-grid {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: 1.15fr .85fr;
+    gap: 18px;
+    align-items: stretch;
+  }
+
+  .panel {
+    border: 4px solid var(--ink);
+    border-radius: 24px;
+    background: var(--paper-2);
+    box-shadow: 0 8px 0 var(--shadow);
+  }
+
+  .brand-panel {
+    padding: 20px 22px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.55), transparent 100%),
+      #ffe474;
+  }
+
+  .eyebrow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    border: 3px solid var(--ink);
+    border-radius: 999px;
+    background: var(--red);
+    color: #fffdf6;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+  }
+
+  .brand-title {
+    margin: 12px 0 8px;
+    font-size: clamp(44px, 6vw, 76px);
+    line-height: .92;
+    letter-spacing: .02em;
+    font-weight: 900;
+  }
+
+  .brand-copy {
+    max-width: 720px;
+    font-size: 16px;
+    line-height: 1.7;
+    color: rgba(27,20,18,.78);
+  }
+
+  .metric-row {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 18px;
+  }
+
+  .metric {
+    padding: 14px 14px 12px;
+    border: 3px solid var(--ink);
+    border-radius: 18px;
+    background: rgba(255, 250, 240, 0.9);
+  }
+
+  .metric-label {
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: rgba(27,20,18,.58);
+  }
+
+  .metric-value {
+    margin-top: 8px;
+    font-size: 26px;
+    font-weight: 900;
+  }
+
+  .hero-side {
+    display: grid;
+    gap: 14px;
+  }
+
+  .hero-card {
+    padding: 18px;
+    background:
+      linear-gradient(180deg, rgba(255,255,255,.58), transparent 100%),
+      #fff8ea;
+  }
+
+  .hero-card h3 {
+    margin: 0;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+  }
+
+  .hero-card p {
+    margin: 10px 0 0;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  .section {
+    padding: 24px;
+  }
+
+  .section-head {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: end;
+    margin-bottom: 18px;
+  }
+
+  .section-title {
+    font-size: 32px;
+    font-weight: 900;
+  }
+
+  .section-sub {
+    font-size: 14px;
+    color: rgba(27,20,18,.66);
+  }
+
+  .games {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .game-card {
+    overflow: hidden;
+    border: 4px solid var(--ink);
+    border-radius: 28px;
+    background: #fff8ed;
+    box-shadow: 0 10px 0 var(--shadow);
+    transition: transform .18s ease, box-shadow .18s ease;
+  }
+
+  .game-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 14px 0 var(--shadow);
+  }
+
+  .game-hero {
+    position: relative;
+    min-height: 220px;
+    padding: 20px;
+    overflow: hidden;
+  }
+
+  .game-hero::after {
+    content: "";
+    position: absolute;
+    right: -36px;
+    bottom: -36px;
+    width: 190px;
+    height: 190px;
+    border-radius: 50%;
+    opacity: .24;
+    background: repeating-conic-gradient(from 0deg, rgba(255,255,255,.38) 0 10deg, transparent 10deg 18deg);
+  }
+
+  .game-badge {
+    position: relative;
+    z-index: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 7px 12px;
+    border: 3px solid var(--ink);
+    border-radius: 999px;
+    background: rgba(255,255,255,.84);
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  .game-icon {
+    position: relative;
+    z-index: 1;
+    margin-top: 18px;
+    font-size: 62px;
+    line-height: 1;
+    filter: drop-shadow(0 4px 0 rgba(27,20,18,.14));
+  }
+
+  .game-title {
+    position: relative;
+    z-index: 1;
+    margin-top: 14px;
+    font-size: 34px;
+    line-height: .95;
+    font-weight: 900;
+  }
+
+  .game-desc {
+    position: relative;
+    z-index: 1;
+    margin-top: 10px;
+    max-width: 30ch;
+    font-size: 14px;
+    line-height: 1.6;
+    color: rgba(27,20,18,.8);
+  }
+
+  .game-body {
+    padding: 18px 20px 20px;
+    border-top: 3px solid var(--ink);
+  }
+
+  .meta-row {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin-bottom: 16px;
+  }
+
+  .meta-pill {
+    padding: 8px 10px;
+    border: 2px solid var(--ink);
+    border-radius: 999px;
+    background: #fff8ea;
+    font-size: 11px;
+    font-weight: 900;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+
+  .cta-row {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    appearance: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 54px;
+    padding: 0 18px;
+    border: 4px solid var(--ink);
+    border-radius: 18px;
+    font-size: 14px;
+    font-weight: 900;
+    text-decoration: none;
+    box-shadow: 0 6px 0 var(--shadow);
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+
+  .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 0 var(--shadow);
+  }
+
+  .btn.primary { background: var(--forest); color: #fffdf6; }
+  .btn.secondary { background: #fff8e4; color: var(--ink); }
+
+  .future-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .future-card {
+    padding: 18px;
+    border: 3px dashed rgba(27,20,18,.38);
+    border-radius: 22px;
+    background: rgba(255,250,240,.72);
+  }
+
+  .future-title {
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .future-copy {
+    margin-top: 8px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: rgba(27,20,18,.66);
+  }
+
+  .footer {
+    padding: 0 24px 24px;
+  }
+
+  .footer-card {
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+    padding: 18px 20px;
+    border: 4px solid var(--ink);
+    border-radius: 24px;
+    background: #fff8ed;
+    box-shadow: 0 8px 0 var(--shadow);
+  }
+
+  .footer-title {
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: .16em;
+    text-transform: uppercase;
+  }
+
+  .footer-copy {
+    margin-top: 6px;
+    font-size: 14px;
+    color: rgba(27,20,18,.72);
+  }
+
+  @media (max-width: 1100px) {
+    .hero-grid,
+    .games,
+    .future-grid,
+    .metric-row {
+      grid-template-columns: 1fr;
+    }
+
+    .footer-card,
+    .section-head {
+      flex-direction: column;
+      align-items: flex-start;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="hero-grid">
+        <div class="brand-panel panel">
+          <div class="eyebrow">JHCasino Collection</div>
+          <div class="brand-title">JHCasino</div>
+          <div class="brand-copy">
+            A growing cartoon-rendered casino library with a cleaner, quieter premium mood. The portal shares the same bold outlines, warm gradients, and playful weight as the games inside, while presenting them like a curated private floor.
+          </div>
+          <div class="metric-row">
+            <div class="metric">
+              <div class="metric-label">Live Games</div>
+              <div class="metric-value">06</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">House Tone</div>
+              <div class="metric-value">Calm Cartoon</div>
+            </div>
+            <div class="metric">
+              <div class="metric-label">Library</div>
+              <div class="metric-value">Growing</div>
+            </div>
+          </div>
+        </div>
+        <div class="hero-side">
+          <div class="hero-card panel">
+            <h3>Unified Style</h3>
+            <p>The site now matches the in-game palette more closely with warm casino oranges, thick comic outlines, and simplified control-first panels.</p>
+          </div>
+          <div class="hero-card panel">
+            <h3>Single Repository</h3>
+            <p>Both current games live inside this one repository structure, ready for GitHub Pages and future expansion.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <div class="section-title">Game Floor</div>
+          <div class="section-sub">Current playable MVP titles available inside the JHCasino house.</div>
+        </div>
+      </div>
+
+      <div class="games">
+        <article class="game-card">
+          <div class="game-hero" style="background:linear-gradient(180deg,#fff0ba 0%,#ffca83 48%,#ff9f6c 100%);">
+            <div class="game-badge">Dice Table</div>
+            <div class="game-icon">D6</div>
+            <div class="game-title">High &amp; Low Dice</div>
+            <div class="game-desc">Push your streak, play the odds, and choose the right moment to lock in the pot.</div>
+          </div>
+          <div class="game-body">
+            <div class="meta-row">
+              <div class="meta-pill">Three.js</div>
+              <div class="meta-pill">Cannon.js</div>
+              <div class="meta-pill">Risk Loop</div>
+            </div>
+            <div class="cta-row">
+              <a class="btn primary" href="./games/hi-low/index.html">Play Game</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="game-card">
+          <div class="game-hero" style="background:linear-gradient(180deg,#fff0ba 0%,#ffca83 48%,#ff9f6c 100%);">
+            <div class="game-badge">Slot Hall</div>
+            <div class="game-icon">777</div>
+            <div class="game-title">Pachinko 3x3 Slot</div>
+            <div class="game-desc">A compact cartoon slot with quick betting, bright wins, and clear arcade-like pacing.</div>
+          </div>
+          <div class="game-body">
+            <div class="meta-row">
+              <div class="meta-pill">3x3 Grid</div>
+              <div class="meta-pill">Fast Play</div>
+              <div class="meta-pill">Arcade Tone</div>
+            </div>
+            <div class="cta-row">
+              <a class="btn primary" href="./games/pachinko-slot/index.html">Play Game</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="game-card">
+          <div class="game-hero" style="background:linear-gradient(180deg,#fff0ba 0%,#ffca83 48%,#ff9f6c 100%);">
+            <div class="game-badge">Card Table</div>
+            <div class="game-icon">DT</div>
+            <div class="game-title">Dragon Tiger</div>
+            <div class="game-desc">A fast card showdown with clear betting choices and instant one-card tension.</div>
+          </div>
+          <div class="game-body">
+            <div class="meta-row">
+              <div class="meta-pill">Fast Reveal</div>
+              <div class="meta-pill">Card Duel</div>
+              <div class="meta-pill">Tie x8</div>
+            </div>
+            <div class="cta-row">
+              <a class="btn primary" href="./games/dragon-tiger/index.html">Play Game</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="game-card">
+          <div class="game-hero" style="background:linear-gradient(180deg,#fff0ba 0%,#ffca83 48%,#ff9f6c 100%);">
+            <div class="game-badge">Speed Table</div>
+            <div class="game-icon">CR</div>
+            <div class="game-title">Crash</div>
+            <div class="game-desc">Ride the multiplier upward, then decide exactly when to get out before everything blows up.</div>
+          </div>
+          <div class="game-body">
+            <div class="meta-row">
+              <div class="meta-pill">Multiplier</div>
+              <div class="meta-pill">Cash Out</div>
+              <div class="meta-pill">Fast Tension</div>
+            </div>
+            <div class="cta-row">
+              <a class="btn primary" href="./games/crash/index.html">Play Game</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="game-card">
+          <div class="game-hero" style="background:linear-gradient(180deg,#fff0ba 0%,#ffca83 48%,#ff9f6c 100%);">
+            <div class="game-badge">Drop Board</div>
+            <div class="game-icon">PL</div>
+            <div class="game-title">Plinko</div>
+            <div class="game-desc">Drop the ball, follow the bounce path, and let the final slot decide the payout.</div>
+          </div>
+          <div class="game-body">
+            <div class="meta-row">
+              <div class="meta-pill">Ball Path</div>
+              <div class="meta-pill">Peg Board</div>
+              <div class="meta-pill">Center x5</div>
+            </div>
+            <div class="cta-row">
+              <a class="btn primary" href="./games/plinko/index.html">Play Game</a>
+            </div>
+          </div>
+        </article>
+
+        <article class="game-card">
+          <div class="game-hero" style="background:linear-gradient(180deg,#f4e6cb 0%,#d9c0a0 100%);">
+            <div class="game-badge">Roulette Floor</div>
+            <div class="game-icon">RT</div>
+            <div class="game-title">Roulette</div>
+            <div class="game-desc">A premium roulette table with a cinematic stage mood and a focused center-table presentation.</div>
+          </div>
+          <div class="game-body">
+            <div class="meta-row">
+              <div class="meta-pill">Wheel Spin</div>
+              <div class="meta-pill">Table Bets</div>
+              <div class="meta-pill">Premium Mood</div>
+            </div>
+            <div class="cta-row">
+              <a class="btn primary" href="./games/roulette/index.html">Play Game</a>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="section-head">
+        <div>
+          <div class="section-title">Expansion Rooms</div>
+          <div class="section-sub">Prepared placeholders for the next JHCasino additions.</div>
+        </div>
+      </div>
+      <div class="future-grid">
+        <div class="future-card">
+          <div class="future-title">Roulette Lounge</div>
+          <div class="future-copy">A polished roulette room can slide into the same card-based floor without changing the overall site feel.</div>
+        </div>
+        <div class="future-card">
+          <div class="future-title">Card Room</div>
+          <div class="future-copy">Blackjack, baccarat, and other table prototypes can be added as future premium game panels.</div>
+        </div>
+        <div class="future-card">
+          <div class="future-title">Member Hub</div>
+          <div class="future-copy">Profiles, events, rankings, and promotions can be added later as a brand layer above the games.</div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <div class="footer-card">
+        <div>
+          <div class="footer-title">JHCasino Portal</div>
+          <div class="footer-copy">A single repository front door for the expanding JHCasino game library.</div>
+        </div>
+        <div class="meta-row">
+          <div class="meta-pill">Single Repo</div>
+          <div class="meta-pill">GitHub Pages Ready</div>
+        </div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>

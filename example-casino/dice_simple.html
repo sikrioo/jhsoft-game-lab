@@ -1,0 +1,460 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tavern Dice - Pot Carryover (Clear Bet Cap)</title>
+<style>
+  :root{
+    --bg:#0f1115; --fg:#e6e6e6; --dim:#9aa0a6; --line:#2a2f3a;
+    --win:#4caf50; --lose:#e53935; --tie:#9aa0a6; --fx:#f5d66b;
+  }
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    padding:16px; display:flex; justify-content:center;
+  }
+  .wrap{ width:min(920px, 100%); }
+  .panel{
+    border:1px solid var(--line);
+    padding:14px; border-radius:10px;
+    background:rgba(255,255,255,.02);
+  }
+  .title{ color:var(--dim); margin-bottom:10px; }
+
+  .hud{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    margin-bottom:12px;
+  }
+  .pill{
+    border:1px solid var(--line);
+    border-radius:999px;
+    padding:8px 12px;
+    background:rgba(0,0,0,.25);
+    white-space:pre;
+  }
+  .pill b{ color:var(--fg); }
+  .warn{ color:#ffb74d; }
+
+  .table{
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    background:rgba(0,0,0,.25);
+  }
+  /* 참가자 | 주사위 | 결과 | 정산 */
+  .row, .head{
+    display:grid;
+    grid-template-columns: 160px 180px 120px 160px;
+    align-items:center;
+  }
+  .head{
+    background:rgba(255,255,255,.03);
+    color:var(--dim);
+    border-bottom:1px solid var(--line);
+    font-size:12px;
+  }
+  .cell{
+    padding:10px 12px;
+    border-bottom:1px solid rgba(42,47,58,.6);
+    white-space:pre;
+  }
+  .row:last-child .cell{ border-bottom:none; }
+
+  .win{ color:var(--win); font-weight:800; }
+  .lose{ color:var(--lose); font-weight:800; }
+  .tie{ color:var(--tie); font-weight:800; }
+
+  .controls{
+    display:flex; gap:10px; flex-wrap:wrap;
+    margin-top:12px; align-items:center;
+  }
+  input, button, select{
+    background:#12151c; color:var(--fg);
+    border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px;
+    font:inherit;
+  }
+  button{ cursor:pointer; }
+  button:disabled{ opacity:.45; cursor:not-allowed; }
+  .hint{ margin-top:8px; color:var(--dim); font-size:12px; line-height:1.4; }
+  .kbd{ border:1px solid var(--line); padding:1px 6px; border-radius:6px; color:var(--dim); }
+
+  /* ---- FX (double) ---- */
+  @keyframes thump {
+    0% { transform:scale(1); filter:brightness(1); }
+    25%{ transform:scale(1.04); filter:brightness(1.25); }
+    55%{ transform:scale(0.99); filter:brightness(1.15); }
+    100%{ transform:scale(1); filter:brightness(1); }
+  }
+  @keyframes shake {
+    0%{ transform:translateX(0); }
+    20%{ transform:translateX(-2px); }
+    40%{ transform:translateX(2px); }
+    60%{ transform:translateX(-2px); }
+    80%{ transform:translateX(2px); }
+    100%{ transform:translateX(0); }
+  }
+  .fxWin{
+    animation: thump 420ms ease-out 1;
+    text-shadow: 0 0 10px rgba(76,175,80,.35);
+  }
+  .fxLose{
+    animation: shake 360ms ease-out 1;
+    text-shadow: 0 0 10px rgba(229,57,53,.25);
+  }
+  .fxBadge{
+    display:inline-block;
+    margin-left:6px;
+    padding:1px 6px;
+    border:1px solid rgba(245,214,107,.55);
+    border-radius:999px;
+    color:var(--fx);
+    font-size:12px;
+    font-weight:600;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <div class="title">주점 미니게임: 뼈주사위 (무승부 팟 누적 / 베팅 한도 명확화)</div>
+
+    <div class="hud">
+      <div class="pill">내 소지금: <b id="gold">250</b>골드</div>
+      <div class="pill">최대 베팅: <b id="maxBetView">125</b>골드</div>
+      <div class="pill">현재 판돈: <b id="betView">50</b>골드</div>
+      <div class="pill">현재 팟: <b id="potView">0</b>골드</div>
+      <div class="pill" id="gateMsg">상태: 대기</div>
+    </div>
+
+    <div class="table" role="table" aria-label="dice table">
+      <div class="head" role="row">
+        <div class="cell" role="columnheader">참가자</div>
+        <div class="cell" role="columnheader">주사위</div>
+        <div class="cell" role="columnheader">결과</div>
+        <div class="cell" role="columnheader">정산</div>
+      </div>
+
+      <div class="row" role="row">
+        <div class="cell" role="cell">당신</div>
+        <div class="cell" id="pDice" role="cell">[ - ] [ - ]</div>
+        <div class="cell" id="pResult" role="cell">-</div>
+        <div class="cell" id="pPay" role="cell">0골드</div>
+      </div>
+
+      <div class="row" role="row">
+        <div class="cell" id="nName" role="cell">용병</div>
+        <div class="cell" id="nDice" role="cell">[ - ] [ - ]</div>
+        <div class="cell" id="nResult" role="cell">-</div>
+        <div class="cell" id="nPay" role="cell">0골드</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <label>판돈
+        <input id="bet" type="number" min="1" max="9999" value="50" style="width:110px" />
+      </label>
+
+      <label class="dim">NPC
+        <select id="npc">
+          <option value="용병">용병</option>
+          <option value="도적">도적</option>
+          <option value="상인">상인</option>
+          <option value="늙은 사냥꾼">늙은 사냥꾼</option>
+        </select>
+      </label>
+
+      <button id="btnPlay">한 판 굴리기</button>
+      <button id="btnReset">초기화</button>
+
+      <span class="dim">조정:</span>
+      <button id="b10">+10</button>
+      <button id="b50">+50</button>
+      <button id="bMax">최대</button>
+    </div>
+
+    <div class="hint">
+      - “최대 베팅”은 지금 규칙(최악의 경우 2배 손실)을 기준으로 <b>안전하게 걸 수 있는 한도</b>야.<br/>
+      - 무승부면 팟이 쌓이고, 승부가 나면 팟에서 <b>수수료 5%</b> 떼고 승자가 가져감.<br/>
+      - 단축키: <span class="kbd">Enter</span> 굴리기, <span class="kbd">Esc</span> 초기화
+    </div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+  // ---- Config ----
+  const FEE_RATE = 0.05;
+  const MULT_NORMAL = 1.0;
+  const MULT_DOUBLE = 1.5;
+  const MULT_DOUBLE6 = 2.0;
+
+  // “최악의 경우 총 손실”을 2배로 가정(더블6 패배 시 bet + extra(bet))
+  const MAX_LOSS_MULT = 2.0;
+
+  // ---- State ----
+  let playerGold = 250;
+  let potGold = 0;
+
+  const ui = {
+    gold: $("gold"),
+    maxBetView: $("maxBetView"),
+    betView: $("betView"),
+    potView: $("potView"),
+    gateMsg: $("gateMsg"),
+
+    bet: $("bet"),
+    npc: $("npc"),
+    btnPlay: $("btnPlay"),
+    btnReset: $("btnReset"),
+
+    nName: $("nName"),
+
+    pDice: $("pDice"),
+    pResult: $("pResult"),
+    pPay: $("pPay"),
+
+    nDice: $("nDice"),
+    nResult: $("nResult"),
+    nPay: $("nPay"),
+  };
+
+  function setText(el, text){ el.textContent = text; }
+
+  function setResult(el, html, kind){
+    el.innerHTML = html;
+    el.classList.remove("win","lose","tie");
+    if (kind) el.classList.add(kind);
+  }
+
+  function setPay(el, amount){
+    const sign = amount > 0 ? "+" : (amount < 0 ? "-" : "");
+    el.textContent = `${sign}${Math.abs(amount)}골드`;
+  }
+
+  function formatDice(a, b){ return `[ ${a} ] [ ${b} ]`; }
+
+  function analyze(a,b){
+    const isDouble = a === b;
+    return { a,b, isDouble, doubleValue: isDouble ? a : 0, sum: a+b, high: Math.max(a,b) };
+  }
+
+  function compare(A, B){
+    if (A.isDouble && !B.isDouble) return 1;
+    if (!A.isDouble && B.isDouble) return -1;
+    if (A.isDouble && B.isDouble && A.doubleValue !== B.doubleValue){
+      return A.doubleValue > B.doubleValue ? 1 : -1;
+    }
+    if (A.sum !== B.sum) return A.sum > B.sum ? 1 : -1;
+    if (A.high !== B.high) return A.high > B.high ? 1 : -1;
+    return 0;
+  }
+
+  function getMultiplier(winnerAna){
+    if (!winnerAna.isDouble) return MULT_NORMAL;
+    if (winnerAna.doubleValue === 6) return MULT_DOUBLE6;
+    return MULT_DOUBLE;
+  }
+
+  function feeFromPot(pot){ return Math.floor(pot * FEE_RATE); }
+
+  function computeMaxBet(){
+    // 최대손실 = bet*2 <= playerGold  -> bet <= floor(playerGold/2)
+    return Math.max(1, Math.floor(playerGold / MAX_LOSS_MULT));
+  }
+
+  function applyFx(el, type){
+    el.classList.remove("fxWin","fxLose");
+    void el.offsetWidth;
+    el.classList.add(type === "win" ? "fxWin" : "fxLose");
+    setTimeout(() => el.classList.remove("fxWin","fxLose"), 520);
+  }
+
+  async function rollInto(diceEl, totalMs=850){
+    let a = randInt(1,6), b = randInt(1,6);
+    const start = performance.now();
+    const stopA = totalMs - randInt(140, 260);
+    const stopB = totalMs;
+
+    while (true){
+      const t = performance.now() - start;
+      if (t < stopA) a = randInt(1,6);
+      if (t < stopB) b = randInt(1,6);
+      setText(diceEl, formatDice(a,b));
+      if (t >= stopB) break;
+      await sleep(randInt(55, 90));
+    }
+    return {a,b};
+  }
+
+  function resetUI(){
+    setText(ui.pDice, "[ - ] [ - ]");
+    setText(ui.nDice, "[ - ] [ - ]");
+    setResult(ui.pResult, "-", null);
+    setResult(ui.nResult, "-", null);
+    setPay(ui.pPay, 0);
+    setPay(ui.nPay, 0);
+    refreshBetCapAndGate();
+  }
+
+  function refreshBetCapAndGate(){
+    const maxBet = computeMaxBet();
+
+    // 입력값을 최대베팅으로 자동 clamp
+    let bet = parseInt(ui.bet.value || "0", 10);
+    bet = Number.isFinite(bet) ? bet : 1;
+    bet = clamp(bet, 1, maxBet);
+    ui.bet.value = bet;
+
+    setText(ui.gold, String(playerGold));
+    setText(ui.maxBetView, String(maxBet));
+    setText(ui.betView, String(bet));
+    setText(ui.potView, String(potGold));
+
+    // 여기서는 “최대베팅을 넘을 수 없게 clamp” 했으니 진행은 항상 가능
+    // 단, 소지금이 0이면 최소베팅도 못하니 막음
+    const ok = playerGold >= 2; // 최소 bet=1인데 최악=2 필요
+    ui.btnPlay.disabled = !ok;
+
+    if (ok){
+      ui.gateMsg.textContent = "상태: 진행 가능";
+      ui.gateMsg.className = "pill";
+    } else {
+      ui.gateMsg.textContent = "상태: 소지금 부족";
+      ui.gateMsg.className = "pill warn";
+    }
+  }
+
+  function adjustBet(delta){
+    const maxBet = computeMaxBet();
+    let bet = parseInt(ui.bet.value || "0", 10);
+    bet = Number.isFinite(bet) ? bet : 1;
+    bet = clamp(bet + delta, 1, maxBet);
+    ui.bet.value = bet;
+    refreshBetCapAndGate();
+  }
+
+  function setMaxBet(){
+    ui.bet.value = computeMaxBet();
+    refreshBetCapAndGate();
+  }
+
+  async function play(){
+    refreshBetCapAndGate();
+    if (ui.btnPlay.disabled) return;
+    ui.btnPlay.disabled = true;
+
+    const bet = parseInt(ui.bet.value, 10);
+    const npcName = ui.npc.value;
+    setText(ui.nName, npcName);
+
+    setResult(ui.pResult, "-", null);
+    setResult(ui.nResult, "-", null);
+    setPay(ui.pPay, 0);
+    setPay(ui.nPay, 0);
+
+    // 베팅(팟 누적): 플레이어는 실제로 bet 차감
+    playerGold -= bet;
+    potGold += (bet * 2);
+    refreshBetCapAndGate();
+
+    const p = await rollInto(ui.pDice);
+    const n = await rollInto(ui.nDice);
+
+    const pAna = analyze(p.a,p.b);
+    const nAna = analyze(n.a,n.b);
+
+    const r = compare(pAna, nAna);
+
+    // 무승부: 팟 유지(누적)
+    if (r === 0){
+      setResult(ui.pResult, "무승부", "tie");
+      setResult(ui.nResult, "무승부", "tie");
+      setPay(ui.pPay, 0);
+      setPay(ui.nPay, 0);
+      refreshBetCapAndGate();
+      ui.btnPlay.disabled = false;
+      return;
+    }
+
+    const playerWins = (r === 1);
+    const winnerAna = playerWins ? pAna : nAna;
+    const mult = getMultiplier(winnerAna);
+
+    // 패자 추가 손실(extra) -> 팟에 추가
+    const extra = Math.floor(bet * (mult - 1));
+    if (!playerWins){
+      playerGold -= extra;
+    }
+    potGold += extra;
+
+    // 수수료 후 승자 지급
+    const fee = feeFromPot(potGold);
+    const payout = potGold - fee;
+    potGold = 0;
+
+    if (playerWins){
+      playerGold += payout;
+
+      if (winnerAna.isDouble && winnerAna.doubleValue === 6){
+        setResult(ui.pResult, `승리<span class="fxBadge">더블6</span>`, "win");
+      } else if (winnerAna.isDouble){
+        setResult(ui.pResult, `승리<span class="fxBadge">더블</span>`, "win");
+      } else {
+        setResult(ui.pResult, "승리", "win");
+      }
+      setResult(ui.nResult, "패배", "lose");
+
+      setPay(ui.pPay, payout - bet);
+      setPay(ui.nPay, -(payout - fee));
+
+      applyFx(ui.pDice, "win");
+      applyFx(ui.pResult, "win");
+    } else {
+      if (winnerAna.isDouble && winnerAna.doubleValue === 6){
+        setResult(ui.nResult, `승리<span class="fxBadge">더블6</span>`, "win");
+      } else if (winnerAna.isDouble){
+        setResult(ui.nResult, `승리<span class="fxBadge">더블</span>`, "win");
+      } else {
+        setResult(ui.nResult, "승리", "win");
+      }
+      setResult(ui.pResult, "패배", "lose");
+
+      setPay(ui.pPay, -(bet + extra));
+      setPay(ui.nPay, +(payout - bet));
+
+      applyFx(ui.pDice, "lose");
+      applyFx(ui.pResult, "lose");
+      if (winnerAna.isDouble) applyFx(ui.nDice, "win");
+    }
+
+    playerGold = Math.max(0, playerGold);
+    refreshBetCapAndGate();
+    ui.btnPlay.disabled = false;
+  }
+
+  // ---- Events ----
+  ui.bet.addEventListener("input", refreshBetCapAndGate);
+  ui.npc.addEventListener("change", () => setText(ui.nName, ui.npc.value));
+
+  $("b10").addEventListener("click", () => adjustBet(10));
+  $("b50").addEventListener("click", () => adjustBet(50));
+  $("bMax").addEventListener("click", setMaxBet);
+
+  ui.btnPlay.addEventListener("click", () => play().catch(console.error));
+  ui.btnReset.addEventListener("click", resetUI);
+
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !ui.btnPlay.disabled) play().catch(console.error);
+    if (e.key === "Escape") resetUI();
+  });
+
+  resetUI();
+</script>
+</body>
+</html>

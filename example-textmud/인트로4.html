@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Prophecy & Awakening - Cinematic Intro</title>
+  <style>
+    :root {
+      --fg: #e5e7eb; --dim: #9ca3af; --sys: #fbbf24; --blood: rgba(239,68,68,.92);
+      --prophet-bg: rgba(10, 10, 15, 0.95);
+    }
+    body { margin: 0; background: #000; color: var(--fg); font-family: ui-monospace, 'Courier New', monospace; overflow: hidden; }
+
+    /* 🎬 3분할 예지자 컨테이너 */
+    #prophecyScene {
+      position: absolute; inset: 0; z-index: 100;
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      background: #000; transition: opacity 2000ms ease;
+    }
+    .prophet-panel {
+      position: relative; border-right: 1px solid rgba(255,255,255,0.05);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: 40px; opacity: 0.15; transition: opacity 1200ms ease, background 1500ms ease;
+    }
+    .prophet-panel.active { opacity: 1; background: var(--prophet-bg); }
+    .prophet-name { font-size: 12px; color: var(--sys); letter-spacing: 0.3em; margin-bottom: 20px; opacity: 0.6; }
+    .prophet-text { font-size: 16px; line-height: 1.8; text-align: center; word-break: keep-all; height: 120px; }
+    .prophet-clue { font-size: 13px; color: var(--blood); margin-top: 30px; opacity: 0; transition: opacity 1000ms; }
+    .prophet-clue.show { opacity: 1; }
+
+    /* 🎬 주인공 씬 (기존 스타일 계승) */
+    .scene { position: relative; height: 100vh; overflow: hidden; opacity: 0; transition: opacity 2500ms ease; }
+    .scene.active { opacity: 1; }
+    
+    #view { position: absolute; inset: 0; z-index: 1; transform: scale(1.02); }
+    #view.standUp { animation: standUpAnim 2400ms ease-out forwards; }
+    @keyframes standUpAnim {
+      0% { transform: translateY(0px) scale(1.02); }
+      100% { transform: translateY(-44px) scale(1.0); }
+    }
+
+    .bg { position: absolute; inset: 0; background: radial-gradient(circle at 50% 35%, rgba(40,10,10,.62), #000 62%); }
+    .vignette { position: absolute; inset: -10%; background: radial-gradient(circle, transparent 33%, rgba(0,0,0,0.9) 100%); pointer-events: none; }
+    
+    /* 텍스트 박스 및 기타 UI */
+    #centerCaption { 
+      position: absolute; inset: 0; z-index: 5; display: flex; align-items: center; justify-content: center;
+      padding: 0 18px; opacity: 0; transform: translateY(10px); transition: 500ms;
+    }
+    #centerCaption.show { opacity: 1; transform: translateY(0); }
+    .captionBox { max-width: 820px; width: 100%; background: rgba(0,0,0,.7); border: 1px solid rgba(255,255,255,.1); border-radius: 12px; padding: 24px; backdrop-filter: blur(10px); }
+    .captionText { font-size: 18px; line-height: 1.6; }
+    #systemHUD { position: absolute; bottom: 0; width: 100%; padding: 20px; background: linear-gradient(transparent, rgba(0,0,0,0.8)); }
+    #systemLog { max-width: 900px; margin: 0 auto; color: var(--sys); font-size: 14px; }
+    .blinkCursor::after { content: "▍"; animation: blink 1s step-end infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+  </style>
+</head>
+<body>
+
+  <div id="prophecyScene">
+    <div class="prophet-panel" id="p1">
+      <div class="prophet-name">첫 번째 예지자</div>
+      <div class="prophet-text" id="t1"></div>
+      <div class="prophet-clue" id="c1">첫 번째 단서: [거꾸로 흐르는 모래시계]</div>
+    </div>
+    <div class="prophet-panel" id="p2">
+      <div class="prophet-name">두 번째 예지자</div>
+      <div class="prophet-text" id="t2"></div>
+      <div class="prophet-clue" id="c2">두 번째 단서: [이름 없는 자의 묘비]</div>
+    </div>
+    <div class="prophet-panel" id="p3">
+      <div class="prophet-name">세 번째 예지자</div>
+      <div class="prophet-text" id="t3"></div>
+      <div class="prophet-clue" id="c3">세 번째 단서: [피로 씻긴 은빛 열쇠]</div>
+    </div>
+  </div>
+
+  <div class="scene" id="mainScene">
+    <div id="view">
+      <div class="bg"></div>
+      <div class="vignette"></div>
+      <div id="camera">
+        <div id="world" class="world" style="padding: 60px; text-align:center;">
+          <h2 style="color:rgba(255,255,255,0.15); letter-spacing: 1em;">SACRIFICE CITY</h2>
+        </div>
+      </div>
+    </div>
+
+    <div id="centerCaption">
+      <div class="captionBox" id="captionBox">
+        <div id="captionText" class="captionText blinkCursor"></div>
+      </div>
+    </div>
+
+    <div id="systemHUD">
+      <div id="systemLog"></div>
+    </div>
+  </div>
+
+  <script>
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    async function typeWriter(el, text, speed = 70) {
+      el.textContent = "";
+      for (const char of text) {
+        el.textContent += char;
+        await sleep(speed);
+      }
+    }
+
+    async function startIntro() {
+      // --- PART 1: 예지자 시퀀스 ---
+      const pData = [
+        { panel: "p1", text: "t1", clue: "c1", msg: "도시가 불타고 있습니다...\n하늘에서 검은 재가 눈처럼 내리는군요." },
+        { panel: "p2", text: "t2", clue: "c2", msg: "모든 아이들이 웃음을 잃었습니다.\n제단 위에는 당신의 그림자가 놓여있소." },
+        { panel: "p3", text: "t3", clue: "c3", msg: "하지만 보십시오. 무너진 성벽 틈새로\n작은 빛이 스며들고 있습니다." }
+      ];
+
+      for (let i = 0; i < pData.length; i++) {
+        const p = pData[i];
+        document.getElementById(p.panel).classList.add('active');
+        await typeWriter(document.getElementById(p.text), p.msg, 60);
+        await sleep(600);
+        document.getElementById(p.clue).classList.add('show');
+        await sleep(1200);
+      }
+
+      await sleep(2000);
+      document.getElementById('prophecyScene').style.opacity = "0";
+      await sleep(2000);
+      document.getElementById('prophecyScene').style.display = "none";
+
+      // --- PART 2: 주인공 각성 시퀀스 ---
+      const mainScene = document.getElementById('mainScene');
+      mainScene.classList.add('active');
+      await sleep(1500);
+
+      await showCaption("...차가운 감각.", 1500);
+      await showCaption("등 뒤로 느껴지는 것은 딱딱한 돌바닥이다.", 1800);
+      await showCaption("방금 전까지 들리던 목소리들이\n환청처럼 귓가를 맴돈다.", 2000);
+
+      // 주인공 몸을 일으킴
+      document.getElementById('view').classList.add('standUp');
+      document.getElementById('captionBox').style.transform = "translateY(-20px)";
+      
+      await showCaption("당신은 재물이 된 도시의 심장부에서\n천천히 눈을 뜬다.", 2500);
+
+      document.getElementById('systemLog').innerHTML = "[시스템] 당신은 살아남았습니다. 예지자들의 말을 기억하십시오.<br>[시스템] 명령어를 입력하십시오: look / status / inventory";
+    }
+
+    async function showCaption(text, hold) {
+      const cap = document.getElementById('centerCaption');
+      const capText = document.getElementById('captionText');
+      cap.classList.add('show');
+      await typeWriter(capText, text, 50);
+      await sleep(hold);
+      cap.classList.remove('show');
+      await sleep(500);
+    }
+
+    // 시작
+    window.onload = startIntro;
+  </script>
+</body>
+</html>

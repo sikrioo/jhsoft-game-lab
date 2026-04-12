@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tavern Blackjack - Master Dealer Edition</title>
+<style>
+  :root{
+    --bg:#0f1115; --fg:#e6e6e6; --dim:#9aa0a6; --line:#2a2f3a;
+    --win:#4caf50; --lose:#e53935; --tie:#9aa0a6; --fx:#f5d66b;
+    --master:#9c27b0;
+  }
+  *{ box-sizing: border-box; }
+  body{
+    margin:0; background:var(--bg); color:var(--fg);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    padding:16px; display:flex; justify-content:center;
+  }
+  .wrap{ width:min(980px, 100%); }
+  .panel{
+    border:1px solid var(--line);
+    padding:14px; border-radius:10px;
+    background:rgba(255,255,255,.02);
+  }
+  .title-area { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+  .title{ color:var(--dim); font-weight: bold; }
+  
+  /* 고수 딜러 토글 스위치 */
+  .mode-switch { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  #isMaster { accent-color: var(--master); cursor: pointer; }
+
+  .hud{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .pill{
+    border:1px solid var(--line); border-radius:999px;
+    padding:8px 14px; background:rgba(0,0,0,.25); min-width: 110px; text-align: center;
+  }
+  .active-turn { border-color: var(--fx); box-shadow: 0 0 10px rgba(245,214,107,0.1); }
+  .master-turn { border-color: var(--master); box-shadow: 0 0 10px rgba(156,39,176,0.2); color: #e1bee7; }
+
+  .table{ border:1px solid var(--line); border-radius:10px; overflow:hidden; background:rgba(0,0,0,.25); }
+  .row, .head{ display:grid; grid-template-columns: 120px 1fr 80px 100px 120px; }
+  .head{ background:rgba(255,255,255,.03); color:var(--dim); border-bottom:1px solid var(--line); font-size:12px; }
+  .cell{ padding:12px; border-bottom:1px solid rgba(42,47,58,.6); display: flex; align-items: center; min-height: 56px; }
+  .row:last-child .cell { border-bottom: none; }
+  
+  .card-slot {
+    display: inline-flex; align-items: center; justify-content: center;
+    margin-right: 6px; width: 45px; height: 32px;
+    border: 1px solid var(--line); border-radius: 4px;
+    background: #1a1d23; font-size: 14px; font-weight: bold;
+    animation: cardIn 0.3s ease-out forwards;
+  }
+  @keyframes cardIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+
+  .win{ color:var(--win); font-weight:800; }
+  .lose{ color:var(--lose); font-weight:800; }
+  .fxWin{ animation: thump 0.4s ease-out; }
+  @keyframes thump { 0%, 100% { transform:scale(1); } 50% { transform:scale(1.05); } }
+
+  .controls{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; align-items:center; }
+  input, button{ background:#12151c; color:var(--fg); border:1px solid var(--line); border-radius:10px; padding:10px 12px; font:inherit; }
+  button:hover:not(:disabled) { border-color: var(--fx); }
+  button:disabled{ opacity:.3; cursor:not-allowed; }
+
+  /* 카운팅 정보창 (고수 모드 전용) */
+  .counting-info { font-size: 11px; color: #666; margin-top: 10px; display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="panel">
+    <div class="title-area">
+      <div class="title" id="dealerName">주점 블랙잭: 견습 딜러</div>
+      <div class="mode-switch">
+        <label for="isMaster">고수 딜러 모드</label>
+        <input type="checkbox" id="isMaster">
+      </div>
+    </div>
+
+    <div class="hud">
+      <div class="pill">보유: <b id="gold">300</b>G</div>
+      <div class="pill">판돈: <b id="betView">25</b>G</div>
+      <div class="pill" id="msg">상태: 대기 중</div>
+    </div>
+
+    <div class="table">
+      <div class="head"><div class="cell">참가자</div><div class="cell">패</div><div class="cell">합계</div><div class="cell">결과</div><div class="cell">정산</div></div>
+      <div class="row">
+        <div class="cell" id="roleLabel">딜러</div>
+        <div id="dCards" class="cell">-</div>
+        <div id="dTotal" class="cell">?</div>
+        <div id="dResult" class="cell">-</div>
+        <div id="dPay" class="cell">0G</div>
+      </div>
+      <div class="row">
+        <div class="cell">당신</div>
+        <div id="pCards" class="cell">-</div>
+        <div id="pTotal" class="cell">0</div>
+        <div id="pResult" class="cell">-</div>
+        <div id="pPay" class="cell">0G</div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <input id="bet" type="number" min="1" value="25" style="width:80px" />
+      <button id="b10">+10</button>
+      <button id="b50">+50</button>
+      <span style="flex-grow:1"></span>
+      <button id="btnDeal">Deal</button>
+      <button id="btnHit" disabled>Hit</button>
+      <button id="btnStand" disabled>Stand</button>
+      <button id="btnReset">Reset</button>
+    </div>
+    
+    <div id="debugInfo" class="counting-info">Master Deck Insight: 카운트 0 (중립)</div>
+  </div>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  const FEE_RATE = 0.01;
+  const DEALER_STAND = 17;
+  
+  let playerGold = 300;
+  let phase = "IDLE"; 
+  let bet = 25;
+  let deck = [];
+  let pHand = [];
+  let dHand = [];
+  let dealerHoleHidden = true;
+
+  // --- 카운팅 시스템 관련 변수 ---
+  let runningCount = 0; // Hi-Lo 카운트
+
+  function updateCounting(card) {
+    if (["2","3","4","5","6"].includes(card)) runningCount++;
+    else if (["10","J","Q","K","A"].includes(card)) runningCount--;
+    
+    let trend = runningCount > 0 ? "플레이어 유리" : (runningCount < 0 ? "딜러 유리" : "중립");
+    $("debugInfo").textContent = `Master Deck Insight: 카운트 ${runningCount} (${trend})`;
+  }
+
+  function buildDeck() {
+    runningCount = 0; // 덱 새로 섞으면 카운트 초기화
+    const ranks = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+    const d = [];
+    for (let s=0; s<8; s++) for (const r of ranks) d.push(r); // 8덱 사용 (카운팅의 정석)
+    for (let i=d.length-1; i>0; i--) {
+      const j = Math.floor(Math.random()*(i+1));
+      [d[i], d[j]] = [d[j], d[i]];
+    }
+    return d;
+  }
+
+  function draw() {
+    if (deck.length < 20) deck = buildDeck();
+    const card = deck.pop();
+    updateCounting(card);
+    return card;
+  }
+
+  function handTotal(hand) {
+    let total = 0, aces = 0;
+    for (const r of hand) {
+      if (r === "A") { total += 11; aces++; }
+      else if (["K","Q","J"].includes(r)) total += 10;
+      else total += parseInt(r);
+    }
+    while (total > 21 && aces > 0) { total -= 10; aces--; }
+    return total;
+  }
+
+  function setMsg(text, isWarn = false) {
+    const isMaster = $("isMaster").checked;
+    $("msg").textContent = text;
+    $("msg").className = isWarn ? "pill warn" : (isMaster ? "pill master-turn" : "pill active-turn");
+  }
+
+  function renderCards() {
+    $("pCards").innerHTML = pHand.map(c => `<div class="card-slot">${c}</div>`).join("");
+    const dShow = dealerHoleHidden ? (dHand.length ? [`??`, ...dHand.slice(1)] : []) : dHand;
+    $("dCards").innerHTML = dShow.map(c => `<div class="card-slot">${c}</div>`).join("");
+    $("pTotal").textContent = handTotal(pHand);
+    $("dTotal").textContent = dealerHoleHidden ? "?" : handTotal(dHand);
+    $("gold").textContent = playerGold;
+    $("betView").textContent = bet;
+  }
+
+  async function rollingTotal(elId, finalValue) {
+    const el = $(elId); el.classList.add("rolling");
+    for (let i=0; i<6; i++) { el.textContent = Math.floor(Math.random()*21); await sleep(40); }
+    el.classList.remove("rolling"); el.textContent = finalValue;
+  }
+
+  // --- 딜러의 지능형 대사 (고수 모드 전용) ---
+  function getMasterCommentary(action) {
+    if (!$("isMaster").checked) return;
+    const pT = handTotal(pHand);
+    
+    if (action === "HIT") {
+      if (runningCount <= -3) return "딜러: '낮은 카드가 다 빠졌는데... 버스트 조심하시게.'";
+      if (runningCount >= 3) return "딜러: '아직 작은 카드들이 많이 남았군. 더 뽑아보게나.'";
+      if (pT >= 15) return "딜러: '그 점수에서 더 뽑겠다고? 배짱 한번 좋군.'";
+    }
+    if (action === "STAND") {
+      if (pT < 15) return "딜러: '겨우 그 점수로 멈추는가? 싱겁구먼.'";
+      if (pT >= 19) return "딜러: '허허, 쉽지 않은 점수를 만드셨군.'";
+    }
+  }
+
+  async function deal() {
+    bet = parseInt($("bet").value);
+    if (bet > playerGold) return setMsg("소지금 부족!", true);
+    playerGold -= bet;
+    phase = "ANIMATING";
+    pHand = []; dHand = []; dealerHoleHidden = true;
+    updateButtons(); clearRoundUI();
+    
+    const drawSeq = ["P", "D", "P", "D"];
+    for (let target of drawSeq) {
+      setMsg(target === "P" ? "카드 분배..." : "딜러 카드 분배...");
+      if (target === "P") pHand.push(draw()); else dHand.push(draw());
+      renderCards(); await sleep(500);
+    }
+
+    if (handTotal(pHand) === 21) await settleNatural();
+    else {
+      phase = "PLAYER_TURN";
+      setMsg("당신의 차례입니다.");
+      updateButtons();
+    }
+  }
+
+  async function hit() {
+    if (phase !== "PLAYER_TURN") return;
+    const comment = getMasterCommentary("HIT");
+    if (comment) { setMsg(comment); await sleep(1000); }
+
+    phase = "ANIMATING"; updateButtons();
+    pHand.push(draw()); renderCards();
+    const total = handTotal(pHand);
+    await rollingTotal("pTotal", total);
+
+    if (total > 21) { setMsg("버스트!"); await sleep(600); settleLose("버스트"); }
+    else { phase = "PLAYER_TURN"; updateButtons(); }
+  }
+
+  async function stand() {
+    if (phase !== "PLAYER_TURN") return;
+    const comment = getMasterCommentary("STAND");
+    if (comment) { setMsg(comment); await sleep(1000); }
+
+    phase = "DEALER_TURN"; updateButtons();
+    setMsg("딜러의 패를 공개합니다..."); await sleep(800);
+    dealerHoleHidden = false; renderCards();
+    await rollingTotal("dTotal", handTotal(dHand));
+    await sleep(600);
+
+    while (handTotal(dHand) < DEALER_STAND) {
+      setMsg("딜러가 카드를 뽑습니다..."); await sleep(1000);
+      dHand.push(draw()); renderCards();
+      await rollingTotal("dTotal", handTotal(dHand)); await sleep(500);
+    }
+    settleCompare();
+  }
+
+  function settleCompare() {
+    const pT = handTotal(pHand), dT = handTotal(dHand);
+    if (dT > 21) settleWin(1, "딜러 버스트!");
+    else if (pT > dT) settleWin(1, "승리!");
+    else if (pT < dT) settleLose("패배");
+    else settlePush();
+  }
+
+  async function settleNatural() {
+    dealerHoleHidden = false; renderCards();
+    if (handTotal(dHand) === 21) settlePush();
+    else settleWin(1.5, "블랙잭!");
+  }
+
+  function settleWin(mult, label) {
+    const profit = Math.floor(bet * mult);
+    const fee = Math.floor(profit * FEE_RATE);
+    const net = profit - fee;
+    playerGold += bet + net;
+    $("pResult").textContent = label; $("pResult").className = "cell win fxWin";
+    $("pPay").textContent = `+${net}G`;
+    setMsg(`${label} (+${net}G)`); endRound();
+  }
+
+  function settleLose(label) {
+    $("pResult").textContent = label; $("pResult").className = "cell lose";
+    $("pPay").textContent = `-${bet}G`;
+    setMsg("패배했습니다."); endRound();
+  }
+
+  function settlePush() {
+    playerGold += bet;
+    $("pResult").textContent = "무승부"; $("pResult").className = "cell tie";
+    setMsg("무승부입니다."); endRound();
+  }
+
+  function clearRoundUI() {
+    $("pResult").textContent = "-"; $("pResult").className = "cell";
+    $("pPay").textContent = "0G";
+  }
+
+  function endRound() { phase = "SETTLED"; updateButtons(); }
+
+  function updateButtons() {
+    $("btnDeal").disabled = !(phase === "IDLE" || phase === "SETTLED");
+    $("btnHit").disabled = phase !== "PLAYER_TURN";
+    $("btnStand").disabled = phase !== "PLAYER_TURN";
+  }
+
+  // 모드 변경 이벤트
+  $("isMaster").onchange = (e) => {
+    const isMaster = e.target.checked;
+    $("dealerName").textContent = isMaster ? "주점 블랙잭: ★고수 딜러" : "주점 블랙잭: 견습 딜러";
+    $("roleLabel").textContent = isMaster ? "고수 딜러" : "딜러";
+    $("debugInfo").style.display = isMaster ? "block" : "none";
+    setMsg(isMaster ? "고수가 상대를 해드리지요." : "견습생이 새로 왔습니다.");
+  };
+
+  $("btnDeal").onclick = deal;
+  $("btnHit").onclick = hit;
+  $("btnStand").onclick = stand;
+  $("btnReset").onclick = () => { location.reload(); };
+  $("b10").onclick = () => { $("bet").value = parseInt($("bet").value) + 10; };
+  $("b50").onclick = () => { $("bet").value = parseInt($("bet").value) + 50; };
+
+  deck = buildDeck();
+  updateButtons();
+</script>
+</body>
+</html>

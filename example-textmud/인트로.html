@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Text MUD Intro - Cinematic Wakeup</title>
+  <style>
+    :root{
+      --fg: #e5e7eb;
+      --dim: #9ca3af;
+      --sys: #fbbf24;
+      --blood: rgba(239,68,68,.92);
+    }
+
+    body{ margin:0; background:#000; }
+    .scene{
+      position:relative; height:100vh; overflow:hidden;
+      background:#000; color:var(--fg);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    /* 배경 분위기(불/연기 느낌만) */
+    .bg{
+      position:absolute; inset:0;
+      background:
+        radial-gradient(circle at 50% 35%, rgba(40,10,10,.62), rgba(0,0,0,1) 62%),
+        radial-gradient(circle at 75% 60%, rgba(90,20,10,.22), rgba(0,0,0,0) 55%),
+        radial-gradient(circle at 25% 70%, rgba(70,10,20,.16), rgba(0,0,0,0) 55%),
+        linear-gradient(180deg, rgba(0,0,0,.15), rgba(0,0,0,.65));
+      filter: saturate(1.25) contrast(1.12);
+      transform: scale(1.02);
+    }
+    .vignette{
+      position:absolute; inset:-10%;
+      background: radial-gradient(circle, rgba(0,0,0,0) 33%, rgba(0,0,0,.88) 76%, rgba(0,0,0,1) 100%);
+      pointer-events:none;
+    }
+    .noise{
+      position:absolute; inset:0; pointer-events:none; opacity:.10; mix-blend-mode: overlay;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='.35'/%3E%3C/svg%3E");
+    }
+
+    /* 카메라 레이어: 블러/팬/미세 흔들림 */
+    #camera{
+      position:relative; z-index:2; height:100%;
+      filter: blur(0px);
+      transition: filter 1700ms ease;
+    }
+    #camera.maxBlur{ filter: blur(10px); }
+
+    /* 팬(둘러봄) */
+    #camera.panLeft{ animation: panLeft 1200ms ease-in-out 1; }
+    #camera.panRight{ animation: panRight 1200ms ease-in-out 1; }
+    @keyframes panLeft{
+      0%{ transform: translate(0,0); }
+      30%{ transform: translate(-14px, 2px); }
+      60%{ transform: translate(-6px, -1px); }
+      100%{ transform: translate(0,0); }
+    }
+    @keyframes panRight{
+      0%{ transform: translate(0,0); }
+      30%{ transform: translate(14px, 2px); }
+      60%{ transform: translate(6px, -1px); }
+      100%{ transform: translate(0,0); }
+    }
+
+    /* 붕괴/충격 같은 순간 흔들림 */
+    #camera.shake{ animation: shake .26s linear 1; }
+    @keyframes shake{
+      0%{ transform: translate(0,0); }
+      20%{ transform: translate(-6px,2px); }
+      40%{ transform: translate(5px,-4px); }
+      60%{ transform: translate(-4px,-2px); }
+      80%{ transform: translate(6px,2px); }
+      100%{ transform: translate(0,0); }
+    }
+
+    /* 본문 월드(시점 상승 = 몸을 일으킴) */
+    .world{
+      max-width: 900px; margin: 0 auto;
+      padding: 56px 20px;
+      transform: translateY(22px);
+      transition: transform 1400ms ease, opacity 1200ms ease;
+      opacity:.88;
+    }
+    .world.rise{ transform: translateY(-10px); opacity:1; }
+
+    .title{ font-size:24px; margin-bottom:14px; color:var(--dim); }
+    .mainText{
+      font-size:16px; line-height:1.9;
+      white-space: pre-wrap;
+      text-shadow: 0 0 18px rgba(0,0,0,.35);
+    }
+    .sys{ color:var(--sys); }
+    .dim{ color:var(--dim); }
+
+    /* 오버레이 레이어(비명/속삭임) */
+    #overlayLayer{
+      position:absolute; inset:0; z-index:3; pointer-events:none;
+    }
+
+    /* 방향감: 텍스트 조각 */
+    .overlayShard{
+      position:absolute;
+      transform: translate(-50%,-50%);
+      white-space: nowrap;
+      font-weight: 900;
+      letter-spacing: .06em;
+      color: rgba(239,68,68,0);
+      text-shadow: 0 0 16px rgba(239,68,68,.22);
+      opacity:0;
+      mix-blend-mode: screen;
+      filter: blur(1px);
+    }
+
+    /* “멀리” 느낌 */
+    .overlayShard.far{
+      text-shadow: 0 0 10px rgba(239,68,68,.18);
+      opacity:.0;
+    }
+
+    /* “근처” 느낌 */
+    .overlayShard.near{
+      text-shadow: 0 0 22px rgba(239,68,68,.30);
+    }
+
+    /* 나타났다 사라지는 영화식 */
+    .overlayShard.show{
+      animation: shard var(--dur, 1800ms) ease 1;
+    }
+    @keyframes shard{
+      0%   { opacity:0; color: rgba(239,68,68,0); transform: translate(-50%,-50%) scale(.98); filter: blur(2px); }
+      18%  { opacity:1; color: var(--blood); filter: blur(0); }
+      75%  { opacity:.86; }
+      100% { opacity:0; color: rgba(239,68,68,0); transform: translate(-50%,-50%) scale(1.02); filter: blur(2px); }
+    }
+
+    /* 악마 속삭임 전용(조금 더 차갑게) */
+    .overlayShard.whisper{
+      color: rgba(239,68,68,0);
+      text-shadow: 0 0 20px rgba(239,68,68,.35);
+      letter-spacing: .14em;
+    }
+
+    /* 하단 힌트 */
+    #hint{
+      position:absolute; left:18px; bottom:18px; z-index:4;
+      font-size:13px; color:var(--sys);
+      opacity:0; transform: translateY(8px);
+      transition: opacity 700ms ease, transform 700ms ease;
+    }
+    #hint.show{ opacity:.95; transform: translateY(0); }
+
+    /* 상단 상태(선택): 영화 자막처럼 얇게 */
+    #sub{
+      position:absolute; left:18px; top:16px; z-index:4;
+      font-size:12px; color: rgba(229,231,235,.55);
+      letter-spacing:.08em;
+      opacity:.0;
+      transition: opacity 800ms ease;
+    }
+    #sub.show{ opacity:1; }
+  </style>
+</head>
+
+<body>
+  <div class="scene" id="scene">
+    <div class="bg"></div>
+    <div class="vignette"></div>
+    <div class="noise"></div>
+
+    <div id="sub">CHAPTER 0 — SACRIFICE CITY</div>
+
+    <div id="camera" class="maxBlur">
+      <div id="world" class="world">
+        <div class="title">…</div>
+        <div id="mainText" class="mainText"></div>
+      </div>
+    </div>
+
+    <div id="overlayLayer"></div>
+    <div id="hint">[시스템] look / move / search</div>
+  </div>
+
+  <script>
+    const mainText = document.getElementById("mainText");
+    const overlayLayer = document.getElementById("overlayLayer");
+    const camera = document.getElementById("camera");
+    const world = document.getElementById("world");
+    const hint = document.getElementById("hint");
+    const sub = document.getElementById("sub");
+
+    const sleep = (ms)=>new Promise(r=>setTimeout(r, ms));
+
+    async function type(text, speed=18){
+      for(const ch of text){
+        mainText.textContent += ch;
+        await sleep(speed);
+      }
+    }
+    function br(){ mainText.textContent += "\n"; }
+
+    function cameraShake(){
+      camera.classList.remove("shake");
+      void camera.offsetWidth;
+      camera.classList.add("shake");
+    }
+    function pan(dir){
+      camera.classList.remove("panLeft","panRight");
+      void camera.offsetWidth;
+      camera.classList.add(dir === "L" ? "panLeft" : "panRight");
+    }
+
+    /**
+     * 방향 프리셋: 영화처럼 "어디서 들리는지" 느낌이 나게,
+     * 화면 영역을 미리 잡아두고 거기서만 생성한다.
+     */
+    const DIRECTIONS = {
+      LEFT_FAR:   { x:[12, 30], y:[28, 55], size:[18, 26], dur:[1700, 2400], cls:"far"  },
+      RIGHT_FAR:  { x:[70, 88], y:[28, 55], size:[18, 26], dur:[1700, 2400], cls:"far"  },
+      BACK_FAR:   { x:[35, 65], y:[18, 32], size:[16, 24], dur:[1800, 2600], cls:"far"  },
+      NEAR_LEFT:  { x:[18, 38], y:[58, 78], size:[26, 38], dur:[1800, 2600], cls:"near" },
+      NEAR_RIGHT: { x:[62, 82], y:[58, 78], size:[26, 38], dur:[1800, 2600], cls:"near" },
+      OVERHEAD:   { x:[42, 58], y:[10, 18], size:[18, 28], dur:[1600, 2200], cls:"far"  },
+      CENTER:     { x:[42, 58], y:[38, 62], size:[26, 40], dur:[1700, 2500], cls:"near" }
+    };
+
+    const rand = (a,b)=> a + Math.random()*(b-a);
+    const pick = (arr)=> arr[Math.floor(Math.random()*arr.length)];
+
+    function spawnOverlay(text, dirKey, opts={}){
+      const d = DIRECTIONS[dirKey] || DIRECTIONS.CENTER;
+
+      const el = document.createElement("div");
+      el.className = `overlayShard ${d.cls || ""} ${opts.whisper ? "whisper" : ""}`;
+
+      const x = opts.x ?? rand(d.x[0], d.x[1]);
+      const y = opts.y ?? rand(d.y[0], d.y[1]);
+      const size = opts.size ?? rand(d.size[0], d.size[1]);
+      const dur = opts.dur ?? rand(d.dur[0], d.dur[1]);
+
+      el.style.left = x + "%";
+      el.style.top  = y + "%";
+      el.style.fontSize = size + "px";
+      el.style.setProperty("--dur", dur + "ms");
+
+      el.textContent = text;
+      overlayLayer.appendChild(el);
+
+      requestAnimationFrame(()=> el.classList.add("show"));
+      setTimeout(()=> el.remove(), dur + 120);
+    }
+
+    /**
+     * 영화식 “비명 웨이브”:
+     * - 멀리(왼/오/뒤)에서 먼저 얇게
+     * - 근처(좌/우)로 점점 다가오고
+     * - 마지막에 중앙/머리위에서 한 번 더
+     */
+    async function screamWave(){
+      const farWords  = ["비명", "도와줘", "여기야", "살려줘"];
+      const nearWords = ["도와줘!", "살려줘!", "여기야!"];
+      
+      // 1) 멀리서 (왼/오/뒤)
+      for(let i=0;i<6;i++){
+        const dir = pick(["LEFT_FAR","RIGHT_FAR","BACK_FAR"]);
+        spawnOverlay(pick(farWords), dir, { size: rand(18,26), dur: rand(1900,2600) });
+        await sleep(220 + Math.random()*140);
+      }
+
+      // 2) 둘러보는 느낌을 주기 위해 살짝 팬
+      pan("L");
+      await sleep(520);
+
+      // 3) 더 가까이 (좌/우)
+      for(let i=0;i<5;i++){
+        const dir = pick(["NEAR_LEFT","NEAR_RIGHT"]);
+        spawnOverlay(pick(nearWords), dir, { size: rand(28,40), dur: rand(2000,2800) });
+        await sleep(260 + Math.random()*160);
+      }
+
+      // 4) 반대 방향으로 팬(“사방에서 들린다”)
+      pan("R");
+      await sleep(520);
+
+      // 5) 머리 위/중앙에서 짧게 한 번
+      spawnOverlay("비명", "OVERHEAD", { size: 24, dur: 1700 });
+      await sleep(180);
+      spawnOverlay("…", "CENTER", { size: 34, dur: 1900 });
+    }
+
+    /**
+     * 악마 속삭임(영화식):
+     * - 중앙이 아니라 “조금 옆/조금 위”에서
+     * - 글자 간격이 넓고, 오래 남지 않게
+     */
+    async function demonWhisper(){
+      await sleep(520);
+      spawnOverlay("무릎 꿇어라", "BACK_FAR", { whisper:true, size: 22, dur: 2200 });
+      await sleep(380);
+      spawnOverlay("…", "LEFT_FAR", { whisper:true, size: 18, dur: 1800 });
+    }
+
+    async function playIntro(){
+      mainText.textContent = "";
+      sub.classList.add("show");
+
+      // 1) 깨어남(정신을 차림)
+      await sleep(280);
+      await type("…어둠.", 24); br();
+      await sleep(260);
+      await type("숨이 막힌다.", 18); br();
+      await sleep(360);
+      await type("눈을 뜬 것 같은데… 아무것도 보이지 않는다.", 16); br();
+      await sleep(320);
+      await type("초점이 잡히지 않는다.", 20); br();
+
+      // 2) 비명 오버레이(여러 방향에서) + 본문 진행은 천천히
+      await sleep(420);
+      await type("멀리서, 여러 겹의 소리가 겹쳐진다.", 16); br();
+
+      // 비명 웨이브(오버레이가 장면의 주인공)
+      await screamWave();
+
+      // 3) 충격(붕괴음) + 카메라 흔들림
+      await sleep(380);
+      cameraShake();
+      await type("어딘가가 무너진다.", 16); br();
+      await sleep(520);
+
+      // 4) 둘러봄(팬) + 초점 회복(블러 해제)
+      await type("당신은 본능적으로 고개를 돌린다.", 16); br();
+      await sleep(260);
+      camera.classList.remove("maxBlur"); // 서서히 선명
+      pan("L");
+      await sleep(820);
+
+      await type("불빛… 연기… 무너진 벽.", 14); br();
+      await sleep(450);
+
+      // 5) 악마의 존재감은 “현상”으로만
+      await demonWhisper();
+
+      // 6) 몸을 일으킴(시점 상승)
+      await sleep(700);
+      world.classList.add("rise");
+      await type("몸을 일으킨다. 근육이 떨린다.", 15); br();
+      await sleep(520);
+
+      await type("[시스템] 이제 입력할 수 있다: look / move / search", 12); br();
+      hint.classList.add("show");
+    }
+
+    playIntro();
+
+    // (선택) 디버그: 스페이스바로 다시 재생
+    window.addEventListener("keydown", (e)=>{
+      if(e.code === "Space"){
+        e.preventDefault();
+        hint.classList.remove("show");
+        world.classList.remove("rise");
+        camera.classList.add("maxBlur");
+        playIntro();
+      }
+    });
+  </script>
+</body>
+</html>

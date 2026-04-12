@@ -1,0 +1,901 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cartoon Dice High & Low</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  min-height:100vh;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:
+    radial-gradient(circle at top,rgba(255,255,255,.72),transparent 24%),
+    radial-gradient(circle at 18% 18%,rgba(61,188,255,.28),transparent 18%),
+    radial-gradient(circle at 82% 14%,rgba(255,100,84,.24),transparent 18%),
+    linear-gradient(180deg,#ffd95f 0%,#ff9c60 100%);
+  font-family:"Trebuchet MS","Malgun Gothic",sans-serif;
+  color:#1b1412;
+  overflow:hidden;
+}
+body::before{
+  content:"";
+  position:fixed;
+  inset:0;
+  pointer-events:none;
+  opacity:.2;
+  background:
+    radial-gradient(circle,rgba(27,20,18,.12) 2px,transparent 2px) 0 0/22px 22px,
+    repeating-conic-gradient(from 0deg,rgba(255,255,255,.16) 0 8deg,transparent 8deg 16deg);
+}
+#app{
+  width:min(1380px,calc(100vw - 26px));
+  min-height:min(900px,calc(100vh - 26px));
+  border:5px solid #1b1412;
+  border-radius:34px;
+  overflow:hidden;
+  background:#fff3d0;
+  box-shadow:0 18px 0 #4d2f25,0 34px 86px rgba(0,0,0,.25);
+}
+#stage{
+  position:relative;
+  overflow:hidden;
+  padding:24px;
+  background:
+    radial-gradient(circle at center,rgba(255,255,255,.22),transparent 28%),
+    linear-gradient(180deg,#fff0b9 0%,#ffca83 48%,#ff9f6c 100%);
+}
+#stage::before{
+  content:"";
+  position:absolute;
+  inset:18px;
+  border:4px solid rgba(27,20,18,.92);
+  border-radius:30px;
+  pointer-events:none;
+  box-shadow:inset 0 0 0 4px rgba(255,255,255,.24);
+}
+#stage::after{
+  content:"";
+  position:absolute;
+  inset:10% 12%;
+  border-radius:50%;
+  opacity:.28;
+  pointer-events:none;
+  background:repeating-conic-gradient(from 0deg,rgba(255,255,255,.28) 0 8deg,transparent 8deg 17deg);
+}
+.panel{
+  position:relative;
+  z-index:1;
+  border:4px solid #1b1412;
+  border-radius:24px;
+  background:#fffaf0;
+  box-shadow:0 8px 0 rgba(27,20,18,.14);
+}
+.tiny{
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:#6f5138;
+}
+.arena{
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:minmax(0,1fr) 270px;
+  gap:18px;
+  align-items:start;
+}
+.table{
+  position:relative;
+  padding:18px;
+  border:5px solid #1b1412;
+  border-radius:30px;
+  background:linear-gradient(180deg,rgba(255,255,255,.28),transparent 100%),linear-gradient(180deg,#ff6f58 0%,#ffa056 52%,#ffd44f 100%);
+  box-shadow:0 12px 0 rgba(27,20,18,.16);
+}
+.table::before{
+  content:"";
+  position:absolute;
+  inset:12px;
+  border:4px solid rgba(27,20,18,.82);
+  border-radius:24px;
+  pointer-events:none;
+}
+.machine-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px}
+.jackpot{
+  padding:10px 14px;
+  border:4px solid #1b1412;
+  border-radius:18px;
+  background:#fff2ae;
+  font-size:20px;
+  font-weight:900;
+  box-shadow:0 6px 0 rgba(27,20,18,.14);
+}
+.lights{display:flex;gap:8px}
+.light{
+  width:18px;height:18px;border:3px solid #1b1412;border-radius:50%;
+  background:#fff7d9;
+  box-shadow:0 0 0 4px rgba(255,255,255,.18);
+  transition:transform .18s ease,background .18s ease,box-shadow .18s ease;
+}
+.light.active{
+  transform:scale(1.12);
+  background:#fff159;
+  box-shadow:0 0 0 4px rgba(255,255,255,.16),0 0 24px rgba(255,241,89,.65);
+}
+#sceneWrap{
+  position:relative;
+  border:5px solid #1b1412;
+  border-radius:26px;
+  overflow:hidden;
+  background:linear-gradient(180deg,rgba(255,255,255,.14),transparent 100%),#2a1830;
+}
+#c{display:block;width:100%;height:580px}
+.hud-over{position:absolute;inset:0;pointer-events:none}
+.current-chip,.streak-chip{
+  position:absolute;
+  padding:10px 14px;
+  border:4px solid #1b1412;
+  border-radius:18px;
+  font-size:16px;
+  font-weight:900;
+  box-shadow:0 6px 0 rgba(27,20,18,.12);
+}
+.current-chip{left:20px;top:20px;background:rgba(255,250,238,.92)}
+.streak-chip{right:20px;top:20px;background:#54d88e}
+.result-pop{
+  position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%) scale(.8) rotate(-2deg);
+  min-width:240px;text-align:center;padding:16px 18px;
+  border:4px solid #1b1412;border-radius:24px;background:#fffdf3;
+  font-size:34px;font-weight:900;box-shadow:0 10px 0 rgba(27,20,18,.16);
+  opacity:0;transition:opacity .22s ease,transform .22s ease;
+}
+.result-pop.show{opacity:1;transform:translate(-50%,-50%) scale(1) rotate(-2deg)}
+.guess-board{display:grid;gap:12px}
+.stat-card,.controls,.history,.odds{padding:14px}
+.stat-row{display:flex;justify-content:space-between;gap:10px;font-size:14px;font-weight:800}
+.stat-row+.stat-row{margin-top:8px}
+.stat-row strong{font-size:20px}
+.odds-grid{display:grid;gap:8px;margin-top:10px}
+.odds-item{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:10px 12px;border:3px solid #1b1412;border-radius:16px;
+  background:#fff7de;font-size:14px;font-weight:900;
+}
+.action-grid{display:grid;gap:10px;margin-top:10px}
+.btn{
+  appearance:none;min-height:60px;border:4px solid #1b1412;border-radius:18px;cursor:pointer;
+  font-size:17px;font-weight:900;box-shadow:0 6px 0 rgba(27,20,18,.14);
+  transition:transform .12s ease,box-shadow .12s ease,filter .12s ease;
+}
+.btn:hover{transform:translateY(-2px)}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 rgba(27,20,18,.12)}
+.btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+#startBtn{background:#58d88e;color:#14301d}
+#cashoutBtn{background:#4bb8ff;color:#fffdf6}
+#highBtn{background:#ff6857;color:#fffdf6}
+#lowBtn{background:#6c63ff;color:#fffdf6}
+#sameBtn{background:#ffd453;color:#1b1412}
+.bet-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:10px}
+.bet-btn{
+  appearance:none;min-height:50px;border:3px solid #1b1412;border-radius:16px;
+  background:#fff8e4;font-weight:900;cursor:pointer;box-shadow:0 5px 0 rgba(27,20,18,.12);
+}
+.bet-btn.selected{background:#ff8454;color:#fffdf6}
+.history-list{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px}
+.history-pill{
+  min-width:56px;padding:8px 10px;border:3px solid #1b1412;border-radius:999px;
+  background:#fff7d8;text-align:center;font-size:12px;font-weight:900;
+}
+.sparkles{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.spark{
+  position:absolute;width:18px;height:18px;border:3px solid #1b1412;border-radius:5px;
+  transform:rotate(45deg);opacity:0;animation:spark-fly .95s ease forwards;
+}
+@keyframes spark-fly{
+  0%{opacity:0;transform:translate(0,0) rotate(45deg) scale(.45)}
+  18%{opacity:1}
+  100%{opacity:0;transform:translate(var(--dx),var(--dy)) rotate(225deg) scale(1.28)}
+}
+@media (max-width:1180px){
+  .arena{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <section id="stage">
+    <div class="arena">
+      <div class="table">
+        <div class="machine-head">
+          <div class="jackpot">SAME x5.00</div>
+          <div class="lights" id="lights"></div>
+        </div>
+        <div id="sceneWrap">
+          <canvas id="c"></canvas>
+          <div class="hud-over">
+            <div class="current-chip">Current Face: <span id="currentFace">-</span></div>
+            <div class="streak-chip">Streak: <span id="streak">0</span></div>
+            <div class="result-pop" id="resultPop">READY</div>
+            <div class="sparkles" id="sparkles"></div>
+          </div>
+        </div>
+      </div>
+      <div class="guess-board">
+        <div class="panel stat-card">
+          <div class="tiny">Round Stats</div>
+          <div class="stat-row" style="margin-top:10px"><span>Balance</span><strong id="balance">1200</strong></div>
+          <div class="stat-row"><span>Round Bet</span><strong id="bet">25</strong></div>
+          <div class="stat-row"><span>Current Pot</span><strong id="pot">0</strong></div>
+          <div class="stat-row"><span>Total Multiplier</span><strong id="multiplier">x1.00</strong></div>
+        </div>
+        <div class="panel odds">
+          <div class="tiny">Live Odds</div>
+          <div class="odds-grid" id="oddsGrid"></div>
+        </div>
+        <div class="panel controls">
+          <div class="tiny">Bet Select</div>
+          <div class="bet-grid" id="betGrid"></div>
+          <div class="action-grid">
+            <button class="btn" id="startBtn" type="button">ROUND START</button>
+            <button class="btn" id="highBtn" type="button">HIGH</button>
+            <button class="btn" id="lowBtn" type="button">LOW</button>
+            <button class="btn" id="sameBtn" type="button">JACKPOT SAME</button>
+            <button class="btn" id="cashoutBtn" type="button">CASH OUT</button>
+          </div>
+        </div>
+        <div class="panel history">
+          <div class="tiny">Recent Results</div>
+          <div class="history-list" id="history"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/effects/OutlineEffect.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+<script>
+(() => {
+  const canvas = document.getElementById("c");
+  const sceneWrap = document.getElementById("sceneWrap");
+  const balanceEl = document.getElementById("balance");
+  const betEl = document.getElementById("bet");
+  const potEl = document.getElementById("pot");
+  const multiplierEl = document.getElementById("multiplier");
+  const currentFaceEl = document.getElementById("currentFace");
+  const streakEl = document.getElementById("streak");
+  const resultPopEl = document.getElementById("resultPop");
+  const historyEl = document.getElementById("history");
+  const oddsGridEl = document.getElementById("oddsGrid");
+  const sparklesEl = document.getElementById("sparkles");
+  const lightsEl = document.getElementById("lights");
+  const startBtn = document.getElementById("startBtn");
+  const highBtn = document.getElementById("highBtn");
+  const lowBtn = document.getElementById("lowBtn");
+  const sameBtn = document.getElementById("sameBtn");
+  const cashoutBtn = document.getElementById("cashoutBtn");
+  const betGridEl = document.getElementById("betGrid");
+
+  const FLOOR_Y = -3;
+  const DIE_HALF = 1;
+  const DIE_REST_Y = FLOOR_Y + DIE_HALF + 0.01;
+  const faceOrder = [2, 5, 1, 6, 3, 4];
+  const localAxes = [
+    new THREE.Vector3(1,0,0),
+    new THREE.Vector3(-1,0,0),
+    new THREE.Vector3(0,1,0),
+    new THREE.Vector3(0,-1,0),
+    new THREE.Vector3(0,0,1),
+    new THREE.Vector3(0,0,-1)
+  ];
+  const stableOrientations = [];
+
+  const state = {
+    balance: 1200,
+    bet: 25,
+    pot: 0,
+    multiplier: 1,
+    currentFace: null,
+    streak: 0,
+    history: [],
+    roundActive: false,
+    needsChoice: false,
+    rolling: false,
+    lastOutcome: null
+  };
+
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+
+  const outlineEffect = new THREE.OutlineEffect(renderer, {
+    defaultThickness: 0.008,
+    defaultColor: [0, 0, 0],
+    defaultAlpha: 1,
+    defaultKeepAlive: true
+  });
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0xffc980, 16, 28);
+  const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
+
+  const toonGradient = createToonGradient();
+  const world = new CANNON.World();
+  world.gravity.set(0, -28, 0);
+  world.broadphase = new CANNON.NaiveBroadphase();
+  world.solver.iterations = 20;
+  world.solver.tolerance = 0.001;
+
+  const groundMat = new CANNON.Material("ground");
+  const diceMat = new CANNON.Material("dice");
+  world.addContactMaterial(new CANNON.ContactMaterial(groundMat, diceMat, {
+    friction: 0.46,
+    restitution: 0.32
+  }));
+
+  const groundBody = new CANNON.Body({ mass: 0, material: groundMat });
+  groundBody.addShape(new CANNON.Plane());
+  groundBody.position.set(0, FLOOR_Y, 0);
+  groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+  world.addBody(groundBody);
+
+  [
+    { p: [0, FLOOR_Y + 5, -8], q: [0, 0, 0, 1] },
+    { p: [0, FLOOR_Y + 5, 8], q: [0, 1, 0, 0] },
+    { p: [-8, FLOOR_Y + 5, 0], q: [0, 0.707, 0, 0.707] },
+    { p: [8, FLOOR_Y + 5, 0], q: [0, -0.707, 0, 0.707] }
+  ].forEach((wall) => {
+    const body = new CANNON.Body({ mass: 0, material: groundMat });
+    body.addShape(new CANNON.Plane());
+    body.position.set(wall.p[0], wall.p[1], wall.p[2]);
+    body.quaternion.set(wall.q[0], wall.q[1], wall.q[2], wall.q[3]);
+    world.addBody(body);
+  });
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+  const keyLight = new THREE.DirectionalLight(0xfff3cc, 1.18);
+  keyLight.position.set(8, 16, 10);
+  keyLight.castShadow = true;
+  keyLight.shadow.mapSize.width = 2048;
+  keyLight.shadow.mapSize.height = 2048;
+  keyLight.shadow.camera.left = -12;
+  keyLight.shadow.camera.right = 12;
+  keyLight.shadow.camera.top = 12;
+  keyLight.shadow.camera.bottom = -12;
+  scene.add(keyLight);
+  const coolLight = new THREE.PointLight(0x4bb8ff, 0.68, 40);
+  coolLight.position.set(-8, 8, -4);
+  scene.add(coolLight);
+  const warmLight = new THREE.PointLight(0xff7158, 0.48, 32);
+  warmLight.position.set(2, 2, 7);
+  scene.add(warmLight);
+
+  const floorMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(30, 30),
+    new THREE.MeshToonMaterial({ map: createFloorTexture(), gradientMap: toonGradient, transparent: true, opacity: 0.96 })
+  );
+  floorMesh.rotation.x = -Math.PI / 2;
+  floorMesh.position.y = FLOOR_Y;
+  floorMesh.receiveShadow = true;
+  scene.add(floorMesh);
+
+  const shadowPlane = new THREE.Mesh(
+    new THREE.CircleGeometry(2.4, 48),
+    new THREE.MeshBasicMaterial({ color: 0x57251c, transparent: true, opacity: 0.16, depthWrite: false })
+  );
+  shadowPlane.rotation.x = -Math.PI / 2;
+  shadowPlane.position.y = FLOOR_Y + 0.01;
+  shadowPlane.scale.set(1.2, 0.7, 1);
+  scene.add(shadowPlane);
+
+  const faceMats = createFaceMaterials({ body: "#fffdf3", border: "#1f1a1a", pip: "#ff5c56", gloss: "#ffffff" });
+  const die = createDie();
+  const lights = [];
+
+  let orbitTheta = 0.32;
+  let orbitPhi = 0.75;
+  let isDragging = false;
+  let prevPoint = { x: 0, y: 0 };
+  let lastTime = performance.now();
+  const fixedStep = 1 / 60;
+  let lightTimer = null;
+  let popTimer = null;
+
+  function buildStableOrientations() {
+    const seen = new Set();
+    const quarterTurns = [0, Math.PI / 2, Math.PI, Math.PI * 1.5];
+    quarterTurns.forEach((x) => {
+      quarterTurns.forEach((y) => {
+        quarterTurns.forEach((z) => {
+          const quaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(x, y, z, "XYZ"));
+          const key = [quaternion.x, quaternion.y, quaternion.z, quaternion.w].map((v) => Math.round(v * 1000)).join(",");
+          if (!seen.has(key)) {
+            seen.add(key);
+            stableOrientations.push(quaternion.clone());
+          }
+        });
+      });
+    });
+  }
+
+  function createToonGradient() {
+    const data = new Uint8Array([24,24,24,255,92,92,92,255,176,176,176,255,255,255,255,255]);
+    const texture = new THREE.DataTexture(data, 4, 1, THREE.RGBAFormat);
+    texture.needsUpdate = true;
+    texture.minFilter = THREE.NearestFilter;
+    texture.magFilter = THREE.NearestFilter;
+    return texture;
+  }
+
+  function roundedRect(ctx, x, y, width, height, radius) {
+    const r = Math.min(radius, width / 2, height / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + width - r, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+    ctx.lineTo(x + width, y + height - r);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+    ctx.lineTo(x + r, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+    ctx.lineTo(x, y + r);
+    ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+
+  function createFloorTexture() {
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 1024;
+    const ctx = cv.getContext("2d");
+    const grad = ctx.createRadialGradient(512, 512, 120, 512, 512, 500);
+    grad.addColorStop(0, "#fff8db");
+    grad.addColorStop(0.42, "#ffd55a");
+    grad.addColorStop(1, "#ff9e69");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, 1024, 1024);
+    ctx.strokeStyle = "rgba(27,20,18,.1)";
+    ctx.lineWidth = 12;
+    for (let i = 0; i < 10; i += 1) {
+      ctx.beginPath();
+      ctx.arc(512, 512, 120 + i * 35, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    for (let i = 0; i < 40; i += 1) {
+      ctx.fillStyle = i % 2 ? "rgba(255,255,255,.15)" : "rgba(27,20,18,.05)";
+      ctx.beginPath();
+      ctx.arc(80 + Math.random() * 864, 80 + Math.random() * 864, 3 + Math.random() * 8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    const tx = new THREE.CanvasTexture(cv);
+    tx.encoding = THREE.sRGBEncoding;
+    return tx;
+  }
+  function createFaceTexture(value, palette) {
+    const cv = document.createElement("canvas");
+    cv.width = cv.height = 256;
+    const ctx = cv.getContext("2d");
+    const fill = ctx.createLinearGradient(0, 0, 256, 256);
+    fill.addColorStop(0, palette.gloss);
+    fill.addColorStop(0.2, palette.body);
+    fill.addColorStop(1, "#e8d7c6");
+    roundedRect(ctx, 12, 12, 232, 232, 34);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.lineWidth = 10;
+    ctx.strokeStyle = palette.border;
+    ctx.stroke();
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = "rgba(255,255,255,.42)";
+    roundedRect(ctx, 24, 24, 208, 208, 26);
+    ctx.stroke();
+    const pips = {
+      1: [[128, 128]],
+      2: [[84, 84], [172, 172]],
+      3: [[84, 84], [128, 128], [172, 172]],
+      4: [[84, 84], [172, 84], [84, 172], [172, 172]],
+      5: [[84, 84], [172, 84], [128, 128], [84, 172], [172, 172]],
+      6: [[84, 76], [172, 76], [84, 128], [172, 128], [84, 180], [172, 180]]
+    }[value];
+    ctx.fillStyle = palette.pip;
+    ctx.strokeStyle = "rgba(27,20,18,.2)";
+    ctx.lineWidth = 3;
+    pips.forEach((pip) => {
+      ctx.beginPath();
+      ctx.arc(pip[0], pip[1], 23, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+    const tx = new THREE.CanvasTexture(cv);
+    tx.encoding = THREE.sRGBEncoding;
+    return tx;
+  }
+  function createFaceMaterials(palette) {
+    return faceOrder.map((value) => new THREE.MeshToonMaterial({ map: createFaceTexture(value, palette), gradientMap: toonGradient }));
+  }
+  function createDie() {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), faceMats);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const edges = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(2.02, 2.02, 2.02)),
+      new THREE.LineBasicMaterial({ color: 0x141010, transparent: true, opacity: 0.62 })
+    );
+    mesh.add(edges);
+    scene.add(mesh);
+    const body = new CANNON.Body({
+      mass: 1,
+      material: diceMat,
+      linearDamping: 0.1,
+      angularDamping: 0.1
+    });
+    body.addShape(new CANNON.Box(new CANNON.Vec3(1, 1, 1)));
+    body.position.set(0, FLOOR_Y + 8, 0);
+    world.addBody(body);
+    return { mesh, body, settled: false, settleTimer: 0, result: null };
+  }
+  function syncDieVisual() {
+    const p = die.body.position;
+    const q = die.body.quaternion;
+    die.mesh.position.set(p.x, p.y, p.z);
+    die.mesh.quaternion.set(q.x, q.y, q.z, q.w);
+  }
+  function getTopFace(mesh) {
+    const up = new THREE.Vector3(0, 1, 0);
+    let best = -1;
+    let bestDot = -Infinity;
+    localAxes.forEach((axis, index) => {
+      const worldAxis = axis.clone().applyQuaternion(mesh.quaternion);
+      const dot = worldAxis.dot(up);
+      if (dot > bestDot) {
+        bestDot = dot;
+        best = index;
+      }
+    });
+    return faceOrder[best];
+  }
+  function snapDieToStableFace() {
+    const current = new THREE.Quaternion(die.body.quaternion.x, die.body.quaternion.y, die.body.quaternion.z, die.body.quaternion.w);
+    let best = stableOrientations[0];
+    let bestDot = -Infinity;
+    stableOrientations.forEach((candidate) => {
+      const dot = Math.abs(current.dot(candidate));
+      if (dot > bestDot) {
+        bestDot = dot;
+        best = candidate;
+      }
+    });
+    die.body.quaternion.set(best.x, best.y, best.z, best.w);
+    die.body.angularVelocity.set(0, 0, 0);
+    die.body.velocity.set(0, 0, 0);
+    die.body.position.y = DIE_REST_Y;
+    die.body.sleep();
+    die.mesh.quaternion.copy(best);
+    die.mesh.position.set(die.body.position.x, die.body.position.y, die.body.position.z);
+    die.result = getTopFace(die.mesh);
+    die.settled = true;
+    return die.result;
+  }
+  function throwDie() {
+    die.settled = false;
+    die.settleTimer = 0;
+    die.result = null;
+    die.body.wakeUp();
+    die.body.position.set((Math.random() - 0.5) * 1.2, FLOOR_Y + 9 + Math.random() * 2, (Math.random() - 0.5) * 1.8);
+    die.body.quaternion.setFromEuler(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, "XYZ");
+    die.body.velocity.set((Math.random() - 0.5) * 7, -1 + Math.random() * 3, (Math.random() - 0.5) * 7);
+    die.body.angularVelocity.set((Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30, (Math.random() - 0.5) * 30);
+    die.body.force.set(0, 0, 0);
+    die.body.torque.set(0, 0, 0);
+    state.rolling = true;
+    resultPopEl.classList.remove("show");
+    cycleLights(85);
+  }
+  function rollForResult(callback) {
+    throwDie();
+    state.lastOutcome = callback;
+  }
+  function chanceFor(type, currentFace) {
+    if (currentFace == null) return { chance: 0, payout: 1 };
+    const higher = (6 - currentFace) / 6;
+    const lower = (currentFace - 1) / 6;
+    const same = 1 / 6;
+    if (type === "high") return { chance: higher, payout: higher > 0 ? +(0.92 / higher).toFixed(2) : 0 };
+    if (type === "low") return { chance: lower, payout: lower > 0 ? +(0.92 / lower).toFixed(2) : 0 };
+    return { chance: same, payout: 5.00 };
+  }
+  function renderOdds() {
+    if (!state.roundActive || state.currentFace == null) {
+      oddsGridEl.innerHTML = `
+        <div class="odds-item"><span>HIGH</span><span>-</span></div>
+        <div class="odds-item"><span>LOW</span><span>-</span></div>
+        <div class="odds-item"><span>SAME</span><span>-</span></div>
+      `;
+      return;
+    }
+    const high = chanceFor("high", state.currentFace);
+    const low = chanceFor("low", state.currentFace);
+    const same = chanceFor("same", state.currentFace);
+    oddsGridEl.innerHTML = `
+      <div class="odds-item"><span>HIGH ${Math.round(high.chance * 100)}%</span><span>x${high.payout.toFixed(2)}</span></div>
+      <div class="odds-item"><span>LOW ${Math.round(low.chance * 100)}%</span><span>x${low.payout.toFixed(2)}</span></div>
+      <div class="odds-item"><span>SAME ${Math.round(same.chance * 100)}%</span><span>x${same.payout.toFixed(2)}</span></div>
+    `;
+  }
+  function renderStats() {
+    balanceEl.textContent = state.balance.toLocaleString();
+    betEl.textContent = state.bet.toLocaleString();
+    potEl.textContent = state.pot.toLocaleString();
+    multiplierEl.textContent = `x${state.multiplier.toFixed(2)}`;
+    currentFaceEl.textContent = state.currentFace == null ? "-" : state.currentFace;
+    streakEl.textContent = String(state.streak);
+    cashoutBtn.disabled = !(state.roundActive && state.pot > state.bet);
+    startBtn.disabled = state.roundActive || state.rolling;
+    const allowGuess = state.roundActive && state.needsChoice && !state.rolling;
+    highBtn.disabled = !allowGuess;
+    lowBtn.disabled = !allowGuess;
+    sameBtn.disabled = !allowGuess;
+    renderOdds();
+  }
+  function pushHistory(text, bg = "#fff7d8", color = "#1b1412") {
+    state.history.unshift({ text, bg, color });
+    state.history = state.history.slice(0, 10);
+    historyEl.innerHTML = state.history.map((item) => `<div class="history-pill" style="background:${item.bg};color:${item.color}">${item.text}</div>`).join("");
+  }
+  function setBanner(text, tone = "normal") {
+    const bg = tone === "win" ? "#dbffe9" : tone === "lose" ? "#ffdada" : "#fffdf3";
+    showPop(text, bg);
+  }
+  function showPop(text, bg = "#fffdf3", options = {}) {
+    const { sticky = false, duration = 1200 } = options;
+    if (popTimer) {
+      clearTimeout(popTimer);
+      popTimer = null;
+    }
+    resultPopEl.textContent = text;
+    resultPopEl.style.background = bg;
+    resultPopEl.classList.add("show");
+    if (!sticky) {
+      popTimer = setTimeout(() => {
+        resultPopEl.classList.remove("show");
+        popTimer = null;
+      }, duration);
+    }
+  }
+  function hidePop() {
+    if (popTimer) {
+      clearTimeout(popTimer);
+      popTimer = null;
+    }
+    resultPopEl.classList.remove("show");
+  }
+  function createSparkBurst() {
+    sparklesEl.innerHTML = "";
+    for (let i = 0; i < 18; i += 1) {
+      const spark = document.createElement("div");
+      spark.className = "spark";
+      spark.style.left = `${45 + Math.random() * 14}%`;
+      spark.style.top = `${42 + Math.random() * 14}%`;
+      spark.style.background = i % 3 === 0 ? "#fff159" : i % 3 === 1 ? "#58d88e" : "#4bb8ff";
+      spark.style.setProperty("--dx", `${-150 + Math.random() * 300}px`);
+      spark.style.setProperty("--dy", `${-120 + Math.random() * 220}px`);
+      sparklesEl.appendChild(spark);
+    }
+  }
+  function cycleLights(speed = 210) {
+    if (lightTimer) clearInterval(lightTimer);
+    let index = 0;
+    lightTimer = setInterval(() => {
+      lights.forEach((light, i) => light.classList.toggle("active", i === index || i === (index + 4) % lights.length));
+      index = (index + 1) % lights.length;
+    }, speed);
+  }
+  function settleLightsForWin() {
+    if (lightTimer) clearInterval(lightTimer);
+    lights.forEach((light, i) => {
+      light.classList.add("active");
+      light.style.background = i % 2 ? "#58d88e" : "#fff159";
+    });
+  }
+  function resetLightColors() {
+    lights.forEach((light) => {
+      light.classList.remove("active");
+      light.style.background = "#fff7d9";
+    });
+    cycleLights(210);
+  }
+  function startRound() {
+    if (state.rolling || state.roundActive || state.balance < state.bet) {
+      if (state.balance < state.bet) setBanner("Not enough coins. Lower your bet and try again.", "lose");
+      return;
+    }
+    state.balance -= state.bet;
+    state.pot = state.bet;
+    state.multiplier = 1;
+    state.streak = 0;
+    state.currentFace = null;
+    state.roundActive = true;
+    state.needsChoice = false;
+    setBanner("Rolling the base die...", "normal");
+    renderStats();
+    rollForResult((face) => {
+      state.currentFace = face;
+      state.needsChoice = true;
+      pushHistory(`OPEN ${face}`, "#fff2b3");
+      showPop(`BASE ${face} - CHOOSE`, "#fff9cf", { sticky: true });
+      renderStats();
+    });
+  }
+  function endRoundLost(rolledFace, guessType) {
+    state.roundActive = false;
+    state.needsChoice = false;
+    state.multiplier = 1;
+    state.pot = 0;
+    state.streak = 0;
+    state.currentFace = null;
+    pushHistory(`${guessType.toUpperCase()} FAIL`, "#ffd5d5", "#9a2323");
+    showPop(`MISS ${rolledFace}`, "#ffdada");
+    setBanner(`Next face: ${rolledFace}. The guess missed and you lost the round pot.`, "lose");
+    resetLightColors();
+    renderStats();
+  }
+  function resolveGuess(type) {
+    if (!state.roundActive || !state.needsChoice || state.rolling) return;
+    const prevFace = state.currentFace;
+    const odds = chanceFor(type, prevFace);
+    if (odds.payout === 0) {
+      setBanner(`${type.toUpperCase()} is not available when the current face is ${prevFace}.`, "lose");
+      return;
+    }
+    state.needsChoice = false;
+    showPop(`${type.toUpperCase()}...`, "#fffdf3", { sticky: true });
+    renderStats();
+    rollForResult((nextFace) => {
+      const win = type === "high" ? nextFace > prevFace : type === "low" ? nextFace < prevFace : nextFace === prevFace;
+      if (!win) {
+        endRoundLost(nextFace, type);
+        return;
+      }
+      state.streak += 1;
+      state.multiplier *= odds.payout;
+      state.pot = Math.max(state.bet, Math.round(state.pot * odds.payout));
+      state.currentFace = nextFace;
+      state.needsChoice = true;
+      pushHistory(`${type.toUpperCase()} ${nextFace}`, "#d9ffe8", "#176b3d");
+      showPop(`WIN ${nextFace} - GO OR CASH`, "#dbffe9", { sticky: true });
+      createSparkBurst();
+      settleLightsForWin();
+      setTimeout(resetLightColors, 700);
+      renderStats();
+    });
+  }
+  function cashOut() {
+    if (!state.roundActive || state.rolling || state.pot <= 0) return;
+    state.balance += state.pot;
+    pushHistory(`CASH +${state.pot}`, "#dff1ff", "#12527d");
+    showPop(`+${state.pot}`, "#dff1ff");
+    createSparkBurst();
+    setBanner(`${state.pot.toLocaleString()} coins secured. Good cash-out timing.`, "win");
+    state.pot = 0;
+    state.multiplier = 1;
+    state.currentFace = null;
+    state.streak = 0;
+    state.roundActive = false;
+    state.needsChoice = false;
+    resetLightColors();
+    renderStats();
+  }
+  function createBetButtons() {
+    [10, 25, 50, 100].forEach((value) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "bet-btn" + (state.bet === value ? " selected" : "");
+      button.textContent = value;
+      button.addEventListener("click", () => {
+        if (state.roundActive || state.rolling) return;
+        state.bet = value;
+        [...betGridEl.children].forEach((child) => child.classList.remove("selected"));
+        button.classList.add("selected");
+        renderStats();
+      });
+      betGridEl.appendChild(button);
+    });
+  }
+  function resize() {
+    const w = sceneWrap.clientWidth;
+    const h = canvas.clientHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  function updateCamera() {
+    const r = 16;
+    camera.position.set(Math.sin(orbitTheta) * Math.cos(orbitPhi) * r, Math.sin(orbitPhi) * r, Math.cos(orbitTheta) * Math.cos(orbitPhi) * r);
+    camera.lookAt(0, -1.2, 0);
+  }
+  function animate(now) {
+    requestAnimationFrame(animate);
+    const dt = Math.min((now - lastTime) / 1000, 0.05);
+    lastTime = now;
+    if (state.rolling) {
+      world.step(fixedStep, dt, 3);
+      syncDieVisual();
+      const p = die.body.position;
+      const speed = die.body.velocity.length() + die.body.angularVelocity.length();
+      if (!die.settled) {
+        if (speed < 0.3 && p.y < DIE_REST_Y + 0.8) {
+          die.settleTimer += dt;
+          if (die.settleTimer > 0.6) {
+            const face = snapDieToStableFace();
+            state.rolling = false;
+            shadowPlane.material.opacity = 0.14;
+            if (state.lastOutcome) {
+              const callback = state.lastOutcome;
+              state.lastOutcome = null;
+              callback(face);
+            }
+          }
+        } else {
+          die.settleTimer = 0;
+        }
+      }
+      shadowPlane.material.opacity = 0.09 + Math.min(0.1, speed * 0.002);
+    } else {
+      syncDieVisual();
+    }
+    updateCamera();
+    outlineEffect.render(scene, camera);
+  }
+  for (let i = 0; i < 8; i += 1) {
+    const light = document.createElement("div");
+    light.className = "light";
+    lightsEl.appendChild(light);
+    lights.push(light);
+  }
+  sceneWrap.addEventListener("mousedown", (event) => {
+    isDragging = true;
+    prevPoint = { x: event.clientX, y: event.clientY };
+  });
+  window.addEventListener("mouseup", () => { isDragging = false; });
+  window.addEventListener("mousemove", (event) => {
+    if (!isDragging) return;
+    orbitTheta -= (event.clientX - prevPoint.x) * 0.008;
+    orbitPhi = Math.max(0.18, Math.min(1.42, orbitPhi - (event.clientY - prevPoint.y) * 0.008));
+    prevPoint = { x: event.clientX, y: event.clientY };
+  });
+  sceneWrap.addEventListener("touchstart", (event) => {
+    isDragging = true;
+    prevPoint = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }, { passive: true });
+  window.addEventListener("touchend", () => { isDragging = false; });
+  window.addEventListener("touchmove", (event) => {
+    if (!isDragging) return;
+    orbitTheta -= (event.touches[0].clientX - prevPoint.x) * 0.008;
+    orbitPhi = Math.max(0.18, Math.min(1.42, orbitPhi - (event.touches[0].clientY - prevPoint.y) * 0.008));
+    prevPoint = { x: event.touches[0].clientX, y: event.touches[0].clientY };
+  }, { passive: true });
+  startBtn.addEventListener("click", startRound);
+  highBtn.addEventListener("click", () => resolveGuess("high"));
+  lowBtn.addEventListener("click", () => resolveGuess("low"));
+  sameBtn.addEventListener("click", () => resolveGuess("same"));
+  cashoutBtn.addEventListener("click", cashOut);
+  window.addEventListener("resize", resize);
+  buildStableOrientations();
+  createBetButtons();
+  pushHistory("READY", "#fff7d8");
+  pushHistory("WELCOME", "#fff2b3");
+  cycleLights(210);
+  renderStats();
+  resize();
+  animate(performance.now());
+})();
+</script>
+</body>
+</html>
+
+

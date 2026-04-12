@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Skill Combat System</title>
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+  <div class="root">
+    <div class="hdr">Skill Combat System - 스킬 배열 전투</div>
+
+    <div class="sbar">
+      <span id="s-queue">배열: 0/15</span>
+      <span id="s-build-mana">코스트: 0/120</span>
+      <span id="s-player-level">Lv.1 · EXP 0/100</span>
+      <span id="s-wave">웨이브 1/5</span>
+      <span id="s-score">Score: 0</span>
+    </div>
+    <div class="main">
+      <div class="pnl lib">
+        <div class="phdr">스킬 목록</div>
+        <div class="lib-inner" id="skill-lib"></div>
+      </div>
+
+      <div class="slots-wrap">
+        <div class="pnl queue-pnl">
+          <div class="phdr">전투 스킬 배열 - 드래그하여 배치 (최대 15칸)</div>
+          <div class="queue-grid" id="queue-grid"></div>
+        </div>
+
+        <div class="pnl arena-pnl">
+          <div class="phdr" id="wave-hdr">웨이브 1 - 전투 준비</div>
+          <div class="arena-inner">
+            <div class="combatants">
+              <div class="fighter" id="f-player">
+                <div class="fighter-name" id="player-name">KIRA</div>
+                <div class="status-effects" id="sfx-player"></div>
+                <div class="fighter-sprite" id="sp-player">🧙‍♀️</div>
+                <div class="hp-bar-wrap">
+                  <div class="bar-label"><span>HP</span><span id="hp-txt">500/500</span></div>
+                  <div class="bar-outer"><div class="bar-fill bar-hp" id="hp-bar" style="width:100%"></div></div>
+                  <div class="bar-label"><span>MP</span><span id="mp-txt">200/200</span></div>
+                  <div class="bar-outer"><div class="bar-fill bar-mp" id="mp-bar" style="width:100%"></div></div>
+                  <div class="mini-turn-wrap">
+                    <div class="mini-turn-label">PLAYER TURN</div>
+                    <div class="turn-bar compact"><div class="turn-fill player" id="turn-fill-player" style="width:0%"></div></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="vs">VS</div>
+
+              <div class="fighter" id="f-enemy">
+                <div class="fighter-name" id="enemy-name">DARK KNIGHT</div>
+                <div class="status-effects" id="sfx-enemy"></div>
+                <div class="fighter-sprite" id="sp-enemy">🧟</div>
+                <div class="hp-bar-wrap">
+                  <div class="bar-label"><span>HP</span><span id="ehp-txt">300/300</span></div>
+                  <div class="bar-outer"><div class="bar-fill bar-hp" id="ehp-bar" style="width:100%"></div></div>
+                  <div class="bar-label"><span>MP</span><span id="emp-txt">80/80</span></div>
+                  <div class="bar-outer"><div class="bar-fill bar-mp" id="emp-bar" style="width:100%"></div></div>
+                  <div class="mini-turn-wrap">
+                    <div class="mini-turn-label">ENEMY TURN</div>
+                    <div class="turn-bar compact"><div class="turn-fill enemy" id="turn-fill-enemy" style="width:0%"></div></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="blog" id="blog"></div>
+
+            <div class="bcontrols">
+              <button class="btn primary" id="btn-start">전투 시작</button>
+              <button class="btn" id="btn-next" style="display:none">다음 웨이브</button>
+              <button class="btn danger" id="btn-reset">초기화</button>
+              <span class="speed-label">속도</span>
+              <button class="btn" id="btn-speed">1x</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pnl tip-pnl">
+        <div class="phdr">ADVENTURER PANEL</div>
+        <div class="side-tabs">
+          <button class="side-tab active" data-tab="info">정보</button>
+          <button class="side-tab" data-tab="inventory">인벤토리</button>
+          <button class="side-tab" data-tab="character">캐릭터</button>
+          <button class="side-tab" data-tab="equipment">장비</button>
+        </div>
+        <div class="side-panels">
+          <div class="side-panel active" data-panel="info">
+            <div class="tip-inner" id="tip">
+              <div class="tip-empty">스킬에 마우스를<br>올려보세요</div>
+            </div>
+          </div>
+          <div class="side-panel" data-panel="inventory">
+            <div class="inventory-panel">
+              <div class="side-section-title">획득 아이템</div>
+              <div class="inventory-list" id="inventory-list"></div>
+            </div>
+          </div>
+          <div class="side-panel" data-panel="character">
+            <div class="character-panel">
+              <div class="character-summary" id="character-summary"></div>
+              <div class="side-section-title">스탯 분배</div>
+              <div class="stat-list" id="stat-list"></div>
+              <div class="side-section-title">전투 스탯</div>
+              <div class="derived-list" id="derived-list"></div>
+            </div>
+          </div>
+          <div class="side-panel" data-panel="equipment">
+            <div class="equipment-panel">
+              <div class="side-section-title">착용 장비</div>
+              <div class="equip-slots" id="equip-slots"></div>
+              <div class="side-section-title">사용 가능 장비</div>
+              <div class="inventory-list" id="equip-inventory-list"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="gh" id="gh" style="display:none"></div>
+  <div class="fx-layer" id="fx-layer"></div>
+  <div class="overlay hidden" id="levelup-overlay">
+    <div class="levelup-panel">
+      <div class="levelup-kicker">LEVEL UP</div>
+      <div class="levelup-title">스킬 강화 선택</div>
+      <div class="levelup-copy" id="levelup-copy">무작위 스킬 3개 중 하나를 선택하세요.</div>
+      <div class="levelup-choices" id="levelup-choices"></div>
+    </div>
+  </div>
+
+  <script type="module" src="./js/boot.js"></script>
+</body>
+</html>

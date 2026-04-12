@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cube Forge Minimal</title>
+  <link rel="stylesheet" href="main.css" />
+  <style>
+    :root{
+      --bg-panel: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.015));
+      --line: rgba(255,255,255,.08);
+      --line-2: rgba(255,255,255,.12);
+      --txt-2: #9eb0cb;
+    }
+    *{box-sizing:border-box}
+    body{
+      margin:0;
+      min-height:100vh;
+      background:
+        radial-gradient(700px 400px at 50% -10%, rgba(74,163,255,.08), transparent 60%),
+        linear-gradient(180deg, rgba(7,10,16,.98), rgba(7,10,16,1));
+      color:var(--txt);
+      font-family:var(--font-body, Inter, system-ui, sans-serif);
+      padding:14px;
+    }
+    .cubeWrap{
+      max-width:920px;
+      margin:0 auto;
+      border:1px solid var(--line);
+      border-radius:18px;
+      background:var(--bg-panel);
+      box-shadow:0 18px 54px rgba(0,0,0,.38), inset 0 0 0 1px rgba(0,0,0,.22);
+      overflow:hidden;
+    }
+    .cubeMain{
+      padding:14px;
+      display:grid;
+      gap:12px;
+    }
+    .topRow{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .title{
+      font:700 12px var(--mono);
+      letter-spacing:.08em;
+      color:#e9f1ff;
+    }
+    .count{
+      font:700 11px var(--mono);
+      color:var(--txt-2);
+    }
+    .forgeArea{
+      position:relative;
+      min-height:320px;
+      border:1px solid var(--line);
+      border-radius:16px;
+      overflow:hidden;
+      background:
+        radial-gradient(circle at center, rgba(74,163,255,.08), transparent 36%),
+        linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.01));
+      display:grid;
+      place-items:center;
+      padding:18px;
+    }
+    .forgeArea::before{
+      content:"";
+      position:absolute;
+      width:300px;
+      height:300px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,.06);
+      box-shadow:0 0 0 16px rgba(255,255,255,.01), inset 0 0 50px rgba(74,163,255,.05);
+    }
+    .slotRing{
+      position:relative;
+      width:100%;
+      max-width:520px;
+      aspect-ratio:1;
+    }
+    .slot{
+      position:absolute;
+      width:112px;
+      min-height:40px;
+      padding:8px 10px;
+      border-radius:12px;
+      border:1px dashed rgba(255,255,255,.14);
+      background:rgba(255,255,255,.02);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+      font-size:11px;
+      font-weight:700;
+      line-height:1.3;
+      transition:all .2s ease;
+      cursor:pointer;
+      user-select:none;
+    }
+    .slot.empty{ color:#6f8098; }
+    .slot.filled{ border-style:solid; color:#ecf3ff; background:rgba(255,255,255,.04); }
+    .slot.anim-out{ animation:slotAbsorb .72s cubic-bezier(.16,.84,.2,1) forwards; }
+    .slot:hover{ transform:translateY(-1px); border-color:rgba(74,163,255,.28); }
+    .slot:nth-child(1){ left:50%; top:4%; transform:translateX(-50%); }
+    .slot:nth-child(2){ right:10%; top:20%; }
+    .slot:nth-child(3){ right:2%; top:50%; transform:translateY(-50%); }
+    .slot:nth-child(4){ right:10%; bottom:20%; }
+    .slot:nth-child(5){ left:50%; bottom:4%; transform:translateX(-50%); }
+    .slot:nth-child(6){ left:10%; bottom:20%; }
+    .slot:nth-child(7){ left:2%; top:50%; transform:translateY(-50%); }
+    .slot:nth-child(8){ left:10%; top:20%; }
+
+    .core{
+      position:absolute;
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-50%);
+      width:200px;
+      height:200px;
+      border-radius:50%;
+      display:grid;
+      place-items:center;
+      border:1px solid rgba(255,255,255,.08);
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,154,60,.14), rgba(74,163,255,.08) 34%, rgba(7,10,16,.28) 62%, transparent 72%),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,.03), transparent 70%);
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.3), 0 0 30px rgba(74,163,255,.10);
+      overflow:hidden;
+      pointer-events:none;
+    }
+    .core::before,
+    .core::after{
+      content:"";
+      position:absolute;
+      inset:15px;
+      border-radius:50%;
+      border:1px solid rgba(255,255,255,.06);
+      animation:runeSpin 18s linear infinite;
+    }
+    .core::after{
+      inset:34px;
+      border-style:dashed;
+      border-color:rgba(255,212,106,.15);
+      animation-duration:11s;
+      animation-direction:reverse;
+    }
+    .glyph{
+      font-size:56px;
+      color:#eef4ff;
+      text-shadow:0 0 22px rgba(74,163,255,.25), 0 0 36px rgba(255,154,60,.18);
+    }
+    .pulse,.flash,.burst,.halo{
+      position:absolute;
+      left:50%;
+      top:50%;
+      transform:translate(-50%,-50%);
+      pointer-events:none;
+      opacity:0;
+    }
+    .pulse{ width:140px; height:140px; border-radius:50%; border:1px solid rgba(124,184,255,.28); }
+    .flash{ width:170px; height:170px; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,.95) 0%, rgba(255,244,208,.42) 25%, rgba(255,154,60,.12) 52%, transparent 72%); filter:blur(14px); }
+    .burst{ width:280px; height:280px; border-radius:50%; background:radial-gradient(circle, rgba(255,255,255,.16) 0%, rgba(255,212,106,.08) 25%, rgba(74,163,255,.06) 46%, transparent 70%); filter:blur(10px); }
+    .halo{ width:360px; height:360px; border-radius:50%; background:radial-gradient(circle, rgba(255,154,60,.12) 0%, rgba(182,140,255,.08) 28%, rgba(74,163,255,.04) 50%, transparent 74%); filter:blur(12px); }
+    .forgeArea.play .pulse{ animation:pulseRing .9s ease-out 1; }
+    .forgeArea.play .flash{ animation:flashPop .55s ease-out 1; }
+    .forgeArea.play .burst{ animation:burstGlow 1s ease-out 1; }
+    .forgeArea.play .halo{ animation:haloPop .95s ease-out 1; }
+
+    .resultBar{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      flex-wrap:wrap;
+      border:1px solid var(--line);
+      border-radius:14px;
+      padding:10px 12px;
+      background:rgba(255,255,255,.02);
+    }
+    .resultName{ font-size:14px; font-weight:800; }
+    .resultSub{ font-size:11px; color:var(--txt-2); margin-top:2px; }
+    .actionBtn{
+      min-width:112px;
+      padding:10px 14px;
+      border-radius:12px;
+      font:700 12px var(--mono);
+      letter-spacing:.04em;
+      cursor:pointer;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(255,255,255,.03);
+      color:#eef3ff;
+    }
+    .actionBtn.primary{
+      color:#fff0cc;
+      border-color:rgba(255,212,106,.34);
+      background:linear-gradient(180deg, rgba(255,212,106,.10), rgba(255,154,60,.08));
+      box-shadow:0 0 20px rgba(255,154,60,.08);
+    }
+    .actionBtn:disabled{ opacity:.45; cursor:not-allowed; }
+
+    .materials{
+      border-top:1px solid var(--line);
+      padding:12px 14px 14px;
+      background:rgba(255,255,255,.015);
+    }
+    .materialsHead{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      margin-bottom:10px;
+      flex-wrap:wrap;
+    }
+    .materialList{
+      display:flex;
+      flex-wrap:wrap;
+      gap:8px;
+    }
+    .mat{
+      padding:8px 11px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.10);
+      background:rgba(255,255,255,.02);
+      font:700 12px/1.1 var(--mono);
+      cursor:pointer;
+      transition:transform .16s ease, border-color .16s ease, background .16s ease, opacity .16s ease;
+      white-space:nowrap;
+    }
+    .mat:hover{ transform:translateY(-1px); }
+    .mat.used{ opacity:.35; }
+    .level-1{ color:#d6d6d6; border-color:rgba(214,214,214,.16); }
+    .level-2{ color:#7fc0ff; border-color:rgba(74,163,255,.24); }
+    .level-3{ color:#ffd84a; border-color:rgba(255,216,74,.24); }
+    .level-4{ color:#b68cff; border-color:rgba(182,140,255,.24); }
+    .level-5{ color:#ff9a3c; border-color:rgba(255,154,60,.28); }
+
+    @keyframes runeSpin{ from{ transform:rotate(0deg);} to{ transform:rotate(360deg);} }
+    @keyframes slotAbsorb{ 0%{ opacity:1; transform:scale(1);} 45%{ opacity:.95; } 100%{ opacity:0; transform:scale(.18);} }
+    @keyframes pulseRing{ 0%{ opacity:.1; transform:translate(-50%,-50%) scale(.55);} 30%{ opacity:.6;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(2.3);} }
+    @keyframes flashPop{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.6);} 30%{ opacity:.95;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(1.35);} }
+    @keyframes burstGlow{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.65);} 30%{ opacity:.8;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(1.38);} }
+    @keyframes haloPop{ 0%{ opacity:0; transform:translate(-50%,-50%) scale(.76);} 35%{ opacity:.82;} 100%{ opacity:0; transform:translate(-50%,-50%) scale(1.1);} }
+
+    @media (max-width:700px){
+      body{ padding:10px; }
+      .forgeArea{ min-height:280px; }
+      .slotRing{ max-width:420px; }
+      .slot{ width:92px; min-height:36px; font-size:10px; padding:7px 8px; }
+      .core{ width:160px; height:160px; }
+      .glyph{ font-size:44px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cubeWrap">
+    <div class="cubeMain">
+      <div class="topRow">
+        <div class="title">CUBE FORGE</div>
+        <div class="count"><span id="selectedCount">0</span>/8</div>
+      </div>
+
+      <div class="forgeArea" id="forgeArea">
+        <div class="slotRing" id="slotRing"></div>
+        <div class="core">
+          <div class="glyph">✦</div>
+        </div>
+        <div class="pulse"></div>
+        <div class="flash"></div>
+        <div class="burst"></div>
+        <div class="halo"></div>
+      </div>
+
+      <div class="resultBar">
+        <div>
+          <div class="resultName" id="resultName">결과 없음</div>
+          <div class="resultSub" id="resultSub">재료를 넣어 큐빙</div>
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="actionBtn" id="clearBtn">비우기</button>
+          <button class="actionBtn primary" id="cubeBtn" disabled>큐빙</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="materials">
+      <div class="materialsHead">
+        <div class="title">MATERIAL</div>
+        <div class="count">클릭하여 투입</div>
+      </div>
+      <div class="materialList" id="materialList"></div>
+    </div>
+  </div>
+
+  <script>
+    const materials = [
+      { id:'m1', name:'낡은 뼈조각', level:1 },
+      { id:'m2', name:'마력 파편', level:2 },
+      { id:'m3', name:'은빛 가루', level:2 },
+      { id:'m4', name:'고대 철편', level:3 },
+      { id:'m5', name:'푸른 용의 비늘', level:4 },
+      { id:'m6', name:'붉은 룬핵', level:5 },
+      { id:'m7', name:'저주받은 실타래', level:3 },
+      { id:'m8', name:'빛바랜 송곳니', level:1 },
+      { id:'m9', name:'심연의 가죽', level:4 },
+      { id:'m10', name:'별가루 결정', level:5 },
+      { id:'m11', name:'균열석', level:3 },
+      { id:'m12', name:'미명초 잎맥', level:2 }
+    ];
+
+    const recipes = [
+      { minScore: 26, name: '용비늘 전투흉갑', type: '방어구' },
+      { minScore: 21, name: '붉은룬 장검', type: '무기' },
+      { minScore: 16, name: '마력 강화석', type: '상위 재료' },
+      { minScore: 11, name: '정제된 합성괴', type: '상위 재료' },
+      { minScore: 0, name: '불완전 응괴', type: '잔재' }
+    ];
+
+    const materialList = document.getElementById('materialList');
+    const slotRing = document.getElementById('slotRing');
+    const selectedCount = document.getElementById('selectedCount');
+    const resultName = document.getElementById('resultName');
+    const resultSub = document.getElementById('resultSub');
+    const cubeBtn = document.getElementById('cubeBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const forgeArea = document.getElementById('forgeArea');
+
+    const selected = [];
+
+    function renderMaterials(){
+      materialList.innerHTML = '';
+      materials.forEach(mat => {
+        const used = selected.includes(mat.id);
+        const btn = document.createElement('button');
+        btn.className = `mat level-${mat.level} ${used ? 'used' : ''}`;
+        btn.textContent = mat.name;
+        btn.disabled = used;
+        btn.addEventListener('click', () => addMaterial(mat.id));
+        materialList.appendChild(btn);
+      });
+    }
+
+    function renderSlots(){
+      slotRing.innerHTML = '';
+      for(let i=0; i<8; i++){
+        const id = selected[i];
+        const mat = materials.find(m => m.id === id);
+        const slot = document.createElement('div');
+        slot.className = `slot ${mat ? 'filled' : 'empty'}`;
+        slot.dataset.index = i;
+        slot.innerHTML = mat ? `<span class="level-${mat.level}">${mat.name}</span>` : '빈 슬롯';
+        if(mat){
+          slot.title = '클릭하여 제거';
+          slot.addEventListener('click', () => removeMaterial(i));
+        }
+        slotRing.appendChild(slot);
+      }
+      selectedCount.textContent = selected.length;
+      cubeBtn.disabled = selected.length === 0;
+    }
+
+    function addMaterial(id){
+      if(selected.length >= 8) return;
+      if(selected.includes(id)) return;
+      selected.push(id);
+      renderMaterials();
+      renderSlots();
+    }
+
+    function removeMaterial(index){
+      selected.splice(index, 1);
+      renderMaterials();
+      renderSlots();
+    }
+
+    function clearAll(){
+      selected.length = 0;
+      renderMaterials();
+      renderSlots();
+      resultName.textContent = '결과 없음';
+      resultSub.textContent = '재료를 넣어 큐빙';
+    }
+
+    function cube(){
+      if(selected.length === 0) return;
+
+      const slots = [...document.querySelectorAll('.slot.filled')];
+      slots.forEach((slot, idx) => {
+        setTimeout(() => slot.classList.add('anim-out'), idx * 45);
+      });
+
+      forgeArea.classList.remove('play');
+      void forgeArea.offsetWidth;
+      forgeArea.classList.add('play');
+
+      const usedMaterials = selected.map(id => materials.find(m => m.id === id));
+      const scoreBase = usedMaterials.reduce((sum, m) => sum + m.level, 0);
+      const varietyBonus = new Set(usedMaterials.map(m => m.level)).size;
+      const random = Math.floor(Math.random() * 7);
+      const score = scoreBase + varietyBonus + random;
+      const result = recipes.find(r => score >= r.minScore);
+
+      setTimeout(() => {
+        resultName.textContent = result.name;
+        resultSub.textContent = `${result.type} · 재료 ${usedMaterials.length}개 · 점수 ${score}`;
+        selected.length = 0;
+        renderMaterials();
+        renderSlots();
+      }, 760);
+    }
+
+    clearBtn.addEventListener('click', clearAll);
+    cubeBtn.addEventListener('click', cube);
+
+    renderMaterials();
+    renderSlots();
+  </script>
+</body>
+</html>

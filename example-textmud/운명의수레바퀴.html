@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root {
+            --bg: #05070a;
+            --panel: #0d1117;
+            --gold: #ffcc00;
+            --fail: #ef4444;
+            --jackpot-flare: 0 0 20px #ffcc00, 0 0 60px #ff9900, 0 0 120px #ff6600;
+            --slot-h: 100px;
+        }
+
+        body { background: var(--bg); color: #c9d1d9; font-family: 'Pretendard', sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+
+        .machine { 
+            width: 400px; background: var(--panel); 
+            border: 1px solid #30363d; border-radius: 8px; 
+            padding: 20px; box-shadow: 0 50px 100px rgba(0,0,0,0.9); 
+            transition: all 0.5s;
+        }
+
+        .status-bar { display: flex; justify-content: space-between; font-size: 0.85rem; color: #8b949e; margin-bottom: 5px; padding: 0 5px; }
+
+        .viewport { 
+            height: var(--slot-h); overflow: hidden; position: relative; 
+            background: #000; border: 2px solid #21262d; 
+            margin: 10px 0; z-index: 1; box-shadow: inset 0 10px 30px rgba(0,0,0,1);
+        }
+
+        .container { position: absolute; top: 0; left: 0; width: 100%; transform: translateY(0); }
+
+        /* 물리 엔진 애니메이션 */
+        .spinning { animation: heavy-land 5.2s cubic-bezier(0.15, 0, 0.05, 1) forwards; }
+        @keyframes heavy-land {
+            0% { transform: translateY(0); }
+            85% { transform: translateY(var(--target)); }
+            93% { transform: translateY(calc(var(--target) - 45px)); }
+            97% { transform: translateY(calc(var(--target) + 15px)); }
+            100% { transform: translateY(var(--target)); }
+        }
+
+        /* 잭팟 맥동 효과 */
+        @keyframes jackpot-pulse {
+            0%, 100% { transform: scale(1); text-shadow: var(--jackpot-flare); filter: brightness(1); }
+            50% { transform: scale(1.2); text-shadow: 0 0 50px #ffcc00, 0 0 100px #ff6600; filter: brightness(2); }
+        }
+
+        .slot-item {
+            height: var(--slot-h); display: flex; justify-content: center; align-items: center;
+            font-size: 1.7rem; font-weight: 900; color: #1a1a1a; transition: color 0.5s;
+        }
+
+        .win-jackpot { color: var(--gold) !important; animation: jackpot-pulse 1.5s infinite ease-in-out; z-index: 10; }
+        .win-item { color: #fff !important; text-shadow: 0 0 20px rgba(255,255,255,0.6); }
+        .win-fail { color: #1a1a1a !important; filter: blur(1px); opacity: 0.2; }
+
+        /* 배팅 및 메시지 영역 */
+        .bet-control { 
+            display: flex; align-items: center; justify-content: space-between; 
+            background: #000; border: 1px solid #30363d; border-radius: 4px; padding: 5px; margin-top: 15px;
+        }
+        .bet-btn { background: #21262d; color: #c9d1d9; border: none; width: 35px; height: 35px; cursor: pointer; font-weight: bold; }
+        .bet-btn:hover { background: #30363d; }
+        .bet-value { font-weight: bold; color: var(--gold); font-size: 1.1rem; }
+
+        .spin-btn { 
+            width: 100%; background: #21262d; color: #c9d1d9; border: 1px solid #30363d; 
+            padding: 15px; margin-top: 10px; cursor: pointer; font-weight: bold; letter-spacing: 2px;
+        }
+        .spin-btn:disabled { opacity: 0.2; cursor: default; }
+
+        /* ⚠️ 하단 메시지 창 */
+        #msg-area {
+            height: 20px; margin-top: 10px; text-align: center;
+            font-size: 0.8rem; font-weight: bold; letter-spacing: 1px;
+            transition: opacity 0.3s; opacity: 0;
+        }
+        .msg-error { color: var(--fail); }
+        .msg-info { color: #8b949e; }
+    </style>
+</head>
+<body>
+
+<div class="machine" id="machine">
+    <div class="status-bar">
+        <span>보유 자산</span>
+        <span><span id="user-money" style="color:#ffcc00">1000</span> G</span>
+    </div>
+
+    <div class="viewport">
+        <div id="slot-container" class="container"></div>
+    </div>
+
+    <div class="bet-control">
+        <button class="bet-btn" onclick="changeBet(-50)">-</button>
+        <div style="text-align:center">
+            <div style="font-size:0.6rem; opacity:0.5; margin-bottom:2px;">BETTED AMOUNT</div>
+            <div class="bet-value"><span id="bet-amount">100</span> G</div>
+        </div>
+        <button class="bet-btn" onclick="changeBet(50)">+</button>
+    </div>
+
+    <button id="spin-btn" class="spin-btn" onclick="spin()">슬롯 가동</button>
+    
+    <div id="msg-area">자금이 부족합니다.</div>
+</div>
+
+<script>
+    let myMoney = 1000;
+    let currentBet = 100;
+    let msgTimer;
+
+    const items = [
+        { name: "👑 잭팟", type: "jackpot", multiplier: 10, effect: "win-jackpot" },
+        { name: "💰 골드 x2", type: "gold", multiplier: 2, effect: "win-item" },
+        { name: "💰 골드 x1", type: "gold", multiplier: 1, effect: "win-item" },
+        { name: "🌿 치유 약초", type: "item", multiplier: 0, effect: "win-item" },
+        { name: "💊 기력 환약", type: "item", multiplier: 0, effect: "win-item" },
+        { name: "💀 꽝", type: "fail", multiplier: 0, effect: "win-fail" }
+    ];
+
+    const container = document.getElementById('slot-container');
+    const slotH = 100;
+    let fullList = [];
+
+    function init() {
+        let html = "";
+        for(let i=0; i<15; i++) {
+            items.forEach(item => { html += `<div class="slot-item">${item.name}</div>`; });
+        }
+        container.innerHTML = html;
+        fullList = Array.from(container.querySelectorAll('.slot-item'));
+    }
+
+    function showMsg(text, isError = true) {
+        const msgArea = document.getElementById('msg-area');
+        msgArea.innerText = text;
+        msgArea.className = isError ? 'msg-error' : 'msg-info';
+        msgArea.style.opacity = '1';
+
+        clearTimeout(msgTimer);
+        msgTimer = setTimeout(() => { msgArea.style.opacity = '0'; }, 2000);
+    }
+
+    function changeBet(val) {
+        if(currentBet + val < 50) return;
+        currentBet += val;
+        document.getElementById('bet-amount').innerText = currentBet;
+    }
+
+    function spin() {
+        const btn = document.getElementById('spin-btn');
+        const machine = document.getElementById('machine');
+
+        if (myMoney < currentBet) {
+            showMsg("! 자금이 부족합니다");
+            return;
+        }
+        
+        myMoney -= currentBet;
+        updateUI();
+        
+        btn.disabled = true;
+        fullList.forEach(el => el.className = 'slot-item');
+        machine.style.borderColor = "#30363d";
+        machine.style.boxShadow = "0 50px 100px rgba(0,0,0,0.9)";
+
+        const randIdx = Math.floor(Math.random() * items.length);
+        const result = items[randIdx];
+        
+        const targetIdx = (items.length * 12) + randIdx;
+        const offset = -(targetIdx * slotH);
+
+        container.style.setProperty('--target', `${offset}px`);
+        container.classList.remove('spinning');
+        void container.offsetWidth;
+        container.classList.add('spinning');
+
+        setTimeout(() => {
+            const winEl = fullList[targetIdx];
+            winEl.classList.add(result.effect);
+            btn.disabled = false;
+            
+            if(result.multiplier > 0) {
+                myMoney += currentBet * result.multiplier;
+                showMsg(`+ ${currentBet * result.multiplier}G 획득`, false);
+            } else if (result.type === 'item') {
+                showMsg(`[${winEl.innerText}] 획득`, false);
+            }
+            updateUI();
+
+            if(result.type === 'jackpot') {
+                machine.style.borderColor = "var(--gold)";
+                machine.style.boxShadow = "0 0 60px rgba(255, 204, 0, 0.4)";
+            }
+        }, 5200);
+    }
+
+    function updateUI() {
+        document.getElementById('user-money').innerText = myMoney;
+    }
+
+    init();
+</script>
+</body>
+</html>

@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>성좌의 각인판 - 단일 파일 프리뷰</title>
+  <link rel="stylesheet" href="./main.css" />
+  <style>
+    .starTabletCompact{
+      display:grid;
+      gap:10px;
+    }
+
+    .starTabletCompactCard{
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      background:
+        radial-gradient(circle at top, rgba(255,214,106,.06), transparent 34%),
+        linear-gradient(180deg, rgba(255,255,255,.025), rgba(255,255,255,.015));
+      padding:12px;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.20);
+    }
+
+    .starTabletCompactHead{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:8px;
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muted);
+      margin-bottom:10px;
+    }
+
+    .starTabletCompactTitle{
+      color:#f0f4ff;
+      font-weight:700;
+      letter-spacing:.2px;
+    }
+
+    .starTabletCompactGold{
+      color:#ffd48d;
+      font-weight:700;
+    }
+
+    .starTabletCompactViewport{
+      position:relative;
+      height:108px;
+      overflow:hidden;
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:10px;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,214,106,.05), transparent 34%),
+        linear-gradient(180deg, rgba(0,0,0,.70), rgba(12,16,24,.92));
+      box-shadow:
+        inset 0 0 28px rgba(0,0,0,.55),
+        inset 0 0 18px rgba(255,214,106,.03);
+    }
+
+    .starTabletCompactRunes{
+      position:absolute;
+      left:0;
+      top:0;
+      width:100%;
+      transform:translateY(0);
+    }
+
+    .starTabletCompactRunes.resonating{
+      animation: starTabletCompactStop 5s cubic-bezier(0.2, 0, 0.1, 1) forwards;
+    }
+
+    @keyframes starTabletCompactStop{
+      0%   { transform:translateY(0); filter:blur(0px); }
+      14%  { filter:blur(1.4px); }
+      80%  { filter:blur(.1px); }
+      86%  { transform:translateY(var(--target)); }
+      93%  { transform:translateY(calc(var(--target) - 24px)); }
+      97%  { transform:translateY(calc(var(--target) + 8px)); }
+      100% { transform:translateY(var(--target)); filter:blur(0px); }
+    }
+
+    .starTabletCompactRune{
+      height:108px;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      gap:4px;
+      text-align:center;
+      color:#74839d;
+      font-family:var(--mono);
+      text-shadow:0 0 10px rgba(0,0,0,.8);
+      transition:color .35s ease, transform .35s ease, text-shadow .35s ease;
+    }
+
+    .starTabletCompactRuneMark{
+      font-size:25px;
+      line-height:1;
+    }
+
+    .starTabletCompactRuneName{
+      font-size:14px;
+      font-weight:700;
+      letter-spacing:.2px;
+    }
+
+    .starTabletCompactRuneDesc{
+      font-size:10px;
+      color:#8ea0be;
+    }
+
+    .starTabletCompactRune.is-jackpot{
+      color:var(--r-legend);
+      text-shadow:0 0 18px rgba(255,154,60,.26);
+    }
+
+    .starTabletCompactRune.is-gold{
+      color:#ffe39e;
+      text-shadow:0 0 14px rgba(255,214,106,.20);
+    }
+
+    .starTabletCompactRune.is-item{
+      color:#dce8ff;
+      text-shadow:0 0 12px rgba(124,184,255,.16);
+    }
+
+    .starTabletCompactRune.is-fail{
+      color:#7b5f67;
+      text-shadow:none;
+    }
+
+    .starTabletCompactRune.win-focus{
+      transform:scale(1.05);
+    }
+
+    .starTabletCompactRune.win-focus.is-jackpot{
+      animation: starTabletCompactPulse 1.5s ease-in-out infinite;
+    }
+
+    @keyframes starTabletCompactPulse{
+      0%,100%{ transform:scale(1.03); }
+      50%{ transform:scale(1.09); }
+    }
+
+    .starTabletCompactMask{
+      position:absolute;
+      left:0;
+      width:100%;
+      height:24px;
+      pointer-events:none;
+      z-index:2;
+    }
+
+    .starTabletCompactMask.top{
+      top:0;
+      background:linear-gradient(180deg, rgba(8,12,18,.96), rgba(8,12,18,0));
+    }
+
+    .starTabletCompactMask.bottom{
+      bottom:0;
+      background:linear-gradient(0deg, rgba(8,12,18,.96), rgba(8,12,18,0));
+    }
+
+    .starTabletCompactLine{
+      position:absolute;
+      left:10px;
+      right:10px;
+      top:50%;
+      transform:translateY(-50%);
+      height:1px;
+      border-top:1px solid rgba(255,214,106,.18);
+      border-bottom:1px solid rgba(74,163,255,.08);
+      box-shadow:0 0 8px rgba(255,214,106,.08);
+      pointer-events:none;
+      z-index:3;
+    }
+
+    .starTabletCompactControls{
+      display:grid;
+      grid-template-columns:auto 1fr auto;
+      gap:8px;
+      align-items:center;
+      margin-top:10px;
+    }
+
+    .starTabletCompactBet{
+      text-align:center;
+      font-family:var(--mono);
+      font-size:11px;
+      color:var(--muted);
+    }
+
+    .starTabletCompactBetValue{
+      display:block;
+      margin-top:2px;
+      color:#ffd48d;
+      font-size:15px;
+      font-weight:700;
+    }
+
+    .starTabletCompactSpin{
+      width:100%;
+      margin-top:8px;
+    }
+
+    .starTabletCompactMsg{
+      min-height:18px;
+      margin-top:8px;
+      text-align:center;
+      font-family:var(--mono);
+      font-size:11px;
+      color:#b9c7dd;
+    }
+
+    .starTabletCompactMsg.good{
+      color:#ffd48d;
+    }
+
+    .starTabletCompactMsg.item{
+      color:#dce8ff;
+    }
+
+    .starTabletCompactMsg.bad{
+      color:#8f9bae;
+    }
+  </style>
+</head>
+<body>
+ <div class="starTabletCompact" id="starTabletCompact">
+  <div class="starTabletCompactCard">
+    <div class="starTabletCompactHead">
+      <span class="starTabletCompactTitle">성좌의 각인판</span>
+      <span class="starTabletCompactGold">보유 <span id="starTabletGold">1000</span> G</span>
+    </div>
+
+    <div class="starTabletCompactViewport">
+      <div id="starTabletRunes" class="starTabletCompactRunes"></div>
+      <div class="starTabletCompactMask top"></div>
+      <div class="starTabletCompactMask bottom"></div>
+      <div class="starTabletCompactLine"></div>
+    </div>
+
+    <div class="starTabletCompactControls">
+      <button type="button" data-bet-change="-50">-50</button>
+      <div class="starTabletCompactBet">
+        BET
+        <span class="starTabletCompactBetValue"><span id="starTabletBet">100</span> G</span>
+      </div>
+      <button type="button" data-bet-change="50">+50</button>
+    </div>
+
+    <button type="button" id="starTabletSpinBtn" class="starTabletCompactSpin">성운석 공헌하기</button>
+    <div id="starTabletMsg" class="starTabletCompactMsg">석판은 아직 잠잠하다.</div>
+  </div>
+</div>
+
+<script>
+(function initStarTabletCompact(){
+  const root = document.getElementById('starTabletCompact');
+  if (!root || root.dataset.inited === 'true') return;
+  root.dataset.inited = 'true';
+
+  const goldEl = root.querySelector('#starTabletGold');
+  const betEl = root.querySelector('#starTabletBet');
+  const msgEl = root.querySelector('#starTabletMsg');
+  const spinBtn = root.querySelector('#starTabletSpinBtn');
+  const runeWrap = root.querySelector('#starTabletRunes');
+  const betBtns = Array.from(root.querySelectorAll('[data-bet-change]'));
+
+  let gold = 1000;
+  let bet = 100;
+  const slotH = 108;
+
+  const outcomes = [
+    { key:'jackpot', mark:'✦', name:'왕성의 징조', desc:'10배 배당', payout:10, item:null, css:'is-jackpot' },
+    { key:'gold2',   mark:'☼', name:'황금 성좌',   desc:'2배 배당',  payout:2,  item:null, css:'is-gold' },
+    { key:'gold1',   mark:'☽', name:'미약한 회수', desc:'1배 회수',  payout:1,  item:null, css:'is-gold' },
+    { key:'herb',    mark:'☘', name:'달이슬 약초', desc:'약초 획득', payout:0,  item:'달이슬 약초', css:'is-item' },
+    { key:'pill',    mark:'◈', name:'별숨 환약',   desc:'환약 획득', payout:0,  item:'별숨 환약', css:'is-item' },
+    { key:'fail',    mark:'☍', name:'침묵의 배열', desc:'무효',      payout:0,  item:null, css:'is-fail' }
+  ];
+
+  let pool = [];
+
+  function renderPool(){
+    let html = '';
+    for(let i = 0; i < 14; i++){
+      outcomes.forEach(outcome => {
+        html += `
+          <div class="starTabletCompactRune ${outcome.css}" data-key="${outcome.key}">
+            <div class="starTabletCompactRuneMark">${outcome.mark}</div>
+            <div class="starTabletCompactRuneName">${outcome.name}</div>
+            <div class="starTabletCompactRuneDesc">${outcome.desc}</div>
+          </div>
+        `;
+      });
+    }
+    runeWrap.innerHTML = html;
+    pool = Array.from(runeWrap.querySelectorAll('.starTabletCompactRune'));
+  }
+
+  function updateUi(){
+    goldEl.textContent = gold;
+    betEl.textContent = bet;
+  }
+
+  function showMsg(text, type){
+    msgEl.textContent = text;
+    msgEl.className = 'starTabletCompactMsg' + (type ? ' ' + type : '');
+  }
+
+  function changeBet(delta){
+    const next = bet + delta;
+    if(next < 50) return;
+    if(next > 500) return;
+    bet = next;
+    updateUi();
+  }
+
+  function spin(){
+    if(gold < bet){
+      showMsg('금화가 부족하다.', 'bad');
+      return;
+    }
+
+    gold -= bet;
+    updateUi();
+    spinBtn.disabled = true;
+    pool.forEach(node => node.classList.remove('win-focus'));
+
+    const randIdx = Math.floor(Math.random() * outcomes.length);
+    const result = outcomes[randIdx];
+    const targetIdx = (outcomes.length * 11) + randIdx;
+    const offset = -(targetIdx * slotH);
+
+    runeWrap.style.setProperty('--target', `${offset}px`);
+    runeWrap.classList.remove('resonating');
+    void runeWrap.offsetWidth;
+    runeWrap.classList.add('resonating');
+
+    setTimeout(() => {
+      const winNode = pool[targetIdx];
+      if (winNode) winNode.classList.add('win-focus');
+
+      if (result.payout > 0) {
+        const gain = bet * result.payout;
+        gold += gain;
+        showMsg(`${gain} G 획득`, 'good');
+      } else if (result.item) {
+        showMsg(`[${result.item}] 획득`, 'item');
+      } else {
+        showMsg('석판이 침묵했다.', 'bad');
+      }
+
+      updateUi();
+      spinBtn.disabled = false;
+    }, 5000);
+  }
+
+  betBtns.forEach(btn => {
+    btn.addEventListener('click', () => changeBet(Number(btn.dataset.betChange || 0)));
+  });
+
+  spinBtn.addEventListener('click', spin);
+
+  renderPool();
+  updateUi();
+})();
+</script> 
+</body>
+</html>

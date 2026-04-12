@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <style>
+        :root {
+            --tavern-green: #0a2e1f;
+            --wood: #3e2723;
+            --gold: #f1c40f;
+            --white: #ecf0f1;
+            --msg-win: #2ecc71;
+            --msg-lose: #e74c3c;
+        }
+
+        body { background: #050505; color: #ecf0f1; font-family: 'serif'; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+
+        .game-board { 
+            width: 440px; background: var(--tavern-green); border: 10px solid var(--wood); 
+            padding: 25px; box-shadow: 0 0 60px rgba(0,0,0,1);
+        }
+
+        .status-header { display: flex; justify-content: space-between; font-size: 0.9rem; border-bottom: 2px solid #1a4a35; padding-bottom: 10px; color: var(--gold); margin-bottom: 15px; }
+
+        .log-area {
+            height: 100px; background: rgba(0,0,0,0.5); border: 1px solid #1a4a35;
+            padding: 12px; font-size: 0.85rem; line-height: 1.6; overflow-y: auto; margin-bottom: 20px; color: #a5b1b1;
+        }
+
+        .dice-container { display: flex; justify-content: space-around; align-items: center; height: 120px; margin-bottom: 10px; }
+        
+        .dice-set { text-align: center; }
+        .hand-name { font-size: 0.75rem; color: var(--gold); height: 18px; margin-top: 5px; font-weight: bold; }
+
+        .dice { 
+            width: 60px; height: 60px; background: var(--white); color: #2c3e50;
+            border-radius: 6px; display: flex; justify-content: center; align-items: center;
+            font-size: 1.8rem; font-weight: bold; box-shadow: 4px 4px 0 rgba(0,0,0,0.3);
+        }
+
+        .rolling { animation: shake 0.1s infinite; filter: blur(1px); }
+        @keyframes shake { 0% { transform: translate(1px, 1px) rotate(0deg); } 50% { transform: translate(-1px, -1px) rotate(3deg); } 100% { transform: translate(1px, -1px) rotate(-3deg); } }
+
+        .controls { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 10px; }
+        .btn { background: #2c3e50; border: 1px solid var(--wood); color: #fff; padding: 12px; cursor: pointer; font-weight: bold; }
+        .btn:hover:not(:disabled) { background: #34495e; border-color: var(--gold); }
+        .btn-main { background: #7f1d1d; color: var(--gold); border: 1px solid var(--gold); }
+        .btn:disabled { opacity: 0.3; }
+
+        .bet-info { text-align: center; margin-top: 15px; color: var(--gold); font-size: 1.1rem; }
+    </style>
+</head>
+<body>
+
+<div class="game-board">
+    <div class="status-header">
+        <span>[ 항구 주점 ]</span>
+        <span>금화: <span id="user-gold">1000</span> G</span>
+    </div>
+
+    <div class="log-area" id="log-window">
+        주인이 컵을 탁자에 내려놓습니다.<br>
+        "쌍룡(같은 눈)은 무엇보다 높다네. 행운을 빌지."
+    </div>
+
+    <div class="dice-container">
+        <div class="dice-set">
+            <div style="display:flex; gap:8px;">
+                <div id="p-dice-1" class="dice">?</div>
+                <div id="p-dice-2" class="dice">?</div>
+            </div>
+            <div id="p-hand" class="hand-name"></div>
+        </div>
+        <div style="font-weight: bold; color: #1a4a35;">VS</div>
+        <div class="dice-set">
+            <div style="display:flex; gap:8px;">
+                <div id="m-dice-1" class="dice">?</div>
+                <div id="m-dice-2" class="dice">?</div>
+            </div>
+            <div id="m-hand" class="hand-name"></div>
+        </div>
+    </div>
+
+    <div class="bet-info">BET: <span id="bet-display">100</span> G</div>
+
+    <div class="controls">
+        <button class="btn" onclick="changeBet(-50)">-</button>
+        <button class="btn btn-main" id="spin-btn" onclick="rollDice()">컵 흔들기</button>
+        <button class="btn" onclick="changeBet(50)">+</button>
+    </div>
+</div>
+
+<script>
+    let gold = 1000;
+    let bet = 100;
+
+    function addLog(msg, color = "#a5b1b1") {
+        const log = document.getElementById('log-window');
+        log.innerHTML += `<div style="color:${color}">${msg}</div>`;
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function changeBet(v) { if(bet + v >= 50) { bet += v; document.getElementById('bet-display').innerText = bet; } }
+
+    function getHand(d1, d2) {
+        if (d1 === d2) return { name: "쌍룡 (Double)", power: 100 + d1 };
+        if (d1 + d2 === 7) return { name: "독수리의 눈 (7)", power: 50 };
+        return { name: `점수: ${d1 + d2}`, power: d1 + d2 };
+    }
+
+    function rollDice() {
+        if (gold < bet) { addLog("주인: \"돈 없는 놈은 저리 가!\"", "#e74c3c"); return; }
+        const btn = document.getElementById('spin-btn');
+        gold -= bet; updateUI();
+        btn.disabled = true;
+
+        const diceEls = [document.getElementById('p-dice-1'), document.getElementById('p-dice-2'), document.getElementById('m-dice-1'), document.getElementById('m-dice-2')];
+        document.getElementById('p-hand').innerText = "";
+        document.getElementById('m-hand').innerText = "";
+
+        diceEls.forEach(d => { d.classList.add('rolling'); d.innerText = "?"; });
+        addLog("달그락... 달그락... 컵이 멈췄습니다.");
+
+        setTimeout(() => {
+            const p1 = Math.floor(Math.random() * 6) + 1;
+            const p2 = Math.floor(Math.random() * 6) + 1;
+            const pHand = getHand(p1, p2);
+            diceEls[0].classList.remove('rolling'); diceEls[0].innerText = p1;
+            diceEls[1].classList.remove('rolling'); diceEls[1].innerText = p2;
+            document.getElementById('p-hand').innerText = pHand.name;
+
+            setTimeout(() => {
+                const m1 = Math.floor(Math.random() * 6) + 1;
+                const m2 = Math.floor(Math.random() * 6) + 1;
+                const mHand = getHand(m1, m2);
+                diceEls[2].classList.remove('rolling'); diceEls[2].innerText = m1;
+                diceEls[3].classList.remove('rolling'); diceEls[3].innerText = m2;
+                document.getElementById('m-hand').innerText = mHand.name;
+
+                if (pHand.power > mHand.power) {
+                    let multi = pHand.power > 100 ? 3 : 2; // 쌍룡으로 이기면 3배
+                    addLog(`결과: ${pHand.name} 승리! 금화 ${bet * multi}G를 획득합니다.`, "var(--gold)");
+                    gold += bet * multi;
+                } else if (pHand.power < mHand.power) {
+                    addLog(`주인: "${mHand.name}! 이건 내 거로군."`, "var(--msg-lose)");
+                } else {
+                    addLog("무승부입니다. 판돈이 반환됩니다.");
+                    gold += bet;
+                }
+                updateUI(); btn.disabled = false;
+            }, 1000);
+        }, 1200);
+    }
+
+    function updateUI() { document.getElementById('user-gold').innerText = gold; }
+</script>
+</body>
+</html>

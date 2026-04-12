@@ -1,0 +1,802 @@
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;user-select:none;}
+:root{
+  --gold:#c9a84c;--gold-b:#f0c866;--gold-d:#5a4020;--gold-dd:#2a1a08;
+  --bg:#090705;--panel:#100d08;--panel2:#161008;
+  --c0:#0d0a06;--red:#8b1a1a;--red-b:#c0392b;
+  --blue:#1a3060;--blue-b:#2980b9;
+  --green:#1a4a1a;--green-b:#27ae60;
+  --purple:#3a1a5a;--purple-b:#8e44ad;
+  --orange:#5a2800;--orange-b:#e67e22;
+  --cyan:#0a3a4a;--cyan-b:#00bcd4;
+}
+body{background:var(--bg);font-family:'Cinzel',serif;}
+
+/* ── LAYOUT ── */
+.root{background:var(--bg);padding:12px;display:flex;flex-direction:column;align-items:center;gap:10px;min-height:720px;}
+.hdr{font-size:10px;color:var(--gold);letter-spacing:5px;border-bottom:1px solid var(--gold-d);padding-bottom:5px;width:100%;max-width:980px;text-align:center;}
+.main{display:flex;gap:10px;width:100%;max-width:980px;}
+
+/* ── PANELS ── */
+.pnl{background:var(--panel);border:1px solid var(--gold-d);position:relative;flex-shrink:0;}
+.pnl::before{content:'';position:absolute;inset:2px;border:1px solid #3a2810;pointer-events:none;opacity:0.3;}
+.phdr{padding:5px 10px;border-bottom:1px solid var(--gold-d);font-size:8px;color:var(--gold);letter-spacing:3px;text-align:center;background:linear-gradient(180deg,#1a1208,transparent);}
+
+/* ── SKILL LIBRARY (left) ── */
+.lib{width:200px;}
+.lib-inner{padding:8px;display:flex;flex-direction:column;gap:4px;max-height:640px;overflow-y:auto;}
+.lib-inner::-webkit-scrollbar{width:4px;}
+.lib-inner::-webkit-scrollbar-track{background:#0a0705;}
+.lib-inner::-webkit-scrollbar-thumb{background:var(--gold-d);}
+
+.skill-card{border:1px solid var(--gold-d);background:var(--c0);padding:6px 8px;cursor:grab;display:flex;align-items:center;gap:7px;transition:border-color 0.15s,background 0.15s;}
+.skill-card:hover{border-color:var(--gold);background:#1a1408;}
+.skill-card.dragging{opacity:0.2;}
+.sk-ic{font-size:18px;line-height:1;width:24px;text-align:center;flex-shrink:0;}
+.sk-info{flex:1;min-width:0;}
+.sk-name{font-size:8px;color:var(--gold);letter-spacing:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sk-type{font-size:7px;color:#5a4a2a;letter-spacing:0.5px;margin-top:1px;}
+.sk-cost{font-size:7px;margin-top:1px;}
+
+/* element colors */
+.el-physical .sk-ic{color:#c8b060;} .el-physical{border-color:#3a3020!important;}
+.el-fire .sk-ic{color:#e05020;} .el-fire{border-color:#5a2010!important;}
+.el-ice .sk-ic{color:#4090d0;} .el-ice{border-color:#1a3060!important;}
+.el-lightning .sk-ic{color:#d0c020;} .el-lightning{border-color:#4a4010!important;}
+.el-dark .sk-ic{color:#8050d0;} .el-dark{border-color:#3a1a5a!important;}
+.el-nature .sk-ic{color:#40b040;} .el-nature{border-color:#1a4010!important;}
+.el-holy .sk-ic{color:#d0b050;} .el-holy{border-color:#5a4010!important;}
+.el-buff .sk-ic{color:#50c0a0;} .el-buff{border-color:#0a3a30!important;}
+
+/* ── SKILL SLOTS GRID (center) ── */
+.slots-wrap{flex:1;display:flex;flex-direction:column;gap:8px;}
+
+.queue-pnl{flex:1;}
+.queue-grid{padding:8px;display:grid;grid-template-columns:repeat(5,72px);grid-template-rows:repeat(3,72px);gap:4px;justify-content:center;}
+
+.sq{width:72px;height:72px;border:1px solid var(--gold-dd);background:var(--c0);display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;position:relative;transition:border-color 0.15s,background 0.15s;}
+.sq .seq-num{position:absolute;top:3px;left:4px;font-size:7px;color:#3a2810;font-family:'Cinzel',serif;}
+.sq:hover{border-color:var(--gold-d);}
+.sq.drag-ok{border-color:#3a8a20;background:rgba(20,60,10,0.5);}
+.sq.drag-no{border-color:#8a2020;background:rgba(70,10,10,0.5);}
+.sq.active-slot{border-color:var(--gold);}
+.sq.active-slot::after{content:'';position:absolute;inset:-2px;border:1px solid var(--gold-b);animation:pulse-border 0.5s ease-in-out infinite alternate;pointer-events:none;}
+@keyframes pulse-border{from{opacity:0.3}to{opacity:1}}
+.sq-empty-hint{font-size:20px;opacity:0.06;}
+.sq-icon{font-size:22px;line-height:1;}
+.sq-name{font-size:6px;font-family:'Cinzel',serif;text-align:center;color:#8a7050;}
+.sq-cooldown{position:absolute;bottom:3px;right:4px;font-size:6px;color:#8a5020;}
+.sq-remove{position:absolute;top:2px;right:3px;font-size:8px;color:#3a2010;cursor:pointer;display:none;}
+.sq:hover .sq-remove{display:block;}
+.sq-remove:hover{color:#c03020;}
+
+/* cooldown overlay */
+.sq-cd-overlay{position:absolute;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;font-size:16px;font-family:'Cinzel',serif;color:var(--gold);pointer-events:none;opacity:0;transition:opacity 0.2s;}
+.sq-cd-overlay.active{opacity:1;}
+
+/* ── COMBAT ARENA (bottom center) ── */
+.arena-pnl{width:100%;}
+.arena-inner{padding:10px;display:flex;flex-direction:column;gap:8px;}
+
+.combatants{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;}
+
+.fighter{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;}
+.fighter-name{font-size:8px;color:var(--gold);letter-spacing:2px;}
+.fighter-sprite{font-size:40px;line-height:1;filter:drop-shadow(0 0 8px rgba(200,160,80,0.3));transition:transform 0.15s;}
+.fighter-sprite.attack-anim{animation:atk 0.3s ease-out;}
+.fighter-sprite.hit-anim{animation:hit 0.3s ease-out;}
+.fighter-sprite.dead{filter:grayscale(1);opacity:0.4;}
+@keyframes atk{0%{transform:scale(1)}40%{transform:scale(1.25) translateX(8px)}100%{transform:scale(1)}}
+@keyframes hit{0%{transform:scale(1)}30%{transform:scale(0.85) translateX(-6px)}100%{transform:scale(1)}}
+
+.hp-bar-wrap{width:100%;display:flex;flex-direction:column;gap:2px;}
+.bar-label{display:flex;justify-content:space-between;font-size:7px;color:#6a4a20;letter-spacing:1px;}
+.bar-outer{height:8px;background:#0a0705;border:1px solid var(--gold-d);}
+.bar-fill{height:100%;transition:width 0.4s ease;}
+.bar-hp{background:linear-gradient(90deg,#8b1a1a,#c0392b);}
+.bar-mp{background:linear-gradient(90deg,#1a2060,#2980b9);}
+
+/* status effects on fighter */
+.status-effects{display:flex;gap:3px;flex-wrap:wrap;justify-content:center;min-height:14px;}
+.sfx{font-size:10px;line-height:1;}
+
+/* VS divider */
+.vs{font-size:14px;color:var(--gold-d);font-weight:600;letter-spacing:2px;flex-shrink:0;padding-bottom:20px;}
+
+/* battle log */
+.blog{height:90px;overflow-y:auto;border:1px solid var(--gold-dd);background:#060402;padding:6px 8px;display:flex;flex-direction:column;gap:2px;}
+.blog::-webkit-scrollbar{width:3px;}
+.blog::-webkit-scrollbar-thumb{background:var(--gold-d);}
+.blog-line{font-size:9px;font-family:'Crimson Pro',serif;line-height:1.5;color:#7a6040;}
+.blog-line.dmg{color:#c06040;} .blog-line.heal{color:#40a040;} .blog-line.status{color:#6080c0;} .blog-line.enemy{color:#a04040;} .blog-line.sys{color:#c9a84c;}
+
+/* battle controls */
+.bcontrols{display:flex;gap:6px;align-items:center;}
+.btn{border:1px solid var(--gold-d);background:transparent;color:var(--gold);font-family:'Cinzel',serif;font-size:8px;letter-spacing:2px;padding:6px 14px;cursor:pointer;transition:all 0.15s;}
+.btn:hover{background:var(--gold-d);border-color:var(--gold);}
+.btn:disabled{opacity:0.3;cursor:default;}
+.btn.primary{border-color:var(--gold);color:var(--gold-b);}
+.btn.danger{border-color:#8b1a1a;color:#c05040;}
+.btn.danger:hover{background:#8b1a1a;}
+.speed-label{font-size:8px;color:var(--gold-d);letter-spacing:2px;}
+
+/* turn indicator */
+.turn-bar{height:4px;background:var(--gold-dd);position:relative;overflow:hidden;}
+.turn-fill{height:100%;background:var(--gold);transition:width 0.1s linear;}
+
+/* ── RIGHT: skill tooltip ── */
+.tip-pnl{width:150px;}
+.tip-inner{padding:8px;min-height:180px;font-family:'Crimson Pro',serif;}
+.tip-nm{font-family:'Cinzel',serif;font-size:10px;font-weight:600;text-align:center;color:var(--gold);margin-bottom:3px;}
+.tip-ty{font-size:8px;color:#666;text-align:center;margin-bottom:6px;font-style:italic;}
+.tip-div{border:none;border-top:1px solid var(--gold-d);margin:5px 0;opacity:0.4;}
+.tip-row{font-size:9px;color:#aaa;padding:1px 0;line-height:1.5;}
+.tip-row span{color:var(--gold);}
+.tip-empty{color:#3a2e1a;font-size:9px;text-align:center;padding-top:20px;font-style:italic;}
+
+/* ghost */
+.gh{position:fixed;pointer-events:none;z-index:9999;opacity:0.88;transform:translate(-50%,-50%);border:1px solid var(--gold-d);background:var(--c0);display:flex;align-items:center;justify-content:center;font-size:22px;width:50px;height:50px;}
+
+/* status bar */
+.sbar{width:100%;max-width:980px;display:flex;justify-content:space-between;font-size:7px;color:#5a4020;letter-spacing:2px;padding:4px 8px;border-top:1px solid var(--gold-d);}
+
+/* wave badge */
+.wave-badge{font-size:9px;color:var(--gold-b);letter-spacing:3px;text-align:center;padding:3px 0;}
+</style>
+
+<div class="root">
+<div class="hdr">⚔ Skill Combat System — 스킬 배열 전투</div>
+<div class="main">
+
+  <!-- LEFT: Skill Library -->
+  <div class="pnl lib">
+    <div class="phdr">스킬 목록</div>
+    <div class="lib-inner" id="skill-lib"></div>
+  </div>
+
+  <!-- CENTER -->
+  <div class="slots-wrap">
+
+    <!-- Skill Queue Grid -->
+    <div class="pnl queue-pnl">
+      <div class="phdr">전투 스킬 배열 — 드래그하여 배치 (최대 15칸)</div>
+      <div class="queue-grid" id="queue-grid"></div>
+    </div>
+
+    <!-- Arena -->
+    <div class="pnl arena-pnl">
+      <div class="phdr" id="wave-hdr">웨이브 1 — 전투 준비</div>
+      <div class="arena-inner">
+
+        <div class="combatants">
+          <!-- PLAYER -->
+          <div class="fighter" id="f-player">
+            <div class="fighter-name">KIRA</div>
+            <div class="status-effects" id="sfx-player"></div>
+            <div class="fighter-sprite" id="sp-player">🧙‍♀️</div>
+            <div class="hp-bar-wrap">
+              <div class="bar-label"><span>HP</span><span id="hp-txt">500/500</span></div>
+              <div class="bar-outer"><div class="bar-fill bar-hp" id="hp-bar" style="width:100%"></div></div>
+              <div class="bar-label"><span>MP</span><span id="mp-txt">200/200</span></div>
+              <div class="bar-outer"><div class="bar-fill bar-mp" id="mp-bar" style="width:100%"></div></div>
+            </div>
+          </div>
+
+          <div class="vs">VS</div>
+
+          <!-- ENEMY -->
+          <div class="fighter" id="f-enemy">
+            <div class="fighter-name" id="enemy-name">DARK KNIGHT</div>
+            <div class="status-effects" id="sfx-enemy"></div>
+            <div class="fighter-sprite" id="sp-enemy">🧟</div>
+            <div class="hp-bar-wrap">
+              <div class="bar-label"><span>HP</span><span id="ehp-txt">300/300</span></div>
+              <div class="bar-outer"><div class="bar-fill bar-hp" id="ehp-bar" style="width:100%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="turn-bar"><div class="turn-fill" id="turn-fill" style="width:0%"></div></div>
+
+        <div class="blog" id="blog"></div>
+
+        <div class="bcontrols">
+          <button class="btn primary" id="btn-start" onclick="startBattle()">전투 시작</button>
+          <button class="btn" id="btn-next" onclick="nextWave()" style="display:none">다음 웨이브</button>
+          <button class="btn danger" id="btn-reset" onclick="resetBattle()">초기화</button>
+          <span class="speed-label">속도</span>
+          <button class="btn" id="btn-speed" onclick="toggleSpeed()">1x</button>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- slots-wrap -->
+
+  <!-- RIGHT: Tooltip -->
+  <div class="pnl tip-pnl">
+    <div class="phdr">스킬 정보</div>
+    <div class="tip-inner" id="tip"><div class="tip-empty">스킬에 마우스를<br>올려보세요</div></div>
+  </div>
+
+</div><!-- main -->
+<div class="sbar">
+  <span id="s-queue">배열: 0/15</span>
+  <span id="s-wave">웨이브 1/5</span>
+  <span id="s-score">Score: 0</span>
+</div>
+</div>
+
+<div class="gh" id="gh" style="display:none"></div>
+
+<script>
+// ── SKILL DEFINITIONS ──
+const SKILLS = [
+  // Physical
+  {id:'atk',    name:'일반 공격',  icon:'⚔️', el:'physical', type:'공격',   mp:0,  cd:0, desc:'기본 물리 피해',      dmg:[18,28], effect:null},
+  {id:'heavy',  name:'강타',       icon:'🔨', el:'physical', type:'공격',   mp:8,  cd:2, desc:'강력한 단일 타격. 30% 기절',dmg:[40,60], effect:{stun:2,chance:0.3}},
+  {id:'slash',  name:'연속 베기',  icon:'🌀', el:'physical', type:'공격',   mp:12, cd:3, desc:'2회 연속 공격',       dmg:[15,22], hits:2, effect:null},
+  {id:'pierce', name:'관통',       icon:'🏹', el:'physical', type:'공격',   mp:10, cd:2, desc:'방어 무시 공격',      dmg:[30,45], pen:true, effect:null},
+  // Fire
+  {id:'fireball',name:'화염구',    icon:'🔥', el:'fire',     type:'마법',   mp:18, cd:1, desc:'화염 마법 피해 + 화상',dmg:[35,55], effect:{burn:3}},
+  {id:'meteor',  name:'메테오',    icon:'☄️', el:'fire',     type:'마법',   mp:35, cd:5, desc:'대형 화염 폭발',      dmg:[80,120],effect:{burn:2}},
+  {id:'flameburst',name:'폭염',    icon:'💥', el:'fire',     type:'마법',   mp:22, cd:3, desc:'화염 범위 피해',      dmg:[45,65], effect:{burn:2}},
+  // Ice
+  {id:'icebolt', name:'얼음 화살', icon:'❄️', el:'ice',      type:'마법',   mp:14, cd:1, desc:'냉기 피해 + 둔화',    dmg:[25,40], effect:{slow:2}},
+  {id:'blizzard',name:'눈보라',    icon:'🌨️', el:'ice',      type:'마법',   mp:30, cd:4, desc:'강력한 냉기 + 빙결',  dmg:[55,75], effect:{freeze:2}},
+  // Lightning
+  {id:'shock',   name:'감전',      icon:'⚡', el:'lightning',type:'마법',   mp:16, cd:2, desc:'번개 + 마비',        dmg:[30,50], effect:{paralyze:1}},
+  {id:'chain',   name:'연쇄 번개', icon:'🌩️', el:'lightning',type:'마법',   mp:28, cd:4, desc:'3번 튀는 번개',      dmg:[20,35], hits:3, effect:null},
+  // Dark / Status
+  {id:'drain',   name:'생명 흡수', icon:'🩸', el:'dark',     type:'마법',   mp:20, cd:3, desc:'피해의 50% 흡수',    dmg:[25,40], drain:0.5, effect:null},
+  {id:'curse',   name:'저주',      icon:'💀', el:'dark',     type:'디버프',  mp:15, cd:4, desc:'방어/공격 -30%, 3턴',dmg:[0,0],   effect:{curse:3}},
+  {id:'poison',  name:'맹독',      icon:'☠️', el:'dark',     type:'디버프',  mp:18, cd:3, desc:'매 턴 독 피해 3턴',  dmg:[8,12],  dot:3, effect:{poison:3}},
+  // Mobility
+  {id:'charge',  name:'돌진',      icon:'💨', el:'physical', type:'공격',   mp:10, cd:2, desc:'돌진 공격 + 밀쳐내기',dmg:[28,42], effect:{knockback:1}},
+  {id:'blink',   name:'순간이동',  icon:'✨', el:'dark',     type:'이동',   mp:20, cd:3, desc:'다음 피해 회피',      dmg:[0,0],   effect:{dodge:1}},
+  // Nature
+  {id:'entangle',name:'속박',      icon:'🌿', el:'nature',   type:'디버프',  mp:14, cd:3, desc:'적 2턴 행동 불능',   dmg:[5,10],  effect:{root:2}},
+  {id:'nature_strike',name:'자연의 일격',icon:'🍃',el:'nature',type:'공격',mp:12, cd:2, desc:'자연 피해 + 독',      dmg:[22,35], effect:{poison:2}},
+  // Holy
+  {id:'smite',   name:'신성 강타', icon:'✝️', el:'holy',     type:'공격',   mp:16, cd:2, desc:'신성 피해 (언데드 2배)',dmg:[30,48],holy:true, effect:null},
+  {id:'barrier', name:'신성 보호막',icon:'🛡️',el:'holy',     type:'방어',   mp:18, cd:4, desc:'다음 공격 완전 차단', dmg:[0,0],   effect:{shield:2}},
+  // Buff / Heal
+  {id:'heal',    name:'회복',      icon:'💚', el:'buff',     type:'회복',   mp:20, cd:3, desc:'HP 60~80 회복',      heal:[60,80],effect:null},
+  {id:'regen',   name:'재생',      icon:'💛', el:'buff',     type:'회복',   mp:15, cd:4, desc:'3턴 지속 HP 재생',   hotick:15,   effect:{regen:3}},
+  {id:'power',   name:'파워 업',   icon:'💪', el:'buff',     type:'버프',   mp:18, cd:4, desc:'공격력 +50%, 2턴',   dmg:[0,0],   effect:{powerup:2}},
+  {id:'focus',   name:'집중',      icon:'🧿', el:'buff',     type:'버프',   mp:12, cd:3, desc:'MP 30 즉시 회복',    mpgain:30,   effect:null},
+  // Special
+  {id:'stun_atk',name:'스턴 강타', icon:'💫', el:'physical', type:'공격',   mp:14, cd:3, desc:'100% 스턴 1턴',      dmg:[22,35], effect:{stun:1}},
+  {id:'guard',   name:'가드',      icon:'🔰', el:'buff',     type:'방어',   mp:0,  cd:2, desc:'이번 턴 피해 70% 감소',dmg:[0,0],  effect:{guard:1}},
+  {id:'berserk', name:'광폭화',    icon:'😡', el:'physical', type:'버프',   mp:10, cd:5, desc:'공격 2배 but HP 소모',dmg:[0,0],  effect:{berserk:2}},
+];
+
+// ── ENEMY WAVES ──
+const WAVES = [
+  {name:'좀비',    icon:'🧟', hp:250,  atk:[15,25],  el:'physical', reward:100, special:null},
+  {name:'스켈레톤',icon:'💀', hp:320,  atk:[20,32],  el:'physical', reward:150, special:'poison'},
+  {name:'데몬',    icon:'👹', hp:450,  atk:[28,42],  el:'fire',     reward:200, special:'fire'},
+  {name:'드래곤',  icon:'🐉', hp:600,  atk:[35,55],  el:'fire',     reward:300, special:'fire_breath'},
+  {name:'리치 킹', icon:'💀', hp:800,  atk:[40,65],  el:'dark',     reward:500, special:'drain'},
+];
+
+// ── STATE ──
+const QUEUE_SIZE = 15;
+let queue = Array(QUEUE_SIZE).fill(null); // skill or null
+let cdState = Array(QUEUE_SIZE).fill(0);  // remaining cooldown per slot
+let battle = null;
+let battleSpeed = 1;
+let score = 0;
+let waveIdx = 0;
+
+// Player stats
+let player = {hp:500, maxHp:500, mp:200, maxMp:200, effects:{}};
+let enemy = null;
+let fighting = false;
+let battleInterval = null;
+let turnIdx = 0;
+
+// ── BUILD SKILL LIBRARY ──
+function buildLib(){
+  const lib = document.getElementById('skill-lib');
+  lib.innerHTML = '';
+  SKILLS.forEach(sk => {
+    const el = document.createElement('div');
+    el.className = `skill-card el-${sk.el}`;
+    el.dataset.id = sk.id;
+    const mpColor = sk.mp > 0 ? '#4070b0' : '#5a4020';
+    const mpText = sk.mp > 0 ? `<span style="color:${mpColor}">MP ${sk.mp}</span>` : `<span style="color:#5a4020">MP 0</span>`;
+    const cdText = sk.cd > 0 ? `&nbsp;· CD ${sk.cd}` : '';
+    el.innerHTML = `<span class="sk-ic">${sk.icon}</span><div class="sk-info"><div class="sk-name">${sk.name}</div><div class="sk-type">${sk.type}</div><div class="sk-cost">${mpText}<span style="color:#4a3820;font-size:7px;">${cdText}</span></div></div>`;
+    el.addEventListener('mouseenter', () => showTip(sk));
+    el.addEventListener('mouseleave', clearTip);
+    el.addEventListener('mousedown', e => startLibDrag(e, sk, el));
+    lib.appendChild(el);
+  });
+}
+
+// ── BUILD QUEUE GRID ──
+function buildQueueGrid(){
+  const g = document.getElementById('queue-grid');
+  g.innerHTML = '';
+  for(let i = 0; i < QUEUE_SIZE; i++){
+    const sq = document.createElement('div');
+    sq.className = 'sq';
+    sq.dataset.idx = i;
+    sq.innerHTML = `<span class="seq-num">${i+1}</span><div class="sq-cd-overlay" id="cdov-${i}"></div><span class="sq-empty-hint">⬡</span>`;
+    sq.addEventListener('dragover', e => e.preventDefault());
+    sq.addEventListener('mouseenter', () => { if(queue[i]) showTip(queue[i]); });
+    sq.addEventListener('mouseleave', clearTip);
+    sq.addEventListener('mousedown', e => {
+      if(e.target.classList.contains('sq-remove')) return;
+      if(queue[i] && !fighting) startSlotDrag(e, i, queue[i]);
+    });
+    g.appendChild(sq);
+    renderSlot(i);
+  }
+}
+
+function renderSlot(i){
+  const sq = document.querySelector(`.sq[data-idx="${i}"]`);
+  if(!sq) return;
+  const sk = queue[i];
+  const cd = cdState[i];
+  const rmBtn = `<span class="sq-remove" onclick="removeSlot(${i})">✕</span>`;
+  if(sk){
+    const cdDisp = cd > 0 ? `<span class="sq-cooldown">CD ${cd}</span>` : '';
+    sq.innerHTML = `<span class="seq-num">${i+1}</span><div class="sq-cd-overlay${cd>0?' active':''}" id="cdov-${i}">${cd>0?cd:''}</div>${rmBtn}<span class="sq-icon el-${sk.el}">${sk.icon}</span><span class="sq-name">${sk.name}</span>${cdDisp}`;
+    sq.querySelector('.sq-icon').style.color = getElColor(sk.el);
+  } else {
+    sq.innerHTML = `<span class="seq-num">${i+1}</span><div class="sq-cd-overlay" id="cdov-${i}"></div><span class="sq-empty-hint">⬡</span>`;
+  }
+  updateQueueStatus();
+}
+
+function removeSlot(i){
+  if(fighting) return;
+  queue[i] = null; cdState[i] = 0;
+  renderSlot(i);
+}
+
+function getElColor(el){
+  const map={physical:'#c8b060',fire:'#e05020',ice:'#4090d0',lightning:'#d0c020',dark:'#8050d0',nature:'#40b040',holy:'#d0b050',buff:'#50c0a0'};
+  return map[el]||'#c9a84c';
+}
+
+function updateQueueStatus(){
+  const count = queue.filter(Boolean).length;
+  document.getElementById('s-queue').textContent = `배열: ${count}/15`;
+}
+
+// ── DRAG ──
+let drag = null;
+
+function startLibDrag(e, sk, el){
+  e.preventDefault();
+  drag = {src:'lib', sk, el};
+  el.classList.add('dragging');
+  mkGhost(sk, e.clientX, e.clientY);
+  addDL();
+}
+
+function startSlotDrag(e, idx, sk){
+  e.preventDefault();
+  drag = {src:'slot', sk, idx};
+  queue[idx] = null; cdState[idx] = 0; renderSlot(idx);
+  mkGhost(sk, e.clientX, e.clientY);
+  addDL();
+}
+
+function mkGhost(sk, x, y){
+  const g = document.getElementById('gh');
+  g.textContent = sk.icon;
+  g.style.left = x+'px'; g.style.top = y+'px'; g.style.display='flex';
+}
+
+function addDL(){document.addEventListener('mousemove',onMv);document.addEventListener('mouseup',onUp);}
+
+function clearHL(){
+  document.querySelectorAll('.sq.drag-ok,.sq.drag-no').forEach(el=>{el.classList.remove('drag-ok','drag-no');});
+}
+
+function getHovSlot(x,y){
+  for(const sq of document.querySelectorAll('.sq')){
+    const r=sq.getBoundingClientRect();
+    if(x>=r.left&&x<=r.right&&y>=r.top&&y<=r.bottom) return sq;
+  }return null;
+}
+
+function onMv(e){
+  if(!drag) return;
+  const g=document.getElementById('gh');g.style.left=e.clientX+'px';g.style.top=e.clientY+'px';
+  clearHL();
+  const sq=getHovSlot(e.clientX,e.clientY);
+  if(sq) sq.classList.add('drag-ok');
+}
+
+function onUp(e){
+  if(!drag) return;
+  document.getElementById('gh').style.display='none';
+  clearHL();
+  const sq=getHovSlot(e.clientX,e.clientY);
+  if(sq&&!fighting){
+    const idx=parseInt(sq.dataset.idx);
+    if(drag.src==='slot'&&drag.idx===idx){queue[idx]=drag.sk;cdState[idx]=0;}
+    else{
+      if(queue[idx]&&drag.src==='slot'){queue[drag.idx]=queue[idx];cdState[drag.idx]=0;}
+      queue[idx]=drag.sk; cdState[idx]=0;
+      if(drag.src==='slot'&&drag.idx!==idx) renderSlot(drag.idx);
+    }
+    renderSlot(idx);
+  } else if(drag.src==='slot'){
+    queue[drag.idx]=drag.sk; cdState[drag.idx]=0; renderSlot(drag.idx);
+  }
+  if(drag.el) drag.el.classList.remove('dragging');
+  drag=null;
+  document.removeEventListener('mousemove',onMv);
+  document.removeEventListener('mouseup',onUp);
+}
+
+// ── TOOLTIP ──
+function showTip(sk){
+  const t=document.getElementById('tip');
+  const col=getElColor(sk.el);
+  let dmgTxt='', extra='';
+  if(sk.dmg&&(sk.dmg[0]>0||sk.dmg[1]>0)) dmgTxt=`<div class="tip-row">피해: <span>${sk.dmg[0]}~${sk.dmg[1]}</span></div>`;
+  if(sk.heal) extra+=`<div class="tip-row">회복: <span>${sk.heal[0]}~${sk.heal[1]}</span></div>`;
+  if(sk.hits) extra+=`<div class="tip-row">타격 횟수: <span>${sk.hits}회</span></div>`;
+  if(sk.dot) extra+=`<div class="tip-row">지속 피해: <span>${sk.dmg[0]}~${sk.dmg[1]} × ${sk.dot}턴</span></div>`;
+  if(sk.mpgain) extra+=`<div class="tip-row">MP 회복: <span>+${sk.mpgain}</span></div>`;
+  const eff=sk.effect?`<div class="tip-row">효과: <span>${JSON.stringify(sk.effect).replace(/[{}"]/g,'').replace(/:/,': ').replace(/,/g,' | ')}</span></div>`:'';
+  t.innerHTML=`<div class="tip-nm" style="color:${col}">${sk.name}</div><div class="tip-ty">${sk.el} · ${sk.type}</div><hr class="tip-div"><div class="tip-row">MP: <span>${sk.mp}</span> / CD: <span>${sk.cd}턴</span></div>${dmgTxt}${extra}${eff}<hr class="tip-div"><div class="tip-row" style="font-style:italic;color:#7a6040;font-family:'Crimson Pro',serif;">${sk.desc}</div>`;
+}
+function clearTip(){document.getElementById('tip').innerHTML='<div class="tip-empty">스킬에 마우스를<br>올려보세요</div>';}
+
+// ── BATTLE SYSTEM ──
+function loadWave(idx){
+  const w=WAVES[idx];
+  enemy={...w, curHp:w.hp, effects:{}};
+  document.getElementById('enemy-name').textContent=w.name.toUpperCase();
+  document.getElementById('sp-enemy').textContent=w.icon;
+  document.getElementById('sp-enemy').classList.remove('dead');
+  updateBars();
+  log(`⚔ ${w.name} 등장! HP: ${w.hp}`, 'sys');
+  document.getElementById('wave-hdr').textContent=`웨이브 ${idx+1}/5 — ${w.name}`;
+  document.getElementById('s-wave').textContent=`웨이브 ${idx+1}/5`;
+}
+
+function startBattle(){
+  const hasSkills=queue.some(Boolean);
+  if(!hasSkills){log('먼저 스킬을 배열에 배치해 주세요!','sys');return;}
+  if(player.hp<=0){log('캐릭터가 사망했습니다. 초기화 후 다시 시작하세요.','sys');return;}
+  fighting=true;
+  turnIdx=0;
+  cdState.fill(0);
+  loadWave(waveIdx);
+  document.getElementById('btn-start').disabled=true;
+  document.getElementById('btn-next').style.display='none';
+  runBattle();
+}
+
+function runBattle(){
+  const slots=queue.map((sk,i)=>sk?i:-1).filter(i=>i>=0);
+  if(slots.length===0){endBattle('스킬이 없습니다');return;}
+  let slotPtr=0;
+  let turnProgress=0;
+  const totalTurns=slots.length;
+
+  function doTurn(){
+    if(!fighting||!enemy||enemy.curHp<=0||player.hp<=0) return;
+    const slotI=slots[slotPtr%slots.length];
+    const sk=queue[slotI];
+    if(!sk){slotPtr++;schedule();return;}
+
+    // Highlight active slot
+    document.querySelectorAll('.sq').forEach(el=>el.classList.remove('active-slot'));
+    const activeSq=document.querySelector(`.sq[data-idx="${slotI}"]`);
+    if(activeSq) activeSq.classList.add('active-slot');
+
+    // Cooldown check
+    if(cdState[slotI]>0){
+      log(`${sk.name} 재충전 중... (${cdState[slotI]}턴 남음)`,'status');
+      cdState[slotI]--;
+      renderSlot(slotI);
+      slotPtr++;
+      doEnemyAction();
+      schedule();return;
+    }
+
+    // MP check
+    if(player.mp<sk.mp){
+      log(`MP 부족 — ${sk.name} 사용 불가 (필요 ${sk.mp}, 보유 ${player.mp})`,'status');
+      slotPtr++;
+      doEnemyAction();
+      schedule();return;
+    }
+
+    // Guard check
+    const guarded=!!player.effects.guard;
+    if(guarded) player.effects.guard--;
+
+    // Execute skill
+    player.mp=Math.max(0,player.mp-sk.mp);
+    if(sk.cd>0){cdState[slotI]=sk.cd; renderSlot(slotI);}
+
+    // Animate
+    const psp=document.getElementById('sp-player');
+    const esp=document.getElementById('sp-enemy');
+    psp.classList.remove('attack-anim');void psp.offsetWidth;psp.classList.add('attack-anim');
+
+    let result=executeSk(sk);
+    log(result.msg, result.type);
+
+    if(sk.mpgain){player.mp=Math.min(player.maxMp,player.mp+sk.mpgain);}
+
+    // Status effects on enemy
+    if(sk.effect) applyEffect('enemy',sk.effect);
+    if(sk.effect&&(sk.effect.stun||sk.effect.root||sk.effect.freeze||sk.effect.paralyze)){
+      // enemy skips next action is handled in doEnemyAction
+    }
+
+    // Player buffs
+    if(sk.effect&&(sk.effect.regen||sk.effect.powerup||sk.effect.berserk||sk.effect.shield||sk.effect.dodge||sk.effect.guard)){
+      applyEffect('player',sk.effect);
+    }
+
+    // DOT tick on enemy
+    tickEffects();
+    updateBars();
+
+    if(enemy.curHp<=0){
+      esp.classList.add('dead');
+      const reward=enemy.reward;
+      score+=reward;
+      document.getElementById('s-score').textContent=`Score: ${score.toLocaleString()}`;
+      log(`${enemy.name} 처치! +${reward} 포인트 획득`,'sys');
+      fighting=false;
+      document.querySelectorAll('.sq').forEach(el=>el.classList.remove('active-slot'));
+      if(waveIdx<WAVES.length-1){
+        document.getElementById('btn-next').style.display='';
+      } else {
+        log('🏆 모든 웨이브 클리어! 당신이 최강입니다!','sys');
+        document.getElementById('btn-start').disabled=false;
+      }
+      return;
+    }
+
+    if(player.hp<=0){
+      document.getElementById('sp-player').classList.add('dead');
+      log('💀 전투 패배...','sys');
+      fighting=false;
+      document.querySelectorAll('.sq').forEach(el=>el.classList.remove('active-slot'));
+      document.getElementById('btn-start').disabled=false;
+      return;
+    }
+
+    slotPtr++;
+    doEnemyAction();
+    schedule();
+  }
+
+  function schedule(){
+    const delay=Math.max(300,1000/battleSpeed);
+    // turn bar
+    let p=0;
+    const bar=document.getElementById('turn-fill');
+    const step=50;
+    const interval=setInterval(()=>{p+=step/(delay);bar.style.width=Math.min(100,p*100)+'%';if(p>=1){clearInterval(interval);bar.style.width='0%';}},step);
+    battleInterval=setTimeout(doTurn,delay);
+  }
+
+  schedule();
+}
+
+function executeSk(sk){
+  const esp=document.getElementById('sp-enemy');
+  const psp=document.getElementById('sp-player');
+  let msg='', type='dmg';
+
+  if(sk.heal){
+    const h=rand(sk.heal[0],sk.heal[1]);
+    player.hp=Math.min(player.maxHp,player.hp+h);
+    return {msg:`💚 ${sk.name} — HP +${h} 회복 (${player.hp}/${player.maxHp})`,type:'heal'};
+  }
+
+  if(sk.mpgain){
+    return {msg:`✨ ${sk.name} — MP +${sk.mpgain} 회복`,type:'heal'};
+  }
+
+  if(!sk.dmg||sk.dmg[0]===0&&sk.dmg[1]===0){
+    return {msg:`✦ ${sk.name} 사용`,type:'status'};
+  }
+
+  const hits=sk.hits||1;
+  let total=0;
+  const powered=player.effects.powerup>0?2:1;
+  const berserk=player.effects.berserk>0?2:1;
+  const powerMult=powered*berserk;
+
+  for(let h=0;h<hits;h++){
+    let dmg=Math.floor(rand(sk.dmg[0],sk.dmg[1])*powerMult);
+    if(sk.holy&&enemy.el==='dark') dmg=Math.floor(dmg*2);
+    if(sk.pen) dmg=Math.floor(dmg*1.3);
+    // enemy guard?
+    if(enemy.effects.shield>0){dmg=0;enemy.effects.shield--;}
+    // drain
+    if(sk.drain){player.hp=Math.min(player.maxHp,player.hp+Math.floor(dmg*sk.drain));}
+    enemy.curHp=Math.max(0,enemy.curHp-dmg);
+    total+=dmg;
+  }
+
+  esp.classList.remove('hit-anim');void esp.offsetWidth;esp.classList.add('hit-anim');
+
+  const hitsTxt=hits>1?` (${hits}회 타격)`:'';
+  const holyTxt=sk.holy&&enemy.el==='dark'?' [성스러운 일격!]':'';
+  msg=`⚔ ${sk.name}${hitsTxt} — ${total} 피해${holyTxt}`;
+  if(sk.drain) msg+=` / HP +${Math.floor(total*sk.drain)} 흡수`;
+  if(sk.effect&&sk.effect.burn) msg+=' / 화상!';
+  if(sk.effect&&sk.effect.freeze) msg+=' / 빙결!';
+  if(sk.effect&&sk.effect.stun) msg+=' / 스턴!';
+  if(sk.effect&&sk.effect.poison) msg+=' / 독!';
+
+  // Berserk costs HP
+  if(player.effects.berserk>0){
+    const bCost=Math.floor(rand(8,15));
+    player.hp=Math.max(1,player.hp-bCost);
+    msg+=` (광폭화: -${bCost} HP)`;
+  }
+
+  return {msg,type:'dmg'};
+}
+
+function doEnemyAction(){
+  if(!enemy||enemy.curHp<=0||player.hp<=0) return;
+  // Enemy stunned/rooted?
+  if(enemy.effects.stun>0||enemy.effects.root>0||enemy.effects.freeze>0||enemy.effects.paralyze>0){
+    const fx=enemy.effects.stun>0?'스턴':enemy.effects.root>0?'속박':enemy.effects.freeze>0?'빙결':'마비';
+    log(`👹 ${enemy.name} — ${fx} 상태로 행동 불능!`,'status');
+    if(enemy.effects.stun>0) enemy.effects.stun--;
+    if(enemy.effects.root>0) enemy.effects.root--;
+    if(enemy.effects.freeze>0) enemy.effects.freeze--;
+    if(enemy.effects.paralyze>0) enemy.effects.paralyze--;
+    renderEffects();return;
+  }
+
+  const dodging=player.effects.dodge>0;
+  if(dodging){player.effects.dodge--;log('✨ 순간이동으로 적 공격 회피!','status');renderEffects();return;}
+
+  let dmg=rand(enemy.atk[0],enemy.atk[1]);
+  if(player.effects.guard>0){dmg=Math.floor(dmg*0.3);player.effects.guard--;}
+  if(player.effects.shield>0){dmg=0;player.effects.shield--;log('🛡️ 신성 보호막이 공격을 차단!','status');}
+  else{
+    player.hp=Math.max(0,player.hp-dmg);
+    const psp=document.getElementById('sp-player');
+    psp.classList.remove('hit-anim');void psp.offsetWidth;psp.classList.add('hit-anim');
+    log(`👹 ${enemy.name} 공격 — ${dmg} 피해 (${player.hp}/${player.maxHp} HP)`,'enemy');
+    // enemy special
+    if(enemy.special==='fire'&&Math.random()<0.3){applyEffect('player',{burn:2});log('🔥 화염 공격! 화상 상태!','status');}
+    if(enemy.special==='drain'&&Math.random()<0.25){const d=Math.floor(dmg*0.3);enemy.curHp=Math.min(enemy.hp,enemy.curHp+d);log(`💀 리치가 생명을 흡수! +${d} HP`,'enemy');}
+    if(enemy.special==='poison'&&Math.random()<0.3){applyEffect('player',{poison:2});log('☠️ 독 공격!','status');}
+  }
+  renderEffects();
+  updateBars();
+}
+
+function tickEffects(){
+  // enemy DOT
+  if(enemy){
+    if(enemy.effects.burn>0){const d=rand(8,14);enemy.curHp=Math.max(0,enemy.curHp-d);enemy.effects.burn--;log(`🔥 화상 지속 피해 ${d}`,'dmg');}
+    if(enemy.effects.poison>0){const d=rand(10,18);enemy.curHp=Math.max(0,enemy.curHp-d);enemy.effects.poison--;log(`☠️ 독 지속 피해 ${d}`,'dmg');}
+    if(enemy.effects.slow>0) enemy.effects.slow--;
+    if(enemy.effects.curse>0){enemy.curHp=Math.max(0,enemy.curHp-rand(5,10));enemy.effects.curse--;log('💀 저주 피해','dmg');}
+  }
+  // player DOT/HOT
+  if(player.effects.regen>0){const h=15;player.hp=Math.min(player.maxHp,player.hp+h);player.effects.regen--;log(`💛 재생 +${h} HP`,'heal');}
+  if(player.effects.burn>0){const d=rand(6,12);player.hp=Math.max(0,player.hp-d);player.effects.burn--;log(`🔥 화상 ${d} HP 손실`,'enemy');}
+  if(player.effects.poison>0){const d=rand(8,15);player.hp=Math.max(0,player.hp-d);player.effects.poison--;log(`☠️ 독 ${d} HP 손실`,'enemy');}
+  if(player.effects.powerup>0) player.effects.powerup--;
+  if(player.effects.berserk>0) player.effects.berserk--;
+  renderEffects();
+}
+
+function applyEffect(target,eff){
+  const obj=target==='player'?player.effects:enemy.effects;
+  for(const [k,v] of Object.entries(eff)){
+    obj[k]=(obj[k]||0)+v;
+  }
+  renderEffects();
+}
+
+function renderEffects(){
+  const ICONS={burn:'🔥',freeze:'❄️',poison:'☠️',stun:'💫',slow:'🐢',root:'🌿',paralyze:'⚡',curse:'💀',regen:'💛',powerup:'💪',berserk:'😡',shield:'🛡️',dodge:'✨',guard:'🔰',knockback:'💨'};
+  ['player','enemy'].forEach(t=>{
+    const effects=t==='player'?player.effects:enemy.effects;
+    const el=document.getElementById(`sfx-${t}`);
+    el.innerHTML=Object.entries(effects).filter(([,v])=>v>0).map(([k,v])=>`<span class="sfx" title="${k}:${v}">${ICONS[k]||'◆'}<span style="font-size:6px;font-family:Cinzel,serif;color:#c9a84c;">${v}</span></span>`).join('');
+  });
+}
+
+function updateBars(){
+  document.getElementById('hp-bar').style.width=(player.hp/player.maxHp*100)+'%';
+  document.getElementById('mp-bar').style.width=(player.mp/player.maxMp*100)+'%';
+  document.getElementById('hp-txt').textContent=`${player.hp}/${player.maxHp}`;
+  document.getElementById('mp-txt').textContent=`${player.mp}/${player.maxMp}`;
+  if(enemy){
+    document.getElementById('ehp-bar').style.width=(enemy.curHp/enemy.hp*100)+'%';
+    document.getElementById('ehp-txt').textContent=`${enemy.curHp}/${enemy.hp}`;
+  }
+}
+
+function log(msg,type=''){
+  const b=document.getElementById('blog');
+  const d=document.createElement('div');
+  d.className=`blog-line ${type}`;d.textContent=msg;
+  b.appendChild(d);b.scrollTop=b.scrollHeight;
+}
+
+function nextWave(){
+  if(waveIdx<WAVES.length-1){
+    waveIdx++;
+    cdState.fill(0);
+    queue.forEach((_,i)=>renderSlot(i));
+    player.mp=Math.min(player.maxMp,player.mp+50);
+    log(`✦ 다음 웨이브! MP +50 회복`,'sys');
+    document.getElementById('btn-next').style.display='none';
+    fighting=true;
+    document.getElementById('btn-start').disabled=true;
+    loadWave(waveIdx);
+    runBattle();
+  }
+}
+
+function endBattle(msg){fighting=false;log(msg,'sys');}
+
+function resetBattle(){
+  if(battleInterval) clearTimeout(battleInterval);
+  fighting=false;waveIdx=0;score=0;turnIdx=0;
+  player={hp:500,maxHp:500,mp:200,maxMp:200,effects:{}};
+  enemy=null;
+  cdState.fill(0);
+  queue.forEach((_,i)=>renderSlot(i));
+  document.getElementById('blog').innerHTML='';
+  document.getElementById('sp-player').classList.remove('dead');
+  document.getElementById('sp-enemy').classList.remove('dead');
+  document.getElementById('sp-enemy').textContent='🧟';
+  document.getElementById('enemy-name').textContent='DARK KNIGHT';
+  document.getElementById('sfx-player').innerHTML='';
+  document.getElementById('sfx-enemy').innerHTML='';
+  document.getElementById('wave-hdr').textContent='웨이브 1 — 전투 준비';
+  document.getElementById('s-wave').textContent='웨이브 1/5';
+  document.getElementById('s-score').textContent='Score: 0';
+  document.getElementById('btn-start').disabled=false;
+  document.getElementById('btn-next').style.display='none';
+  document.getElementById('turn-fill').style.width='0%';
+  document.querySelectorAll('.sq').forEach(el=>el.classList.remove('active-slot'));
+  updateBars();log('⬥ 초기화 완료 — 스킬을 배열하고 전투를 시작하세요','sys');
+}
+
+function toggleSpeed(){
+  const speeds=[1,2,4];
+  const cur=speeds.indexOf(battleSpeed);
+  battleSpeed=speeds[(cur+1)%speeds.length];
+  document.getElementById('btn-speed').textContent=battleSpeed+'x';
+}
+
+function rand(a,b){return Math.floor(Math.random()*(b-a+1)+a);}
+
+// ── INIT ──
+buildLib();
+buildQueueGrid();
+log('⬥ 스킬 목록에서 스킬을 드래그하여 배열에 배치하세요','sys');
+log('⬥ 배열된 순서대로 스킬이 순환 실행됩니다','sys');
+log('⬥ 강력한 조합을 만들어보세요!','sys');
+updateBars();
+
+// Default starter combo
+const starter=['atk','fireball','heal','icebolt','guard','heavy','regen','shock','atk','fireball'];
+starter.forEach((id,i)=>{
+  const sk=SKILLS.find(s=>s.id===id);
+  if(sk){queue[i]=sk;renderSlot(i);}
+});
+</script>

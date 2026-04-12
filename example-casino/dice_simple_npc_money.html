@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Tavern Dice - True 1v1</title>
+<style>
+  body{
+    background:#0f1115;
+    color:#e6e6e6;
+    font-family: ui-monospace, monospace;
+    padding:20px;
+  }
+  .pill{
+    display:inline-block;
+    border:1px solid #333;
+    padding:6px 12px;
+    margin:4px;
+    border-radius:20px;
+    background:#151822;
+  }
+  .win{ color:#4caf50; font-weight:bold; }
+  .lose{ color:#e53935; font-weight:bold; }
+  .tie{ color:#aaa; }
+  button,input{
+    background:#151822;
+    color:#e6e6e6;
+    border:1px solid #333;
+    padding:8px 12px;
+    margin:4px;
+  }
+</style>
+</head>
+<body>
+
+<h3>주점: 뼈주사위 (1:1 구조)</h3>
+
+<div>
+  <span class="pill">당신: <b id="pGold">300</b>G</span>
+  <span class="pill">용병: <b id="nGold">200</b>G</span>
+  <span class="pill">판돈: <b id="betView">50</b>G</span>
+</div>
+
+<br/>
+
+<input id="bet" type="number" value="50" min="1" />
+<button onclick="maxBet()">최대</button>
+<button onclick="play()">굴리기</button>
+
+<hr/>
+
+<div>
+  <div>
+    당신: <span id="pDice">[ - ] [ - ]</span>
+    <span id="pResult"></span>
+  </div>
+  <div>
+    용병: <span id="nDice">[ - ] [ - ]</span>
+    <span id="nResult"></span>
+  </div>
+</div>
+
+<script>
+let playerGold = 300;
+let npcGold = 200;
+
+const FEE_RATE = 0.05;
+
+function $(id){ return document.getElementById(id); }
+function rand(){ return Math.floor(Math.random()*6)+1; }
+
+function updateUI(){
+  $("pGold").textContent = playerGold;
+  $("nGold").textContent = npcGold;
+  $("betView").textContent = $("bet").value;
+}
+
+function maxBet(){
+  const max = Math.min(playerGold, npcGold);
+  $("bet").value = max;
+  updateUI();
+}
+
+function analyze(a,b){
+  return {
+    a,b,
+    isDouble: a===b,
+    doubleVal: a===b ? a : 0,
+    sum: a+b
+  };
+}
+
+function compare(A,B){
+  if(A.isDouble && !B.isDouble) return 1;
+  if(!A.isDouble && B.isDouble) return -1;
+  if(A.isDouble && B.isDouble && A.doubleVal!==B.doubleVal)
+    return A.doubleVal > B.doubleVal ? 1:-1;
+  if(A.sum!==B.sum) return A.sum>B.sum?1:-1;
+  return 0;
+}
+
+function play(){
+  let bet = parseInt($("bet").value);
+  if(bet<=0) return;
+
+  if(bet>playerGold || bet>npcGold){
+    alert("둘 중 한 명이 돈이 부족합니다.");
+    return;
+  }
+
+  $("pResult").textContent="";
+  $("nResult").textContent="";
+
+  // 베팅 차감
+  playerGold -= bet;
+  npcGold -= bet;
+
+  const p1=rand(), p2=rand();
+  const n1=rand(), n2=rand();
+
+  $("pDice").textContent=`[ ${p1} ] [ ${p2} ]`;
+  $("nDice").textContent=`[ ${n1} ] [ ${n2} ]`;
+
+  const pA = analyze(p1,p2);
+  const nA = analyze(n1,n2);
+
+  const r = compare(pA,nA);
+
+  if(r===0){
+    // 무승부
+    playerGold += bet;
+    npcGold += bet;
+    $("pResult").textContent="무승부";
+    $("pResult").className="tie";
+    $("nResult").textContent="무승부";
+    $("nResult").className="tie";
+  } else {
+    const pot = bet*2;
+    const fee = Math.floor(pot*FEE_RATE);
+    const payout = pot-fee;
+
+    if(r===1){
+      playerGold += payout;
+      $("pResult").textContent="승리";
+      $("pResult").className="win";
+      $("nResult").textContent="패배";
+      $("nResult").className="lose";
+    } else {
+      npcGold += payout;
+      $("nResult").textContent="승리";
+      $("nResult").className="win";
+      $("pResult").textContent="패배";
+      $("pResult").className="lose";
+    }
+  }
+
+  updateUI();
+}
+
+updateUI();
+</script>
+
+</body>
+</html>

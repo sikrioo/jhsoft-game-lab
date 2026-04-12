@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>큐빙 제단</title>
+<style>
+:root{
+  --bg:#070a10;
+  --panel:#0b0f18;
+  --txt:#d7e0ff;
+  --muted:#8fa2c6;
+  --border:rgba(255,255,255,.08);
+  --sys:#ffd56a;
+  --ok:#7CFF6B;
+  --bad:#ff6b7a;
+  --move:#32f6ff;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
+  --sans:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+  --r-common:#d6d6d6;
+  --r-magic:#4aa3ff;
+  --r-rare:#ffd84a;
+  --r-epic:#b68cff;
+  --r-legend:#ff9a3c;
+  --row-h:22px; /* fixed row height */
+}
+*{ box-sizing:border-box; margin:0; padding:0; }
+html,body{ height:100%; background:var(--bg); color:var(--txt); font-family:var(--sans); overflow:hidden; }
+
+.card{
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(255,255,255,.015));
+  box-shadow:0 0 0 1px rgba(0,0,0,.25) inset, 0 20px 60px rgba(0,0,0,.45);
+  overflow:hidden;
+}
+
+/* ── root layout ── */
+#root{
+  position:fixed; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  padding:16px;
+}
+#cube-ui{
+  display:flex; flex-direction:column;
+  gap:8px; width:280px;
+}
+
+/* ── panel header ── */
+.ph{
+  display:flex; align-items:center; gap:6px;
+  padding:8px 12px 7px;
+  border-bottom:1px solid var(--border);
+  font:700 10px var(--mono);
+  letter-spacing:.1em; text-transform:uppercase;
+  color:var(--muted); flex-shrink:0;
+}
+.ph .dot{ width:5px; height:5px; border-radius:50%; background:var(--muted); opacity:.5; flex-shrink:0; }
+.ph-r{ margin-left:auto; font:400 10px var(--mono); color:var(--muted); opacity:.7; letter-spacing:0; text-transform:none; }
+.ph-r .hi{ color:var(--r-rare); font-weight:700; }
+.ph-r .lo{ color:var(--muted); }
+
+/* ══════════════════════
+   ALTAR (fixed height)
+══════════════════════ */
+#panel-altar{ display:flex; flex-direction:column; }
+
+/* FIXED: always 8 rows regardless of content */
+.altar-slots{
+  flex-shrink:0;
+  height:calc(var(--row-h) * 8 + 12px); /* 8 rows + top/bottom padding */
+  padding:6px 10px;
+  display:flex; flex-direction:column;
+  gap:0;
+  overflow:hidden;
+  position:relative;
+}
+
+/* empty state hint — absolute so it doesn't affect height */
+.altar-empty-hint{
+  position:absolute; inset:0;
+  display:flex; align-items:center; justify-content:center;
+  font:400 11px var(--mono); color:var(--muted); opacity:.3;
+  pointer-events:none;
+  font-style:italic;
+}
+
+.altar-row{
+  height:var(--row-h);
+  display:flex; align-items:center;
+  padding:0 4px;
+  border-radius:5px;
+  cursor:pointer;
+  transition:background .1s;
+  user-select:none;
+  flex-shrink:0;
+}
+.altar-row:hover{ background:rgba(255,60,40,.07); }
+.altar-row .idx{
+  width:16px; flex-shrink:0;
+  font:700 10px var(--mono); color:var(--muted); opacity:.28;
+}
+.altar-row .aname{
+  flex:1; font:400 12px var(--mono);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.altar-row .adel{
+  font:400 10px var(--mono); color:var(--muted); opacity:.2;
+  padding-left:6px; flex-shrink:0;
+  transition:opacity .1s, color .1s;
+}
+.altar-row:hover .adel{ opacity:.65; color:var(--bad); }
+
+.altar-row.r-common .aname{ color:var(--r-common); }
+.altar-row.r-magic  .aname{ color:var(--r-magic);  }
+.altar-row.r-rare   .aname{ color:var(--r-rare);   }
+.altar-row.r-epic   .aname{ color:var(--r-epic);   }
+.altar-row.r-legend .aname{ color:var(--r-legend); }
+
+/* ── ACTION AREA ── */
+.altar-action{
+  border-top:1px solid var(--border);
+  padding:8px 12px 10px;
+  display:flex; flex-direction:column; gap:7px;
+}
+.altar-meta{
+  display:flex; justify-content:space-between; align-items:center;
+  font:400 10px var(--mono); color:var(--muted);
+}
+.altar-meta .hi{ color:var(--r-rare); font-weight:700; }
+.altar-meta .dim{ color:var(--muted); opacity:.6; }
+.altar-meta .warn{ color:var(--bad); }
+
+/* ══════════════════════
+   CUBE BUTTON — heavy
+══════════════════════ */
+.cube-btn-wrap{ position:relative; }
+
+.cube-btn{
+  width:100%;
+  height:36px;
+  border-radius:8px;
+  font:700 11px var(--mono);
+  letter-spacing:.18em; text-transform:uppercase;
+  cursor:pointer;
+  position:relative; overflow:hidden;
+  transition:background .2s, border-color .2s, box-shadow .2s, opacity .2s;
+  display:flex; align-items:center; justify-content:center; gap:7px;
+
+  /* disabled state */
+  border:1px solid rgba(255,255,255,.07);
+  background:rgba(255,255,255,.03);
+  color:rgba(255,255,255,.2);
+  box-shadow:none;
+}
+.cube-btn:not(:disabled){
+  border:1px solid rgba(200,140,40,.32);
+  background:
+    linear-gradient(180deg,
+      rgba(120,70,10,.28) 0%,
+      rgba(85,46,6,.34) 50%,
+      rgba(60,32,4,.38) 100%
+    );
+  color:rgba(220,160,60,.85);
+  box-shadow:
+    inset 0 1px 0 rgba(255,200,100,.07),
+    inset 0 -1px 0 rgba(0,0,0,.4),
+    0 1px 8px rgba(140,70,8,.22);
+}
+.cube-btn:not(:disabled):hover{
+  border-color:rgba(220,155,50,.48);
+  background:
+    linear-gradient(180deg,
+      rgba(140,84,14,.34) 0%,
+      rgba(100,58,8,.4) 50%,
+      rgba(74,40,6,.44) 100%
+    );
+  color:rgba(240,185,90,.95);
+  box-shadow:
+    inset 0 1px 0 rgba(255,210,120,.1),
+    inset 0 -1px 0 rgba(0,0,0,.45),
+    0 2px 14px rgba(180,90,10,.3),
+    0 0 30px rgba(220,140,30,.09);
+}
+.cube-btn:not(:disabled):active{
+  transform:translateY(1px);
+  box-shadow:
+    inset 0 2px 4px rgba(0,0,0,.45),
+    0 1px 4px rgba(120,60,8,.18);
+}
+.cube-btn:disabled{ cursor:not-allowed; }
+
+/* decorative side marks */
+.cube-btn-mark{
+  font-size:8px; opacity:.5; letter-spacing:0;
+}
+
+/* heartbeat pulse — applied during cubing */
+@keyframes heartbeat{
+  0%   { transform:scale(1);     box-shadow:inset 0 1px 0 rgba(255,200,120,.07),inset 0 -1px 0 rgba(0,0,0,.4), 0 1px 8px rgba(160,80,10,.2); }
+  12%  { transform:scale(1.055); box-shadow:inset 0 1px 0 rgba(255,200,120,.1), inset 0 -1px 0 rgba(0,0,0,.4), 0 0 28px rgba(255,160,40,.65), 0 0 60px rgba(255,130,20,.25); border-color:rgba(255,160,40,.85); }
+  26%  { transform:scale(.988);  box-shadow:inset 0 1px 0 rgba(255,200,120,.07),inset 0 -1px 0 rgba(0,0,0,.4), 0 1px 8px rgba(160,80,10,.2); }
+  100% { transform:scale(1);     box-shadow:inset 0 1px 0 rgba(255,200,120,.07),inset 0 -1px 0 rgba(0,0,0,.4), 0 1px 8px rgba(160,80,10,.2); }
+}
+.cube-btn.beating{
+  animation:heartbeat .75s cubic-bezier(.22,1,.36,1);
+  pointer-events:none;
+  color:rgba(255,210,140,.95);
+}
+
+/* ══════════════════════
+   INVENTORY (scrollable)
+══════════════════════ */
+#panel-inv{ display:flex; flex-direction:column; max-height:148px; }
+.inv-scroll{
+  flex:1; overflow-y:auto;
+  scrollbar-width:thin;
+  scrollbar-color:rgba(255,255,255,.09) transparent;
+}
+.inv-scroll::-webkit-scrollbar{ width:3px; }
+.inv-scroll::-webkit-scrollbar-thumb{ background:rgba(255,255,255,.09); border-radius:99px; }
+.inv-list{ padding:4px 10px 6px; display:flex; flex-direction:column; gap:0; }
+.inv-row{
+  height:var(--row-h);
+  display:flex; align-items:center;
+  padding:0 4px;
+  border-radius:5px;
+  cursor:pointer; user-select:none;
+  transition:background .1s;
+}
+.inv-row:hover{ background:rgba(255,255,255,.05); }
+.inv-row.full{ opacity:.28; cursor:default; pointer-events:none; }
+.inv-row .ib{ width:12px; flex-shrink:0; font:400 10px var(--mono); color:var(--muted); opacity:.3; }
+.inv-row .in{ flex:1; font:400 12px var(--mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.inv-row .it{ font:400 9px var(--mono); color:var(--muted); opacity:.4; padding-left:4px; flex-shrink:0; }
+.inv-row.r-common .in{ color:var(--r-common); }
+.inv-row.r-magic  .in{ color:var(--r-magic);  }
+.inv-row.r-rare   .in{ color:var(--r-rare);   }
+.inv-row.r-epic   .in{ color:var(--r-epic);   }
+.inv-row.r-legend .in{ color:var(--r-legend); }
+
+/* ══════════════════════
+   STATUS BAR
+══════════════════════ */
+#status{
+  display:flex; align-items:center; gap:7px;
+  padding:6px 10px;
+  border:1px solid var(--border);
+  border-radius:10px;
+  background:linear-gradient(180deg,rgba(255,255,255,.02),rgba(255,255,255,.01));
+}
+.sdot{ width:5px; height:5px; border-radius:50%; background:var(--muted); opacity:.3; flex-shrink:0; transition:all .2s; }
+.sdot.on{ background:var(--ok); opacity:1; animation:sdotBlink .65s ease 2; }
+@keyframes sdotBlink{ 0%,100%{opacity:1;} 50%{opacity:.3;} }
+.smsg{ font:400 11px var(--mono); color:var(--muted); flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; transition:color .2s; }
+.smsg.t-legend{ color:var(--r-legend); font-weight:700; }
+.smsg.t-epic  { color:var(--r-epic);   font-weight:700; }
+.smsg.t-rare  { color:var(--r-rare);   }
+.smsg.t-magic { color:var(--r-magic);  }
+.smsg.t-ok    { color:var(--ok);       }
+.smsg.t-fail  { color:var(--bad);      }
+
+/* ══════════════════════
+   CUBING CINEMATIC
+══════════════════════ */
+#cin{
+  position:fixed; inset:0; z-index:80;
+  display:none; align-items:center; justify-content:center;
+  pointer-events:none;
+}
+#cin.play{ display:flex; }
+.cin-bg{ position:absolute; inset:0; background:radial-gradient(ellipse 55% 55% at 50% 50%,transparent,rgba(0,0,0,.86) 100%); opacity:0; animation:cinBg .3s ease forwards; }
+@keyframes cinBg{ to{opacity:1;} }
+.cin-veil{ position:absolute; inset:0; animation:cinFlash .1s ease forwards; }
+@keyframes cinFlash{ 0%{opacity:1;} 100%{opacity:0;} }
+.cin-pp{ position:absolute; inset:0; overflow:hidden; }
+.cin-p{ position:absolute; border-radius:50%; animation:pFly linear forwards; opacity:0; }
+@keyframes pFly{ 0%{opacity:1;transform:translate(0,0) scale(1.3);} 100%{opacity:0;transform:translate(var(--dx),var(--dy)) scale(.1);} }
+.cin-ring{ position:absolute; top:50%; left:50%; border-radius:50%; width:0; height:0; margin:0; animation:ringOut 1s ease-out forwards; }
+@keyframes ringOut{ 0%{width:0;height:0;margin:0;opacity:.9;border-width:2.5px;} 100%{width:400px;height:400px;margin:-200px;opacity:0;border-width:1px;} }
+.cin-ground{ position:absolute; bottom:0; left:0; right:0; height:2px; background:linear-gradient(90deg,transparent,rgba(182,140,255,.7) 30%,rgba(50,246,255,.5) 50%,rgba(182,140,255,.7) 70%,transparent); animation:groundPulse .4s ease-out .05s forwards; opacity:0; }
+@keyframes groundPulse{ 0%{opacity:0;transform:scaleX(.2);} 30%{opacity:1;transform:scaleX(1);} 100%{opacity:0;transform:scaleX(1);} }
+.cin-word{ position:relative; z-index:5; font:900 11px var(--mono); letter-spacing:.38em; text-transform:uppercase; color:transparent; background:linear-gradient(135deg,#b68cff,#e0d4ff,#32f6ff,#b68cff); background-clip:text; -webkit-background-clip:text; filter:drop-shadow(0 0 22px rgba(182,140,255,.95)) drop-shadow(0 0 48px rgba(100,40,200,.7)); opacity:0; animation:wordPop .58s cubic-bezier(.22,1,.36,1) .1s forwards; }
+@keyframes wordPop{ 0%{opacity:0;transform:scale(1.7);filter:blur(14px) drop-shadow(0 0 22px rgba(182,140,255,.9));} 65%{opacity:1;transform:scale(.96);filter:blur(0) drop-shadow(0 0 28px rgba(182,140,255,1));} 100%{opacity:1;transform:scale(1);filter:blur(0) drop-shadow(0 0 18px rgba(182,140,255,.7));} }
+@keyframes screenShake{ 0%{transform:translate(0,0);} 14%{transform:translate(-3px,2px);} 28%{transform:translate(3px,-2px);} 42%{transform:translate(-2px,3px);} 56%{transform:translate(2px,-1px);} 72%{transform:translate(-1px,1px);} 86%{transform:translate(1px,-1px);} 100%{transform:translate(0,0);} }
+#cube-ui.shake{ animation:screenShake .4s ease forwards; }
+
+/* ══════════════════════
+   RESULT OVERLAY
+══════════════════════ */
+#overlay{ position:fixed; inset:0; z-index:100; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.72); backdrop-filter:blur(6px); }
+#overlay.show{ display:flex; animation:ovIn .2s ease forwards; }
+@keyframes ovIn{ from{opacity:0;} to{opacity:1;} }
+.res-box{ width:260px; border-radius:14px; background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02)); box-shadow:0 0 0 1px rgba(0,0,0,.4) inset,0 32px 80px rgba(0,0,0,.75); overflow:hidden; border:1px solid var(--border); animation:resPop .4s cubic-bezier(.22,1,.36,1) forwards; opacity:0; }
+@keyframes resPop{ 0%{opacity:0;transform:scale(.88) translateY(14px);} 100%{opacity:1;transform:scale(1) translateY(0);} }
+.res-box.r-magic { border-color:rgba(74,163,255,.32);  box-shadow:0 0 0 1px rgba(0,0,0,.4) inset,0 0 44px rgba(74,163,255,.15),0 32px 70px rgba(0,0,0,.7); }
+.res-box.r-rare  { border-color:rgba(255,216,74,.38);  box-shadow:0 0 0 1px rgba(0,0,0,.4) inset,0 0 52px rgba(255,216,74,.16),0 32px 70px rgba(0,0,0,.7); }
+.res-box.r-epic  { border-color:rgba(182,140,255,.42); box-shadow:0 0 0 1px rgba(0,0,0,.4) inset,0 0 60px rgba(182,140,255,.2), 0 32px 70px rgba(0,0,0,.7); }
+.res-box.r-legend{ border-color:rgba(255,154,60,.48);  box-shadow:0 0 0 1px rgba(0,0,0,.4) inset,0 0 72px rgba(255,154,60,.25),0 32px 70px rgba(0,0,0,.7); animation:resPop .4s cubic-bezier(.22,1,.36,1) forwards,lgBoxPulse 2s ease-in-out .5s infinite; }
+@keyframes lgBoxPulse{ 0%,100%{box-shadow:0 0 0 1px rgba(0,0,0,.4) inset,0 0 72px rgba(255,154,60,.25),0 32px 70px rgba(0,0,0,.7);} 50%{box-shadow:0 0 0 1px rgba(0,0,0,.4) inset,0 0 100px rgba(255,154,60,.4),0 32px 70px rgba(0,0,0,.7);} }
+.res-fanfare{ display:none; text-align:center; padding:7px 14px 0; font:700 9px var(--mono); letter-spacing:.24em; text-transform:uppercase; color:var(--r-legend); animation:lgGlow 2s ease-in-out infinite; }
+.r-legend .res-fanfare{ display:block; }
+@keyframes lgGlow{ 0%,100%{text-shadow:0 0 14px rgba(255,154,60,.6);} 50%{text-shadow:0 0 26px rgba(255,154,60,1),0 0 50px rgba(255,154,60,.4);} }
+.res-head{ padding:12px 14px 10px; border-bottom:1px solid var(--border); }
+.res-rarity{ font:700 9px var(--mono); letter-spacing:.18em; text-transform:uppercase; margin-bottom:3px; }
+.res-name{ font:700 17px var(--mono); line-height:1.2; }
+.res-type{ font:400 10px var(--mono); color:var(--muted); margin-top:2px; }
+.r-common .res-rarity,.r-common .res-name{ color:var(--r-common); }
+.r-magic  .res-rarity,.r-magic  .res-name{ color:var(--r-magic);  }
+.r-rare   .res-rarity,.r-rare   .res-name{ color:var(--r-rare);   }
+.r-epic   .res-rarity,.r-epic   .res-name{ color:var(--r-epic);   }
+.r-legend .res-rarity,.r-legend .res-name{ color:var(--r-legend); animation:lgGlow 2s ease-in-out infinite; }
+.res-stats{ padding:8px 14px; display:flex; flex-direction:column; gap:3px; border-bottom:1px solid var(--border); }
+.sr{ display:flex; justify-content:space-between; font:400 11px var(--mono); }
+.sk{ color:var(--muted); }
+.sv{ font-weight:700; color:var(--txt); }
+.sv.ok{ color:var(--ok); }
+.sv.ep{ color:var(--r-epic);   text-shadow:0 0 8px rgba(182,140,255,.35); }
+.sv.lg{ color:var(--r-legend); text-shadow:0 0 8px rgba(255,154,60,.35); }
+.res-footer{ display:flex; gap:6px; padding:8px 10px 10px; }
+.rbtn{ flex:1; padding:6px 0; border-radius:7px; font:700 10px var(--mono); letter-spacing:.1em; text-transform:uppercase; cursor:pointer; transition:all .12s; }
+.rbtn-take{ border:1px solid rgba(124,255,107,.22); background:rgba(124,255,107,.04); color:var(--ok); }
+.rbtn-take:hover{ background:rgba(124,255,107,.1); border-color:rgba(124,255,107,.38); box-shadow:0 0 12px rgba(124,255,107,.1); }
+.rbtn-discard{ border:1px solid var(--border); background:rgba(255,255,255,.02); color:var(--muted); }
+.rbtn-discard:hover{ border-color:rgba(255,107,122,.22); color:var(--bad); background:rgba(255,107,122,.04); }
+</style>
+</head>
+<body>
+
+<!-- cinematic layer -->
+<div id="cin">
+  <div class="cin-bg"></div>
+  <div class="cin-pp" id="cinP"></div>
+  <div class="cin-ground"></div>
+  <div class="cin-word">Cubing</div>
+</div>
+
+<!-- result overlay -->
+<div id="overlay" onclick="bgClick(event)">
+  <div class="res-box" id="resBox">
+    <div class="res-fanfare">✦ &nbsp;LEGENDARY&nbsp; ✦</div>
+    <div class="res-head">
+      <div class="res-rarity" id="resRarity"></div>
+      <div class="res-name"   id="resName"></div>
+      <div class="res-type"   id="resType"></div>
+    </div>
+    <div class="res-stats" id="resStats"></div>
+    <div class="res-footer">
+      <button class="rbtn rbtn-take"    onclick="takeItem()">획득</button>
+      <button class="rbtn rbtn-discard" onclick="discardItem()">버리기</button>
+    </div>
+  </div>
+</div>
+
+<div id="root">
+  <div id="cube-ui">
+
+    <!-- ALTAR -->
+    <div class="card" id="panel-altar">
+      <div class="ph">
+        <div class="dot"></div>
+        큐빙 제단
+        <div class="ph-r">🪙 <span class="hi" id="goldVal">1,200</span></div>
+      </div>
+
+      <!-- FIXED HEIGHT: always 8 rows -->
+      <div class="altar-slots" id="altarSlots">
+        <div class="altar-empty-hint" id="altarHint">— 아이템을 올려주세요 —</div>
+      </div>
+
+      <div class="altar-action">
+        <div class="altar-meta">
+          <span class="lo">슬롯 <span class="hi" id="slotN">0</span> / 8</span>
+          <span id="altarNote"></span>
+        </div>
+        <div class="cube-btn-wrap">
+          <button class="cube-btn" id="cubeBtn" disabled onclick="startCubing()">
+            <span class="cube-btn-mark">◈</span>
+            <span id="cubeBtnLabel">큐빙</span>
+            <span class="cube-btn-mark">◈</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- INVENTORY -->
+    <div class="card" id="panel-inv">
+      <div class="ph">
+        <div class="dot"></div>
+        인벤토리
+        <div class="ph-r lo" id="invCnt"></div>
+      </div>
+      <div class="inv-scroll">
+        <div class="inv-list" id="invList"></div>
+      </div>
+    </div>
+
+    <!-- STATUS -->
+    <div id="status">
+      <div class="sdot" id="sdot"></div>
+      <div class="smsg" id="smsg">아이템을 선택해 제단에 올리세요.</div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+/* ─── CONFIG ─── */
+const MAX_SLOTS = 8;
+const MIN_CUBE  = 2;
+
+const RL = { common:'일반', magic:'마법', rare:'레어', epic:'에픽', legend:'전설' };
+const POOL = [
+  {id:'w1',n:'강철 검',       t:'무기',   r:'common', s:[{k:'공격력',v:'+12~18'},{k:'치명타',v:'5%'}]},
+  {id:'w2',n:'마법 완드',     t:'무기',   r:'magic',  s:[{k:'마법 공격',v:'+28~36'},{k:'마나',v:'+40'}]},
+  {id:'w3',n:'룬 검',         t:'무기',   r:'rare',   s:[{k:'공격력',v:'+44~56'},{k:'치명타',v:'18%'}]},
+  {id:'w4',n:'심연의 대검',   t:'무기',   r:'epic',   s:[{k:'공격력',v:'+80~100'},{k:'공격속도',v:'+15%'}]},
+  {id:'w5',n:'멸망의 도끼',   t:'무기',   r:'legend', s:[{k:'공격력',v:'+140~180'},{k:'치명타',v:'32%'},{k:'고유',v:'폭풍의 일격'}]},
+  {id:'a1',n:'가죽 갑옷',     t:'방어구', r:'common', s:[{k:'방어력',v:'+18~24'},{k:'체력',v:'+30'}]},
+  {id:'a2',n:'마법 로브',     t:'방어구', r:'magic',  s:[{k:'방어력',v:'+24~32'},{k:'마나',v:'+60'}]},
+  {id:'a3',n:'룬 갑옷',       t:'방어구', r:'rare',   s:[{k:'방어력',v:'+55~70'},{k:'체력',v:'+80'}]},
+  {id:'a4',n:'공허의 판금',   t:'방어구', r:'epic',   s:[{k:'방어력',v:'+110~130'},{k:'체력',v:'+150'}]},
+  {id:'a5',n:'불멸의 흉갑',   t:'방어구', r:'legend', s:[{k:'방어력',v:'+200~240'},{k:'피해 감소',v:'28%'},{k:'고유',v:'불멸의 수호'}]},
+  {id:'j1',n:'구리 반지',     t:'장신구', r:'common', s:[{k:'체력',v:'+15'},{k:'마나',v:'+10'}]},
+  {id:'j2',n:'마법 목걸이',   t:'장신구', r:'magic',  s:[{k:'마법 공격',v:'+14'},{k:'쿨다운',v:'-5%'}]},
+  {id:'j3',n:'고대 룬 반지',  t:'장신구', r:'rare',   s:[{k:'모든 속성',v:'+12'},{k:'경험치',v:'+15%'}]},
+  {id:'m1',n:'마법 수정',     t:'재료',   r:'magic',  s:[{k:'마법 에너지',v:'+100'}]},
+  {id:'m2',n:'용의 비늘',     t:'재료',   r:'rare',   s:[{k:'변환 촉매',v:'×2.0'}]},
+  {id:'m3',n:'별의 조각',     t:'재료',   r:'epic',   s:[{k:'전설 확률',v:'+5%'}]},
+  {id:'m4',n:'고대 룬석',     t:'재료',   r:'rare',   s:[{k:'옵션 재조합',v:'1회'}]},
+  {id:'c1',n:'강화석',        t:'소재',   r:'common', s:[{k:'강화 수치',v:'+1~2'}]},
+  {id:'c2',n:'축복받은 오브', t:'소재',   r:'rare',   s:[{k:'품질 향상',v:'+15%'}]},
+];
+
+let inv = [], altar = [], gold = 1200, pending = null;
+const uid = () => Math.random().toString(36).slice(2,9);
+const calcCost = n => Math.max(100, n * 120);
+
+/* ─── BOOT ─── */
+function boot(){
+  ['w1','w1','a1','j1','w2','a2','j2','w3','m1','m1','m2','c1','c1','c1','c2','m3','m4','w4','a3','j3','w5','a4','m1','c2'].forEach(id=>{
+    inv.push({...POOL.find(x=>x.id===id), uid:uid()});
+  });
+  renderAll();
+}
+
+function renderAll(){ renderAltar(); renderInv(); }
+
+/* ─── ALTAR ─── */
+function renderAltar(){
+  const el    = document.getElementById('altarSlots');
+  const hint  = document.getElementById('altarHint');
+  const n     = altar.length;
+  const cost  = calcCost(n);
+
+  // remove old rows (keep hint element)
+  el.querySelectorAll('.altar-row').forEach(r => r.remove());
+
+  if(n === 0){
+    hint.style.display = '';
+  } else {
+    hint.style.display = 'none';
+    altar.forEach((it, i) => {
+      const row = document.createElement('div');
+      row.className = `altar-row r-${it.r}`;
+      row.innerHTML = `<div class="idx">${i+1}</div><div class="aname">${it.n}</div><div class="adel">✕</div>`;
+      row.onclick = () => removeFromAltar(it.uid);
+      el.appendChild(row);
+    });
+  }
+
+  document.getElementById('slotN').textContent  = n;
+  document.getElementById('goldVal').textContent = gold.toLocaleString();
+
+  const noteEl = document.getElementById('altarNote');
+  noteEl.removeAttribute('class');
+  if(n === 0){
+    noteEl.textContent = ''; noteEl.className = '';
+  } else if(gold < cost){
+    noteEl.textContent = `골드 부족 (${cost.toLocaleString()} 필요)`; noteEl.className = 'warn';
+  } else if(n < MIN_CUBE){
+    noteEl.textContent = `${MIN_CUBE - n}개 더 필요`; noteEl.style.color = 'var(--muted)';
+  } else {
+    noteEl.textContent = `소모 ${cost.toLocaleString()} G`; noteEl.className = 'hi';
+  }
+
+  document.getElementById('cubeBtn').disabled = !(n >= MIN_CUBE && gold >= cost);
+}
+
+/* ─── INVENTORY ─── */
+function renderInv(){
+  const el   = document.getElementById('invList');
+  const full = altar.length >= MAX_SLOTS;
+  el.innerHTML = '';
+  document.getElementById('invCnt').textContent = `${inv.length}개`;
+
+  if(inv.length === 0){
+    el.innerHTML = `<div style="padding:5px 4px;font:400 11px var(--mono);color:var(--muted);opacity:.3;font-style:italic;">비어있음</div>`;
+    return;
+  }
+  inv.forEach(it => {
+    const row = document.createElement('div');
+    row.className = `inv-row r-${it.r}` + (full?' full':'');
+    row.innerHTML = `<div class="ib">›</div><div class="in">${it.n}</div><div class="it">${it.t}</div>`;
+    if(!full) row.onclick = () => addToAltar(it.uid);
+    el.appendChild(row);
+  });
+}
+
+/* ─── MOVES ─── */
+function addToAltar(u){
+  if(altar.length >= MAX_SLOTS){ log(`최대 ${MAX_SLOTS}개까지 배치 가능합니다.`,'fail'); return; }
+  const i = inv.findIndex(x => x.uid === u); if(i<0) return;
+  const it = inv.splice(i,1)[0];
+  altar.push(it); renderAll();
+  log(`${it.n}을(를) 제단에 올렸습니다.`,'');
+}
+function removeFromAltar(u){
+  const i = altar.findIndex(x => x.uid === u); if(i<0) return;
+  const it = altar.splice(i,1)[0];
+  inv.push(it); renderAll();
+  log(`${it.n}을(를) 회수했습니다.`,'');
+}
+
+/* ─── CUBING ─── */
+function startCubing(){
+  const n    = altar.length;
+  const cost = calcCost(n);
+  if(n < MIN_CUBE || gold < cost) return;
+
+  gold  -= cost;
+  altar  = [];
+  renderAll();
+
+  /* heartbeat sequence → cinematic → result */
+  runHeartbeat(4, () => {
+    playCinematic(() => {
+      showResult(roll(n));
+    });
+  });
+}
+
+/* heartbeat: pulse the button `beats` times, then call done() */
+function runHeartbeat(beats, done){
+  const btn   = document.getElementById('cubeBtn');
+  const label = document.getElementById('cubeBtnLabel');
+  btn.disabled = true;
+
+  const msgs   = ['준비...', '수렴 중...', '변환 중...', '완료!'];
+  let   count  = 0;
+
+  /* interval between beats — slow and tense, slight acceleration */
+  const intervals = [1100, 900, 700, 500];
+
+  function doBeat(){
+    if(count >= beats){ done(); return; }
+
+    label.textContent = msgs[Math.min(count, msgs.length-1)];
+
+    // reset then re-trigger animation
+    btn.classList.remove('beating');
+    void btn.offsetWidth;
+    btn.classList.add('beating');
+
+    count++;
+    const delay = intervals[Math.min(count-1, intervals.length-1)];
+    setTimeout(doBeat, delay);
+  }
+  doBeat();
+}
+
+/* ─── ROLL ─── */
+function roll(count){
+  let w = { common:50, magic:28, rare:14, epic:6, legend:2 };
+  if(count >= 4){ w.rare+=4; w.epic+=3; w.legend+=1; w.common-=6; }
+  if(count >= 6){ w.rare+=3; w.epic+=4; w.legend+=2; w.common-=6; w.magic-=4; }
+  if(count === 8){ w.legend+=6; w.epic+=6; w.rare+=4; w.common-=10; w.magic-=6; }
+  Object.keys(w).forEach(k => w[k] = Math.max(0, w[k]));
+  const total = Object.values(w).reduce((a,b)=>a+b,0);
+  let r = Math.random()*total, rarity;
+  for(const [k,v] of Object.entries(w)){ r-=v; if(r<=0){rarity=k;break;} }
+  if(!rarity) rarity='common';
+  const pool = POOL.filter(p => p.r===rarity);
+  return {...pool[~~(Math.random()*pool.length)], uid:uid()};
+}
+
+/* ─── SHOW RESULT ─── */
+function showResult(item){
+  pending = item;
+
+  // reset btn
+  const btn = document.getElementById('cubeBtn');
+  btn.classList.remove('beating');
+  document.getElementById('cubeBtnLabel').textContent = '큐빙';
+
+  const box = document.getElementById('resBox');
+  box.className = `res-box r-${item.r}`;
+  box.style.animation = 'none'; void box.offsetWidth; box.style.animation = '';
+
+  document.getElementById('resRarity').textContent = RL[item.r] + ' 등급';
+  document.getElementById('resName').textContent   = item.n;
+  document.getElementById('resType').textContent   = item.t;
+  document.getElementById('resStats').innerHTML    = item.s.map(s => {
+    const cls = item.r==='legend'?'lg': item.r==='epic'?'ep': (s.v.includes('+')||s.v.includes('%'))?'ok':'';
+    return `<div class="sr"><span class="sk">${s.k}</span><span class="sv ${cls}">${s.v}</span></div>`;
+  }).join('');
+
+  document.getElementById('overlay').classList.add('show');
+
+  const t   = {legend:'legend',epic:'epic',rare:'rare',magic:'magic'}[item.r]||'';
+  const pre = {legend:'✦ 전설',epic:'◈ 에픽',rare:'◆ 레어',magic:'◇ 마법',common:'일반'}[item.r];
+  log(`${pre} 등급 [${item.n}] 획득!`, t);
+}
+
+function takeItem(){
+  if(pending){ inv.push(pending); pending=null; renderAll(); log('인벤토리에 추가했습니다.','ok'); }
+  document.getElementById('overlay').classList.remove('show');
+}
+function discardItem(){
+  pending=null;
+  document.getElementById('overlay').classList.remove('show');
+  log('아이템을 버렸습니다.','');
+}
+function bgClick(e){ if(e.target===document.getElementById('overlay')) discardItem(); }
+
+/* ─── CINEMATIC ─── */
+function playCinematic(cb){
+  const cin = document.getElementById('cin');
+  cin.innerHTML = `
+    <div class="cin-bg"></div>
+    <div class="cin-pp" id="cinP"></div>
+    <div class="cin-ground"></div>
+    <div class="cin-word">Cubing</div>
+  `;
+  cin.classList.add('play');
+
+  // flash veils
+  ['rgba(182,140,255,.11)','rgba(255,255,255,.06)','rgba(182,140,255,.07)'].forEach((bg,i)=>{
+    const f = document.createElement('div');
+    f.className='cin-veil'; f.style.cssText=`background:${bg};animation-delay:${i*.14}s;`;
+    cin.appendChild(f);
+  });
+
+  // rings
+  ['rgba(182,140,255,.72)','rgba(50,246,255,.5)','rgba(255,216,74,.42)','rgba(182,140,255,.28)'].forEach((c,i)=>{
+    const ring=document.createElement('div');
+    ring.className='cin-ring';
+    ring.style.cssText=`border:2px solid ${c};animation-delay:${i*.17}s;`;
+    cin.appendChild(ring);
+  });
+
+  // particles
+  const colors=['#b68cff','#32f6ff','#ffd84a','#ff9a3c','rgba(255,255,255,.8)'];
+  const pp = document.getElementById('cinP');
+  for(let i=0;i<55;i++){
+    const p=document.createElement('div'); p.className='cin-p';
+    const a=Math.random()*Math.PI*2, d=90+Math.random()*230;
+    p.style.cssText=`width:${1.5+Math.random()*4}px;height:${1.5+Math.random()*4}px;background:${colors[~~(Math.random()*colors.length)]};box-shadow:0 0 5px currentColor;left:calc(50% + ${(Math.random()-.5)*50}px);top:calc(50% + ${(Math.random()-.5)*50}px);--dx:${Math.cos(a)*d}px;--dy:${Math.sin(a)*d}px;animation-duration:${.9+Math.random()*.9}s;animation-delay:${Math.random()*.3}s;`;
+    pp.appendChild(p);
+  }
+
+  const ui = document.getElementById('cube-ui');
+  ui.classList.add('shake');
+  setTimeout(()=>ui.classList.remove('shake'), 400);
+
+  setTimeout(()=>{
+    cin.classList.remove('play');
+    cin.innerHTML = `<div class="cin-pp" id="cinP"></div>`;
+    cb();
+  }, 1400);
+}
+
+/* ─── LOG ─── */
+function log(msg, type){
+  const el=document.getElementById('smsg'), dot=document.getElementById('sdot');
+  el.className='smsg'+(type?` t-${type}`:'');
+  el.textContent=msg;
+  dot.classList.remove('on'); void dot.offsetWidth; dot.classList.add('on');
+}
+
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,633 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Puyo Puyo (Smooth Grid) - Phaser 3</title>
+  <style>
+    html,body{margin:0;height:100%;background:#0b0b12;color:#eaeaff;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+    .wrap{display:flex;gap:16px;padding:14px;align-items:flex-start;flex-wrap:wrap;}
+    .panel{
+      width:280px;background:#121226;border:1px solid rgba(255,255,255,.08);
+      border-radius:14px;padding:14px;box-shadow:0 10px 30px rgba(0,0,0,.35);
+    }
+    .title{font-weight:800;margin:0 0 10px;font-size:16px;}
+    .stat{display:grid;grid-template-columns:1fr auto;gap:6px 10px;margin:10px 0 14px;font-size:14px;}
+    .k{color:#9aa0ff;font-weight:800;}
+    .btn{
+      width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);
+      background:#1a1a33;color:#fff;cursor:pointer;font-weight:800;
+    }
+    .btn:hover{filter:brightness(1.08);}
+    .hint{font-size:13px;line-height:1.55;opacity:.9;margin-top:12px;}
+    #game canvas{border-radius:14px;border:1px solid rgba(255,255,255,.08);box-shadow:0 10px 30px rgba(0,0,0,.35);}
+    .small{opacity:.75;font-size:12px;margin-top:10px;}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <div id="game"></div>
+  <div class="panel">
+    <p class="title">Puyo Puyo (Smooth Grid) - Phaser 3</p>
+    <div class="stat">
+      <div>Score</div><div id="score" class="k">0</div>
+      <div>Chain</div><div id="chain" class="k">0</div>
+      <div>Status</div><div id="status" class="k">PLAY</div>
+    </div>
+    <button class="btn" id="restart">Restart</button>
+    <div class="hint">
+      <div><span class="k">← →</span> 이동 (누르고 있으면 연속 이동)</div>
+      <div><span class="k">↓</span> 소프트 드롭</div>
+      <div><span class="k">↑ / X</span> 시계 회전</div>
+      <div><span class="k">Z</span> 반시계 회전</div>
+      <div class="small">규칙: 같은 색 4개 이상(상하좌우) 연결 → 삭제, 위는 낙하, 연쇄 발생</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<script>
+(() => {
+  // ===== Board config =====
+  const COLS = 6;
+  const ROWS = 12;
+  const CELL = 44;
+  const BOARD_X = 20;
+  const BOARD_Y = 20;
+
+  // ===== Colors =====
+  const COLORS = [
+    { name:'red',    fill:0xff4b6e },
+    { name:'green',  fill:0x38f59a },
+    { name:'blue',   fill:0x4aa6ff },
+    { name:'yellow', fill:0xffd14a },
+    { name:'purple', fill:0xb15cff },
+  ];
+  const COLOR_COUNT = 4; // 4~5 추천 (원하면 5로 바꿔도 됨)
+
+  // ===== Feel tuning (you can tweak) =====
+  const FALL_INTERVAL_MS = 520;   // 자연 낙하
+  const SOFT_FALL_MS = 45;        // 소프트 드롭 낙하
+  const LOCK_DELAY_MS = 380;      // 바닥/블록 위에 닿고 고정되기까지 여유
+  const MOVE_TWEEN_MS = 70;       // 좌우/회전 표시 이동 부드러움
+  const GRAVITY_TWEEN_MS = 120;   // 삭제 후 낙하 애니메이션
+  const CLEAR_STEP_MS = 160;      // 삭제/낙하 템포
+
+  // Key repeat feel (like DAS/ARR)
+  const DAS = 140;  // 누른 뒤 연속 시작 지연
+  const ARR = 55;   // 연속 이동 간격
+
+  // ===== UI =====
+  const UI = {
+    score: document.getElementById('score'),
+    chain: document.getElementById('chain'),
+    status: document.getElementById('status'),
+  };
+  const setScore = v => UI.score.textContent = String(v);
+  const setChain = v => UI.chain.textContent = String(v);
+  const setStatus = s => UI.status.textContent = s;
+
+  // ===== Game State =====
+  let grid;             // grid[y][x] = {color, sprite} | null
+  let active = null;    // falling pair
+  let nextPair = null;
+  let score = 0;
+  let chain = 0;
+
+  let fallTimer = 0;
+  let lockTimer = 0;
+  let softDrop = false;
+
+  let phase = 'PLAY';   // PLAY | RESOLVE | GAMEOVER
+
+  // ===== Helpers =====
+  function makePair(){
+    return {
+      aColor: Math.floor(Math.random() * COLOR_COUNT),
+      bColor: Math.floor(Math.random() * COLOR_COUNT),
+    };
+  }
+
+  function gridToPixel(gx, gy){
+    return {
+      x: BOARD_X + gx*CELL + CELL/2,
+      y: BOARD_Y + gy*CELL + CELL/2
+    };
+  }
+
+  function makePuyo(scene, colorIdx){
+    const fill = COLORS[colorIdx].fill;
+    const sprite = scene.add.circle(0, 0, CELL*0.38, fill, 1);
+    sprite.setStrokeStyle(3, 0xffffff, 0.18);
+    sprite.setAlpha(1);
+    return { color: colorIdx, sprite };
+  }
+
+  function canOccupy(x, y){
+    // allow y < 0 for spawn/rotation near top
+    if (x < 0 || x >= COLS) return false;
+    if (y >= ROWS) return false;
+    if (y < 0) return true;
+    return grid[y][x] == null;
+  }
+
+  // dir from A to B:
+  // 0=down, 1=left, 2=up, 3=right
+  function dirToOffset(dir){
+    if (dir === 0) return { dx: 0, dy: 1 };
+    if (dir === 1) return { dx: -1, dy: 0 };
+    if (dir === 2) return { dx: 0, dy: -1 };
+    return { dx: 1, dy: 0 };
+  }
+
+  function killTween(sprite){
+    if (sprite.__moveTween) {
+      sprite.__moveTween.stop();
+      sprite.__moveTween.remove();
+      sprite.__moveTween = null;
+    }
+  }
+
+  function moveSpriteToGrid(scene, sprite, gx, gy, duration = MOVE_TWEEN_MS){
+    const p = gridToPixel(gx, gy);
+
+    // tween 누적 방지
+    killTween(sprite);
+
+    sprite.__moveTween = scene.tweens.add({
+      targets: sprite,
+      x: p.x,
+      y: p.y,
+      duration,
+      ease: 'Sine.easeOut'
+    });
+  }
+
+  function snapSpriteToGrid(sprite, gx, gy){
+    const p = gridToPixel(gx, gy);
+    killTween(sprite);
+    sprite.setPosition(p.x, p.y);
+  }
+
+  function sleep(scene, ms){
+    return new Promise(res => scene.time.delayedCall(ms, res));
+  }
+
+  function findAllGroups(){
+    const visited = Array.from({length: ROWS}, () => Array(COLS).fill(false));
+    const groups = [];
+
+    for (let y=0; y<ROWS; y++){
+      for (let x=0; x<COLS; x++){
+        const cell = grid[y][x];
+        if (!cell || visited[y][x]) continue;
+
+        const color = cell.color;
+        const stack = [{x,y}];
+        const comp = [];
+        visited[y][x] = true;
+
+        while (stack.length){
+          const p = stack.pop();
+          comp.push(p);
+
+          const nbs = [
+            {x:p.x+1,y:p.y},{x:p.x-1,y:p.y},{x:p.x,y:p.y+1},{x:p.x,y:p.y-1}
+          ];
+          for (const n of nbs){
+            if (n.x<0||n.x>=COLS||n.y<0||n.y>=ROWS) continue;
+            if (visited[n.y][n.x]) continue;
+            const c2 = grid[n.y][n.x];
+            if (!c2 || c2.color !== color) continue;
+            visited[n.y][n.x] = true;
+            stack.push(n);
+          }
+        }
+
+        groups.push(comp);
+      }
+    }
+    return groups;
+  }
+
+  function clearCells(list){
+    const set = new Set(list.map(p => `${p.x},${p.y}`));
+    let cnt = 0;
+
+    for (const key of set){
+      const [x,y] = key.split(',').map(Number);
+      const cell = grid[y][x];
+      if (!cell) continue;
+      cell.sprite.destroy();
+      grid[y][x] = null;
+      cnt++;
+    }
+    return cnt;
+  }
+
+  function applyGravity(scene){
+    for (let x=0; x<COLS; x++){
+      let write = ROWS - 1;
+      for (let y=ROWS-1; y>=0; y--){
+        const cell = grid[y][x];
+        if (!cell) continue;
+
+        if (y !== write){
+          grid[write][x] = cell;
+          grid[y][x] = null;
+
+          // 일정 duration으로 낙하 표현
+          moveSpriteToGrid(scene, cell.sprite, x, write, GRAVITY_TWEEN_MS);
+        } else {
+          // 혹시라도 오차가 생기면 정렬
+          snapSpriteToGrid(cell.sprite, x, y);
+        }
+        write--;
+      }
+    }
+  }
+
+  // ===== Phaser Scene =====
+  class MainScene extends Phaser.Scene {
+    constructor(){ super('main'); }
+
+    create(){
+      this.cameras.main.setBackgroundColor('#0f1020');
+
+      // board background
+      this.boardG = this.add.graphics();
+      this.boardG.fillStyle(0x0b0b18, 1);
+      this.boardG.fillRoundedRect(BOARD_X-8, BOARD_Y-8, COLS*CELL+16, ROWS*CELL+16, 14);
+      this.boardG.lineStyle(2, 0xffffff, 0.10);
+      this.boardG.strokeRoundedRect(BOARD_X-8, BOARD_Y-8, COLS*CELL+16, ROWS*CELL+16, 14);
+
+      // grid lines
+      this.gridG = this.add.graphics();
+      this.gridG.lineStyle(1, 0xffffff, 0.05);
+      for (let x=1; x<COLS; x++) {
+        this.gridG.lineBetween(BOARD_X + x*CELL, BOARD_Y, BOARD_X + x*CELL, BOARD_Y + ROWS*CELL);
+      }
+      for (let y=1; y<ROWS; y++) {
+        this.gridG.lineBetween(BOARD_X, BOARD_Y + y*CELL, BOARD_X + COLS*CELL, BOARD_Y + y*CELL);
+      }
+
+      // next panel
+      this.nextG = this.add.graphics();
+      const NX = BOARD_X + COLS*CELL + 30;
+      const NY = BOARD_Y + 20;
+      this.nextG.fillStyle(0x121226, 1);
+      this.nextG.fillRoundedRect(NX, NY, 120, 140, 14);
+      this.nextG.lineStyle(2, 0xffffff, 0.10);
+      this.nextG.strokeRoundedRect(NX, NY, 120, 140, 14);
+      this.add.text(NX+14, NY+10, 'NEXT', { fontSize: '14px', color:'#9aa0ff', fontStyle:'700' });
+
+      this.nextSprites = [
+        this.add.circle(NX+60, NY+62, 16, 0xffffff).setAlpha(0.0),
+        this.add.circle(NX+60, NY+96, 16, 0xffffff).setAlpha(0.0),
+      ];
+
+      // input
+      this.keys = this.input.keyboard.addKeys({
+        left: Phaser.Input.Keyboard.KeyCodes.LEFT,
+        right: Phaser.Input.Keyboard.KeyCodes.RIGHT,
+        down: Phaser.Input.Keyboard.KeyCodes.DOWN,
+        rotCw: Phaser.Input.Keyboard.KeyCodes.UP,
+        x: Phaser.Input.Keyboard.KeyCodes.X,
+        z: Phaser.Input.Keyboard.KeyCodes.Z,
+      });
+
+      // key repeat state
+      this.moveRepeat = { dir: 0, hold: 0, next: 0 };
+
+      // restart button
+      document.getElementById('restart').onclick = () => this.resetGame();
+
+      this.resetGame();
+    }
+
+    resetGame(){
+      // clear old sprites
+      if (grid) {
+        for (let y=0; y<ROWS; y++) for (let x=0; x<COLS; x++){
+          const c = grid[y][x];
+          if (c?.sprite) c.sprite.destroy();
+        }
+      }
+      if (active) {
+        active.a.sprite.destroy();
+        active.b.sprite.destroy();
+      }
+
+      grid = Array.from({length: ROWS}, () => Array.from({length: COLS}, () => null));
+      active = null;
+      nextPair = makePair();
+
+      score = 0;
+      chain = 0;
+      setScore(score);
+      setChain(chain);
+
+      phase = 'PLAY';
+      setStatus('PLAY');
+
+      fallTimer = 0;
+      lockTimer = 0;
+      softDrop = false;
+
+      this.renderNext();
+      this.spawnActive();
+    }
+
+    update(_, dt){
+      if (phase === 'GAMEOVER') return;
+
+      // soft drop
+      softDrop = this.keys.down.isDown;
+
+      // key repeat for left/right
+      this.handleLeftRightRepeat(dt);
+
+      // rotation (just down)
+      if (phase === 'PLAY' && active) {
+        const rotCw = Phaser.Input.Keyboard.JustDown(this.keys.rotCw) || Phaser.Input.Keyboard.JustDown(this.keys.x);
+        const rotCcw = Phaser.Input.Keyboard.JustDown(this.keys.z);
+
+        if (rotCw) { this.tryRotate(+1); lockTimer = 0; }
+        if (rotCcw){ this.tryRotate(-1); lockTimer = 0; }
+      }
+
+      if (phase !== 'PLAY') return;
+
+      // fall
+      fallTimer += dt;
+      const interval = softDrop ? SOFT_FALL_MS : FALL_INTERVAL_MS;
+
+      if (fallTimer >= interval) {
+        fallTimer = 0;
+
+        const moved = this.tryMove(0, 1);
+        if (!moved) {
+          lockTimer += interval;
+          if (lockTimer >= LOCK_DELAY_MS) {
+            lockTimer = 0;
+            this.lockActive();
+          }
+        } else {
+          lockTimer = 0;
+        }
+      }
+    }
+
+    handleLeftRightRepeat(dt){
+      if (phase !== 'PLAY' || !active) return;
+
+      const left = this.keys.left.isDown;
+      const right = this.keys.right.isDown;
+
+      let dir = 0;
+      if (left && !right) dir = -1;
+      if (right && !left) dir = 1;
+
+      if (dir !== 0) {
+        if (this.moveRepeat.dir !== dir) {
+          this.moveRepeat.dir = dir;
+          this.moveRepeat.hold = 0;
+          this.moveRepeat.next = 0;
+          this.tryMove(dir, 0);
+          lockTimer = 0;
+        } else {
+          this.moveRepeat.hold += dt;
+          if (this.moveRepeat.hold >= DAS) {
+            this.moveRepeat.next -= dt;
+            if (this.moveRepeat.next <= 0) {
+              this.moveRepeat.next = ARR;
+              this.tryMove(dir, 0);
+              lockTimer = 0;
+            }
+          }
+        }
+      } else {
+        this.moveRepeat.dir = 0;
+        this.moveRepeat.hold = 0;
+        this.moveRepeat.next = 0;
+      }
+    }
+
+    renderNext(){
+      const aC = COLORS[nextPair.aColor].fill;
+      const bC = COLORS[nextPair.bColor].fill;
+      this.nextSprites[0].setFillStyle(aC, 1).setAlpha(1);
+      this.nextSprites[1].setFillStyle(bC, 1).setAlpha(1);
+    }
+
+    spawnActive(){
+      const sx = 2; // spawn column
+      const sy = 0;
+
+      // game over check
+      if (grid[sy][sx] || grid[sy+1][sx]) {
+        phase = 'GAMEOVER';
+        setStatus('GAMEOVER');
+        return;
+      }
+
+      active = {
+        ax: sx, ay: sy,
+        bx: sx, by: sy+1,
+        dir: 0, // b below a
+        a: makePuyo(this, nextPair.aColor),
+        b: makePuyo(this, nextPair.bColor),
+      };
+
+      // show immediately at correct place (no tween for first frame)
+      snapSpriteToGrid(active.a.sprite, active.ax, active.ay);
+      snapSpriteToGrid(active.b.sprite, active.bx, active.by);
+
+      nextPair = makePair();
+      this.renderNext();
+
+      fallTimer = 0;
+      lockTimer = 0;
+      chain = 0;
+      setChain(chain);
+    }
+
+    syncActiveSprites(){
+      if (!active) return;
+
+      // allow y < 0 (spawn/rotation near top): render slightly above board
+      const ay = Math.max(-1, active.ay);
+      const by = Math.max(-1, active.by);
+
+      // y < 0일 때는 픽셀 y를 직접 계산해서 위쪽 보이게
+      const ap = (ay < 0) ? { x: gridToPixel(active.ax, 0).x, y: BOARD_Y - CELL/2 } : gridToPixel(active.ax, ay);
+      const bp = (by < 0) ? { x: gridToPixel(active.bx, 0).x, y: BOARD_Y - CELL/2 } : gridToPixel(active.bx, by);
+
+      // tween 누적 방지
+      killTween(active.a.sprite);
+      killTween(active.b.sprite);
+
+      active.a.sprite.__moveTween = this.tweens.add({
+        targets: active.a.sprite,
+        x: ap.x, y: ap.y,
+        duration: MOVE_TWEEN_MS,
+        ease: 'Sine.easeOut'
+      });
+      active.b.sprite.__moveTween = this.tweens.add({
+        targets: active.b.sprite,
+        x: bp.x, y: bp.y,
+        duration: MOVE_TWEEN_MS,
+        ease: 'Sine.easeOut'
+      });
+    }
+
+    tryMove(dx, dy){
+      if (!active) return false;
+
+      const nax = active.ax + dx, nay = active.ay + dy;
+      const nbx = active.bx + dx, nby = active.by + dy;
+
+      if (!canOccupy(nax, nay) || !canOccupy(nbx, nby)) return false;
+
+      active.ax = nax; active.ay = nay;
+      active.bx = nbx; active.by = nby;
+
+      this.syncActiveSprites();
+      return true;
+    }
+
+    tryRotate(dirSign){
+      if (!active) return false;
+
+      const ndir = (active.dir + (dirSign > 0 ? 1 : 3)) % 4;
+      const off = dirToOffset(ndir);
+
+      // wall kicks
+      const kicks = [
+        { kx: 0,  ky: 0 },
+        { kx: -1, ky: 0 },
+        { kx:  1, ky: 0 },
+        { kx: 0,  ky: -1 },
+        { kx: -1, ky: -1 },
+        { kx:  1, ky: -1 },
+      ];
+
+      for (const k of kicks) {
+        const nax = active.ax + k.kx;
+        const nay = active.ay + k.ky;
+        const nbx = nax + off.dx;
+        const nby = nay + off.dy;
+
+        if (canOccupy(nax, nay) && canOccupy(nbx, nby)) {
+          active.ax = nax; active.ay = nay;
+          active.bx = nbx; active.by = nby;
+          active.dir = ndir;
+          this.syncActiveSprites();
+          return true;
+        }
+      }
+      return false;
+    }
+
+    lockActive(){
+      if (!active) return;
+
+      const cells = [
+        { x: active.ax, y: active.ay, puyo: active.a },
+        { x: active.bx, y: active.by, puyo: active.b },
+      ];
+
+      // place into grid
+      for (const c of cells) {
+        if (c.y < 0) {
+          phase = 'GAMEOVER';
+          setStatus('GAMEOVER');
+          return;
+        }
+        // 스프라이트는 정확히 정렬
+        snapSpriteToGrid(c.puyo.sprite, c.x, c.y);
+        grid[c.y][c.x] = { color: c.puyo.color, sprite: c.puyo.sprite };
+      }
+
+      active = null;
+      phase = 'RESOLVE';
+      this.resolveLoop();
+    }
+
+    async resolveLoop(){
+      chain = 0;
+      setChain(chain);
+
+      while (true) {
+        const groups = findAllGroups();
+        const toClear = groups.filter(g => g.length >= 4).flat();
+
+        if (toClear.length === 0) break;
+
+        chain += 1;
+        setChain(chain);
+
+        await this.flashCells(toClear, 2);
+
+        const cleared = clearCells(toClear);
+        score += cleared * 10 * chain;
+        setScore(score);
+
+        await sleep(this, CLEAR_STEP_MS);
+        applyGravity(this);
+        await sleep(this, CLEAR_STEP_MS + GRAVITY_TWEEN_MS);
+      }
+
+      phase = 'PLAY';
+      this.spawnActive();
+    }
+
+    flashCells(list, times=2){
+      return new Promise(resolve => {
+        let t = 0;
+        let on = false;
+
+        const ev = this.time.addEvent({
+          delay: 80,
+          repeat: times*2 - 1,
+          callback: () => {
+            on = !on;
+            for (const p of list) {
+              const cell = grid[p.y][p.x];
+              if (cell?.sprite) cell.sprite.setAlpha(on ? 0.35 : 1.0);
+            }
+            t++;
+            if (t >= times*2) {
+              for (const p of list) {
+                const cell = grid[p.y][p.x];
+                if (cell?.sprite) cell.sprite.setAlpha(1.0);
+              }
+              ev.remove(false);
+              resolve();
+            }
+          }
+        });
+      });
+    }
+  }
+
+  // ===== Phaser Boot =====
+  const config = {
+    type: Phaser.WEBGL,
+    parent: 'game',
+    width: BOARD_X + COLS*CELL + 30 + 120 + 30,
+    height: BOARD_Y + ROWS*CELL + 20,
+    scene: [MainScene],
+    fps: { target: 60, min: 60 },
+    render: {
+      pixelArt: false,
+      roundPixels: true,
+      antialias: true
+    }
+  };
+
+  new Phaser.Game(config);
+})();
+</script>
+</body>
+</html>

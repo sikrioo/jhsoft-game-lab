@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Horadric Cubing System</title>
+    <style>
+        /* 1. 제공해주신 main.css 베이스 스타일 적용 */
+        :root {
+            --bg: #070a10;
+            --panel: #0b0f18;
+            --txt: #d7e0ff;
+            --muted: #8fa2c6;
+            --border: rgba(255, 255, 255, .08);
+            --sys: #ffd56a;
+            --ok: #7CFF6B;
+            --bad: #ff6b7a;
+            --move: #32f6ff;
+            --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            --sans: ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+            /* 등급별 색상 */
+            --r-common: #d6d6d6;
+            --r-magic: #4aa3ff;
+            --r-rare: #ffd84a;
+            --r-epic: #b68cff;
+            --r-legend: #ff9a3c;
+        }
+
+        body {
+            height: 100vh;
+            margin: 0;
+            background: var(--bg);
+            color: var(--txt);
+            font-family: var(--sans);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        /* 2. 큐빙 인터페이스 스타일 */
+        .cubing-container {
+            width: 420px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+            position: relative;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h2 {
+            margin: 0;
+            color: var(--sys);
+            font-family: var(--mono);
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(255, 213, 106, 0.3);
+        }
+
+        /* 큐브 중앙 영역 */
+        .cube-area {
+            position: relative;
+            height: 220px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: radial-gradient(circle, rgba(74, 163, 255, 0.05) 0%, transparent 70%);
+            margin-bottom: 30px;
+            border-radius: 50%;
+        }
+
+        .main-slot {
+            width: 90px;
+            height: 90px;
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid var(--border);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            font-size: 32px;
+        }
+
+        /* 재료 슬롯 (주변 배치) */
+        .material-slot {
+            position: absolute;
+            width: 45px;
+            height: 45px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            opacity: 0.6;
+        }
+
+        .m1 { transform: translate(-80px, -60px); }
+        .m2 { transform: translate(80px, -60px); }
+        .m3 { transform: translate(0px, 80px); }
+
+        /* 연출: 회전하는 마법진 느낌의 배경 */
+        .magic-ring {
+            position: absolute;
+            width: 180px;
+            height: 180px;
+            border: 1px dashed rgba(50, 246, 255, 0.1);
+            border-radius: 50%;
+            animation: rotateRing 20s linear infinite;
+        }
+
+        @keyframes rotateRing {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        /* 연출: 조합 중 상태 */
+        .cubing-active .main-slot {
+            animation: shake 0.12s infinite, glowPulse 0.4s infinite alternate;
+            border-color: var(--move);
+        }
+
+        @keyframes shake {
+            0% { transform: translate(1px, 1px); }
+            50% { transform: translate(-1px, -2px); }
+            100% { transform: translate(1px, -1px); }
+        }
+
+        @keyframes glowPulse {
+            from { box-shadow: 0 0 5px var(--move); }
+            to { box-shadow: 0 0 30px var(--move); }
+        }
+
+        /* 버튼 스타일 */
+        .transmute-btn {
+            width: 100%;
+            padding: 14px;
+            background: #1a2235;
+            border: 1px solid #2e3c5a;
+            border-radius: 8px;
+            color: var(--txt);
+            font-weight: bold;
+            font-family: var(--mono);
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+
+        .transmute-btn:hover:not(:disabled) {
+            background: #25314d;
+            border-color: var(--move);
+            color: #fff;
+            box-shadow: 0 0 15px rgba(50, 246, 255, 0.2);
+        }
+
+        .transmute-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 로그 영역 */
+        .log-pane {
+            margin-top: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            height: 100px;
+            padding: 10px;
+            font-size: 12px;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+        }
+
+        .log-entry { margin-bottom: 5px; animation: fadeIn 0.3s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    </style>
+</head>
+<body>
+
+<div class="cubing-container" id="cubeContainer">
+    <div class="header">
+        <h2>HORADRIC CUBE</h2>
+    </div>
+
+    <div class="cube-area" id="cubeArea">
+        <div class="magic-ring"></div>
+        <div class="material-slot m1">💎</div>
+        <div class="material-slot m2">📜</div>
+        <div class="material-slot m3">⚔️</div>
+        
+        <div class="main-slot" id="mainSlot">
+            <span id="itemIcon">?</span>
+        </div>
+    </div>
+
+    <button class="transmute-btn" id="transmuteBtn">조합하기 (Transmute)</button>
+
+    <div class="log-pane" id="logPane">
+        <div class="log-entry" style="color: var(--muted)">시스템: 재료 아이템이 준비되었습니다.</div>
+    </div>
+</div>
+
+<script>
+    const transmuteBtn = document.getElementById('transmuteBtn');
+    const cubeContainer = document.getElementById('cubeContainer');
+    const mainSlot = document.getElementById('mainSlot');
+    const itemIcon = document.getElementById('itemIcon');
+    const logPane = document.getElementById('logPane');
+
+    // 아이템 데이터베이스 (예시)
+    const possibleResults = [
+        { name: "낡은 단검", rarity: "common", icon: "🗡️", chance: 50 },
+        { name: "마법사의 서클릿", rarity: "magic", icon: "👑", chance: 30 },
+        { name: "축복받은 기사의 검", rarity: "rare", icon: "⚔️", chance: 15 },
+        { name: "고대 용의 숨결", rarity: "legend", icon: "🔥", chance: 5 }
+    ];
+
+    transmuteBtn.addEventListener('click', () => {
+        // 1. 연출 시작
+        cubeContainer.classList.add('cubing-active');
+        transmuteBtn.disabled = true;
+        itemIcon.innerText = "⏳";
+        addLog("연성을 시작합니다...", "var(--move)");
+
+        // 2. 1.5초 후 결과 도출 (디아블로식 딜레이)
+        setTimeout(() => {
+            cubeContainer.classList.remove('cubing-active');
+            const result = getCubingResult();
+            renderResult(result);
+            transmuteBtn.disabled = false;
+        }, 1500);
+    });
+
+    function getCubingResult() {
+        const rand = Math.random() * 100;
+        let cumulative = 0;
+        for (let item of possibleResults) {
+            cumulative += item.chance;
+            if (rand <= cumulative) return item;
+        }
+        return possibleResults[0];
+    }
+
+    function renderResult(item) {
+        const color = `var(--r-${item.rarity})`;
+        
+        // 메인 슬롯 업데이트
+        mainSlot.style.borderColor = color;
+        mainSlot.style.boxShadow = `0 0 20px ${color}44`;
+        itemIcon.innerText = item.icon;
+
+        // 로그 기록
+        addLog(`성공: [${item.name}]을(를) 연성하였습니다!`, color);
+    }
+
+    function addLog(message, color) {
+        const div = document.createElement('div');
+        div.className = 'log-entry';
+        div.style.color = color;
+        div.innerText = `> ${message}`;
+        logPane.prepend(div);
+    }
+</script>
+
+</body>
+</html>

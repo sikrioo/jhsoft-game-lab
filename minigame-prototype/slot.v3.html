@@ -1,0 +1,1105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>NEON REEL SPINNER (stable svg version)</title>
+  <link rel="preconnect" href="https://cdnjs.cloudflare.com" />
+  <style>
+    :root{
+      --bg0:#060612;
+      --bg1:#0a0a1a;
+      --panel: rgba(255,255,255,.06);
+      --txt:#eaf0ff;
+      --muted:#aab3d4;
+
+      --pink:#ff3edb;
+      --cyan:#32f6ff;
+      --purple:#8a5cff;
+      --lime:#7cff6b;
+      --gold:#ffd36a;
+
+      --shadow: 0 18px 60px rgba(0,0,0,.55);
+      --radius: 22px;
+
+      --reelW: 112px;
+      --reelH: 148px;
+
+      --symbolSize: 78px;
+      --symbolVisualOffsetY: 8px;
+
+      --lineGlow: rgba(50,246,255,.45);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial;
+      background:
+        radial-gradient(1200px 800px at 20% 15%, rgba(138,92,255,.22), transparent 55%),
+        radial-gradient(1000px 700px at 85% 20%, rgba(50,246,255,.18), transparent 55%),
+        radial-gradient(900px 700px at 50% 110%, rgba(255,62,219,.12), transparent 55%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      color: var(--txt);
+      overflow-x:hidden;
+    }
+
+    .wrap{
+      min-height:100%;
+      display:grid;
+      place-items:center;
+      padding:26px 14px;
+    }
+
+    .cabinet{
+      width:min(980px, 96vw);
+      border-radius: calc(var(--radius) + 8px);
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.03));
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow: var(--shadow);
+      position:relative;
+      overflow:hidden;
+    }
+
+    .cabinet::before{
+      content:"";
+      position:absolute; inset:-2px;
+      background:
+        radial-gradient(600px 200px at 25% 0%, rgba(50,246,255,.18), transparent 60%),
+        radial-gradient(600px 200px at 75% 0%, rgba(255,62,219,.16), transparent 60%),
+        radial-gradient(900px 260px at 50% 110%, rgba(124,255,107,.12), transparent 60%);
+      filter: blur(14px);
+      pointer-events:none;
+      opacity:.95;
+    }
+
+    .topbar{
+      position:relative;
+      padding:22px 22px 14px;
+      display:flex;
+      gap:16px;
+      align-items:flex-end;
+      justify-content:space-between;
+    }
+
+    .brand{
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+
+    .brand h1{
+      margin:0;
+      letter-spacing:.06em;
+      font-size:20px;
+      font-weight:800;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      text-transform:uppercase;
+    }
+
+    .badge{
+      font-size:12px;
+      padding:4px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+    }
+
+    .sub{
+      margin:0;
+      color: var(--muted);
+      font-size:13px;
+      line-height:1.35;
+    }
+
+    .hud{
+      display:flex;
+      gap:10px;
+      align-items:stretch;
+      flex-wrap:wrap;
+      justify-content:flex-end;
+    }
+
+    .stat{
+      min-width:140px;
+      border-radius:16px;
+      padding:10px 12px;
+      background: var(--panel);
+      border:1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(10px);
+    }
+
+    .stat .k{
+      font-size:11px;
+      color: var(--muted);
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    .stat .v{
+      margin-top:6px;
+      font-size:18px;
+      font-weight:800;
+      letter-spacing:.02em;
+      display:flex;
+      align-items:baseline;
+      gap:8px;
+    }
+
+    .stat .v small{
+      font-size:12px;
+      color: var(--muted);
+      font-weight:700;
+    }
+
+    .stage{
+      position:relative;
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap:16px;
+      padding:10px 22px 22px;
+      align-items:stretch;
+    }
+
+    .machine{
+      border-radius: var(--radius);
+      background: rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.10);
+      padding:18px;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .machine::after{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        linear-gradient(120deg, rgba(255,255,255,.10), transparent 40%),
+        radial-gradient(700px 260px at 50% 0%, rgba(255,255,255,.06), transparent 60%);
+      pointer-events:none;
+      opacity:.7;
+    }
+
+    .reelRow{
+      position:relative;
+      display:flex;
+      gap:14px;
+      justify-content:center;
+      align-items:center;
+      padding:18px 10px 10px;
+    }
+
+    .reel{
+      width: var(--reelW);
+      height: var(--reelH);
+      border-radius:18px;
+      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow:0 10px 30px rgba(0,0,0,.35);
+      overflow:hidden;
+      position:relative;
+      transform: translateZ(0);
+    }
+
+    .reel::before{
+      content:"";
+      position:absolute; inset:0;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.10), transparent 26%, transparent 74%, rgba(0,0,0,.25));
+      pointer-events:none;
+      z-index:3;
+    }
+
+    .strip{
+      position:absolute;
+      left:0;
+      top:0;
+      width:100%;
+      will-change: transform, filter;
+      z-index:1;
+    }
+
+    .sym{
+      height: var(--reelH);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      user-select:none;
+    }
+
+    .sym img{
+      width: var(--symbolSize);
+      height: var(--symbolSize);
+      object-fit: contain;
+      display:block;
+      transform: translateY(var(--symbolVisualOffsetY));
+      filter: drop-shadow(0 8px 14px rgba(0,0,0,.45));
+      pointer-events:none;
+    }
+
+    .centerDot{
+      position:absolute;
+      left:50%;
+      top:50%;
+      width:56px;
+      height:38px;
+      transform:translate(-50%, -50%);
+      border-top:1px solid rgba(255,255,255,.18);
+      border-bottom:1px solid rgba(255,255,255,.18);
+      background: rgba(255,255,255,.03);
+      box-shadow: inset 0 0 18px rgba(255,255,255,.04);
+      border-radius:10px;
+      z-index:3;
+      pointer-events:none;
+    }
+
+    .centerLine{
+      position:absolute;
+      left:0;
+      right:0;
+      top:50%;
+      height:0;
+      transform:translateY(-50%);
+      z-index:4;
+      pointer-events:none;
+    }
+
+    .centerLine::before,
+    .centerLine::after{
+      content:"";
+      position:absolute;
+      left:0;
+      right:0;
+      height:1px;
+      background: linear-gradient(90deg, transparent, var(--lineGlow), transparent);
+      box-shadow: 0 0 10px rgba(50,246,255,.35);
+    }
+
+    .centerLine::before{ top:-12px; }
+    .centerLine::after{ top:12px; }
+
+    .message{
+      position:relative;
+      margin-top:12px;
+      border-radius:16px;
+      padding:12px 14px;
+      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--muted);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+    }
+
+    .message b{ color: var(--txt); }
+
+    .pill{
+      font-size:12px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: var(--muted);
+      white-space:nowrap;
+    }
+
+    .side{
+      width:min(280px, 92vw);
+      border-radius: var(--radius);
+      background: rgba(255,255,255,.04);
+      border:1px solid rgba(255,255,255,.10);
+      padding:16px;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .controls{
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    .btn{
+      appearance:none;
+      border:none;
+      border-radius:18px;
+      padding:14px 14px;
+      font-weight:900;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:#07101a;
+      background: linear-gradient(135deg, var(--cyan), var(--pink));
+      box-shadow: 0 12px 30px rgba(255,62,219,.18), 0 12px 30px rgba(50,246,255,.12);
+      cursor:pointer;
+      position:relative;
+      overflow:hidden;
+    }
+
+    .btn:disabled{
+      opacity:.55;
+      cursor:not-allowed;
+      filter:grayscale(.25);
+    }
+
+    .btn.secondary{
+      background: rgba(255,255,255,.06);
+      color: var(--txt);
+      border:1px solid rgba(255,255,255,.14);
+      box-shadow:none;
+      font-weight:800;
+      letter-spacing:.06em;
+    }
+
+    .lever{
+      margin-top:12px;
+      border-radius:18px;
+      padding:14px;
+      background: rgba(0,0,0,.18);
+      border:1px solid rgba(255,255,255,.10);
+      display:grid;
+      gap:10px;
+    }
+
+    .leverTop{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      color: var(--muted);
+      font-size:12px;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+    }
+
+    .leverTrack{
+      height:110px;
+      border-radius:16px;
+      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.10);
+      position:relative;
+      overflow:hidden;
+    }
+
+    .leverKnob{
+      width:56px;
+      height:56px;
+      border-radius:18px;
+      position:absolute;
+      left:50%;
+      top:12px;
+      transform:translateX(-50%);
+      background: linear-gradient(135deg, rgba(255,255,255,.20), rgba(255,255,255,.08));
+      border:1px solid rgba(255,255,255,.18);
+      box-shadow:0 18px 40px rgba(0,0,0,.4);
+      display:grid;
+      place-items:center;
+      user-select:none;
+      cursor:grab;
+    }
+
+    .knobDot{
+      width:18px;
+      height:18px;
+      border-radius:8px;
+      background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.9), rgba(255,255,255,.18));
+      box-shadow:0 0 18px rgba(50,246,255,.35);
+    }
+
+    .hint{
+      color: var(--muted);
+      font-size:12px;
+      line-height:1.45;
+    }
+
+    .footerTips{
+      margin-top:10px;
+      border-top:1px solid rgba(255,255,255,.10);
+      padding-top:10px;
+      color: var(--muted);
+      font-size:12px;
+      line-height:1.55;
+    }
+
+    .confetti{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      overflow:hidden;
+      z-index:20;
+    }
+
+    .confetti span{
+      position:absolute;
+      width:10px;
+      height:18px;
+      border-radius:4px;
+      opacity:0;
+      transform: translateY(-40px) rotate(0deg);
+      filter: drop-shadow(0 10px 10px rgba(0,0,0,.35));
+    }
+
+    @media (max-width: 860px){
+      .stage{ grid-template-columns:1fr; }
+      .side{ width:100%; }
+      .stat{ min-width:120px; }
+    }
+
+    @media (max-width: 420px){
+      :root{
+        --reelW: 98px;
+        --reelH: 136px;
+        --symbolSize: 70px;
+        --symbolVisualOffsetY: 7px;
+      }
+      .reelRow{ gap:10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="cabinet" role="application" aria-label="Neon Reel Spinner">
+      <div class="topbar">
+        <div class="brand">
+          <h1>
+            <span style="color:var(--cyan); text-shadow:0 0 18px rgba(50,246,255,.35)">NEON</span>
+            <span style="color:var(--pink); text-shadow:0 0 18px rgba(255,62,219,.30)">REEL</span>
+            <span style="opacity:.92">SPINNER</span>
+            <span class="badge">SVG SYMBOLS</span>
+          </h1>
+          <p class="sub">임시 SVG 심볼로 정렬과 정지를 먼저 안정화한 버전</p>
+        </div>
+
+        <div class="hud" aria-label="Score HUD">
+          <div class="stat">
+            <div class="k">score</div>
+            <div class="v"><span id="score">0</span> <small>pts</small></div>
+          </div>
+          <div class="stat">
+            <div class="k">streak</div>
+            <div class="v"><span id="streak">0</span> <small>x</small></div>
+          </div>
+          <div class="stat">
+            <div class="k">best</div>
+            <div class="v"><span id="best">0</span> <small>pts</small></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stage">
+        <div class="machine">
+          <div class="confetti" id="confetti"></div>
+
+          <div class="reelRow" aria-label="Reels">
+            <div class="reel" data-reel="0">
+              <div class="strip" id="strip0"></div>
+              <div class="centerDot"></div>
+              <div class="centerLine"></div>
+            </div>
+            <div class="reel" data-reel="1">
+              <div class="strip" id="strip1"></div>
+              <div class="centerDot"></div>
+              <div class="centerLine"></div>
+            </div>
+            <div class="reel" data-reel="2">
+              <div class="strip" id="strip2"></div>
+              <div class="centerDot"></div>
+              <div class="centerLine"></div>
+            </div>
+          </div>
+
+          <div class="message" aria-live="polite">
+            <div id="msg"><b>READY</b> — SPIN 버튼(또는 레버)로 시작!</div>
+            <div class="pill" id="modePill">Mode: Combo</div>
+          </div>
+        </div>
+
+        <aside class="side">
+          <div class="controls">
+            <button class="btn" id="spinBtn">SPIN</button>
+            <button class="btn secondary" id="autoBtn" aria-pressed="false">AUTO: OFF</button>
+            <button class="btn secondary" id="resetBtn">RESET</button>
+
+            <div class="lever">
+              <div class="leverTop">
+                <span>drag lever</span>
+                <span id="leverPct">0%</span>
+              </div>
+              <div class="leverTrack" id="leverTrack">
+                <div class="leverKnob" id="leverKnob" role="slider" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+                  <div class="knobDot"></div>
+                </div>
+              </div>
+              <div class="hint">
+                레버를 아래로 <b>70% 이상</b> 당기면 자동으로 SPIN!<br/>
+                키보드: <b>Space</b> = Spin, <b>A</b> = Auto, <b>R</b> = Reset
+              </div>
+
+              <div class="footerTips">
+                <b>점수 규칙</b><br/>
+                • 3개 동일: +120 × (streak+1)<br/>
+                • 2개 동일: +40 × (streak+1)<br/>
+                • 모두 다름: streak 초기화
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.2/anime.min.js"></script>
+  <script>
+    /*
+      ============================================================
+      현재는 임시 SVG 심볼 버전
+      ------------------------------------------------------------
+      나중에 실제 심볼 파일로 교체하려면 아래처럼 바꾸면 됨.
+
+      1) SYMBOLS를 src 포함 구조로 변경
+      ------------------------------------------------------------
+      const SYMBOLS = [
+        { id: "star",  label: "STAR", src: "./symbols/star.svg" },
+        { id: "bell",  label: "BELL", src: "./symbols/bell.svg" },
+        { id: "fire",  label: "FIRE", src: "./symbols/fire.svg" },
+        { id: "gem",   label: "GEM",  src: "./symbols/gem.svg" }
+      ];
+
+      2) buildStrip() 안의 img src 부분을 아래처럼 변경
+      ------------------------------------------------------------
+      stripEl.innerHTML = items.map(symbol => `
+        <div class="sym" data-symbol-id="${symbol.id}">
+          <img src="${symbol.src}" alt="${symbol.label}" draggable="false" />
+        </div>
+      `).join("");
+
+      3) createSymbolSvg() 함수는 더 이상 필요 없음
+      ------------------------------------------------------------
+      삭제하거나 주석 처리하면 됨.
+      ============================================================
+    */
+
+    const SYMBOLS = [
+      { id: "one",   label: "1" },
+      { id: "two",   label: "2" },
+      { id: "three", label: "3" },
+      { id: "four",  label: "4" },
+      { id: "five",  label: "5" },
+      { id: "seven", label: "7" },
+      { id: "A",     label: "A" },
+      { id: "B",     label: "B" },
+      { id: "C",     label: "C" },
+      { id: "D",     label: "D" }
+    ];
+
+    const REELS = 3;
+    const REPEAT_BLOCKS = 40;
+    const SAFE_MARGIN_BLOCKS = 6;
+
+    const scoreEl = document.getElementById("score");
+    const streakEl = document.getElementById("streak");
+    const bestEl = document.getElementById("best");
+    const msgEl = document.getElementById("msg");
+    const modePill = document.getElementById("modePill");
+
+    const spinBtn = document.getElementById("spinBtn");
+    const autoBtn = document.getElementById("autoBtn");
+    const resetBtn = document.getElementById("resetBtn");
+
+    const confetti = document.getElementById("confetti");
+    const leverTrack = document.getElementById("leverTrack");
+    const leverKnob = document.getElementById("leverKnob");
+    const leverPct = document.getElementById("leverPct");
+
+    let score = 0;
+    let best = 0;
+    let streak = 0;
+    let spinning = false;
+    let auto = false;
+
+    const strips = [];
+
+    const AudioFX = (() => {
+      const ctx = (window.AudioContext || window.webkitAudioContext)
+        ? new (window.AudioContext || window.webkitAudioContext)()
+        : null;
+
+      function beep(freq=440, ms=90, type="sine", gain=0.03){
+        if(!ctx) return;
+        const t0 = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const g = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, t0);
+        g.gain.setValueAtTime(gain, t0);
+        g.gain.exponentialRampToValueAtTime(0.0001, t0 + ms/1000);
+        osc.connect(g);
+        g.connect(ctx.destination);
+        osc.start(t0);
+        osc.stop(t0 + ms/1000);
+      }
+
+      return { beep };
+    })();
+
+    const randInt = (min, max) => Math.floor(Math.random() * (max - min + 1)) + min;
+    const choice = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const reelHeight = () => document.querySelector(".reel").clientHeight;
+    const midBlock = () => Math.floor(REPEAT_BLOCKS / 2);
+
+    function normalizeIndex(index){
+      return ((index % SYMBOLS.length) + SYMBOLS.length) % SYMBOLS.length;
+    }
+
+    function absoluteIndexToY(index){
+      return -(index * reelHeight());
+    }
+
+    function symbolAtAbsoluteIndex(index){
+      return SYMBOLS[normalizeIndex(index)];
+    }
+
+    function setStripY(strip, y){
+      strip._y = y;
+      strip.style.transform = `translateY(${y}px)`;
+    }
+
+    function spinBlur(strip, amount){
+      strip.style.filter = `blur(${amount}px) brightness(${amount > 0 ? 1.05 : 1})`;
+    }
+
+    function setMessage(title, detail="", tone="neutral"){
+      const color =
+        tone === "win" ? "var(--lime)" :
+        tone === "big" ? "var(--gold)" :
+        tone === "warn" ? "var(--pink)" :
+        "var(--txt)";
+
+      msgEl.innerHTML = `<b style="color:${color}">${title}</b>${detail ? ` — ${detail}` : ""}`;
+
+      anime({
+        targets: msgEl,
+        translateY: [2, 0],
+        opacity: [0.72, 1],
+        duration: 260,
+        easing: "easeOutQuad"
+      });
+    }
+
+    function updateHUD(){
+      scoreEl.textContent = String(score);
+      streakEl.textContent = String(streak);
+      bestEl.textContent = String(best);
+    }
+
+    function addScore(delta){
+      score += delta;
+      if(score > best) best = score;
+      updateHUD();
+
+      anime({
+        targets: scoreEl,
+        scale: [1, 1.16, 1],
+        duration: 380,
+        easing: "easeOutElastic(1, .7)"
+      });
+    }
+
+    function confettiBurst(intensity=26){
+      confetti.innerHTML = "";
+      const w = confetti.clientWidth;
+      const colors = ["#32f6ff","#ff3edb","#8a5cff","#7cff6b","#ffd36a"];
+
+      for(let i=0;i<intensity;i++){
+        const p = document.createElement("span");
+        p.style.left = (Math.random() * w) + "px";
+        p.style.top = (-20 - Math.random() * 60) + "px";
+        p.style.background = colors[i % colors.length];
+        confetti.appendChild(p);
+      }
+
+      anime({
+        targets: confetti.querySelectorAll("span"),
+        opacity: [0, 1, 1, 0],
+        translateY: [-30, () => 260 + Math.random() * 220],
+        translateX: [0, () => Math.random() * 260 - 130],
+        rotate: [0, () => Math.random() * 720 - 360],
+        duration: () => 1200 + Math.random() * 650,
+        delay: () => Math.random() * 120,
+        easing: "easeOutCubic"
+      });
+    }
+
+    function recenterIfNeeded(state){
+      const minIndex = SYMBOLS.length * SAFE_MARGIN_BLOCKS;
+      const maxIndex = SYMBOLS.length * (REPEAT_BLOCKS - SAFE_MARGIN_BLOCKS);
+
+      if(state.absoluteIndex < minIndex || state.absoluteIndex > maxIndex){
+        const normalized = normalizeIndex(state.absoluteIndex);
+        state.absoluteIndex = midBlock() * SYMBOLS.length + normalized;
+        const y = absoluteIndexToY(state.absoluteIndex);
+        setStripY(state.stripEl, y);
+      }
+    }
+
+    function createSymbolSvg(label){
+      const svg = `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+          <defs>
+            <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#1d2247"/>
+              <stop offset="100%" stop-color="#0f1230"/>
+            </linearGradient>
+            <linearGradient id="fg" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#ffe082"/>
+              <stop offset="100%" stop-color="#ffb300"/>
+            </linearGradient>
+          </defs>
+          <rect x="10" y="10" width="80" height="80" rx="18" fill="url(#bg)" stroke="rgba(255,255,255,.14)"/>
+          <rect x="16" y="16" width="68" height="68" rx="14" fill="rgba(255,255,255,.03)"/>
+          <text
+            x="50"
+            y="60"
+            text-anchor="middle"
+            font-size="38"
+            font-weight="800"
+            fill="url(#fg)"
+            font-family="Arial, Helvetica, sans-serif"
+          >${label}</text>
+        </svg>
+      `;
+      return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+    }
+
+    function buildStrip(stripEl){
+      const items = [];
+      for(let i=0;i<REPEAT_BLOCKS;i++){
+        for(const symbol of SYMBOLS) items.push(symbol);
+      }
+
+      stripEl.innerHTML = items.map(symbol => `
+        <div class="sym" data-symbol-id="${symbol.id}">
+          <img src="${createSymbolSvg(symbol.label)}" alt="${symbol.label}" draggable="false" />
+        </div>
+      `).join("");
+
+      const normalizedIndex = randInt(0, SYMBOLS.length - 1);
+      const absoluteIndex = midBlock() * SYMBOLS.length + normalizedIndex;
+      const y = absoluteIndexToY(absoluteIndex);
+
+      setStripY(stripEl, y);
+
+      return {
+        stripEl,
+        absoluteIndex
+      };
+    }
+
+    function pulseReelStop(reelIndex){
+      const reelEl = document.querySelector(`.reel[data-reel="${reelIndex}"]`);
+      anime({
+        targets: reelEl,
+        scale: [1, 1.008, 1],
+        duration: 150,
+        easing: "easeOutQuad"
+      });
+    }
+
+    async function spin(){
+      if(spinning) return;
+
+      strips.forEach(recenterIfNeeded);
+
+      spinning = true;
+      spinBtn.disabled = true;
+
+      setMessage("SPINNING", "릴 가속 중…");
+      AudioFX.beep(220, 70, "triangle", 0.02);
+
+      const result = [choice(SYMBOLS), choice(SYMBOLS), choice(SYMBOLS)];
+
+      if(Math.random() < 0.16){
+        const s = choice(SYMBOLS);
+        result[0] = s;
+        result[1] = s;
+      }
+      if(Math.random() < 0.09){
+        const s = choice(SYMBOLS);
+        result[0] = s;
+        result[1] = s;
+        result[2] = s;
+      }
+
+      const tasks = [];
+
+      for(let i=0;i<REELS;i++){
+        const state = strips[i];
+        const strip = state.stripEl;
+
+        const targetSymbolIndex = SYMBOLS.findIndex(s => s.id === result[i].id);
+        const currentNormalized = normalizeIndex(state.absoluteIndex);
+        const offsetToTarget = (targetSymbolIndex - currentNormalized + SYMBOLS.length) % SYMBOLS.length;
+        const extraLoops = randInt(11 + i, 15 + i);
+
+        state.absoluteIndex += extraLoops * SYMBOLS.length + offsetToTarget;
+        const targetY = absoluteIndexToY(state.absoluteIndex);
+
+        tasks.push(new Promise(resolve => {
+          anime({
+            targets: strip,
+            translateY: [strip._y, targetY],
+            duration: 1380 + i * 220 + randInt(0, 120),
+            easing: "cubicBezier(.10,.68,.16,1)",
+            update: anim => {
+              const ty = Number(anim.animations[0].currentValue);
+              strip._y = ty;
+
+              const p = anim.progress / 100;
+              const blurAmount = p < 0.78
+                ? 5
+                : Math.max(0, 5 - ((p - 0.78) / 0.22) * 5);
+
+              spinBlur(strip, blurAmount);
+            },
+            complete: () => {
+              setStripY(strip, targetY);
+              spinBlur(strip, 0);
+              pulseReelStop(i);
+              AudioFX.beep(520 + i * 80, 65, "sine", 0.02);
+              resolve();
+            }
+          });
+        }));
+      }
+
+      anime({
+        targets: spinBtn,
+        scale: [1, 0.96, 1],
+        duration: 240,
+        easing: "easeOutQuad"
+      });
+
+      await Promise.all(tasks);
+
+      const shown = strips.map(s => symbolAtAbsoluteIndex(s.absoluteIndex));
+      const [a,b,c] = shown;
+
+      let delta = 0;
+
+      if(a.id === b.id && b.id === c.id){
+        streak += 1;
+        delta = 120 * (streak + 1);
+        setMessage("TRIPLE MATCH!", `${a.label} ${b.label} ${c.label}  +${delta} pts`, "big");
+        confettiBurst(34);
+        AudioFX.beep(880, 120, "sawtooth", 0.03);
+      } else if(a.id === b.id || b.id === c.id || a.id === c.id){
+        streak += 1;
+        delta = 40 * (streak + 1);
+        setMessage("DOUBLE MATCH!", `${shown.map(v => v.label).join(" ")}  +${delta} pts`, "win");
+        confettiBurst(18);
+        AudioFX.beep(660, 110, "square", 0.02);
+      } else {
+        streak = 0;
+        setMessage("NO COMBO", `${shown.map(v => v.label).join(" ")} — streak reset`, "warn");
+        AudioFX.beep(180, 90, "triangle", 0.015);
+      }
+
+      modePill.textContent = "Mode: Combo";
+      addScore(delta);
+
+      spinning = false;
+      spinBtn.disabled = false;
+
+      if(auto){
+        setTimeout(() => {
+          if(auto) spin();
+        }, 620);
+      }
+    }
+
+    function reset(){
+      auto = false;
+      autoBtn.textContent = "AUTO: OFF";
+      autoBtn.setAttribute("aria-pressed","false");
+
+      score = 0;
+      streak = 0;
+      updateHUD();
+
+      setMessage("RESET", "READY 상태로 돌아왔어!");
+      confetti.innerHTML = "";
+
+      strips.forEach((s, i) => {
+        const normalizedIndex = randInt(0, SYMBOLS.length - 1);
+        s.absoluteIndex = midBlock() * SYMBOLS.length + normalizedIndex;
+        const targetY = absoluteIndexToY(s.absoluteIndex);
+
+        anime({
+          targets: s.stripEl,
+          translateY: [s.stripEl._y, targetY],
+          duration: 240 + i * 50,
+          easing: "easeOutQuad",
+          update: anim => {
+            const ty = Number(anim.animations[0].currentValue);
+            s.stripEl._y = ty;
+          },
+          complete: () => {
+            setStripY(s.stripEl, targetY);
+            spinBlur(s.stripEl, 0);
+          }
+        });
+      });
+    }
+
+    function toggleAuto(){
+      auto = !auto;
+      autoBtn.textContent = auto ? "AUTO: ON" : "AUTO: OFF";
+      autoBtn.setAttribute("aria-pressed", auto ? "true" : "false");
+
+      setMessage(auto ? "AUTO ON" : "AUTO OFF", auto ? "연속 스핀 모드" : "수동 모드");
+
+      anime({
+        targets: autoBtn,
+        scale: [1, 1.05, 1],
+        duration: 260,
+        easing: "easeOutQuad"
+      });
+
+      if(auto && !spinning) spin();
+    }
+
+    let dragging = false;
+    let startY = 0;
+    let knobStartTop = 12;
+    const trackPaddingTop = 12;
+    const trackPaddingBottom = 12;
+
+    function knobTopToPct(top){
+      const trackH = leverTrack.clientHeight;
+      const maxTop = trackH - trackPaddingBottom - leverKnob.clientHeight;
+      return Math.max(0, Math.min(100, (top - trackPaddingTop) / (maxTop - trackPaddingTop) * 100));
+    }
+
+    function pctToKnobTop(pct){
+      const trackH = leverTrack.clientHeight;
+      const maxTop = trackH - trackPaddingBottom - leverKnob.clientHeight;
+      return trackPaddingTop + (maxTop - trackPaddingTop) * (pct / 100);
+    }
+
+    function setLeverPct(pct){
+      const top = pctToKnobTop(pct);
+      leverKnob.style.top = `${top}px`;
+      leverKnob.setAttribute("aria-valuenow", String(Math.round(pct)));
+      leverPct.textContent = `${Math.round(pct)}%`;
+    }
+
+    function springLeverBack(){
+      anime({
+        targets: leverKnob,
+        top: trackPaddingTop,
+        duration: 520,
+        easing: "easeOutElastic(1, .6)",
+        update: () => {
+          const top = parseFloat(getComputedStyle(leverKnob).top);
+          const pct = knobTopToPct(top);
+          leverKnob.setAttribute("aria-valuenow", String(Math.round(pct)));
+          leverPct.textContent = `${Math.round(pct)}%`;
+        }
+      });
+    }
+
+    function pullFlash(){
+      anime({
+        targets: ".leverTrack",
+        boxShadow: [
+          "0 0 0 rgba(0,0,0,0)",
+          "0 0 28px rgba(50,246,255,.25)",
+          "0 0 0 rgba(0,0,0,0)"
+        ],
+        duration: 420,
+        easing: "easeOutQuad"
+      });
+    }
+
+    leverKnob.addEventListener("pointerdown", (e) => {
+      dragging = true;
+      leverKnob.setPointerCapture(e.pointerId);
+      startY = e.clientY;
+      knobStartTop = parseFloat(getComputedStyle(leverKnob).top);
+      AudioFX.beep(320, 60, "sine", 0.015);
+    });
+
+    leverKnob.addEventListener("pointermove", (e) => {
+      if(!dragging) return;
+
+      const dy = e.clientY - startY;
+      const trackH = leverTrack.clientHeight;
+      const maxTop = trackH - trackPaddingBottom - leverKnob.clientHeight;
+      let newTop = knobStartTop + dy;
+      newTop = Math.max(trackPaddingTop, Math.min(maxTop, newTop));
+
+      leverKnob.style.top = `${newTop}px`;
+
+      const pct = knobTopToPct(newTop);
+      leverKnob.setAttribute("aria-valuenow", String(Math.round(pct)));
+      leverPct.textContent = `${Math.round(pct)}%`;
+      leverPct.style.color = pct > 70 ? "var(--lime)" : "";
+    });
+
+    leverKnob.addEventListener("pointerup", () => {
+      if(!dragging) return;
+      dragging = false;
+
+      const top = parseFloat(getComputedStyle(leverKnob).top);
+      const pct = knobTopToPct(top);
+
+      if(pct >= 70){
+        pullFlash();
+        setMessage("LEVER PULL!", "스핀 발동!");
+        AudioFX.beep(520, 70, "square", 0.02);
+        spin();
+      } else {
+        setMessage("LEVER", "조금 더 아래로 당겨봐 (70% 이상)!");
+        AudioFX.beep(240, 70, "triangle", 0.012);
+      }
+
+      springLeverBack();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if(e.code === "Space"){
+        e.preventDefault();
+        spin();
+      } else if(e.key.toLowerCase() === "a"){
+        toggleAuto();
+      } else if(e.key.toLowerCase() === "r"){
+        reset();
+      }
+    });
+
+    spinBtn.addEventListener("click", spin);
+    autoBtn.addEventListener("click", toggleAuto);
+    resetBtn.addEventListener("click", reset);
+
+    for(let i=0;i<REELS;i++){
+      strips.push(buildStrip(document.getElementById(`strip${i}`)));
+    }
+
+    anime({
+      targets: ".cabinet",
+      translateY: [8, 0],
+      opacity: [0, 1],
+      duration: 520,
+      easing: "easeOutQuad"
+    });
+
+    updateHUD();
+    setLeverPct(0);
+    setMessage("READY", "SPIN 버튼 또는 레버로 시작!");
+  </script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+window.GAME_BALANCE = {
+  PLAYER: {
+    FIRE_RATE_BASE: 18,
+    FIRE_RATE_MIN: 3,
+    MOVE_SPEED: 4.6,
+    DASH_SPEED: 14,
+    DASH_CD_MAX: 70,
+    BULLET_SPEED: 12,
+    BULLET_DAMAGE: 1,
+    DEFENSE: 0
+  },
+
+  XP: {
+    BASE_TO_NEXT: 10,
+    GROWTH: 1.35
+  }
+};
