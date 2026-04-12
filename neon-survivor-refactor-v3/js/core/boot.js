@@ -4,11 +4,15 @@ window.Boot = (() => {
   function addShake(v){ S.shake = Math.min(24, S.shake + v); }
 
   function resetAll(practice=false){
+    for (const d of S.decoys) S.uiLayer.removeChild(d.spr);
     for (const b of S.bullets) S.fx.removeChild(b.spr);
+    for (const m of S.missiles) S.fx.removeChild(m.spr);
     for (const e of S.enemies) S.uiLayer.removeChild(e.spr);
     for (const p of S.particles) S.fx.removeChild(p.spr);
 
+    S.decoys.length = 0;
     S.bullets.length = 0;
+    S.missiles.length = 0;
     S.enemies.length = 0;
     S.particles.length = 0;
 
@@ -21,9 +25,22 @@ window.Boot = (() => {
     S.stats.fireRate = GAME_BALANCE.PLAYER.FIRE_RATE_BASE;
     S.stats.bulletSpeed = GAME_BALANCE.PLAYER.BULLET_SPEED;
     S.stats.bulletDamage = GAME_BALANCE.PLAYER.BULLET_DAMAGE;
+    S.stats.bulletCount = GAME_BALANCE.PLAYER.BULLET_COUNT;
     S.stats.bulletPierce = 0;
     S.stats.defense = GAME_BALANCE.PLAYER.DEFENSE;
+    S.stats.mp = GAME_BALANCE.PLAYER.MP_MAX;
+    S.stats.mpMax = GAME_BALANCE.PLAYER.MP_MAX;
+    S.stats.mpRegen = GAME_BALANCE.PLAYER.MP_REGEN;
     S.stats.regen = 0;
+    S.stats.shield = 0;
+    S.stats.shieldMax = 0;
+    S.stats.shieldRegen = 0;
+    S.stats.shieldRegenDelay = 0;
+    S.stats.shieldRegenDelayMax = GAME_BALANCE.PLAYER.SHIELD_REGEN_DELAY_MAX;
+    S.stats.homingMissileLevel = 0;
+    S.stats.homingMissileDamage = GAME_BALANCE.PLAYER.HOMING_MISSILE_DAMAGE;
+    S.stats.homingMissileCd = 0;
+    S.stats.homingMissileCdMax = GAME_BALANCE.PLAYER.HOMING_MISSILE_CD_MAX;
     S.stats.practice = !!practice;
 
     S.progression.score = 0;
@@ -41,9 +58,13 @@ window.Boot = (() => {
     S.progression.pendingLevelUps = 0;
 
     S.shake = 0;
+    S.activeSkillState.boostT = 0;
+    S.activeSkillState.afterburnerT = 0;
 
     if (S.player) S.uiLayer.removeChild(S.player.spr);
     S.player = PlayerFactory.makePlayer();
+    SkillSystem.applyStartingLoadout();
+    ActiveSkillSystem.assignStartingLoadout();
 
     WaveSystem.startNextWave();
     UI.hudUpdate();
@@ -59,6 +80,7 @@ window.Boot = (() => {
     window.addEventListener("keydown", (e)=>{
       S.keys.add(e.code);
       if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
+      ActiveSkillSystem.tryUseSlotByKey(e.code);
     }, { passive:false });
 
     window.addEventListener("keyup", (e)=>S.keys.delete(e.code));
@@ -84,7 +106,8 @@ window.Boot = (() => {
     if (S.stats.dashCd > 0) return;
     if (!(S.keys.has("ShiftLeft") || S.keys.has("ShiftRight"))) return;
 
-    let dx = 0, dy = 0;
+    let dx = 0;
+    let dy = 0;
     if (S.keys.has("KeyA") || S.keys.has("ArrowLeft")) dx -= 1;
     if (S.keys.has("KeyD") || S.keys.has("ArrowRight")) dx += 1;
     if (S.keys.has("KeyW") || S.keys.has("ArrowUp")) dy -= 1;
@@ -96,7 +119,8 @@ window.Boot = (() => {
       dy = Math.sin(ang);
     } else {
       const m = Math.hypot(dx, dy) || 1;
-      dx /= m; dy /= m;
+      dx /= m;
+      dy /= m;
     }
 
     p.vx += dx * S.stats.dashSpeed;
@@ -116,7 +140,16 @@ window.Boot = (() => {
     if (p.dashT > 0) p.dashT -= dt;
     if (S.stats.dashCd > 0) S.stats.dashCd -= dt;
 
-    let ax = 0, ay = 0;
+    if (p.shieldSpr){
+      const ratio = S.stats.shieldMax > 0 ? Helpers.clamp(S.stats.shield / S.stats.shieldMax, 0, 1) : 0;
+      p.shieldSpr.alpha = ratio > 0.01 ? (0.15 + ratio * 0.45) : 0;
+      const pulse = 1 + Math.sin(performance.now() / 160) * 0.04;
+      p.shieldSpr.scale.set(pulse + ratio * 0.06);
+      p.shieldSpr.rotation += 0.01 * dt;
+    }
+
+    let ax = 0;
+    let ay = 0;
     if (S.keys.has("KeyA") || S.keys.has("ArrowLeft")) ax -= 1;
     if (S.keys.has("KeyD") || S.keys.has("ArrowRight")) ax += 1;
     if (S.keys.has("KeyW") || S.keys.has("ArrowUp")) ay -= 1;
@@ -124,12 +157,17 @@ window.Boot = (() => {
 
     if (ax !== 0 || ay !== 0){
       const m = Math.hypot(ax, ay) || 1;
-      ax /= m; ay /= m;
+      ax /= m;
+      ay /= m;
     }
 
     doDash();
 
-    const accel = S.stats.speed * 0.9;
+    const afterburnerSkill = ActiveSkillSystem.getDefinition("afterburner");
+    const afterburnerBoost = S.activeSkillState.afterburnerT > 0 && afterburnerSkill
+      ? afterburnerSkill.effectData.speedMultiplier
+      : 1;
+    const accel = S.stats.speed * afterburnerBoost * 0.9;
     p.vx = Helpers.lerp(p.vx, ax * accel, 0.18);
     p.vy = Helpers.lerp(p.vy, ay * accel, 0.18);
 
@@ -138,8 +176,8 @@ window.Boot = (() => {
 
     const w = S.app.renderer.width;
     const h = S.app.renderer.height;
-    p.spr.x = Helpers.clamp(p.spr.x, 20, w-20);
-    p.spr.y = Helpers.clamp(p.spr.y, 20, h-20);
+    p.spr.x = Helpers.clamp(p.spr.x, 20, w - 20);
+    p.spr.y = Helpers.clamp(p.spr.y, 20, h - 20);
 
     const ang = Math.atan2(S.mouse.y - p.spr.y, S.mouse.x - p.spr.x);
     p.spr.rotation = ang + Math.PI / 2;
@@ -150,12 +188,19 @@ window.Boot = (() => {
       const p = S.particles[i];
       p.x += p.vx * dt;
       p.y += p.vy * dt;
-      p.vx *= 0.92;
-      p.vy *= 0.92;
+      p.vx *= p.drag || 0.92;
+      p.vy *= p.drag || 0.92;
       p.life -= dt;
       p.spr.x = p.x;
       p.spr.y = p.y;
-      p.spr.alpha = Math.max(0, p.life / 36);
+      if (p.pulse){
+        const progress = 1 - (p.life / (p.maxLife || 1));
+        const scale = 1 + progress * p.pulseRadius;
+        p.spr.scale.set(scale);
+        p.spr.alpha = Math.max(0, 1 - progress);
+      } else {
+        p.spr.alpha = Math.max(0, p.life / 36);
+      }
       if (p.life <= 0){
         S.fx.removeChild(p.spr);
         S.particles.splice(i, 1);
@@ -167,7 +212,17 @@ window.Boot = (() => {
     const P = S.progression;
 
     if (S.stats.regen > 0 && S.stats.hp < S.stats.maxHp){
-      S.stats.hp = Math.min(S.stats.maxHp, S.stats.hp + S.stats.regen * (dt/60));
+      S.stats.hp = Math.min(S.stats.maxHp, S.stats.hp + S.stats.regen * (dt / 60));
+    }
+    if (S.stats.mp < S.stats.mpMax){
+      S.stats.mp = Math.min(S.stats.mpMax, S.stats.mp + S.stats.mpRegen * (dt / 60));
+    }
+    if (S.stats.shieldMax > 0){
+      if (S.stats.shieldRegenDelay > 0){
+        S.stats.shieldRegenDelay -= dt;
+      } else if (S.stats.shield < S.stats.shieldMax && S.stats.shieldRegen > 0){
+        S.stats.shield = Math.min(S.stats.shieldMax, S.stats.shield + S.stats.shieldRegen * (dt / 60));
+      }
     }
 
     if (P.comboT > 0){
@@ -205,8 +260,11 @@ window.Boot = (() => {
     updateProgress(dt);
     updatePlayer(dt);
     CombatSystem.tryShoot();
+    CombatSystem.tryShootMissiles();
+    ActiveSkillSystem.update(dt);
     EnemySystem.updateEnemies(dt);
     CombatSystem.updateBullets(dt);
+    CombatSystem.updateMissiles(dt);
     updateParticles(dt);
     UI.hudUpdate();
   }
@@ -247,6 +305,7 @@ window.Boot = (() => {
     });
 
     UI.showCard("start");
+    ActiveSkillSystem.assignStartingLoadout();
     UI.hudUpdate();
 
     S.app.ticker.add(tick);

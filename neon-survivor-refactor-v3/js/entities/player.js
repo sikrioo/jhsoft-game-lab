@@ -21,7 +21,15 @@ window.PlayerFactory = (() => {
       quality: 0.25
     }));
 
-    c.addChild(body, core);
+    const shield = new PIXI.Graphics();
+    shield.lineStyle(2.5, 0x7fe7ff, 0.72);
+    shield.drawCircle(0, 0, 22);
+    shield.beginFill(0x7fe7ff, 0.08);
+    shield.drawCircle(0, 0, 20);
+    shield.endFill();
+    shield.alpha = 0;
+
+    c.addChild(shield, body, core);
     c.filters = Effects.asFilters(Effects.makeGlowFilter({
       color: 0x32f6ff,
       distance: 18,
@@ -36,6 +44,7 @@ window.PlayerFactory = (() => {
     return {
       type:"player",
       spr:c,
+      shieldSpr:shield,
       r:14,
       vx:0, vy:0,
       inv:0,

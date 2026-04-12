@@ -121,6 +121,27 @@ window.Effects = (() => {
     return makeCenteredSprite(getEnemyTexture(tierKey, tier), x, y, 0xffffff, 1, 1);
   }
 
+  function emitPulse(x, y, color=0xffffff, radius=120, life=20){
+    const S = GameState;
+    const ring = new PIXI.Graphics();
+    ring.lineStyle(3, color, 0.9);
+    ring.drawCircle(0, 0, 1);
+    ring.x = x;
+    ring.y = y;
+    ring.scale.set(1);
+    S.fx.addChild(ring);
+    S.particles.push({
+      spr: ring,
+      x, y,
+      vx: 0,
+      vy: 0,
+      life,
+      maxLife: life,
+      pulseRadius: radius,
+      pulse: true
+    });
+  }
+
   function emitParticle(x, y, color=0x32f6ff, count=10, power=1){
     const S = GameState;
     for (let i=0;i<count;i++){
@@ -144,6 +165,7 @@ window.Effects = (() => {
     makeGlowFilter,
     asFilters,
     emitParticle,
+    emitPulse,
     makeParticleSprite,
     makeTrailSprite,
     makeBulletSprite,

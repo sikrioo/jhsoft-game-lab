@@ -8,7 +8,7 @@ html,body{
 .hud{
   position:fixed; left:14px; top:12px; z-index:10; color:#eef4ff;
   text-shadow:0 0 12px rgba(80,180,255,.32), 0 0 18px rgba(255,62,219,.20);
-  user-select:none; pointer-events:none;
+  user-select:none; pointer-events:none; width:min(860px, calc(100vw - 28px));
 }
 .hud .row{
   display:flex; gap:10px; align-items:center; flex-wrap:wrap;
@@ -23,6 +23,38 @@ html,body{
   font-size:13px;
 }
 .pill b{ font-weight:700; }
+
+.activeHud{
+  position:fixed; left:50%; bottom:18px; transform:translateX(-50%);
+  z-index:15; display:grid; grid-template-columns:repeat(3, minmax(150px, 1fr)); gap:12px;
+  width:min(560px, calc(100vw - 28px));
+}
+.activeSlot{
+  padding:11px 12px; border-radius:16px;
+  background:rgba(7,10,24,.78);
+  border:1px solid rgba(120,180,255,.16);
+  box-shadow:0 0 18px rgba(110,90,255,.08);
+  color:#eef4ff;
+}
+.activeSlot.cooldown{ opacity:.75; }
+.activeSlot.noMp{
+  border-color:rgba(255,120,120,.28);
+  box-shadow:0 0 18px rgba(255,80,80,.12);
+}
+.activeSlot.cast{
+  border-color:rgba(255,196,92,.42);
+  box-shadow:0 0 18px rgba(255,196,92,.18);
+}
+.slotTop,.slotMeta{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+}
+.slotKey{
+  display:inline-flex; align-items:center; justify-content:center;
+  min-width:26px; height:26px; border-radius:999px;
+  background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.08); font-weight:800;
+}
+.slotCd,.slotMeta{ font-size:11px; opacity:.82; }
+.slotName{ margin-top:8px; font-weight:700; font-size:14px; }
 
 .centerOverlay{
   position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
@@ -96,4 +128,5 @@ html,body{
 
 @media (max-width:560px){
   .upgradeGrid{ grid-template-columns:1fr; }
+  .activeHud{ grid-template-columns:1fr; bottom:12px; }
 }

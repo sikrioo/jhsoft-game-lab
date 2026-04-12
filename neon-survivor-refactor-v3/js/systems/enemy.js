@@ -1,4 +1,19 @@
 window.EnemySystem = (() => {
+  function getTargetForEnemy(enemy){
+    const S = GameState;
+    let bestDecoy = null;
+    let bestDist = Infinity;
+    for (const decoy of S.decoys){
+      const d2 = Helpers.dist2(enemy.x, enemy.y, decoy.x, decoy.y);
+      if (d2 < bestDist){
+        bestDist = d2;
+        bestDecoy = decoy;
+      }
+    }
+    if (bestDecoy) return { x: bestDecoy.x, y: bestDecoy.y, r: bestDecoy.r, decoy: bestDecoy };
+    return { x: S.player.spr.x, y: S.player.spr.y, r: S.player.r, player: S.player };
+  }
+
   function getTierByWaveAndRoll(){
     const wave = GameState.progression.wave;
     const roll = Math.random();
@@ -15,12 +30,13 @@ window.EnemySystem = (() => {
     const h = S.app.renderer.height;
 
     const side = Helpers.randi(0,3);
-    let x=0, y=0;
+    let x = 0;
+    let y = 0;
     const pad = 60;
-    if (side===0){ x=-pad; y=Helpers.rand(0,h); }
-    if (side===1){ x=w+pad; y=Helpers.rand(0,h); }
-    if (side===2){ x=Helpers.rand(0,w); y=-pad; }
-    if (side===3){ x=Helpers.rand(0,w); y=h+pad; }
+    if (side === 0){ x = -pad; y = Helpers.rand(0, h); }
+    if (side === 1){ x = w + pad; y = Helpers.rand(0, h); }
+    if (side === 2){ x = Helpers.rand(0, w); y = -pad; }
+    if (side === 3){ x = Helpers.rand(0, w); y = h + pad; }
 
     const r = tier.radius;
     const hits = Helpers.randi(tier.hitsMin, tier.hitsMax);
@@ -39,7 +55,6 @@ window.EnemySystem = (() => {
     hpText.anchor.set(0.5);
 
     c.addChild(body, hpText);
-
     c.x = x;
     c.y = y;
     S.uiLayer.addChild(c);
@@ -55,6 +70,8 @@ window.EnemySystem = (() => {
       dmg: tier.damage,
       xp: tier.xpBase,
       hitT: 0,
+      slowT: 0,
+      slowMul: 1,
       hpText,
       scoreBase: tier.scoreBase,
       glowColor: tier.glowColor
@@ -78,31 +95,44 @@ window.EnemySystem = (() => {
     const S = GameState;
     const p = S.player;
     const now = performance.now() / 1000;
+
     for (let i=S.enemies.length-1; i>=0; i--){
       const e = S.enemies[i];
-      let dx = p.spr.x - e.x;
-      let dy = p.spr.y - e.y;
+      const target = getTargetForEnemy(e);
+      let dx = target.x - e.x;
+      let dy = target.y - e.y;
       const d = Math.hypot(dx,dy) || 1;
       dx /= d;
       dy /= d;
 
+      if (e.slowT > 0){
+        e.slowT -= dt;
+      } else {
+        e.slowMul = 1;
+      }
+
       if (e.tier === "normal"){
         const wig = Math.sin(now * 5 + i) * 0.18;
-        const ca = Math.cos(wig), sa = Math.sin(wig);
-        const ndx = dx*ca - dy*sa;
-        const ndy = dx*sa + dy*ca;
-        dx = ndx; dy = ndy;
+        const ca = Math.cos(wig);
+        const sa = Math.sin(wig);
+        const ndx = dx * ca - dy * sa;
+        const ndy = dx * sa + dy * ca;
+        dx = ndx;
+        dy = ndy;
       }
       if (e.tier === "elite"){
         const wig = Math.sin(now * 6 + i) * 0.28;
-        const ca = Math.cos(wig), sa = Math.sin(wig);
-        const ndx = dx*ca - dy*sa;
-        const ndy = dx*sa + dy*ca;
-        dx = ndx; dy = ndy;
+        const ca = Math.cos(wig);
+        const sa = Math.sin(wig);
+        const ndx = dx * ca - dy * sa;
+        const ndy = dx * sa + dy * ca;
+        dx = ndx;
+        dy = ndy;
       }
 
-      e.x += dx * e.sp * dt;
-      e.y += dy * e.sp * dt;
+      const moveSpeed = e.sp * (e.slowMul || 1);
+      e.x += dx * moveSpeed * dt;
+      e.y += dy * moveSpeed * dt;
       e.spr.x = e.x;
       e.spr.y = e.y;
       e.spr.rotation = Math.atan2(dy, dx);
@@ -115,11 +145,25 @@ window.EnemySystem = (() => {
         e.spr.alpha = 1;
       }
 
-      const rr = e.r + p.r;
-      if (Helpers.dist2(e.x,e.y,p.spr.x,p.spr.y) < rr*rr){
-        if (p.inv <= 0 && !S.stats.practice){
-          const actualDamage = Math.max(1, e.dmg - S.stats.defense);
-          S.stats.hp -= actualDamage;
+      const rr = e.r + target.r;
+      if (Helpers.dist2(e.x, e.y, target.x, target.y) < rr * rr){
+        if (target.decoy){
+          target.decoy.hp -= 1;
+          e.hitT = 8;
+          Effects.emitParticle(target.x, target.y, 0xffd27a, 10, 0.8);
+          p.vx += dx * -2;
+          p.vy += dy * -2;
+        } else if (p.inv <= 0 && !S.stats.practice){
+          let remainingDamage = Math.max(1, e.dmg - S.stats.defense);
+          if (S.stats.shield > 0){
+            const absorbed = Math.min(S.stats.shield, remainingDamage);
+            S.stats.shield -= absorbed;
+            remainingDamage -= absorbed;
+            S.stats.shieldRegenDelay = S.stats.shieldRegenDelayMax;
+            Effects.emitParticle(p.spr.x, p.spr.y, 0x7fe7ff, 16, 1.15);
+          }
+          if (remainingDamage > 0) S.stats.hp -= remainingDamage;
+
           p.inv = 30;
           Effects.emitParticle(p.spr.x, p.spr.y, e.glowColor, 18, 1.2);
           if (S.stats.hp <= 0){

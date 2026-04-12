@@ -1,8 +1,8 @@
 window.UPGRADE_DEFINITIONS = [
   {
     id:"firerate",
-    name:"연사 강화",
-    desc:"발사 간격 -15%",
+    name:"Fire Rate",
+    desc:"Fire interval -15%",
     apply:()=>{
       const S = GameState;
       S.stats.fireRate = Math.max(
@@ -13,32 +13,32 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"damage",
-    name:"공격력 강화",
-    desc:"한 발당 타수 +1",
+    name:"Damage Up",
+    desc:"Bullet damage +1",
     apply:()=>{
       GameState.stats.bulletDamage += 1;
     }
   },
   {
     id:"defense",
-    name:"방어력 강화",
-    desc:"받는 피해 -2",
+    name:"Defense Up",
+    desc:"Incoming hit damage -2",
     apply:()=>{
       GameState.stats.defense += 2;
     }
   },
   {
     id:"speed",
-    name:"기동력",
-    desc:"이동 속도 +12%",
+    name:"Thruster Tune",
+    desc:"Move speed +12%",
     apply:()=>{
       GameState.stats.speed *= 1.12;
     }
   },
   {
     id:"dash",
-    name:"대시 쿨감",
-    desc:"대시 쿨타임 -20%",
+    name:"Dash Cooling",
+    desc:"Dash cooldown -20%",
     apply:()=>{
       const S = GameState;
       S.stats.dashCdMax = Math.max(25, Math.floor(S.stats.dashCdMax * 0.80));
@@ -46,16 +46,47 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"pierce",
-    name:"관통",
-    desc:"탄환 관통 +1",
+    name:"Pierce",
+    desc:"Bullet pierce +1",
     apply:()=>{
       GameState.stats.bulletPierce += 1;
     }
   },
   {
+    id:"shield",
+    name:"Shield Matrix",
+    desc:"Shield max +35, shield regen +4/s",
+    apply:()=>{
+      const S = GameState;
+      S.stats.shieldMax += 35;
+      S.stats.shield = S.stats.shieldMax;
+      S.stats.shieldRegen += 4;
+      S.stats.shieldRegenDelay = 0;
+    }
+  },
+  {
+    id:"homingmissile",
+    name:"Homing Missile",
+    desc:"Launches tracking missiles automatically",
+    apply:()=>{
+      const S = GameState;
+      S.stats.homingMissileLevel += 1;
+      S.stats.homingMissileDamage += 1;
+      S.stats.homingMissileCdMax = Math.max(28, Math.floor(S.stats.homingMissileCdMax * 0.90));
+    }
+  },
+  {
+    id:"multishot",
+    name:"Multi Shot",
+    desc:"Bullets fired per shot +1",
+    apply:()=>{
+      GameState.stats.bulletCount += 1;
+    }
+  },
+  {
     id:"hp",
-    name:"최대 HP",
-    desc:"최대 HP +25",
+    name:"Max HP",
+    desc:"Max HP +25",
     apply:()=>{
       const S = GameState;
       S.stats.maxHp += 25;
@@ -64,16 +95,16 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"regen",
-    name:"재생",
-    desc:"초당 HP +0.6",
+    name:"Regen",
+    desc:"HP regen +0.6/s",
     apply:()=>{
       GameState.stats.regen += 0.6;
     }
   },
   {
     id:"bulletspeed",
-    name:"탄속",
-    desc:"탄환 속도 +15%",
+    name:"Velocity",
+    desc:"Bullet speed +15%",
     apply:()=>{
       GameState.stats.bulletSpeed *= 1.15;
     }

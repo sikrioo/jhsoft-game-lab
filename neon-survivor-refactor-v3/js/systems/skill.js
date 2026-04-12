@@ -1,4 +1,20 @@
 window.SkillSystem = (() => {
+  function getUpgradeById(id){
+    return UPGRADE_DEFINITIONS.find(upgrade => upgrade.id === id) || null;
+  }
+
+  function applyUpgradeById(id){
+    const upgrade = getUpgradeById(id);
+    if (!upgrade) return false;
+    upgrade.apply();
+    return true;
+  }
+
+  function applyStartingLoadout(){
+    const starting = (GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_UPGRADES) || [];
+    for (const id of starting) applyUpgradeById(id);
+  }
+
   function pickChoices(n=3){
     const pool = [...UPGRADE_DEFINITIONS];
     const picks = [];
@@ -50,6 +66,8 @@ window.SkillSystem = (() => {
 
   return {
     gainXp,
-    openLevelUpIfNeeded
+    openLevelUpIfNeeded,
+    applyUpgradeById,
+    applyStartingLoadout
   };
 })();

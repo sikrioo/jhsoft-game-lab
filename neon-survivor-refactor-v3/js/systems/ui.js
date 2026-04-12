@@ -4,9 +4,12 @@ window.UI = (() => {
   const $level = document.getElementById("level");
   const $xp = document.getElementById("xp");
   const $hp = document.getElementById("hp");
+  const $mp = document.getElementById("mp");
+  const $shield = document.getElementById("shield");
   const $atk = document.getElementById("atk");
   const $def = document.getElementById("def");
   const $fireRate = document.getElementById("fireRate");
+  const $shots = document.getElementById("shots");
   const $pierce = document.getElementById("pierce");
   const $combo = document.getElementById("combo");
 
@@ -17,6 +20,7 @@ window.UI = (() => {
   const upgradeGrid = document.getElementById("upgradeGrid");
   const finalScoreEl = document.getElementById("finalScore");
   const warningOverlay = document.getElementById("warningOverlay");
+  const activeSlotEls = [...document.querySelectorAll(".activeSlot")];
 
   function hudUpdate() {
     const S = GameState;
@@ -26,11 +30,53 @@ window.UI = (() => {
     $level.textContent = String(P.level);
     $xp.textContent = `${Math.floor(P.xp)} / ${Math.floor(P.xpToNext)}`;
     $hp.textContent = String(Math.max(0, Math.floor(S.stats.hp)));
+    $mp.textContent = `${Math.floor(S.stats.mp)} / ${Math.floor(S.stats.mpMax)}`;
+    $shield.textContent = S.stats.shieldMax > 0
+      ? `${Math.max(0, Math.floor(S.stats.shield))} / ${Math.floor(S.stats.shieldMax)}`
+      : "-";
     $atk.textContent = String(S.stats.bulletDamage);
     $def.textContent = String(S.stats.defense);
     $fireRate.textContent = String(S.stats.fireRate);
+    $shots.textContent = String(S.stats.bulletCount);
     $pierce.textContent = String(S.stats.bulletPierce);
     $combo.textContent = "x" + P.combo.toFixed(1).replace(/\.0$/,"");
+    renderActiveSlots();
+  }
+
+  function renderActiveSlots(){
+    for (const el of activeSlotEls){
+      const slot = GameState.activeSkillState.slots.find(item => item.key === el.dataset.key);
+      const skill = slot ? ActiveSkillSystem.getSlotSkill(slot) : null;
+      const nameEl = el.querySelector(".slotName");
+      const typeEl = el.querySelector(".slotType");
+      const costEl = el.querySelector(".slotCost");
+      const cdEl = el.querySelector(".slotCd");
+
+      if (!slot || !skill){
+        nameEl.textContent = "Empty";
+        typeEl.textContent = "-";
+        costEl.textContent = "0 MP";
+        cdEl.textContent = "READY";
+        el.classList.remove("cooldown");
+        el.classList.remove("noMp");
+        continue;
+      }
+
+      nameEl.textContent = skill.name;
+      typeEl.textContent = skill.type.toUpperCase();
+      costEl.textContent = `${skill.mpCost} MP`;
+      cdEl.textContent = slot.cooldown > 0 ? `${(slot.cooldown / 60).toFixed(1)}s` : "READY";
+      el.classList.toggle("cooldown", slot.cooldown > 0);
+      el.classList.toggle("noMp", GameState.stats.mp < skill.mpCost);
+    }
+  }
+
+  function flashActiveSlot(key, reason="cast"){
+    const el = activeSlotEls.find(item => item.dataset.key === key);
+    if (!el) return;
+    const className = reason === "mp" ? "noMp" : "cast";
+    el.classList.add(className);
+    setTimeout(() => el.classList.remove(className), 160);
   }
 
   function showCard(which) {
@@ -83,6 +129,7 @@ window.UI = (() => {
     showGameOver,
     triggerBossWarning,
     renderUpgradeChoices,
-    bindButtons
+    bindButtons,
+    flashActiveSlot
   };
 })();

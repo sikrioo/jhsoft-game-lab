@@ -16,20 +16,41 @@
       <div class="pill"><b>Lv</b><span id="level">1</span></div>
       <div class="pill"><b>XP</b><span id="xp">0 / 10</span></div>
       <div class="pill"><b>HP</b><span id="hp">100</span></div>
+      <div class="pill"><b>MP</b><span id="mp">100 / 100</span></div>
+      <div class="pill"><b>Shield</b><span id="shield">-</span></div>
       <div class="pill"><b>ATK</b><span id="atk">1</span></div>
       <div class="pill"><b>DEF</b><span id="def">0</span></div>
       <div class="pill"><b>Fire Rate</b><span id="fireRate">18</span></div>
+      <div class="pill"><b>Shots</b><span id="shots">1</span></div>
       <div class="pill"><b>Pierce</b><span id="pierce">0</span></div>
       <div class="pill"><b>Combo</b><span id="combo">x1</span></div>
-      <div class="pill hint">WASD/←→↑↓ 이동 · 마우스 조준 · 클릭/Space 발사 · Shift 대시</div>
+      <div class="pill hint">WASD / Arrow move, mouse aim, click or Space shoot, Shift dash</div>
+    </div>
+  </div>
+
+  <div class="activeHud" id="activeHud">
+    <div class="activeSlot" data-key="KeyQ">
+      <div class="slotTop"><span class="slotKey">Q</span><span class="slotCd">READY</span></div>
+      <div class="slotName">Empty</div>
+      <div class="slotMeta"><span class="slotType">-</span><span class="slotCost">0 MP</span></div>
+    </div>
+    <div class="activeSlot" data-key="KeyE">
+      <div class="slotTop"><span class="slotKey">E</span><span class="slotCd">READY</span></div>
+      <div class="slotName">Empty</div>
+      <div class="slotMeta"><span class="slotType">-</span><span class="slotCost">0 MP</span></div>
+    </div>
+    <div class="activeSlot" data-key="KeyR">
+      <div class="slotTop"><span class="slotKey">R</span><span class="slotCd">READY</span></div>
+      <div class="slotName">Empty</div>
+      <div class="slotMeta"><span class="slotType">-</span><span class="slotCost">0 MP</span></div>
     </div>
   </div>
 
   <div class="centerOverlay" id="overlayRoot">
     <div class="card" id="startCard">
       <h1>NEON SURVIVOR</h1>
-      <p>우주 배경 위에서 적을 처치하고 경험치를 모아 성장하세요.</p>
-      <p class="hint">레벨업 시 스킬 선택 창이 열립니다.</p>
+      <p>Hold the arena, shred incoming enemies, and stack upgrades while the waves scale up.</p>
+      <p class="hint">Test loadout is enabled from the start for fast skill iteration.</p>
       <div class="btnRow">
         <button class="btn" id="btnStart">Start</button>
         <button class="btn secondary" id="btnPractice">Practice</button>
@@ -38,14 +59,14 @@
 
     <div class="card" id="upgradeCard" style="display:none;">
       <h1>Level Up</h1>
-      <p>스킬을 하나 선택하세요.</p>
+      <p>Choose one upgrade.</p>
       <div class="upgradeGrid" id="upgradeGrid"></div>
-      <p class="hint">선택 즉시 적용되고 게임이 이어집니다.</p>
+      <p class="hint">The game resumes as soon as you pick.</p>
     </div>
 
     <div class="card" id="gameOverCard" style="display:none;">
       <h1>Game Over</h1>
-      <p>최종 점수: <b id="finalScore">0</b></p>
+      <p>Final Score: <b id="finalScore">0</b></p>
       <div class="btnRow">
         <button class="btn" id="btnRetry">Retry</button>
         <button class="btn secondary" id="btnBack">Back</button>
@@ -63,6 +84,7 @@
   <script src="./js/data/game-balance.js"></script>
   <script src="./js/data/enemy-tiers.js"></script>
   <script src="./js/data/upgrades.js"></script>
+  <script src="./js/data/active-skills.js"></script>
 
   <script src="./js/core/utils.js"></script>
   <script src="./js/core/state.js"></script>
@@ -72,6 +94,7 @@
 
   <script src="./js/systems/ui.js"></script>
   <script src="./js/systems/skill.js"></script>
+  <script src="./js/systems/active-skills.js"></script>
   <script src="./js/systems/wave.js"></script>
   <script src="./js/systems/enemy.js"></script>
   <script src="./js/systems/combat.js"></script>
