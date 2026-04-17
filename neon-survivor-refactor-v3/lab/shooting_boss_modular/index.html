@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structured Shooting Boss Demo</title>
+  <link rel="stylesheet" href="assets/css/styles.css" />
+</head>
+<body>
+  <canvas id="game"></canvas>
+  <div id="controlPanel">
+    <label>Boss
+      <select id="bossSelect"></select>
+    </label>
+    <label>Start Phase
+      <select id="phaseSelect"></select>
+    </label>
+    <button id="applySelection">Apply</button>
+    <button id="resetSelection">Reset</button>
+  </div>
+
+  <script src="assets/js/engine.js"></script>
+  <script src="assets/js/bosses/bosses.registry.js"></script>
+  <script src="assets/js/bosses/bosses.runtime.js"></script>
+  <script src="assets/js/bosses/bosses.factory.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

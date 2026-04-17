@@ -24,7 +24,7 @@
       <div class="pill"><b>Shots</b><span id="shots">1</span></div>
       <div class="pill"><b>Pierce</b><span id="pierce">0</span></div>
       <div class="pill"><b>Combo</b><span id="combo">x1</span></div>
-      <div class="pill hint">WASD / Arrow move, mouse aim, click or Space shoot, Shift dash</div>
+      <div class="pill hint">WASD move, mouse aim, click shoot, E front boost, 1/2/3/4 boost dir</div>
     </div>
   </div>
 
@@ -46,14 +46,31 @@
     </div>
   </div>
 
+  <div class="weaponHud" id="weaponHud">
+    <div class="weaponHead">Weapon Test</div>
+    <label class="weaponOption">
+      <input type="radio" name="weaponType" value="machinegun" checked />
+      <span>기관포</span>
+    </label>
+    <label class="weaponOption">
+      <input type="radio" name="weaponType" value="laser" />
+      <span>레이저</span>
+    </label>
+    <label class="weaponOption">
+      <input type="radio" name="weaponType" value="shotgun" />
+      <span>샷건</span>
+    </label>
+    <div class="weaponState">현재 무기: <b id="weaponName">기관포</b> <span id="weaponLevel">Lv.MAX</span></div>
+  </div>
+
   <div class="centerOverlay" id="overlayRoot">
     <div class="card" id="startCard">
       <h1>NEON SURVIVOR</h1>
-      <p>Hold the arena, shred incoming enemies, and stack upgrades while the waves scale up.</p>
-      <p class="hint">Test loadout is enabled from the start for fast skill iteration.</p>
+      <p>시작 모드를 선택하세요. 플레이 모드는 일반 시작, 테스트 모드는 스킬/무기 테스트 세팅으로 시작합니다.</p>
+      <p class="hint">테스트 모드에서는 시작 로드아웃과 무기 교체 UI가 활성화됩니다.</p>
       <div class="btnRow">
-        <button class="btn" id="btnStart">Start</button>
-        <button class="btn secondary" id="btnPractice">Practice</button>
+        <button class="btn" id="btnStart">Play Mode</button>
+        <button class="btn secondary" id="btnPractice">Test Mode</button>
       </div>
     </div>
 
@@ -85,6 +102,7 @@
   <script src="./js/data/enemy-tiers.js"></script>
   <script src="./js/data/upgrades.js"></script>
   <script src="./js/data/active-skills.js"></script>
+  <script src="./js/data/weapon-types.js"></script>
 
   <script src="./js/core/utils.js"></script>
   <script src="./js/core/state.js"></script>

@@ -3,15 +3,19 @@ window.Boot = (() => {
 
   function addShake(v){ S.shake = Math.min(24, S.shake + v); }
 
-  function resetAll(practice=false){
+  function resetAll(testMode=false){
     for (const d of S.decoys) S.uiLayer.removeChild(d.spr);
     for (const b of S.bullets) S.fx.removeChild(b.spr);
+    for (const b of S.enemyBullets) S.fx.removeChild(b.spr);
+    for (const beam of S.beams) S.fx.removeChild(beam.spr);
     for (const m of S.missiles) S.fx.removeChild(m.spr);
     for (const e of S.enemies) S.uiLayer.removeChild(e.spr);
     for (const p of S.particles) S.fx.removeChild(p.spr);
 
     S.decoys.length = 0;
     S.bullets.length = 0;
+    S.enemyBullets.length = 0;
+    S.beams.length = 0;
     S.missiles.length = 0;
     S.enemies.length = 0;
     S.particles.length = 0;
@@ -41,7 +45,7 @@ window.Boot = (() => {
     S.stats.homingMissileDamage = GAME_BALANCE.PLAYER.HOMING_MISSILE_DAMAGE;
     S.stats.homingMissileCd = 0;
     S.stats.homingMissileCdMax = GAME_BALANCE.PLAYER.HOMING_MISSILE_CD_MAX;
-    S.stats.practice = !!practice;
+    S.stats.practice = !!testMode;
 
     S.progression.score = 0;
     S.progression.combo = 1;
@@ -56,15 +60,22 @@ window.Boot = (() => {
     S.progression.xp = 0;
     S.progression.xpToNext = GAME_BALANCE.XP.BASE_TO_NEXT;
     S.progression.pendingLevelUps = 0;
+    S.progression.deathTimer = 0;
 
     S.shake = 0;
+    S.activeSkillState.boostDir = 0;
+    S.activeSkillState.boostDrag = 0.9;
+    S.activeSkillState.boostMitigationT = 0;
+    S.activeSkillState.boostMitigationMul = 1;
     S.activeSkillState.boostT = 0;
     S.activeSkillState.afterburnerT = 0;
+    S.weaponState.laserChannel = null;
 
     if (S.player) S.uiLayer.removeChild(S.player.spr);
     S.player = PlayerFactory.makePlayer();
-    SkillSystem.applyStartingLoadout();
-    ActiveSkillSystem.assignStartingLoadout();
+    CombatSystem.applyStartingWeaponLoadout(testMode);
+    SkillSystem.applyStartingLoadout(testMode);
+    ActiveSkillSystem.assignStartingLoadout(testMode);
 
     WaveSystem.startNextWave();
     UI.hudUpdate();
@@ -72,14 +83,34 @@ window.Boot = (() => {
   }
 
   function gameOver(){
-    S.progression.waveState = "idle";
-    UI.showGameOver();
+    if (S.progression.waveState === "dying" || S.progression.waveState === "idle") return;
+
+    S.progression.waveState = "dying";
+    S.progression.deathTimer = 28;
+    S.mouse.down = false;
+    S.keys.delete("Space");
+
+    if (S.weaponState.laserChannel){
+      S.fx.removeChild(S.weaponState.laserChannel.beam.spr);
+      S.weaponState.laserChannel = null;
+    }
+
+    if (S.player && S.player.spr){
+      Effects.emitPlayerExplosion(S.player.spr.x, S.player.spr.y);
+      S.player.spr.visible = false;
+    }
+
+    addShake(16);
   }
 
   function bindInput(){
     window.addEventListener("keydown", (e)=>{
       S.keys.add(e.code);
       if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
+      if (e.code === "Digit1") ActiveSkillSystem.tryUseBoostDirection("forward");
+      if (e.code === "Digit2") ActiveSkillSystem.tryUseBoostDirection("left");
+      if (e.code === "Digit3") ActiveSkillSystem.tryUseBoostDirection("back");
+      if (e.code === "Digit4") ActiveSkillSystem.tryUseBoostDirection("right");
       ActiveSkillSystem.tryUseSlotByKey(e.code);
     }, { passive:false });
 
@@ -170,6 +201,10 @@ window.Boot = (() => {
     const accel = S.stats.speed * afterburnerBoost * 0.9;
     p.vx = Helpers.lerp(p.vx, ax * accel, 0.18);
     p.vy = Helpers.lerp(p.vy, ay * accel, 0.18);
+    if (S.activeSkillState.boostT > 0){
+      p.vx *= S.activeSkillState.boostDrag;
+      p.vy *= S.activeSkillState.boostDrag;
+    }
 
     p.spr.x += p.vx * dt;
     p.spr.y += p.vy * dt;
@@ -255,6 +290,17 @@ window.Boot = (() => {
       S.shake = 0;
     }
 
+    if (S.progression.waveState === "dying"){
+      updateParticles(dt);
+      if (S.progression.deathTimer > 0){
+        S.progression.deathTimer -= dt;
+      } else {
+        S.progression.waveState = "idle";
+        UI.showGameOver();
+      }
+      return;
+    }
+
     if (S.progression.waveState !== "running") return;
 
     updateProgress(dt);
@@ -263,7 +309,9 @@ window.Boot = (() => {
     CombatSystem.tryShootMissiles();
     ActiveSkillSystem.update(dt);
     EnemySystem.updateEnemies(dt);
+    EnemySystem.updateEnemyBullets(dt);
     CombatSystem.updateBullets(dt);
+    CombatSystem.updateBeams(dt);
     CombatSystem.updateMissiles(dt);
     updateParticles(dt);
     UI.hudUpdate();
@@ -305,7 +353,7 @@ window.Boot = (() => {
     });
 
     UI.showCard("start");
-    ActiveSkillSystem.assignStartingLoadout();
+    ActiveSkillSystem.assignStartingLoadout(false);
     UI.hudUpdate();
 
     S.app.ticker.add(tick);

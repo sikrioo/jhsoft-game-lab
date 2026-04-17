@@ -1,7 +1,7 @@
 window.WaveSystem = (() => {
   function startNextWave(){
     const P = GameState.progression;
-    P.waveTarget = 6 + Math.floor(P.wave * 2.3);
+    P.waveTarget = 10 + Math.floor(P.wave * 3.1);
     P.waveAlive = 0;
     P.spawnT = 0;
     P.spawnedCount = 0;

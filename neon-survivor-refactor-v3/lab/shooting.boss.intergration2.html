@@ -1,0 +1,1756 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structured Shooting Boss Demo</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #050816;
+      font-family: system-ui, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: radial-gradient(circle at center, rgba(24,34,70,0.28), rgba(2,4,12,1));
+    }
+    #controlPanel {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      padding: 10px 12px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(4,8,20,0.72);
+      backdrop-filter: blur(8px);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 13px;
+    }
+    #controlPanel label {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    #controlPanel select, #controlPanel button {
+      height: 32px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.18);
+      background: rgba(255,255,255,0.08);
+      color: #fff;
+      padding: 0 10px;
+    }
+    #controlPanel button { cursor: pointer; }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="controlPanel">
+  <label>Boss
+    <select id="bossSelect"></select>
+  </label>
+  <label>Start Phase
+    <select id="phaseSelect"></select>
+  </label>
+  <button id="applySelection">Apply</button>
+  <button id="resetSelection">Reset</button>
+</div>
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  function resize() {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+  }
+  addEventListener("resize", resize);
+  resize();
+
+  const TAU = Math.PI * 2;
+  const keys = new Set();
+  addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
+  addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+  const bullets = [];
+  const hazards = [];
+  const projectiles = [];
+  const effects = [];
+  const texts = [];
+
+  const Utils = {
+    clamp(v, a, b) { return Math.max(a, Math.min(b, v)); },
+    lerp(a, b, t) { return a + (b - a) * t; },
+    rand(a, b) { return Math.random() * (b - a) + a; },
+    dist(ax, ay, bx, by) { return Math.hypot(bx - ax, by - ay); },
+    angleTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); },
+    normalize(x, y) {
+      const len = Math.hypot(x, y) || 1;
+      return { x: x / len, y: y / len };
+    },
+    angleDelta(a, b) {
+      return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+    },
+    linePointDistance(x1, y1, x2, y2, px, py) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const lenSq = dx * dx + dy * dy || 1;
+      let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+      t = Utils.clamp(t, 0, 1);
+      const cx = x1 + dx * t;
+      const cy = y1 + dy * t;
+      return Math.hypot(px - cx, py - cy);
+    },
+    circleLineHit(cx, cy, r, x1, y1, x2, y2, lineWidth) {
+      return Utils.linePointDistance(x1, y1, x2, y2, cx, cy) <= r + lineWidth * 0.5;
+    },
+    pointInFan(px, py, ox, oy, facing, radius, halfAngle) {
+      const dx = px - ox;
+      const dy = py - oy;
+      const d = Math.hypot(dx, dy);
+      if (d > radius) return false;
+      const a = Math.atan2(dy, dx);
+      return Math.abs(Utils.angleDelta(a, facing)) <= halfAngle;
+    }
+  };
+
+  function drawText(text, x, y, color = "#fff", size = 14, align = "left", alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.font = `bold ${size}px sans-serif`;
+    ctx.textAlign = align;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function drawGlowCircle(x, y, r, color, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  class FloatText {
+    constructor(text, x, y, color = "#fff") {
+      this.text = text;
+      this.x = x;
+      this.y = y;
+      this.color = color;
+      this.life = 0.8;
+      this.maxLife = 0.8;
+    }
+    update(dt) {
+      this.life -= dt;
+      this.y -= 28 * dt;
+      return this.life > 0;
+    }
+    draw() {
+      drawText(this.text, this.x, this.y, this.color, 14, "center", this.life / this.maxLife);
+    }
+  }
+
+  class Spark {
+    constructor(x, y, color = "#ffd166") {
+      this.x = x;
+      this.y = y;
+      this.vx = Utils.rand(-180, 180);
+      this.vy = Utils.rand(-180, 180);
+      this.life = Utils.rand(0.18, 0.42);
+      this.maxLife = this.life;
+      this.size = Utils.rand(2, 4);
+      this.color = color;
+    }
+    update(dt) {
+      this.life -= dt;
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.vx *= 0.92;
+      this.vy *= 0.92;
+      return this.life > 0;
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      ctx.save();
+      ctx.globalAlpha = t;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = this.color;
+      ctx.fillStyle = this.color;
+      ctx.fillRect(this.x, this.y, this.size, this.size);
+      ctx.restore();
+    }
+  }
+
+  class RingEffect {
+    constructor(x, y, r = 20, color = "#7df9ff", life = 0.45) {
+      this.x = x;
+      this.y = y;
+      this.r = r;
+      this.life = life;
+      this.maxLife = life;
+      this.color = color;
+    }
+    update(dt) {
+      this.life -= dt;
+      this.r += 150 * dt;
+      return this.life > 0;
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      ctx.save();
+      ctx.globalAlpha = t * 0.9;
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  class Bullet {
+    constructor(x, y, vx, vy, r = 7, color = "#ff7aa2", life = 8, damage = 10) {
+      this.x = x;
+      this.y = y;
+      this.vx = vx;
+      this.vy = vy;
+      this.r = r;
+      this.color = color;
+      this.life = life;
+      this.damage = damage;
+    }
+    update(dt, player) {
+      this.life -= dt;
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      if (Utils.dist(this.x, this.y, player.x, player.y) < this.r + player.radius) {
+        player.damage(this.damage);
+        for (let i = 0; i < 8; i++) effects.push(new Spark(this.x, this.y, this.color));
+        return false;
+      }
+      if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) return false;
+      return this.life > 0;
+    }
+    draw() {
+      drawGlowCircle(this.x, this.y, this.r, this.color, 0.9);
+      ctx.save();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r + 2, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  class RotatingBullet extends Bullet {
+    constructor(cx, cy, angle, orbitR, radialSpeed, spin, r = 6, color = "#9a7dff") {
+      super(cx, cy, 0, 0, r, color, 4.0, 10);
+      this.cx = cx;
+      this.cy = cy;
+      this.angle = angle;
+      this.orbitR = orbitR;
+      this.radialSpeed = radialSpeed;
+      this.spin = spin;
+    }
+    update(dt, player) {
+      this.life -= dt;
+      this.angle += this.spin * dt;
+      this.orbitR += this.radialSpeed * dt;
+      this.x = this.cx + Math.cos(this.angle) * this.orbitR;
+      this.y = this.cy + Math.sin(this.angle) * this.orbitR;
+      if (Utils.dist(this.x, this.y, player.x, player.y) < this.r + player.radius) {
+        player.damage(this.damage);
+        return false;
+      }
+      return this.life > 0;
+    }
+  }
+
+  class DelayedBlast {
+    constructor(x, y, delay = 1.0, radius = 68, color = "#ff8fab", followPlayer = false, followDuration = 0.8) {
+      this.x = x;
+      this.y = y;
+      this.delay = delay;
+      this.maxDelay = delay;
+      this.radius = radius;
+      this.color = color;
+      this.followPlayer = followPlayer;
+      this.followDuration = followDuration;
+      this.exploded = false;
+      this.lifeAfter = 0.18;
+    }
+    update(dt, player) {
+      if (!this.exploded) {
+        this.delay -= dt;
+        if (this.followPlayer && this.delay > this.maxDelay - this.followDuration) {
+          this.x = Utils.lerp(this.x, player.x, 0.08);
+          this.y = Utils.lerp(this.y, player.y, 0.08);
+        }
+        if (this.delay <= 0) {
+          this.exploded = true;
+          for (let i = 0; i < 18; i++) effects.push(new Spark(this.x, this.y, this.color));
+          effects.push(new RingEffect(this.x, this.y, 18, this.color, 0.28));
+          if (Utils.dist(this.x, this.y, player.x, player.y) < this.radius + player.radius) {
+            player.damage(18);
+          }
+        }
+        return true;
+      }
+      this.lifeAfter -= dt;
+      return this.lifeAfter > 0;
+    }
+    draw() {
+      if (!this.exploded) {
+        const t = Math.max(0, this.delay / this.maxDelay);
+        ctx.save();
+        ctx.globalAlpha = 0.25 + (1 - t) * 0.45;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 8]);
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+        drawText((this.delay + 0.05).toFixed(1), this.x, this.y + 4, "#fff", 14, "center");
+      } else {
+        ctx.save();
+        ctx.globalAlpha = this.lifeAfter / 0.18 * 0.35;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  class SafeLaneCurtain {
+    constructor({ centerX, centerY, startAngle, laneWidth, color = "#ff6bb5", speed = 180, count = 42, radius = 6 }) {
+      const step = TAU / count;
+      for (let i = 0; i < count; i++) {
+        const a = i * step;
+        const diff = Utils.angleDelta(a, startAngle);
+        if (Math.abs(diff) < laneWidth * 0.5) continue;
+        bullets.push(new Bullet(centerX, centerY, Math.cos(a) * speed, Math.sin(a) * speed, radius, color, 6, 12));
+      }
+    }
+    update() { return false; }
+    draw() {}
+  }
+
+  class Player {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.radius = 14;
+      this.speed = 280;
+      this.hp = 100;
+      this.hitFlash = 0;
+      this.dashTime = 0;
+      this.dashCooldown = 0;
+      this.facing = -Math.PI / 2;
+    }
+    update(dt) {
+      let dx = 0, dy = 0;
+      if (keys.has("w") || keys.has("arrowup")) dy -= 1;
+      if (keys.has("s") || keys.has("arrowdown")) dy += 1;
+      if (keys.has("a") || keys.has("arrowleft")) dx -= 1;
+      if (keys.has("d") || keys.has("arrowright")) dx += 1;
+      const dir = Utils.normalize(dx, dy);
+      if (dx || dy) this.facing = Math.atan2(dir.y, dir.x);
+
+      if ((keys.has("shift") || keys.has(" ")) && this.dashCooldown <= 0) {
+        this.dashTime = 0.14;
+        this.dashCooldown = 0.6;
+        for (let i = 0; i < 10; i++) effects.push(new Spark(this.x, this.y, "#7df9ff"));
+      }
+
+      const dashMul = this.dashTime > 0 ? 2.8 : 1;
+      this.x += dir.x * this.speed * dashMul * dt;
+      this.y += dir.y * this.speed * dashMul * dt;
+      this.x = Utils.clamp(this.x, 18, canvas.width - 18);
+      this.y = Utils.clamp(this.y, 18, canvas.height - 18);
+      this.dashTime = Math.max(0, this.dashTime - dt);
+      this.dashCooldown = Math.max(0, this.dashCooldown - dt);
+      this.hitFlash = Math.max(0, this.hitFlash - dt);
+    }
+    damage(amount) {
+      if (this.dashTime > 0.02) return;
+      this.hp = Math.max(0, this.hp - amount);
+      this.hitFlash = 0.18;
+      for (let i = 0; i < 8; i++) effects.push(new Spark(this.x, this.y, "#ff7a7a"));
+      texts.push(new FloatText(`-${amount}`, this.x, this.y - 18, "#ff8fab"));
+    }
+    draw() {
+      const c = this.hitFlash > 0 ? "#ff6b6b" : "#66f2ff";
+      drawGlowCircle(this.x, this.y, this.radius, c, 1);
+      const tipX = this.x + Math.cos(this.facing) * 22;
+      const tipY = this.y + Math.sin(this.facing) * 22;
+      ctx.save();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 4, 0, TAU);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+      ctx.restore();
+      if (this.dashTime > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = "#7df9ff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 10 + (0.14 - this.dashTime) * 100, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+
+  class AfterImage {
+    constructor(x, y, radius, angle, color, life = 0.15) {
+      this.x = x;
+      this.y = y;
+      this.radius = radius;
+      this.angle = angle;
+      this.color = color;
+      this.life = life;
+      this.maxLife = life;
+    }
+    update(dt) {
+      this.life -= dt;
+      return this.life > 0;
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      ctx.save();
+      ctx.globalAlpha = t * 0.3;
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = this.color;
+      ctx.fillStyle = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius, 0, TAU);
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(this.x + Math.cos(this.angle) * this.radius * 1.2, this.y + Math.sin(this.angle) * this.radius * 1.2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  class SlashEffect {
+    constructor({ x, y, startAngle, endAngle, color = "#ffffff", life = 0.14, scale = 1 }) {
+      this.x = x;
+      this.y = y;
+      this.startAngle = startAngle;
+      this.endAngle = endAngle;
+      this.color = color;
+      this.life = life;
+      this.maxLife = life;
+      this.scale = scale;
+      this.innerRadius = 20 * scale;
+      this.outerRadius = 74 * scale;
+    }
+    update(dt) {
+      this.life -= dt;
+      return this.life > 0;
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      const p = 1 - t;
+      const innerR = this.innerRadius + p * 10 * this.scale;
+      const outerR = this.outerRadius + p * 18 * this.scale;
+      const alpha = Math.pow(t, 0.6);
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      const layers = [
+        ["#7df9ff", alpha * 0.22, innerR, outerR, this.startAngle, this.endAngle, 24],
+        ["#9a7dff", alpha * 0.18, innerR + 4, outerR - 6, this.startAngle + 0.02, this.endAngle - 0.02, 20],
+        [this.color, alpha * 0.9, innerR + 6, outerR - 12, this.startAngle + 0.04, this.endAngle - 0.04, 16]
+      ];
+      for (const [fill, a, inR, outR, sa, ea, blur] of layers) {
+        ctx.save();
+        ctx.globalAlpha = a;
+        ctx.shadowBlur = blur;
+        ctx.shadowColor = fill;
+        ctx.fillStyle = fill;
+        ctx.beginPath();
+        ctx.arc(0, 0, outR, sa, ea, false);
+        ctx.arc(0, 0, inR, ea, sa, true);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+      ctx.save();
+      ctx.globalAlpha = alpha * 0.9;
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(0, 0, (innerR + outerR) * 0.5, this.startAngle + 0.05, this.endAngle - 0.05, false);
+      ctx.stroke();
+      ctx.restore();
+      ctx.restore();
+    }
+  }
+
+  class PhaseShiftRing extends RingEffect {
+    constructor(x, y, color) {
+      super(x, y, 28, color, 0.8);
+    }
+    update(dt) {
+      this.life -= dt;
+      this.r += 110 * dt / 0.8;
+      return this.life > 0;
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      const p = 1 - t;
+      ctx.save();
+      ctx.globalAlpha = t * 0.85;
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 6 - p * 3;
+      ctx.shadowBlur = 26;
+      ctx.shadowColor = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, 28 + p * 110, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  class TelegraphLine {
+    constructor(x1, y1, x2, y2, life = 0.35, color = "#9a7dff") {
+      this.x1 = x1;
+      this.y1 = y1;
+      this.x2 = x2;
+      this.y2 = y2;
+      this.life = life;
+      this.maxLife = life;
+      this.color = color;
+    }
+    update(dt) {
+      this.life -= dt;
+      return this.life > 0;
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      ctx.save();
+      ctx.globalAlpha = 0.18 + t * 0.6;
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8, 8]);
+      ctx.shadowBlur = 16;
+      ctx.shadowColor = this.color;
+      ctx.beginPath();
+      ctx.moveTo(this.x1, this.y1);
+      ctx.lineTo(this.x2, this.y2);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  class WaveProjectile {
+    constructor(x, y, angle, opts = {}) {
+      this.x = x;
+      this.y = y;
+      this.angle = angle;
+      this.speed = opts.speed ?? 420;
+      this.radius = opts.radius ?? 16;
+      this.life = opts.life ?? 1.2;
+      this.maxLife = this.life;
+      this.damage = opts.damage ?? 14;
+      this.color = opts.color ?? "#7df9ff";
+      this.hit = false;
+    }
+    update(dt, player) {
+      this.life -= dt;
+      this.x += Math.cos(this.angle) * this.speed * dt;
+      this.y += Math.sin(this.angle) * this.speed * dt;
+      if (!this.hit && Utils.dist(this.x, this.y, player.x, player.y) <= this.radius + player.radius) {
+        this.hit = true;
+        player.damage(this.damage);
+        for (let i = 0; i < 12; i++) effects.push(new Spark(player.x, player.y, this.color));
+      }
+      return this.life > 0 && this.x > -80 && this.x < canvas.width + 80 && this.y > -80 && this.y < canvas.height + 80;
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      ctx.save();
+      ctx.translate(this.x, this.y);
+      ctx.rotate(this.angle);
+      ctx.globalAlpha = Math.max(0.28, t);
+      ctx.shadowBlur = 24;
+      ctx.shadowColor = this.color;
+      ctx.fillStyle = this.color === "#ff6bd6" ? "rgba(255,107,214,0.35)" : "rgba(125,249,255,0.35)";
+      ctx.beginPath();
+      ctx.moveTo(30, 0);
+      ctx.quadraticCurveTo(0, 16, -24, 0);
+      ctx.quadraticCurveTo(0, -16, 30, 0);
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(26, 0);
+      ctx.lineTo(-20, 0);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  const PatternLibrary = {
+    single(runtime) {
+      const tuning = getBossTuning(runtime).single || { speed: 260, radius: 7, damage: 10, color: "#ff9e7a" };
+      const player = runtime.player;
+      const angle = Utils.angleTo(runtime.x, runtime.y, player.x, player.y);
+      bullets.push(new Bullet(runtime.x, runtime.y, Math.cos(angle) * tuning.speed, Math.sin(angle) * tuning.speed, tuning.radius, tuning.color, 5, tuning.damage));
+      runtime.stateText = "단일 탄";
+    },
+
+    radial(runtime, options = {}) {
+      const count = options.count ?? 10;
+      const speed = options.speed ?? 140;
+      const color = options.color ?? "#9a7dff";
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * TAU;
+        bullets.push(new Bullet(runtime.x, runtime.y, Math.cos(a) * speed, Math.sin(a) * speed, 7, color, 6, 10));
+      }
+      runtime.stateText = "원형 확산";
+    },
+
+    danger(runtime) {
+      const player = runtime.player;
+      const tuning = getBossTuning(runtime).danger || { delay: 1.0, radius: 72, color: "#ff8fab" };
+      hazards.push(new DelayedBlast(player.x, player.y, tuning.delay, tuning.radius, tuning.color, false));
+      runtime.stateText = "위험지대";
+    },
+
+    trackingZone(runtime) {
+      const player = runtime.player;
+      const tuning = getBossTuning(runtime).trackingZone || { delay: 1.1, radius: 64, color: "#ffb347", followPlayer: true, followDuration: 0.8 };
+      hazards.push(new DelayedBlast(player.x, player.y, tuning.delay, tuning.radius, tuning.color, tuning.followPlayer, tuning.followDuration));
+      runtime.stateText = "추적 위험지대";
+    },
+
+    rotating(runtime) {
+      const tuning = getBossTuning(runtime).rotating || { count: 14, orbitR: 10, radialSpeed: 65, spin: 1.9, radius: 6, color: "#9a7dff", damage: 10, life: 4.0 };
+      const base = performance.now() / 1000;
+      for (let i = 0; i < tuning.count; i++) {
+        const bullet = new RotatingBullet(runtime.x, runtime.y, base + (i / tuning.count) * TAU, tuning.orbitR, tuning.radialSpeed, tuning.spin, tuning.radius, tuning.color);
+        bullet.damage = tuning.damage;
+        bullet.life = tuning.life;
+        bullet.maxLife = tuning.life;
+        bullets.push(bullet);
+      }
+      runtime.stateText = "회전 탄막";
+    },
+
+    safeLane(runtime, options = {}) {
+      const player = runtime.player;
+      let angle = Utils.angleTo(runtime.x, runtime.y, player.x, player.y);
+      if (options.randomize) angle += Utils.rand(-1.2, 1.2);
+      hazards.push(new SafeLaneCurtain({
+        centerX: runtime.x,
+        centerY: runtime.y,
+        startAngle: angle,
+        laneWidth: options.randomize ? 0.52 : 0.68,
+        color: options.randomize ? "#ff6bb5" : "#7df9ff",
+        speed: options.randomize ? 220 : 190,
+        count: options.randomize ? 56 : 46,
+        radius: options.randomize ? 6 : 7
+      }));
+      runtime.stateText = options.randomize ? "랜덤 안전지대" : "안전지대 탄막";
+    },
+
+    doubleRing(runtime) {
+      const tuning = getBossTuning(runtime).doubleRing || {};
+      const outer = tuning.outerCount ?? 18;
+      const inner = tuning.innerCount ?? 12;
+      for (let i = 0; i < outer; i++) {
+        const a = (i / outer) * TAU;
+        bullets.push(new Bullet(runtime.x, runtime.y, Math.cos(a) * (tuning.outerSpeed ?? 120), Math.sin(a) * (tuning.outerSpeed ?? 120), tuning.outerRadius ?? 7, tuning.outerColor ?? "#ffb347", 6, tuning.outerDamage ?? 10));
+      }
+      for (let i = 0; i < inner; i++) {
+        const a = (i / inner) * TAU + Math.PI / inner;
+        bullets.push(new Bullet(runtime.x, runtime.y, Math.cos(a) * (tuning.innerSpeed ?? 260), Math.sin(a) * (tuning.innerSpeed ?? 260), tuning.innerRadius ?? 6, tuning.innerColor ?? "#ff6bb5", 4.8, tuning.innerDamage ?? 12));
+      }
+      runtime.stateText = "이중 탄막";
+    },
+
+    teleportBlast(runtime) {
+      const player = runtime.player;
+      const tuning = getBossTuning(runtime).teleportBlast || { distanceMin: 110, distanceMax: 160, delay: 0.45, radius: 88, color: "#ff6bb5" };
+      const a = Utils.rand(0, TAU);
+      const r = Utils.rand(tuning.distanceMin, tuning.distanceMax);
+      runtime.x = Utils.clamp(player.x + Math.cos(a) * r, 80, canvas.width - 80);
+      runtime.y = Utils.clamp(player.y + Math.sin(a) * r, 80, canvas.height * 0.6);
+      for (let i = 0; i < 14; i++) effects.push(new Spark(runtime.x, runtime.y, tuning.color));
+      effects.push(new RingEffect(runtime.x, runtime.y, 14, tuning.color, 0.24));
+      hazards.push(new DelayedBlast(runtime.x, runtime.y, tuning.delay, tuning.radius, tuning.color, false));
+      runtime.stateText = "텔포 폭발";
+    }
+  };
+
+  const BossTunings = {
+    basic: {
+      phases: {
+        1: {
+          cooldownMin: 1.0,
+          cooldownMax: 1.35,
+          single: { speed: 260, radius: 7, damage: 10, color: "#ff9e7a" },
+          danger: { delay: 1.0, radius: 72, damage: 18, color: "#ff8fab" },
+          radial: { count: 10, speed: 135, radius: 7, damage: 10, color: "#9a7dff" }
+        }
+      }
+    },
+    advanced: {
+      phases: {
+        1: {
+          cooldown: 0.95,
+          rotating: { count: 14, orbitR: 10, radialSpeed: 65, spin: 1.9, radius: 6, color: "#9a7dff", damage: 10, life: 4.0 },
+          trackingZone: { delay: 1.1, radius: 64, color: "#ffb347", followPlayer: true, followDuration: 0.8 },
+          safeLane: { randomize: false, laneWidth: 0.68, color: "#7df9ff", speed: 190, count: 46, radius: 7 }
+        },
+        2: {
+          cooldown: 0.78,
+          doubleRing: {
+            outerCount: 18, outerSpeed: 120, outerRadius: 7, outerDamage: 10, outerColor: "#ffb347",
+            innerCount: 12, innerSpeed: 260, innerRadius: 6, innerDamage: 12, innerColor: "#ff6bb5"
+          },
+          safeLaneRandom: { randomize: true, laneWidth: 0.52, color: "#ff6bb5", speed: 220, count: 56, radius: 6 },
+          teleportBlast: { distanceMin: 110, distanceMax: 160, delay: 0.45, radius: 88, color: "#ff6bb5" }
+        }
+      }
+    },
+    knight: {
+      phases: {
+        1: {
+          moveSpeed: 118,
+          attackDamage: 20,
+          desiredRange: 150,
+          attackRange: 185,
+          strafeBias: 0.65,
+          telegraphColor: "#9a7dff",
+          bodyColor: "#7a5cff",
+          glow: "#9a7dff",
+          chargeJitterFrequency: 60,
+          chargeJitterAmplitude: 2.2,
+          afterImageInterval: 0.028,
+          berserkDuration: 1.0,
+          durations: {
+            approachMin: 0.45,
+            approachMax: 0.85,
+            strafeMin: 0.5,
+            strafeMax: 0.95,
+            chargeDefault: 0.32,
+            chargeWave: 0.46,
+            chargeCrossRush: 0.22,
+            recoveryDefault: 0.34,
+            recoveryWave: 0.42,
+            recoveryBurst: 0.16
+          },
+          wave: { speed: 420, damage: 14, radius: 16, life: 1.2, color: "#7df9ff" },
+          burstWave: { speed: 500, damage: 16, radius: 15, life: 1.05, color: "#9a7dff" }
+        },
+        2: {
+          moveSpeed: 152,
+          attackDamage: 24,
+          desiredRange: 170,
+          attackRange: 230,
+          strafeBias: 0.85,
+          telegraphColor: "#ff6bd6",
+          bodyColor: "#ff5abf",
+          glow: "#ff6bd6",
+          chargeJitterFrequency: 90,
+          chargeJitterAmplitude: 3.2,
+          afterImageInterval: 0.02,
+          berserkDuration: 1.0,
+          durations: {
+            approachMin: 0.3,
+            approachMax: 0.6,
+            strafeMin: 0.35,
+            strafeMax: 0.7,
+            chargeDefault: 0.22,
+            chargeWave: 0.3,
+            chargeCrossRush: 0.22,
+            recoveryDefault: 0.22,
+            recoveryWave: 0.22,
+            recoveryBurst: 0.16
+          },
+          wave: { speed: 520, damage: 18, radius: 16, life: 1.2, color: "#ff6bd6" },
+          burstWave: { speed: 500, damage: 16, radius: 15, life: 1.05, color: "#ff6bd6" }
+        }
+      }
+    }
+  };
+
+  function resolveValue(value, runtime) {
+    return typeof value === "function" ? value(runtime) : value;
+  }
+
+  function getBossTuning(runtime) {
+    return BossTunings[runtime.type]?.phases?.[runtime.phase] || {};
+  }
+
+  function distanceToPlayer(runtime) {
+    return Utils.dist(runtime.x, runtime.y, runtime.player.x, runtime.player.y);
+  }
+
+  function countActiveThreats() {
+    return bullets.length + hazards.length + projectiles.length;
+  }
+
+  function chooseWeighted(items) {
+    if (!items.length) return null;
+    const total = items.reduce((sum, item) => sum + (item.weight ?? 1), 0);
+    if (total <= 0) return items[0] ?? null;
+    let roll = Math.random() * total;
+    for (const item of items) {
+      roll -= item.weight ?? 1;
+      if (roll <= 0) return item;
+    }
+    return items[items.length - 1] ?? null;
+  }
+
+  function chooseBossAction(runtime, phaseData) {
+    const actions = phaseData.actions || [];
+    if (!actions.length && phaseData.patternOrder?.length) {
+      const pattern = phaseData.patternOrder[runtime.loopCursor % phaseData.patternOrder.length];
+      runtime.loopCursor++;
+      return pattern;
+    }
+
+    runtime.actionHistory ??= {};
+    const now = performance.now() / 1000;
+    const candidates = actions.filter((action) => {
+      const okCondition = action.condition ? action.condition(runtime) : true;
+      const lastUsedAt = runtime.actionHistory[action.name] ?? -Infinity;
+      const minInterval = action.minInterval ?? 0;
+      return okCondition && now - lastUsedAt >= minInterval;
+    });
+
+    const selected = chooseWeighted(candidates.length ? candidates : actions);
+    if (!selected) return null;
+    runtime.actionHistory[selected.name] = now;
+    return selected;
+  }
+
+  const KnightPatternRules = {
+    1: [
+      { name: "FORWARD_SLASH", weight: 3.0, condition: (rt, d) => d > 165 },
+      { name: "WAVE_SLASH", weight: 2.0, condition: (rt, d) => d > 165 },
+      { name: "LEFT_STEP_SLASH", weight: 1.3, condition: (rt, d) => d <= 165 },
+      { name: "RIGHT_STEP_SLASH", weight: 1.3, condition: (rt, d) => d <= 165 },
+      { name: "BACK_STEP_SLASH", weight: 1.0, condition: (rt, d) => d <= 165 },
+      { name: "FORWARD_SLASH", weight: 1.8, condition: (rt, d) => d <= 165 },
+      { name: "WAVE_SLASH", weight: 1.4, condition: (rt, d) => d <= 165 }
+    ],
+    2: [
+      { name: "BURST_WAVE", weight: 2.4, condition: (rt, d) => d > 190 },
+      { name: "CROSS_RUSH", weight: 2.8, condition: (rt, d) => d > 190 },
+      { name: "CROSS_RUSH", weight: 2.5, condition: (rt, d) => d <= 190 },
+      { name: "BURST_WAVE", weight: 2.0, condition: (rt, d) => d <= 190 },
+      { name: "LEFT_STEP_SLASH", weight: 1.2, condition: (rt, d) => d <= 190 },
+      { name: "RIGHT_STEP_SLASH", weight: 1.2, condition: (rt, d) => d <= 190 },
+      { name: "FORWARD_SLASH", weight: 1.0, condition: (rt, d) => d <= 190 }
+    ]
+  };
+
+  const BossRegistry = {
+    basic: {
+      id: "basic",
+      label: "기본형",
+      code: "CTRL-A",
+      runtimeClass: "pattern",
+      radius: 34,
+      maxHp: 220,
+      colors() {
+        return { body: "#79ffbf", glow: "#48ffc5" };
+      },
+      movement(runtime, dt) {
+        runtime.x = Utils.lerp(runtime.x, canvas.width * 0.5, dt * 0.4);
+        runtime.y = Utils.lerp(runtime.y, canvas.height * 0.24, dt * 0.4);
+      },
+      phases: [
+        {
+          threshold: 1,
+          cooldown: (rt) => {
+            const tuning = getBossTuning(rt);
+            return Utils.rand(tuning.cooldownMin, tuning.cooldownMax);
+          },
+          actions: [
+            { name: "single", weight: 3.2, minInterval: 0.2 },
+            { name: "danger", weight: 1.8, minInterval: 0.8, condition: (rt) => distanceToPlayer(rt) > 90 },
+            { name: "radial", weight: 1.3, minInterval: 0.8, condition: () => countActiveThreats() < 20 }
+          ]
+        }
+      ],
+      panel() {
+        return [
+          "기본형 컨셉: 움직이면 살고, 멈추면 죽는다",
+          "- 공통 베이스 런타임 적용",
+          "- 단일 탄 / 위험지대 / 원형탄 수치 데이터화",
+          "- 조건형 AI: 화면 탄 수 / 거리 기반 선택",
+          "- 가장 단순한 학습형 보스"
+        ];
+      }
+    },
+
+    advanced: {
+      id: "advanced",
+      label: "강화형",
+      code: "CTRL-X",
+      runtimeClass: "pattern",
+      radius: 42,
+      maxHp: 500,
+      colors(runtime) {
+        if (runtime.phase === 1) return { body: "#7a5cff", glow: "#9a7dff" };
+        return { body: "#ff6bb5", glow: "#ff8fab" };
+      },
+      movement(runtime, dt) {
+        const player = runtime.player;
+        if (runtime.phase === 1) {
+          const orbit = performance.now() / 1000 * 0.65;
+          const tx = canvas.width * 0.5 + Math.cos(orbit) * 110;
+          const ty = canvas.height * 0.24 + Math.sin(orbit * 2) * 26;
+          runtime.x = Utils.lerp(runtime.x, tx, dt * 1.3);
+          runtime.y = Utils.lerp(runtime.y, ty, dt * 1.3);
+        } else {
+          const desired = Utils.angleTo(runtime.x, runtime.y, player.x, player.y) + Math.PI / 2;
+          const tx = player.x + Math.cos(desired) * 170;
+          const ty = Utils.clamp(player.y + Math.sin(desired) * 110, 80, canvas.height * 0.58);
+          runtime.x = Utils.lerp(runtime.x, tx, dt * 1.6);
+          runtime.y = Utils.lerp(runtime.y, ty, dt * 1.6);
+        }
+      },
+      onPhaseEnter(runtime, newPhase) {
+        if (newPhase !== 2) return;
+        runtime.phaseTransition = 1.4;
+        runtime.stateText = "PHASE SHIFT";
+        for (let i = 0; i < 26; i++) effects.push(new Spark(runtime.x, runtime.y, "#ff6bb5"));
+        effects.push(new RingEffect(runtime.x, runtime.y, 18, "#ff6bb5", 0.55));
+      },
+      duringPhaseTransition(runtime) {
+        if (runtime.phaseTransition > 0.7 && runtime.aiTimer <= 0) {
+          runtime.aiTimer = 0.22;
+          PatternLibrary.single(runtime);
+        }
+      },
+      phases: [
+        {
+          threshold: 1,
+          cooldown: (rt) => getBossTuning(rt).cooldown,
+          actions: [
+            { name: "rotating", weight: 2.3, minInterval: 0.7, condition: () => countActiveThreats() < 35 },
+            { name: "trackingZone", weight: 1.9, minInterval: 1.1, condition: (rt) => distanceToPlayer(rt) > 100 },
+            { name: "safeLane", options: { randomize: false }, weight: 3.1, minInterval: 1.0, condition: (rt) => rt.player.dashCooldown > 0.08 || distanceToPlayer(rt) > 140 }
+          ]
+        },
+        {
+          threshold: 0.5,
+          cooldown: (rt) => getBossTuning(rt).cooldown,
+          actions: [
+            { name: "doubleRing", weight: 2.0, minInterval: 1.0, condition: () => countActiveThreats() < 55 },
+            { name: "safeLane", options: { randomize: true }, weight: 2.8, minInterval: 0.9, condition: (rt) => distanceToPlayer(rt) > 140 },
+            { name: "teleportBlast", weight: 2.7, minInterval: 1.3, condition: (rt) => distanceToPlayer(rt) < 260 }
+          ]
+        }
+      ],
+      panel(runtime) {
+        if (runtime.phase === 1) {
+          return [
+            "강화형 Phase 1: 조건형 탄막 설계",
+            "- 회전 탄막: 화면 여유 있을 때만 선택",
+            "- 추적 위험지대: 거리 기반 선택",
+            "- 안전지대 탄막: 대시 쿨과 거리 반응",
+            "- 순환형 대신 가중치 + 조건형 AI"
+          ];
+        }
+        return [
+          "강화형 Phase 2: 조건형 난이도 압박",
+          "- 이중 탄막 / 랜덤 안전지대 / 텔포 폭발",
+          "- 화면 위협량이 많으면 패턴 자동 조절",
+          "- 측면 위치 선정은 유지",
+          "- 내부 수치는 BossTunings로 분리"
+        ];
+      }
+    },
+
+    knight: {
+      id: "knight",
+      label: "돌진 기사형",
+      code: "ELITE-K",
+      runtimeClass: "knight",
+      radius: 22,
+      maxHp: 300,
+      phases: [
+        { threshold: 1 },
+        { threshold: 0.5 }
+      ],
+      colors(runtime) {
+        const tuning = getBossTuning(runtime);
+        return { body: tuning.bodyColor || "#7a5cff", glow: tuning.glow || "#9a7dff" };
+      },
+      panel(runtime) {
+        if (runtime.phase === 1) {
+          return [
+            "기사형 Phase 1: 상태머신 + 데이터 기반 수치",
+            "- 접근 / 측면 이동 / 차지 / 공격 / 후딜",
+            "- 패턴 선택도 규칙 테이블로 분리",
+            "- 예고선, 돌진, 파동 수치 전부 데이터화",
+            "- 근접 압박 학습용 보스"
+          ];
+        }
+        return [
+          "기사형 Phase 2: 규칙형 패턴 선택 강화",
+          "- 크로스 러시 / 버스트 웨이브 비중 증가",
+          "- 페이즈 수치를 BossTunings에서 직접 관리",
+          "- 공통 BaseBossRuntime 사용",
+          "- 고속 돌진형 테스트 보스"
+        ];
+      }
+    }
+  };
+
+  class BaseBossRuntime {
+    constructor(type, player, startPhase = "auto") {
+      this.player = player;
+      this.setDefinition(type, startPhase);
+    }
+
+    setDefinition(type, startPhase = "auto") {
+      const definition = BossRegistry[type];
+      if (!definition) throw new Error(`Unknown boss type: ${type}`);
+      this.definition = definition;
+      this.type = definition.id;
+      this.x = canvas.width * 0.5;
+      this.y = canvas.height * 0.24;
+      this.radius = definition.radius;
+      this.maxHp = definition.maxHp;
+      this.hp = this.maxHp;
+      this.phase = 1;
+      this.stateText = "IDLE";
+      this.currentPhaseData = this.getPhaseData();
+      this.applyStartPhase(startPhase);
+    }
+
+    get tuning() {
+      return getBossTuning(this);
+    }
+
+    getPhaseData() {
+      let selected = this.definition.phases[0];
+      const ratio = this.hp / this.maxHp;
+      for (const phase of this.definition.phases) {
+        if (ratio <= phase.threshold) selected = phase;
+      }
+      return selected;
+    }
+
+    applyStartPhase(startPhase = "auto") {
+      if (startPhase === "auto") return;
+      const phaseIndex = Math.max(1, Math.min(Number(startPhase) || 1, this.definition.phases.length));
+      const phaseData = this.definition.phases[phaseIndex - 1];
+      this.phase = phaseIndex;
+      this.currentPhaseData = phaseData;
+      this.hp = this.maxHp * phaseData.threshold;
+      this.onStartPhaseApplied?.(phaseIndex, phaseData);
+      this.stateText = `TEST START P${phaseIndex}`;
+    }
+
+    syncPhase() {
+      const previousPhase = this.phase;
+      const nextPhaseData = this.getPhaseData();
+      const nextPhase = this.definition.phases.indexOf(nextPhaseData) + 1;
+      if (nextPhase !== previousPhase) {
+        this.phase = nextPhase;
+        this.currentPhaseData = nextPhaseData;
+        this.onPhaseChanged?.(previousPhase, nextPhase, nextPhaseData);
+      } else {
+        this.currentPhaseData = nextPhaseData;
+      }
+    }
+
+    forcePhase2() {
+      if (this.definition.phases.length < 2 || this.phase !== 1) return;
+      this.hp = this.maxHp * this.definition.phases[1].threshold;
+      this.syncPhase();
+    }
+
+    update(dt) {
+      this.syncPhase();
+      this.updateBoss(dt);
+    }
+
+    updateBoss(dt) {}
+
+    drawBaseBody({ drawX = this.x, drawY = this.y, body, glow, code }) {
+      drawGlowCircle(drawX, drawY, this.radius, glow, 0.92);
+      ctx.save();
+      ctx.strokeStyle = body;
+      ctx.lineWidth = 4;
+      ctx.shadowBlur = 22;
+      ctx.shadowColor = glow;
+      ctx.beginPath();
+      ctx.arc(drawX, drawY, this.radius + 4, 0, TAU);
+      ctx.stroke();
+      const c = this.radius * 0.65;
+      ctx.beginPath();
+      ctx.moveTo(drawX - c, drawY);
+      ctx.lineTo(drawX + c, drawY);
+      ctx.moveTo(drawX, drawY - c);
+      ctx.lineTo(drawX, drawY + c);
+      ctx.stroke();
+      ctx.restore();
+      drawText(code ?? this.definition.code, drawX, drawY + 5, "#fff", 13, "center");
+    }
+  }
+
+  class PatternBossRuntime extends BaseBossRuntime {
+    constructor(type, player, startPhase = "auto") {
+      super(type, player, startPhase);
+      this.phaseTransition = 0;
+      this.aiTimer = 0;
+      this.loopCursor = 0;
+      this.actionHistory = {};
+    }
+
+    onStartPhaseApplied() {
+      this.phaseTransition = 0;
+      this.aiTimer = 0;
+      this.loopCursor = 0;
+      this.actionHistory = {};
+    }
+
+    onPhaseChanged(prevPhase, nextPhase) {
+      this.loopCursor = 0;
+      this.actionHistory = {};
+      this.definition.onPhaseEnter?.(this, nextPhase, prevPhase);
+    }
+
+    updateBoss(dt) {
+      this.definition.movement?.(this, dt);
+      this.aiTimer -= dt;
+
+      if (this.phaseTransition > 0) {
+        this.phaseTransition -= dt;
+        this.definition.duringPhaseTransition?.(this, dt);
+        return;
+      }
+
+      if (this.aiTimer > 0) return;
+
+      const phaseData = this.currentPhaseData;
+      this.aiTimer = resolveValue(phaseData.cooldown, this);
+      const action = chooseBossAction(this, phaseData);
+      if (!action) return;
+      const fn = PatternLibrary[action.name];
+      if (fn) fn(this, action.options || {});
+    }
+
+    draw() {
+      const colors = this.definition.colors(this);
+      this.drawBaseBody({ body: colors.body, glow: colors.glow, code: this.definition.code });
+      if (this.phaseTransition > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.3 + Math.sin(performance.now() / 100) * 0.2;
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 16, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  class StateMachineBossRuntime extends BaseBossRuntime {
+    constructor(type, player, startPhase = "auto") {
+      super(type, player, startPhase);
+      this.state = "APPROACH";
+      this.stateTime = 0;
+      this.stateDuration = 0.6;
+    }
+
+    setState(next) {
+      this.state = next;
+      this.stateTime = 0;
+      this.stateText = next;
+    }
+
+    updateBoss(dt) {
+      this.stateTime += dt;
+      this.updateStateMachine(dt);
+    }
+
+    updateStateMachine(dt) {}
+  }
+
+  class KnightBossRuntime extends StateMachineBossRuntime {
+    constructor(type, player, startPhase = "auto") {
+      super(type, player, startPhase);
+      this.x = canvas.width * 0.5;
+      this.y = canvas.height * 0.25;
+      this.state = "APPROACH";
+      this.stateTime = 0;
+      this.stateDuration = 0.6;
+      this.angle = 0;
+      this.lockedAngle = 0;
+      this.strafeDir = 1;
+      this.chargeJitter = 0;
+      this.hitApplied = false;
+      this.attackSpawned = false;
+      this.afterImageTimer = 0;
+      this.attackPattern = "FORWARD_SLASH";
+      this.attackStartX = this.x;
+      this.attackStartY = this.y;
+      this.attackEndX = this.x;
+      this.attackEndY = this.y;
+      this.comboStep = 0;
+    }
+
+    onStartPhaseApplied(phaseIndex) {
+      if (phaseIndex === 2) {
+        this.state = "BERSERK";
+        this.stateTime = 0;
+        this.stateDuration = this.tuning.berserkDuration || 1.0;
+        this.stateText = "TEST START P2";
+      }
+    }
+
+    onPhaseChanged(prevPhase, nextPhase) {
+      if (nextPhase === 2) {
+        this.state = "BERSERK";
+        this.stateTime = 0;
+        this.stateDuration = this.tuning.berserkDuration || 1.0;
+        this.chargeJitter = 0;
+        this.comboStep = 0;
+        this.stateText = "BERSERK";
+        effects.push(new PhaseShiftRing(this.x, this.y, this.tuning.glow));
+        for (let i = 0; i < 26; i++) effects.push(new Spark(this.x, this.y, this.tuning.glow));
+      }
+    }
+
+    pickPattern() {
+      const d = distanceToPlayer(this);
+      const rules = KnightPatternRules[this.phase] || [];
+      const candidates = rules.filter((rule) => rule.condition ? rule.condition(this, d) : true);
+      const selected = chooseWeighted(candidates);
+      return selected?.name || "FORWARD_SLASH";
+    }
+
+    getAttackVector(pattern, facing) {
+      const forward = { x: Math.cos(facing), y: Math.sin(facing) };
+      const left = { x: -forward.y, y: forward.x };
+      const right = { x: forward.y, y: -forward.x };
+      switch (pattern) {
+        case "LEFT_STEP_SLASH": return { x: left.x * 130 + forward.x * 34, y: left.y * 130 + forward.y * 34, duration: this.phase === 1 ? 0.18 : 0.15 };
+        case "RIGHT_STEP_SLASH": return { x: right.x * 130 + forward.x * 34, y: right.y * 130 + forward.y * 34, duration: this.phase === 1 ? 0.18 : 0.15 };
+        case "BACK_STEP_SLASH": return { x: -forward.x * 100, y: -forward.y * 100, duration: 0.2 };
+        case "FORWARD_SLASH": return { x: forward.x * (this.phase === 1 ? 165 : 190), y: forward.y * (this.phase === 1 ? 165 : 190), duration: this.phase === 1 ? 0.16 : 0.13 };
+        case "CROSS_RUSH": {
+          const side = this.comboStep % 2 === 0 ? left : right;
+          return { x: forward.x * 120 + side.x * 110, y: forward.y * 120 + side.y * 110, duration: 0.12 };
+        }
+        default: return { x: 0, y: 0, duration: this.phase === 1 ? 0.22 : 0.18 };
+      }
+    }
+
+    setState(next) {
+      super.setState(next);
+      const d = this.tuning.durations || {};
+      const player = this.player;
+      if (next === "APPROACH") {
+        this.stateDuration = Utils.rand(d.approachMin, d.approachMax);
+      } else if (next === "STRAFE") {
+        this.stateDuration = Utils.rand(d.strafeMin, d.strafeMax);
+        this.strafeDir = Math.random() < 0.5 ? -1 : 1;
+      } else if (next === "CHARGE") {
+        this.lockedAngle = Utils.angleTo(this.x, this.y, player.x, player.y);
+        this.attackPattern = this.pickPattern();
+        if (this.attackPattern === "WAVE_SLASH") this.stateDuration = d.chargeWave;
+        else if (this.attackPattern === "BURST_WAVE") this.stateDuration = d.chargeWave;
+        else if (this.attackPattern === "CROSS_RUSH") this.stateDuration = d.chargeCrossRush;
+        else this.stateDuration = d.chargeDefault;
+        this.chargeJitter = 0;
+        const len = (this.attackPattern === "WAVE_SLASH" || this.attackPattern === "BURST_WAVE") ? 220 : 180;
+        effects.push(new TelegraphLine(this.x, this.y, this.x + Math.cos(this.lockedAngle) * len, this.y + Math.sin(this.lockedAngle) * len, this.stateDuration, this.tuning.telegraphColor));
+      } else if (next === "ATTACK") {
+        this.hitApplied = false;
+        this.attackSpawned = false;
+        this.afterImageTimer = 0;
+        this.attackStartX = this.x;
+        this.attackStartY = this.y;
+        const v = this.getAttackVector(this.attackPattern, this.lockedAngle);
+        this.attackEndX = this.x + v.x;
+        this.attackEndY = this.y + v.y;
+        this.stateDuration = v.duration;
+      } else if (next === "RECOVERY") {
+        if (this.phase === 2 && this.attackPattern === "CROSS_RUSH" && this.comboStep < 1) {
+          this.comboStep += 1;
+          this.setState("CHARGE");
+          return;
+        }
+        this.comboStep = 0;
+        if (this.attackPattern === "WAVE_SLASH") this.stateDuration = d.recoveryWave;
+        else if (this.attackPattern === "BURST_WAVE") this.stateDuration = d.recoveryBurst;
+        else this.stateDuration = d.recoveryDefault;
+      } else if (next === "BERSERK") {
+        this.stateDuration = this.tuning.berserkDuration || 1.0;
+      }
+    }
+
+    spawnAttackEffect() {
+      const cx = this.x + Math.cos(this.lockedAngle) * 18;
+      const cy = this.y + Math.sin(this.lockedAngle) * 18;
+      const accent = this.phase === 1 ? "#7df9ff" : this.tuning.glow;
+      let startAngle = this.lockedAngle - Math.PI * 0.75;
+      let endAngle = this.lockedAngle + Math.PI * 0.15;
+      if (this.attackPattern === "LEFT_STEP_SLASH") {
+        startAngle = this.lockedAngle - Math.PI * 1.05;
+        endAngle = this.lockedAngle - Math.PI * 0.12;
+      } else if (this.attackPattern === "RIGHT_STEP_SLASH") {
+        startAngle = this.lockedAngle + Math.PI * 0.12;
+        endAngle = this.lockedAngle + Math.PI * 1.05;
+      } else if (this.attackPattern === "BACK_STEP_SLASH") {
+        startAngle = this.lockedAngle - Math.PI * 0.65;
+        endAngle = this.lockedAngle + Math.PI * 0.30;
+      } else if (this.attackPattern === "WAVE_SLASH" || this.attackPattern === "BURST_WAVE") {
+        startAngle = this.lockedAngle - Math.PI * 0.6;
+        endAngle = this.lockedAngle + Math.PI * 0.22;
+      } else if (this.attackPattern === "CROSS_RUSH") {
+        startAngle = this.lockedAngle - Math.PI * 0.9;
+        endAngle = this.lockedAngle + Math.PI * 0.9;
+      }
+      effects.push(new SlashEffect({ x: cx, y: cy, startAngle, endAngle, color: "#ffffff", life: 0.14, scale: this.attackPattern === "CROSS_RUSH" ? 1.15 : 1 }));
+      effects.push(new SlashEffect({ x: cx - Math.cos(this.lockedAngle) * 8, y: cy - Math.sin(this.lockedAngle) * 8, startAngle: startAngle + 0.06, endAngle: endAngle - 0.06, color: accent, life: 0.10, scale: 0.8 }));
+    }
+
+    updateStateMachine(dt) {
+      this.angle = Utils.angleTo(this.x, this.y, this.player.x, this.player.y);
+      if (this.state === "APPROACH") this.updateApproach(dt);
+      else if (this.state === "STRAFE") this.updateStrafe(dt);
+      else if (this.state === "CHARGE") this.updateCharge(dt);
+      else if (this.state === "ATTACK") this.updateAttack(dt);
+      else if (this.state === "RECOVERY") this.updateRecovery(dt);
+      else if (this.state === "BERSERK") this.updateBerserk(dt);
+      this.x = Utils.clamp(this.x, 24, canvas.width - 24);
+      this.y = Utils.clamp(this.y, 24, canvas.height - 24);
+    }
+
+    updateApproach(dt) {
+      const d = distanceToPlayer(this);
+      const angle = Utils.angleTo(this.x, this.y, this.player.x, this.player.y);
+      const forward = { x: Math.cos(angle), y: Math.sin(angle) };
+      if (d > this.tuning.desiredRange) {
+        this.x += forward.x * this.tuning.moveSpeed * dt;
+        this.y += forward.y * this.tuning.moveSpeed * dt;
+      } else if (d < this.tuning.desiredRange - 25) {
+        this.x -= forward.x * this.tuning.moveSpeed * 0.45 * dt;
+        this.y -= forward.y * this.tuning.moveSpeed * 0.45 * dt;
+      }
+      if (d <= this.tuning.attackRange && this.stateTime > 0.24) {
+        this.setState(Math.random() < this.tuning.strafeBias ? "STRAFE" : "CHARGE");
+        return;
+      }
+      if (this.stateTime >= this.stateDuration) this.setState("STRAFE");
+    }
+
+    updateStrafe(dt) {
+      const toPlayer = Utils.angleTo(this.x, this.y, this.player.x, this.player.y);
+      const d = distanceToPlayer(this);
+      const forward = { x: Math.cos(toPlayer), y: Math.sin(toPlayer) };
+      const side = { x: -forward.y * this.strafeDir, y: forward.x * this.strafeDir };
+      let vx = side.x * this.tuning.moveSpeed * (this.phase === 1 ? 0.95 : 1.15);
+      let vy = side.y * this.tuning.moveSpeed * (this.phase === 1 ? 0.95 : 1.15);
+      if (d > this.tuning.desiredRange + 20) { vx += forward.x * this.tuning.moveSpeed * 0.6; vy += forward.y * this.tuning.moveSpeed * 0.6; }
+      else if (d < this.tuning.desiredRange - 30) { vx -= forward.x * this.tuning.moveSpeed * 0.45; vy -= forward.y * this.tuning.moveSpeed * 0.45; }
+      this.x += vx * dt;
+      this.y += vy * dt;
+      if (this.phase === 2 && this.stateTime > this.stateDuration * 0.35 && Math.random() < 0.018) this.strafeDir *= -1;
+      if (d <= this.tuning.attackRange && this.stateTime >= this.stateDuration * (this.phase === 1 ? 0.45 : 0.28)) { this.setState("CHARGE"); return; }
+      if (this.stateTime >= this.stateDuration) this.setState("APPROACH");
+    }
+
+    updateCharge(dt) {
+      this.chargeJitter = Math.sin(this.stateTime * this.tuning.chargeJitterFrequency) * this.tuning.chargeJitterAmplitude;
+      if (this.attackPattern !== "WAVE_SLASH" && this.attackPattern !== "BURST_WAVE") {
+        const drift = Utils.angleTo(this.x, this.y, this.player.x, this.player.y);
+        this.lockedAngle = Utils.lerp(this.lockedAngle, drift, this.phase === 1 ? 0.09 : 0.18);
+      }
+      if (this.stateTime >= this.stateDuration) this.setState("ATTACK");
+    }
+
+    updateBerserk(dt) {
+      this.chargeJitter = Math.sin(this.stateTime * 120) * 4.0;
+      if (this.stateTime >= this.stateDuration * 0.55 && this.stateTime - dt < this.stateDuration * 0.55) {
+        for (let i = 0; i < 3; i++) {
+          const a = this.angle + (i - 1) * 0.24;
+          projectiles.push(new WaveProjectile(this.x + Math.cos(a) * 42, this.y + Math.sin(a) * 42, a, { speed: 360, color: this.tuning.glow, damage: 10, radius: 14, life: 1.1 }));
+        }
+      }
+      if (this.stateTime >= this.stateDuration) this.setState("CHARGE");
+    }
+
+    updateAttack(dt) {
+      const t = Utils.clamp(this.stateTime / this.stateDuration, 0, 1);
+      const prevX = this.x;
+      const prevY = this.y;
+      if (this.attackPattern !== "WAVE_SLASH" && this.attackPattern !== "BURST_WAVE") {
+        this.x = Utils.lerp(this.attackStartX, this.attackEndX, t);
+        this.y = Utils.lerp(this.attackStartY, this.attackEndY, t);
+        this.afterImageTimer -= dt;
+        if (this.afterImageTimer <= 0) {
+          this.afterImageTimer = this.tuning.afterImageInterval;
+          effects.push(new AfterImage(this.x, this.y, this.radius, this.lockedAngle, this.phase === 1 ? "#7df9ff" : this.tuning.glow));
+        }
+      }
+      if (!this.attackSpawned && t >= (this.phase === 1 ? 0.22 : 0.16)) {
+        this.attackSpawned = true;
+        this.spawnAttackEffect();
+        if (this.attackPattern === "WAVE_SLASH") {
+          const wave = this.tuning.wave;
+          const sx = this.x + Math.cos(this.lockedAngle) * 54;
+          const sy = this.y + Math.sin(this.lockedAngle) * 54;
+          projectiles.push(new WaveProjectile(sx, sy, this.lockedAngle, wave));
+        } else if (this.attackPattern === "BURST_WAVE") {
+          const burst = this.tuning.burstWave;
+          for (let i = -1; i <= 1; i++) {
+            const a = this.lockedAngle + i * 0.24;
+            const sx = this.x + Math.cos(a) * 54;
+            const sy = this.y + Math.sin(a) * 54;
+            projectiles.push(new WaveProjectile(sx, sy, a, burst));
+          }
+        }
+      }
+      if (!this.hitApplied) {
+        let hit = false;
+        if (this.attackPattern === "WAVE_SLASH" || this.attackPattern === "BURST_WAVE") {
+          hit = Utils.pointInFan(this.player.x, this.player.y, this.x, this.y, this.lockedAngle, 72 + this.player.radius, Math.PI * 0.35);
+        } else if (this.attackPattern === "BACK_STEP_SLASH") {
+          hit = Utils.pointInFan(this.player.x, this.player.y, this.x, this.y, this.lockedAngle, 96 + this.player.radius, Math.PI * 0.55);
+        } else if (this.attackPattern === "CROSS_RUSH") {
+          hit = Utils.circleLineHit(this.player.x, this.player.y, this.player.radius, prevX, prevY, this.x, this.y, this.radius * 2.1);
+          hit = hit || Utils.pointInFan(this.player.x, this.player.y, this.x, this.y, this.lockedAngle, 102 + this.player.radius, Math.PI * 0.62);
+        } else {
+          hit = Utils.circleLineHit(this.player.x, this.player.y, this.player.radius, prevX, prevY, this.x, this.y, this.radius * 1.7);
+          hit = hit || Utils.pointInFan(this.player.x, this.player.y, this.x, this.y, this.lockedAngle, 84 + this.player.radius, Math.PI * 0.45);
+        }
+        if (hit) {
+          this.hitApplied = true;
+          this.player.damage(this.tuning.attackDamage + (this.attackPattern === "CROSS_RUSH" ? 2 : 0));
+          for (let i = 0; i < 12; i++) effects.push(new Spark(this.player.x, this.player.y, this.phase === 1 ? "#ffd166" : this.tuning.glow));
+        }
+      }
+      if (t >= 1) this.setState("RECOVERY");
+    }
+
+    updateRecovery(dt) {
+      const d = distanceToPlayer(this);
+      const ang = Utils.angleTo(this.x, this.y, this.player.x, this.player.y);
+      if (d < (this.phase === 1 ? 105 : 130)) {
+        this.x -= Math.cos(ang) * this.tuning.moveSpeed * (this.phase === 1 ? 0.55 : 0.4) * dt;
+        this.y -= Math.sin(ang) * this.tuning.moveSpeed * (this.phase === 1 ? 0.55 : 0.4) * dt;
+      }
+      if (this.stateTime >= this.stateDuration) this.setState(d < this.tuning.attackRange ? "STRAFE" : "APPROACH");
+    }
+
+    drawBlade(drawX, drawY, facing) {
+      let bladeLen = this.state === "CHARGE" ? 28 + Math.sin(this.stateTime * 30) * 6 : 46;
+      if (this.phase === 2) bladeLen += 6;
+      let bladeAngle = facing + 0.65;
+      if (this.attackPattern === "LEFT_STEP_SLASH") bladeAngle = facing - 1.0;
+      else if (this.attackPattern === "RIGHT_STEP_SLASH") bladeAngle = facing + 1.0;
+      else if (this.attackPattern === "BACK_STEP_SLASH") bladeAngle = facing + Math.sin(this.stateTime * 24) * 0.85;
+      else if (this.attackPattern === "FORWARD_SLASH") bladeAngle = facing - 0.25 + Math.sin(this.stateTime * 18) * 0.22;
+      else if (this.attackPattern === "WAVE_SLASH" || this.attackPattern === "BURST_WAVE") bladeAngle = facing - 0.95 + Math.min(1, this.stateTime / Math.max(0.001, this.stateDuration)) * 1.2;
+      else if (this.attackPattern === "CROSS_RUSH") bladeAngle = facing + Math.sin(this.stateTime * 28) * 1.3;
+      const bladeX1 = drawX + Math.cos(bladeAngle) * 10;
+      const bladeY1 = drawY + Math.sin(bladeAngle) * 10;
+      const bladeX2 = bladeX1 + Math.cos(bladeAngle) * bladeLen;
+      const bladeY2 = bladeY1 + Math.sin(bladeAngle) * bladeLen;
+      const glowColor = this.phase === 1 ? "#7df9ff" : this.tuning.glow;
+      ctx.save();
+      ctx.shadowBlur = 22;
+      ctx.shadowColor = glowColor;
+      ctx.strokeStyle = this.phase === 1 ? "rgba(125,249,255,0.45)" : "rgba(255,107,214,0.45)";
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.moveTo(bladeX1, bladeY1);
+      ctx.lineTo(bladeX2, bladeY2);
+      ctx.stroke();
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      ctx.moveTo(bladeX1, bladeY1);
+      ctx.lineTo(bladeX2, bladeY2);
+      ctx.stroke();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(bladeX1, bladeY1);
+      ctx.lineTo(bladeX2, bladeY2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.fillStyle = "#ffffff";
+      ctx.arc(bladeX2, bladeY2, 3, 0, TAU);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    draw() {
+      const drawX = (this.state === "CHARGE" || this.state === "BERSERK") ? this.x + this.chargeJitter : this.x;
+      const drawY = this.y;
+      let bodyColor = this.tuning.bodyColor;
+      let glow = this.tuning.glow;
+      if (this.state === "CHARGE") {
+        bodyColor = this.phase === 1 ? "#00f0ff" : "#ff8be4";
+        glow = this.phase === 1 ? "#00f0ff" : "#ff6bd6";
+      } else if (this.state === "ATTACK") {
+        bodyColor = "#ffffff";
+        glow = this.phase === 1 ? "#7df9ff" : "#ff9be8";
+      } else if (this.state === "RECOVERY") {
+        bodyColor = this.phase === 1 ? "#6c6f88" : "#8b5b7b";
+        glow = this.phase === 1 ? "#8f96c9" : "#c97bb0";
+      } else if (this.state === "BERSERK") {
+        bodyColor = "#ffffff";
+        glow = this.tuning.glow;
+      }
+      drawGlowCircle(drawX, drawY, this.radius, glow, 0.95);
+      ctx.save();
+      ctx.strokeStyle = bodyColor;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 15;
+      ctx.shadowColor = glow;
+      ctx.beginPath();
+      ctx.arc(drawX, drawY, this.radius + 3, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+      const facing = (this.state === "CHARGE" || this.state === "ATTACK" || this.state === "BERSERK") ? this.lockedAngle : this.angle;
+      ctx.save();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(drawX, drawY);
+      ctx.lineTo(drawX + Math.cos(facing) * this.radius * 1.3, drawY + Math.sin(facing) * this.radius * 1.3);
+      ctx.stroke();
+      ctx.restore();
+      if (this.state === "CHARGE" || this.state === "ATTACK" || this.state === "BERSERK") this.drawBlade(drawX, drawY, facing);
+      drawText(this.definition.code, drawX, drawY + 5, "#fff", 12, "center");
+    }
+  }
+
+  const BossRuntimeClasses = {
+    pattern: PatternBossRuntime,
+    knight: KnightBossRuntime
+  };
+
+  function createBoss(type, player, startPhase) {
+    const definition = BossRegistry[type];
+    const runtimeKey = definition.runtimeClass || "pattern";
+    const RuntimeClass = BossRuntimeClasses[runtimeKey] || PatternBossRuntime;
+    return new RuntimeClass(type, player, startPhase);
+  }
+
+  const bossSelect = document.getElementById("bossSelect");
+  const phaseSelect = document.getElementById("phaseSelect");
+  const applySelectionBtn = document.getElementById("applySelection");
+  const resetSelectionBtn = document.getElementById("resetSelection");
+
+  let player;
+  let boss;
+  let selectedBossType = "basic";
+  let selectedStartPhase = "auto";
+
+  function getPhaseOptions(type) {
+    const definition = BossRegistry[type];
+    const options = [{ value: "auto", label: "Auto" }];
+    for (let i = 1; i <= definition.phases.length; i++) {
+      options.push({ value: String(i), label: `Phase ${i}` });
+    }
+    return options;
+  }
+
+  function syncPhaseSelect(type, selectedValue = "auto") {
+    const options = getPhaseOptions(type);
+    phaseSelect.innerHTML = options.map(option => `<option value="${option.value}">${option.label}</option>`).join("");
+    phaseSelect.value = options.some(option => option.value === selectedValue) ? selectedValue : "auto";
+  }
+
+  function populateBossSelect() {
+    const entries = Object.values(BossRegistry);
+    bossSelect.innerHTML = entries.map(entry => `<option value="${entry.id}">${entry.label} (${entry.code})</option>`).join("");
+    bossSelect.value = selectedBossType;
+    syncPhaseSelect(selectedBossType, selectedStartPhase);
+  }
+
+  function resetGame(type = selectedBossType, startPhase = selectedStartPhase) {
+    selectedBossType = type;
+    selectedStartPhase = startPhase;
+    bullets.length = 0;
+    hazards.length = 0;
+    projectiles.length = 0;
+    effects.length = 0;
+    texts.length = 0;
+    player = new Player(canvas.width * 0.5, canvas.height * 0.82);
+    boss = createBoss(type, player, startPhase);
+    bossSelect.value = selectedBossType;
+    syncPhaseSelect(selectedBossType, selectedStartPhase);
+  }
+
+  bossSelect.addEventListener("change", () => {
+    selectedBossType = bossSelect.value;
+    syncPhaseSelect(selectedBossType, phaseSelect.value);
+  });
+
+  applySelectionBtn.addEventListener("click", () => {
+    resetGame(bossSelect.value, phaseSelect.value);
+  });
+
+  resetSelectionBtn.addEventListener("click", () => {
+    resetGame(selectedBossType, selectedStartPhase);
+  });
+
+  addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === "1") resetGame("basic");
+    if (k === "2") resetGame("advanced");
+    if (k === "3") resetGame("knight");
+    if (k === "p" && boss && typeof boss.forcePhase2 === "function") boss.forcePhase2();
+    if (k === "r") resetGame(selectedBossType);
+    if (k === "h" && boss) {
+      boss.hp = Math.max(0, boss.hp - boss.maxHp * 0.1);
+      texts.push(new FloatText("Boss HP -10%", boss.x, boss.y - 46, "#ffd166"));
+    }
+  });
+
+  function updateList(arr, dt, extra) {
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const alive = extra ? arr[i].update(dt, extra) : arr[i].update(dt);
+      if (!alive) arr.splice(i, 1);
+    }
+  }
+
+  function drawArena() {
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.strokeStyle = boss && boss.type === "knight" && boss.phase === 2 ? "#4d2347" : "#2b3e72";
+    ctx.lineWidth = 1;
+    const grid = 40;
+    for (let x = 0; x < canvas.width; x += grid) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += grid) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawBar(x, y, w, h, ratio, fill) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, w * Utils.clamp(ratio, 0, 1), h);
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+  }
+
+  function drawPanel() {
+    drawBar(20, 20, 240, 18, player.hp / 100, "#66f2ff");
+    drawText("Player HP", 20, 14, "#fff", 14);
+
+    const bossColors = boss.definition.colors(boss);
+    drawBar(20, 50, 240, 18, boss.hp / boss.maxHp, bossColors.glow);
+    drawText("Boss HP", 20, 44, "#fff", 14);
+
+    drawText(`Boss Type: ${boss.definition.label}`, 20, 92, "#fff", 14);
+    drawText(`Phase: ${boss.phase}`, 20, 114, "#fff", 14);
+    drawText(`Current Pattern: ${boss.stateText}`, 20, 136, "#fff", 14);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(4,8,20,0.62)";
+    ctx.fillRect(canvas.width - 420, 18, 400, 258);
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.strokeRect(canvas.width - 420, 18, 400, 258);
+    ctx.restore();
+
+    drawText("패턴 / AI 설명", canvas.width - 398, 44, "#fff", 16);
+    const lines = boss.definition.panel(boss);
+    for (let i = 0; i < lines.length; i++) {
+      drawText(lines[i], canvas.width - 398, 76 + i * 28, "#dce7ff", 14);
+    }
+
+    drawText("구조: PatternLibrary + BossTunings + Base/Pattern/StateMachine Runtime", canvas.width - 398, 232, "#9ecbff", 13);
+    drawText("조건형 AI + 데이터 기반 보스 튜닝 테스트", canvas.width - 398, 254, "#9ecbff", 13);
+
+    drawText("우측 상단 패널에서 보스 / 시작 페이즈 선택 가능", 20, canvas.height - 96, "#9ecbff", 13);
+    drawText("이동: WASD / 방향키", 20, canvas.height - 74, "#fff", 14);
+    drawText("대시: Shift 또는 Space", 20, canvas.height - 52, "#fff", 14);
+    drawText("1: 기본형  2: 강화형  3: 기사형  P: 2페이즈  H: 보스HP -10%  R: 리셋", 20, canvas.height - 30, "#fff", 14);
+  }
+
+  populateBossSelect();
+  resetGame("basic", "auto");
+
+  let lastTime = performance.now();
+  function loop(now) {
+    const dt = Math.min((now - lastTime) / 1000, 0.033);
+    lastTime = now;
+
+    player.update(dt);
+    boss.update(dt);
+    updateList(bullets, dt, player);
+    updateList(hazards, dt, player);
+    updateList(projectiles, dt, player);
+    updateList(effects, dt);
+    updateList(texts, dt);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawArena();
+    for (const h of hazards) h.draw();
+    for (const b of bullets) b.draw();
+    for (const p of projectiles) p.draw();
+    for (const e of effects) e.draw();
+    boss.draw();
+    player.draw();
+    for (const t of texts) t.draw();
+    drawPanel();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

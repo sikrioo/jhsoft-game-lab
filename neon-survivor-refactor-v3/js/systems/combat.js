@@ -1,4 +1,30 @@
 window.CombatSystem = (() => {
+  function getWeaponDef(){
+    return WEAPON_DEFINITIONS[GameState.weaponState.current];
+  }
+
+  function getWeaponLevel(type=GameState.weaponState.current){
+    return GameState.weaponState.levels[type] || 1;
+  }
+
+  function setWeaponType(type){
+    if (!WEAPON_DEFINITIONS[type]) return false;
+    GameState.weaponState.current = type;
+    UI.hudUpdate();
+    return true;
+  }
+
+  function applyStartingWeaponLoadout(testMode=false){
+    const startingLevels = testMode ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_WEAPON_LEVELS) || {}) : {};
+    for (const type of Object.keys(WEAPON_DEFINITIONS)){
+      const def = WEAPON_DEFINITIONS[type];
+      GameState.weaponState.levels[type] = Math.max(1, Math.min(def.maxLevel, startingLevels[type] || 1));
+    }
+    GameState.weaponState.current = testMode
+      ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_WEAPON) || "machinegun")
+      : "machinegun";
+  }
+
   function findNearestEnemy(x, y, takenSet=null){
     const S = GameState;
     let best = null;
@@ -15,22 +41,52 @@ window.CombatSystem = (() => {
     return best;
   }
 
-  function makeBullet(x, y, ang, damage, speed, pierce){
+  function makeBullet(x, y, ang, damage, speed, pierce, options={}){
     const S = GameState;
-    const spr = Effects.makeBulletSprite(x, y, ang, 0x32f6ff);
+    const spr = Effects.makeBulletSprite(x, y, ang, options.color || 0x32f6ff);
+    if (options.scaleX || options.scaleY) spr.scale.set(options.scaleX || 1, options.scaleY || 1);
     S.fx.addChild(spr);
 
     return {
       type:"bullet",
+      kind: options.kind || "machinegun",
       spr,
       x, y,
       vx:Math.cos(ang) * speed,
       vy:Math.sin(ang) * speed,
-      r:7,
+      r:options.radius || 7,
       dmg:damage,
       pierce,
-      life:120
+      color: options.color || 0x32f6ff,
+      life:options.life || 120,
+      trailAlpha: options.trailAlpha || 0.18
     };
+  }
+
+  function makeBeam(x, y, ang, length, width, color){
+    const g = new PIXI.Graphics();
+    g.x = x;
+    g.y = y;
+    GameState.fx.addChild(g);
+    const beam = { spr:g, x, y, ang, length, width, color, life:7, maxLife:7 };
+    redrawBeam(beam, 1);
+    return beam;
+  }
+
+  function redrawBeam(beam, alpha=1){
+    const g = beam.spr;
+    g.x = beam.x;
+    g.y = beam.y;
+    g.clear();
+    g.lineStyle(beam.width + 8, beam.color, 0.10 * alpha);
+    g.moveTo(0, 0);
+    g.lineTo(Math.cos(beam.ang) * beam.length, Math.sin(beam.ang) * beam.length);
+    g.lineStyle(beam.width + 3, beam.color, 0.24 * alpha);
+    g.moveTo(0, 0);
+    g.lineTo(Math.cos(beam.ang) * beam.length, Math.sin(beam.ang) * beam.length);
+    g.lineStyle(beam.width, beam.color, 0.96 * alpha);
+    g.moveTo(0, 0);
+    g.lineTo(Math.cos(beam.ang) * beam.length, Math.sin(beam.ang) * beam.length);
   }
 
   function makeMissile(x, y, target){
@@ -111,25 +167,41 @@ window.CombatSystem = (() => {
     return false;
   }
 
+  function getAfterburnerMultipliers(){
+    const S = GameState;
+    const afterburnerSkill = window.ActiveSkillSystem && ActiveSkillSystem.getDefinition("afterburner");
+    return {
+      fireRateMul: S.activeSkillState.afterburnerT > 0 && afterburnerSkill ? afterburnerSkill.effectData.fireRateMultiplier : 1,
+      bulletSpeedMul: S.activeSkillState.afterburnerT > 0 && afterburnerSkill ? afterburnerSkill.effectData.bulletSpeedMultiplier : 1
+    };
+  }
+
   function tryShoot(){
     const S = GameState;
     const player = S.player;
     if (player.fireCd > 0) return;
     if (!(S.mouse.down || S.keys.has("Space"))) return;
 
-    const afterburnerSkill = window.ActiveSkillSystem && ActiveSkillSystem.getDefinition("afterburner");
-    const fireRateMul = S.activeSkillState.afterburnerT > 0 && afterburnerSkill
-      ? afterburnerSkill.effectData.fireRateMultiplier
-      : 1;
-    const bulletSpeedMul = S.activeSkillState.afterburnerT > 0 && afterburnerSkill
-      ? afterburnerSkill.effectData.bulletSpeedMultiplier
-      : 1;
+    const weaponDef = getWeaponDef();
+    const weaponLevel = getWeaponLevel();
+    const { fireRateMul, bulletSpeedMul } = getAfterburnerMultipliers();
+    const ang = Math.atan2(S.mouse.y - player.spr.y, S.mouse.x - player.spr.x);
 
-    const px = player.spr.x;
-    const py = player.spr.y;
-    const ang = Math.atan2(S.mouse.y - py, S.mouse.x - px);
-    const count = Math.max(1, Math.floor(S.stats.bulletCount));
-    const spread = count === 1 ? 0 : Math.min(0.52, 0.12 * (count - 1));
+    if (S.weaponState.current === "machinegun") fireMachinegun(ang, weaponLevel, bulletSpeedMul);
+    if (S.weaponState.current === "laser") fireLaser(ang, weaponLevel);
+    if (S.weaponState.current === "shotgun") fireShotgun(ang, weaponLevel, bulletSpeedMul);
+
+    if (S.weaponState.current !== "laser"){
+      player.fireCd = weaponDef.fireInterval * fireRateMul;
+    }
+  }
+
+  function fireMachinegun(ang, level, bulletSpeedMul){
+    const S = GameState;
+    const px = S.player.spr.x;
+    const py = S.player.spr.y;
+    const count = Math.min(5, Math.max(level, S.stats.bulletCount));
+    const spread = count === 1 ? 0 : Math.min(0.42, 0.10 * (count - 1));
 
     for (let i=0; i<count; i++){
       const t = count === 1 ? 0 : (i / (count - 1)) - 0.5;
@@ -139,14 +211,107 @@ window.CombatSystem = (() => {
         py + Math.sin(shotAng) * 18,
         shotAng,
         S.stats.bulletDamage,
-        S.stats.bulletSpeed * bulletSpeedMul,
-        S.stats.bulletPierce
+        WEAPON_DEFINITIONS.machinegun.projectileSpeed * bulletSpeedMul,
+        S.stats.bulletPierce,
+        {
+          color:0x32f6ff,
+          radius:7,
+          kind:"machinegun",
+          scaleX:1,
+          scaleY:1.05,
+          life:WEAPON_DEFINITIONS.machinegun.projectileLife
+        }
       );
       S.bullets.push(bullet);
     }
 
-    player.fireCd = S.stats.fireRate * fireRateMul;
-    Effects.emitParticle(px + Math.cos(ang) * 18, py + Math.sin(ang) * 18, 0x32f6ff, 7 + count, 0.9 + (count - 1) * 0.1);
+    Effects.emitParticle(px + Math.cos(ang) * 18, py + Math.sin(ang) * 18, 0x32f6ff, 6 + count, 0.9);
+  }
+
+  function fireLaser(ang, level){
+    const S = GameState;
+    if (S.weaponState.laserChannel) return;
+    if (S.player.fireCd > 0) return;
+    const def = WEAPON_DEFINITIONS.laser;
+    const color = def.colors[Math.min(def.colors.length - 1, level - 1)];
+    const width = 4 + level * 2.4;
+    const originX = S.player.spr.x + Math.cos(ang) * 18;
+    const originY = S.player.spr.y + Math.sin(ang) * 18;
+    const beam = makeBeam(originX, originY, ang, def.range, width, color);
+    Effects.emitParticle(originX, originY, color, 12, 1.1);
+    S.weaponState.laserChannel = {
+      beam,
+      remaining: 22 + level * 8,
+      maxRemaining: 22 + level * 8,
+      damageTick: 0,
+      damageInterval: 4,
+      level,
+      color,
+      width,
+      length: def.range
+    };
+  }
+
+  function damageLaserChannel(channel){
+    const S = GameState;
+    const damage = S.stats.bulletDamage * (1.35 + channel.level * 0.3);
+    const cos = Math.cos(channel.beam.ang);
+    const sin = Math.sin(channel.beam.ang);
+    const originX = channel.beam.x;
+    const originY = channel.beam.y;
+    for (const enemy of [...S.enemies]){
+      const rx = enemy.x - originX;
+      const ry = enemy.y - originY;
+      const along = rx * cos + ry * sin;
+      const side = Math.abs(rx * -sin + ry * cos);
+      if (along >= 0 && along <= channel.length && side <= channel.width + enemy.r){
+        damageEnemy(enemy, damage, channel.color, enemy.tier === "boss" ? 12 : 8, 0.75);
+      }
+    }
+  }
+
+  function finishLaserChannel(interrupted=false){
+    const S = GameState;
+    const channel = S.weaponState.laserChannel;
+    if (!channel) return;
+    channel.beam.life = interrupted ? 5 : 8;
+    channel.beam.maxLife = channel.beam.life;
+    S.beams.push(channel.beam);
+    S.weaponState.laserChannel = null;
+    S.player.fireCd = WEAPON_DEFINITIONS.laser.fireInterval;
+  }
+
+  function fireShotgun(ang, level, bulletSpeedMul){
+    const S = GameState;
+    const px = S.player.spr.x;
+    const py = S.player.spr.y;
+    const pelletCount = 6 + Math.min(4, level);
+    const spread = 0.42 + level * 0.045;
+    const pelletDamage = Math.max(0.8, S.stats.bulletDamage * (0.65 + level * 0.16));
+
+    for (let i=0; i<pelletCount; i++){
+      const shotAng = ang + Helpers.rand(-spread, spread);
+      const bullet = makeBullet(
+        px + Math.cos(shotAng) * 18,
+        py + Math.sin(shotAng) * 18,
+        shotAng,
+        pelletDamage,
+        WEAPON_DEFINITIONS.shotgun.projectileSpeed * bulletSpeedMul,
+        0,
+        {
+          color:0xffbf7a,
+          radius:8.5,
+          life:WEAPON_DEFINITIONS.shotgun.projectileLife,
+          kind:"shotgun",
+          scaleX:1.25,
+          scaleY:1.3,
+          trailAlpha:0.26
+        }
+      );
+      S.bullets.push(bullet);
+    }
+
+    Effects.emitParticle(px + Math.cos(ang) * 18, py + Math.sin(ang) * 18, 0xffbf7a, 15, 1.2);
   }
 
   function tryShootMissiles(){
@@ -205,8 +370,9 @@ window.CombatSystem = (() => {
         const e = S.enemies[j];
         const rr = b.r + e.r;
         if (Helpers.dist2(b.x, b.y, e.x, e.y) < rr * rr){
-          damageEnemy(e, b.dmg, e.glowColor, e.tier === "boss" ? 18 : 10, e.tier === "boss" ? 1.3 : 1.0);
-
+          const particleCount = b.kind === "shotgun" ? 14 : (e.tier === "boss" ? 18 : 10);
+          const particlePower = b.kind === "shotgun" ? 1.35 : (e.tier === "boss" ? 1.3 : 1.0);
+          damageEnemy(e, b.dmg, b.color || e.glowColor, particleCount, particlePower);
           if (b.pierce > 0){
             b.pierce -= 1;
           } else {
@@ -218,14 +384,53 @@ window.CombatSystem = (() => {
 
       if ((performance.now() | 0) % 2 === 0){
         const t = Effects.makeTrailSprite(
-          b.x - b.vx * 0.25,
-          b.y - b.vy * 0.25,
-          0x32f6ff,
-          Helpers.rand(0.12, 0.22),
-          0.18
+          b.x - b.vx * 0.2,
+          b.y - b.vy * 0.2,
+          b.color || 0x32f6ff,
+          b.kind === "shotgun" ? Helpers.rand(0.16, 0.28) : Helpers.rand(0.12, 0.22),
+          b.trailAlpha || 0.18
         );
         S.fx.addChild(t);
-        S.particles.push({ spr:t, x:t.x, y:t.y, vx:0, vy:0, life:12 });
+        S.particles.push({ spr:t, x:t.x, y:t.y, vx:0, vy:0, life:b.kind === "shotgun" ? 10 : 12 });
+      }
+    }
+  }
+
+  function updateBeams(dt){
+    const S = GameState;
+    const channel = S.weaponState.laserChannel;
+    if (channel){
+      if (!(S.mouse.down || S.keys.has("Space")) || channel.remaining <= 0){
+        finishLaserChannel(channel.remaining > 0 ? true : false);
+      } else {
+        const ang = Math.atan2(S.mouse.y - S.player.spr.y, S.mouse.x - S.player.spr.x);
+        channel.beam.x = S.player.spr.x + Math.cos(ang) * 18;
+        channel.beam.y = S.player.spr.y + Math.sin(ang) * 18;
+        channel.beam.ang = ang;
+        channel.beam.width = channel.width;
+        channel.beam.length = channel.length;
+        redrawBeam(channel.beam, 1);
+        channel.remaining -= dt;
+        channel.damageTick -= dt;
+        if (channel.damageTick <= 0){
+          channel.damageTick = channel.damageInterval;
+          damageLaserChannel(channel);
+          if ((performance.now() | 0) % 3 === 0){
+            const endX = channel.beam.x + Math.cos(ang) * (channel.length * 0.25);
+            const endY = channel.beam.y + Math.sin(ang) * (channel.length * 0.25);
+            Effects.emitParticle(endX, endY, channel.color, 6, 0.5);
+          }
+        }
+      }
+    }
+
+    for (let i=S.beams.length-1; i>=0; i--){
+      const beam = S.beams[i];
+      beam.life -= dt;
+      redrawBeam(beam, Math.max(0, beam.life / beam.maxLife));
+      if (beam.life <= 0){
+        S.fx.removeChild(beam.spr);
+        S.beams.splice(i, 1);
       }
     }
   }
@@ -289,7 +494,10 @@ window.CombatSystem = (() => {
     tryShoot,
     tryShootMissiles,
     launchMissileVolley,
+    setWeaponType,
+    applyStartingWeaponLoadout,
     updateBullets,
+    updateBeams,
     updateMissiles
   };
 })();

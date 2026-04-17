@@ -29,6 +29,24 @@ html,body{
   z-index:15; display:grid; grid-template-columns:repeat(3, minmax(150px, 1fr)); gap:12px;
   width:min(560px, calc(100vw - 28px));
 }
+.weaponHud{
+  position:fixed; right:14px; top:14px; z-index:16;
+  width:min(220px, calc(100vw - 28px));
+  padding:12px; border-radius:16px;
+  background:rgba(7,10,24,.82);
+  border:1px solid rgba(120,180,255,.16);
+  box-shadow:0 0 18px rgba(110,90,255,.08);
+  color:#eef4ff;
+}
+.weaponHead{ font-weight:800; margin-bottom:10px; }
+.weaponOption{
+  display:flex; align-items:center; gap:8px;
+  padding:7px 0; font-size:13px; cursor:pointer;
+}
+.weaponState{
+  margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08);
+  font-size:12px; opacity:.9;
+}
 .activeSlot{
   padding:11px 12px; border-radius:16px;
   background:rgba(7,10,24,.78);
@@ -128,5 +146,6 @@ html,body{
 
 @media (max-width:560px){
   .upgradeGrid{ grid-template-columns:1fr; }
+  .weaponHud{ left:14px; right:14px; top:auto; bottom:180px; width:auto; }
   .activeHud{ grid-template-columns:1fr; bottom:12px; }
 }

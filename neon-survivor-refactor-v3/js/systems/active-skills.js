@@ -11,14 +11,17 @@ window.ActiveSkillSystem = (() => {
     return slot && slot.skillId ? getDefinition(slot.skillId) : null;
   }
 
-  function assignStartingLoadout(){
+  function assignStartingLoadout(testMode=false){
     const slots = GameState.activeSkillState.slots;
-    const loadout = (GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_ACTIVE_SKILLS) || [];
+    const loadout = testMode ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_ACTIVE_SKILLS) || []) : [];
     for (let i=0; i<slots.length; i++){
       slots[i].skillId = loadout[i] || null;
       slots[i].cooldown = 0;
       slots[i].autoCast = false;
     }
+
+    const startingLevels = testMode ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_ACTIVE_SKILL_LEVELS) || {}) : {};
+    GameState.activeSkillState.levels.boost = Math.max(1, startingLevels.boost || 1);
   }
 
   function canUseSlot(slot){
@@ -35,7 +38,13 @@ window.ActiveSkillSystem = (() => {
     return tryUseSlot(getSlotByKey(code));
   }
 
-  function tryUseSlot(slot){
+  function tryUseBoostDirection(direction){
+    const boostSlot = GameState.activeSkillState.slots.find(slot => slot.skillId === "boost");
+    if (!boostSlot) return false;
+    return tryUseSlot(boostSlot, { boostDirection: direction });
+  }
+
+  function tryUseSlot(slot, context={}){
     const check = canUseSlot(slot);
     if (!check.ok){
       if (slot && check.reason === "mp") UI.flashActiveSlot(slot.key, "mp");
@@ -45,7 +54,7 @@ window.ActiveSkillSystem = (() => {
     const { skill } = check;
     let casted = false;
     if (skill.id === "decoy_drone") casted = castDecoyDrone(skill);
-    if (skill.id === "boost") casted = castBoost(skill);
+    if (skill.id === "boost") casted = castBoost(skill, context);
     if (skill.id === "afterburner") casted = castAfterburner(skill);
     if (!casted) return false;
 
@@ -94,22 +103,46 @@ window.ActiveSkillSystem = (() => {
     return true;
   }
 
-  function castBoost(skill){
+  function castBoost(skill, context={}){
     const S = GameState;
     const p = S.player;
-    const angle = Math.atan2(S.mouse.y - p.spr.y, S.mouse.x - p.spr.x);
-    const dx = Math.cos(angle);
-    const dy = Math.sin(angle);
+    const facing = Math.atan2(S.mouse.y - p.spr.y, S.mouse.x - p.spr.x);
+    const level = Math.max(1, S.activeSkillState.levels.boost || 1);
+    const boostSpec = getBoostSpec(skill, facing, level, context.boostDirection || null);
 
-    p.vx += dx * skill.effectData.speed;
-    p.vy += dy * skill.effectData.speed;
-    p.inv = Math.max(p.inv, skill.effectData.invulnerability);
+    p.vx += Math.cos(boostSpec.angle) * boostSpec.profile.speed;
+    p.vy += Math.sin(boostSpec.angle) * boostSpec.profile.speed;
+    S.activeSkillState.boostDir = boostSpec.angle;
+    S.activeSkillState.boostDrag = boostSpec.profile.drag;
+    S.activeSkillState.boostMitigationT = Math.max(S.activeSkillState.boostMitigationT, skill.duration + 3);
+    S.activeSkillState.boostMitigationMul = boostSpec.profile.mitigationMul;
     S.activeSkillState.boostT = Math.max(S.activeSkillState.boostT, skill.duration);
 
-    const backX = p.spr.x - dx * 18;
-    const backY = p.spr.y - dy * 18;
+    const backX = p.spr.x - Math.cos(boostSpec.angle) * 18;
+    const backY = p.spr.y - Math.sin(boostSpec.angle) * 18;
     Effects.emitParticle(backX, backY, 0x8be9ff, 7, 0.75);
     return true;
+  }
+
+  function getBoostSpec(skill, facing, level, explicitDirection=null){
+    let angle = facing;
+    let profile = skill.effectData.forward;
+
+    if (explicitDirection === "forward"){
+      angle = facing;
+      profile = skill.effectData.forward;
+    } else if (explicitDirection === "back" && level >= 3){
+      angle = facing + Math.PI;
+      profile = skill.effectData.back;
+    } else if (explicitDirection === "left" && level >= 2){
+      angle = facing - Math.PI / 2;
+      profile = skill.effectData.side;
+    } else if (explicitDirection === "right" && level >= 2){
+      angle = facing + Math.PI / 2;
+      profile = skill.effectData.side;
+    }
+
+    return { angle, profile };
   }
 
   function castAfterburner(skill){
@@ -144,7 +177,7 @@ window.ActiveSkillSystem = (() => {
     if (S.activeSkillState.boostT > 0){
       S.activeSkillState.boostT = Math.max(0, S.activeSkillState.boostT - dt);
       if ((performance.now() | 0) % 3 === 0){
-        const ang = S.player.spr.rotation - Math.PI / 2;
+        const ang = S.activeSkillState.boostDir || (S.player.spr.rotation - Math.PI / 2);
         const p = Effects.makeTrailSprite(
           S.player.spr.x - Math.cos(ang) * 16 + Helpers.rand(-2, 2),
           S.player.spr.y - Math.sin(ang) * 16 + Helpers.rand(-2, 2),
@@ -164,6 +197,11 @@ window.ActiveSkillSystem = (() => {
         });
       }
     }
+    if (S.activeSkillState.boostMitigationT > 0){
+      S.activeSkillState.boostMitigationT = Math.max(0, S.activeSkillState.boostMitigationT - dt);
+    } else {
+      S.activeSkillState.boostMitigationMul = 1;
+    }
 
     if (S.activeSkillState.afterburnerT > 0){
       S.activeSkillState.afterburnerT = Math.max(0, S.activeSkillState.afterburnerT - dt);
@@ -182,6 +220,7 @@ window.ActiveSkillSystem = (() => {
     getSlotSkill,
     assignStartingLoadout,
     tryUseSlotByKey,
+    tryUseBoostDirection,
     update
   };
 })();

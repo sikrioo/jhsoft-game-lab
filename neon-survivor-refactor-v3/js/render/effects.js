@@ -161,11 +161,48 @@ window.Effects = (() => {
     }
   }
 
+  function emitPlayerExplosion(x, y){
+    const S = GameState;
+    emitPulse(x, y, 0xff9b59, 84, 18);
+    emitPulse(x, y, 0x32f6ff, 52, 12);
+    emitParticle(x, y, 0xff9b59, 18, 1.5);
+    emitParticle(x, y, 0xff3edb, 14, 1.2);
+    emitParticle(x, y, 0x32f6ff, 24, 1.8);
+
+    const flash = makeParticleSprite(x, y, 0xffffff, 1.5, 0.9);
+    S.fx.addChild(flash);
+    S.particles.push({
+      spr: flash,
+      x, y,
+      vx: 0,
+      vy: 0,
+      drag: 0.9,
+      life: 10
+    });
+
+    for (let i=0; i<12; i++){
+      const ang = (Math.PI * 2 * i) / 12 + Helpers.rand(-0.18, 0.18);
+      const shard = makeTrailSprite(x, y, i % 2 === 0 ? 0xffc66d : 0x32f6ff, Helpers.rand(0.3, 0.48), 0.42);
+      shard.rotation = ang;
+      S.fx.addChild(shard);
+      const speed = Helpers.rand(3.8, 7.2);
+      S.particles.push({
+        spr: shard,
+        x, y,
+        vx: Math.cos(ang) * speed,
+        vy: Math.sin(ang) * speed,
+        drag: 0.9,
+        life: Helpers.randi(14, 22)
+      });
+    }
+  }
+
   return {
     makeGlowFilter,
     asFilters,
     emitParticle,
     emitPulse,
+    emitPlayerExplosion,
     makeParticleSprite,
     makeTrailSprite,
     makeBulletSprite,

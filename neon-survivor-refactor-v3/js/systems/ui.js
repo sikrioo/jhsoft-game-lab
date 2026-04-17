@@ -12,6 +12,8 @@ window.UI = (() => {
   const $shots = document.getElementById("shots");
   const $pierce = document.getElementById("pierce");
   const $combo = document.getElementById("combo");
+  const $weaponName = document.getElementById("weaponName");
+  const $weaponLevel = document.getElementById("weaponLevel");
 
   const overlayRoot = document.getElementById("overlayRoot");
   const startCard = document.getElementById("startCard");
@@ -21,10 +23,14 @@ window.UI = (() => {
   const finalScoreEl = document.getElementById("finalScore");
   const warningOverlay = document.getElementById("warningOverlay");
   const activeSlotEls = [...document.querySelectorAll(".activeSlot")];
+  const weaponRadioEls = [...document.querySelectorAll("input[name='weaponType']")];
+  const weaponHud = document.getElementById("weaponHud");
 
   function hudUpdate() {
     const S = GameState;
     const P = S.progression;
+    const weaponDef = WEAPON_DEFINITIONS[S.weaponState.current];
+    const weaponLevel = S.weaponState.levels[S.weaponState.current] || 1;
     $score.textContent = String(Math.floor(P.score));
     $wave.textContent = String(P.wave);
     $level.textContent = String(P.level);
@@ -36,10 +42,18 @@ window.UI = (() => {
       : "-";
     $atk.textContent = String(S.stats.bulletDamage);
     $def.textContent = String(S.stats.defense);
-    $fireRate.textContent = String(S.stats.fireRate);
-    $shots.textContent = String(S.stats.bulletCount);
+    $fireRate.textContent = weaponDef ? String(weaponDef.fireInterval) : String(S.stats.fireRate);
+    $shots.textContent = S.weaponState.current === "machinegun"
+      ? String(Math.min(5, Math.max(weaponLevel, S.stats.bulletCount)))
+      : S.weaponState.current === "shotgun"
+        ? String(6 + Math.min(4, weaponLevel))
+        : "1";
     $pierce.textContent = String(S.stats.bulletPierce);
     $combo.textContent = "x" + P.combo.toFixed(1).replace(/\.0$/,"");
+    $weaponName.textContent = weaponDef ? weaponDef.name : "-";
+    $weaponLevel.textContent = weaponDef && weaponLevel >= weaponDef.maxLevel ? "Lv.MAX" : `Lv.${weaponLevel}`;
+    for (const radio of weaponRadioEls) radio.checked = radio.value === S.weaponState.current;
+    weaponHud.style.display = S.stats.practice ? "block" : "none";
     renderActiveSlots();
   }
 
@@ -121,6 +135,11 @@ window.UI = (() => {
     document.getElementById("btnPractice").onclick = onPractice;
     document.getElementById("btnRetry").onclick = onRetry;
     document.getElementById("btnBack").onclick = onBack;
+    for (const radio of weaponRadioEls){
+      radio.onchange = () => {
+        if (radio.checked) CombatSystem.setWeaponType(radio.value);
+      };
+    }
   }
 
   return {

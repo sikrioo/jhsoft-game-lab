@@ -2,10 +2,10 @@ window.GAME_BALANCE = {
   PLAYER: {
     FIRE_RATE_BASE: 18,
     FIRE_RATE_MIN: 3,
-    MOVE_SPEED: 4.6,
+    MOVE_SPEED: 3.68,
     DASH_SPEED: 14,
     DASH_CD_MAX: 70,
-    BULLET_SPEED: 12,
+    BULLET_SPEED: 9.6,
     BULLET_DAMAGE: 1,
     BULLET_COUNT: 1,
     DEFENSE: 0,
@@ -17,8 +17,8 @@ window.GAME_BALANCE = {
   },
 
   XP: {
-    BASE_TO_NEXT: 10,
-    GROWTH: 1.35
+    BASE_TO_NEXT: 16,
+    GROWTH: 1.48
   },
 
   TEST: {
@@ -27,6 +27,15 @@ window.GAME_BALANCE = {
       "homingmissile",
       "multishot"
     ],
+    STARTING_ACTIVE_SKILL_LEVELS: {
+      boost: 3
+    },
+    STARTING_WEAPON: "machinegun",
+    STARTING_WEAPON_LEVELS: {
+      machinegun: 5,
+      laser: 5,
+      shotgun: 5
+    },
     STARTING_ACTIVE_SKILLS: [
       "decoy_drone",
       "boost",

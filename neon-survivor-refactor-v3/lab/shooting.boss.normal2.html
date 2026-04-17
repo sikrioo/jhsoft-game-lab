@@ -1,0 +1,803 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Structured Shooting Boss Demo</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      background: #050816;
+      font-family: system-ui, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: radial-gradient(circle at center, rgba(24,34,70,0.28), rgba(2,4,12,1));
+    }
+  </style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  function resize() {
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+  }
+  addEventListener("resize", resize);
+  resize();
+
+  const TAU = Math.PI * 2;
+  const keys = new Set();
+  addEventListener("keydown", (e) => keys.add(e.key.toLowerCase()));
+  addEventListener("keyup", (e) => keys.delete(e.key.toLowerCase()));
+
+  const bullets = [];
+  const hazards = [];
+  const effects = [];
+  const texts = [];
+
+  const Utils = {
+    clamp(v, a, b) { return Math.max(a, Math.min(b, v)); },
+    lerp(a, b, t) { return a + (b - a) * t; },
+    rand(a, b) { return Math.random() * (b - a) + a; },
+    dist(ax, ay, bx, by) { return Math.hypot(bx - ax, by - ay); },
+    angleTo(ax, ay, bx, by) { return Math.atan2(by - ay, bx - ax); },
+    normalize(x, y) {
+      const len = Math.hypot(x, y) || 1;
+      return { x: x / len, y: y / len };
+    },
+    angleDelta(a, b) {
+      return Math.atan2(Math.sin(a - b), Math.cos(a - b));
+    }
+  };
+
+  function drawText(text, x, y, color = "#fff", size = 14, align = "left", alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.font = `bold ${size}px sans-serif`;
+    ctx.textAlign = align;
+    ctx.fillText(text, x, y);
+    ctx.restore();
+  }
+
+  function drawGlowCircle(x, y, r, color, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.shadowBlur = 20;
+    ctx.shadowColor = color;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  class FloatText {
+    constructor(text, x, y, color = "#fff") {
+      this.text = text;
+      this.x = x;
+      this.y = y;
+      this.color = color;
+      this.life = 0.8;
+      this.maxLife = 0.8;
+    }
+    update(dt) {
+      this.life -= dt;
+      this.y -= 28 * dt;
+      return this.life > 0;
+    }
+    draw() {
+      drawText(this.text, this.x, this.y, this.color, 14, "center", this.life / this.maxLife);
+    }
+  }
+
+  class Spark {
+    constructor(x, y, color = "#ffd166") {
+      this.x = x;
+      this.y = y;
+      this.vx = Utils.rand(-180, 180);
+      this.vy = Utils.rand(-180, 180);
+      this.life = Utils.rand(0.18, 0.42);
+      this.maxLife = this.life;
+      this.size = Utils.rand(2, 4);
+      this.color = color;
+    }
+    update(dt) {
+      this.life -= dt;
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      this.vx *= 0.92;
+      this.vy *= 0.92;
+      return this.life > 0;
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      ctx.save();
+      ctx.globalAlpha = t;
+      ctx.shadowBlur = 12;
+      ctx.shadowColor = this.color;
+      ctx.fillStyle = this.color;
+      ctx.fillRect(this.x, this.y, this.size, this.size);
+      ctx.restore();
+    }
+  }
+
+  class RingEffect {
+    constructor(x, y, r = 20, color = "#7df9ff", life = 0.45) {
+      this.x = x;
+      this.y = y;
+      this.r = r;
+      this.life = life;
+      this.maxLife = life;
+      this.color = color;
+    }
+    update(dt) {
+      this.life -= dt;
+      this.r += 150 * dt;
+      return this.life > 0;
+    }
+    draw() {
+      const t = this.life / this.maxLife;
+      ctx.save();
+      ctx.globalAlpha = t * 0.9;
+      ctx.strokeStyle = this.color;
+      ctx.lineWidth = 3;
+      ctx.shadowBlur = 20;
+      ctx.shadowColor = this.color;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  class Bullet {
+    constructor(x, y, vx, vy, r = 7, color = "#ff7aa2", life = 8, damage = 10) {
+      this.x = x;
+      this.y = y;
+      this.vx = vx;
+      this.vy = vy;
+      this.r = r;
+      this.color = color;
+      this.life = life;
+      this.damage = damage;
+    }
+    update(dt, player) {
+      this.life -= dt;
+      this.x += this.vx * dt;
+      this.y += this.vy * dt;
+      if (Utils.dist(this.x, this.y, player.x, player.y) < this.r + player.radius) {
+        player.damage(this.damage);
+        for (let i = 0; i < 8; i++) effects.push(new Spark(this.x, this.y, this.color));
+        return false;
+      }
+      if (this.x < -50 || this.x > canvas.width + 50 || this.y < -50 || this.y > canvas.height + 50) return false;
+      return this.life > 0;
+    }
+    draw() {
+      drawGlowCircle(this.x, this.y, this.r, this.color, 0.9);
+      ctx.save();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.r + 2, 0, TAU);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  class RotatingBullet extends Bullet {
+    constructor(cx, cy, angle, orbitR, radialSpeed, spin, r = 6, color = "#9a7dff") {
+      super(cx, cy, 0, 0, r, color, 4.0, 10);
+      this.cx = cx;
+      this.cy = cy;
+      this.angle = angle;
+      this.orbitR = orbitR;
+      this.radialSpeed = radialSpeed;
+      this.spin = spin;
+    }
+    update(dt, player) {
+      this.life -= dt;
+      this.angle += this.spin * dt;
+      this.orbitR += this.radialSpeed * dt;
+      this.x = this.cx + Math.cos(this.angle) * this.orbitR;
+      this.y = this.cy + Math.sin(this.angle) * this.orbitR;
+      if (Utils.dist(this.x, this.y, player.x, player.y) < this.r + player.radius) {
+        player.damage(this.damage);
+        return false;
+      }
+      return this.life > 0;
+    }
+  }
+
+  class DelayedBlast {
+    constructor(x, y, delay = 1.0, radius = 68, color = "#ff8fab", followPlayer = false, followDuration = 0.8) {
+      this.x = x;
+      this.y = y;
+      this.delay = delay;
+      this.maxDelay = delay;
+      this.radius = radius;
+      this.color = color;
+      this.followPlayer = followPlayer;
+      this.followDuration = followDuration;
+      this.exploded = false;
+      this.lifeAfter = 0.18;
+    }
+    update(dt, player) {
+      if (!this.exploded) {
+        this.delay -= dt;
+        if (this.followPlayer && this.delay > this.maxDelay - this.followDuration) {
+          this.x = Utils.lerp(this.x, player.x, 0.08);
+          this.y = Utils.lerp(this.y, player.y, 0.08);
+        }
+        if (this.delay <= 0) {
+          this.exploded = true;
+          for (let i = 0; i < 18; i++) effects.push(new Spark(this.x, this.y, this.color));
+          effects.push(new RingEffect(this.x, this.y, 18, this.color, 0.28));
+          if (Utils.dist(this.x, this.y, player.x, player.y) < this.radius + player.radius) {
+            player.damage(18);
+          }
+        }
+        return true;
+      }
+      this.lifeAfter -= dt;
+      return this.lifeAfter > 0;
+    }
+    draw() {
+      if (!this.exploded) {
+        const t = Math.max(0, this.delay / this.maxDelay);
+        ctx.save();
+        ctx.globalAlpha = 0.25 + (1 - t) * 0.45;
+        ctx.strokeStyle = this.color;
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 8]);
+        ctx.shadowBlur = 16;
+        ctx.shadowColor = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+        drawText((this.delay + 0.05).toFixed(1), this.x, this.y + 4, "#fff", 14, "center");
+      } else {
+        ctx.save();
+        ctx.globalAlpha = this.lifeAfter / 0.18 * 0.35;
+        ctx.fillStyle = this.color;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius, 0, TAU);
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+  }
+
+  class SafeLaneCurtain {
+    constructor({ centerX, centerY, startAngle, laneWidth, color = "#ff6bb5", speed = 180, count = 42, radius = 6 }) {
+      const step = TAU / count;
+      for (let i = 0; i < count; i++) {
+        const a = i * step;
+        const diff = Utils.angleDelta(a, startAngle);
+        if (Math.abs(diff) < laneWidth * 0.5) continue;
+        bullets.push(new Bullet(centerX, centerY, Math.cos(a) * speed, Math.sin(a) * speed, radius, color, 6, 12));
+      }
+    }
+    update() { return false; }
+    draw() {}
+  }
+
+  class Player {
+    constructor(x, y) {
+      this.x = x;
+      this.y = y;
+      this.radius = 14;
+      this.speed = 280;
+      this.hp = 100;
+      this.hitFlash = 0;
+      this.dashTime = 0;
+      this.dashCooldown = 0;
+      this.facing = -Math.PI / 2;
+    }
+    update(dt) {
+      let dx = 0, dy = 0;
+      if (keys.has("w") || keys.has("arrowup")) dy -= 1;
+      if (keys.has("s") || keys.has("arrowdown")) dy += 1;
+      if (keys.has("a") || keys.has("arrowleft")) dx -= 1;
+      if (keys.has("d") || keys.has("arrowright")) dx += 1;
+      const dir = Utils.normalize(dx, dy);
+      if (dx || dy) this.facing = Math.atan2(dir.y, dir.x);
+
+      if ((keys.has("shift") || keys.has(" ")) && this.dashCooldown <= 0) {
+        this.dashTime = 0.14;
+        this.dashCooldown = 0.6;
+        for (let i = 0; i < 10; i++) effects.push(new Spark(this.x, this.y, "#7df9ff"));
+      }
+
+      const dashMul = this.dashTime > 0 ? 2.8 : 1;
+      this.x += dir.x * this.speed * dashMul * dt;
+      this.y += dir.y * this.speed * dashMul * dt;
+      this.x = Utils.clamp(this.x, 18, canvas.width - 18);
+      this.y = Utils.clamp(this.y, 18, canvas.height - 18);
+      this.dashTime = Math.max(0, this.dashTime - dt);
+      this.dashCooldown = Math.max(0, this.dashCooldown - dt);
+      this.hitFlash = Math.max(0, this.hitFlash - dt);
+    }
+    damage(amount) {
+      if (this.dashTime > 0.02) return;
+      this.hp = Math.max(0, this.hp - amount);
+      this.hitFlash = 0.18;
+      for (let i = 0; i < 8; i++) effects.push(new Spark(this.x, this.y, "#ff7a7a"));
+      texts.push(new FloatText(`-${amount}`, this.x, this.y - 18, "#ff8fab"));
+    }
+    draw() {
+      const c = this.hitFlash > 0 ? "#ff6b6b" : "#66f2ff";
+      drawGlowCircle(this.x, this.y, this.radius, c, 1);
+      const tipX = this.x + Math.cos(this.facing) * 22;
+      const tipY = this.y + Math.sin(this.facing) * 22;
+      ctx.save();
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 4, 0, TAU);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(this.x, this.y);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+      ctx.restore();
+      if (this.dashTime > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = "#7df9ff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 10 + (0.14 - this.dashTime) * 100, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  const PatternLibrary = {
+    single(runtime) {
+      const player = runtime.player;
+      const angle = Utils.angleTo(runtime.x, runtime.y, player.x, player.y);
+      bullets.push(new Bullet(runtime.x, runtime.y, Math.cos(angle) * 260, Math.sin(angle) * 260, 7, "#ff9e7a", 5, 10));
+      runtime.stateText = "단일 탄";
+    },
+
+    radial(runtime, options = {}) {
+      const count = options.count ?? 10;
+      const speed = options.speed ?? 140;
+      const color = options.color ?? "#9a7dff";
+      for (let i = 0; i < count; i++) {
+        const a = (i / count) * TAU;
+        bullets.push(new Bullet(runtime.x, runtime.y, Math.cos(a) * speed, Math.sin(a) * speed, 7, color, 6, 10));
+      }
+      runtime.stateText = "원형 확산";
+    },
+
+    danger(runtime) {
+      const player = runtime.player;
+      hazards.push(new DelayedBlast(player.x, player.y, 1.0, 72, "#ff8fab", false));
+      runtime.stateText = "위험지대";
+    },
+
+    trackingZone(runtime) {
+      const player = runtime.player;
+      hazards.push(new DelayedBlast(player.x, player.y, 1.1, 64, "#ffb347", true, 0.8));
+      runtime.stateText = "추적 위험지대";
+    },
+
+    rotating(runtime) {
+      const count = 14;
+      const base = performance.now() / 1000;
+      for (let i = 0; i < count; i++) {
+        bullets.push(new RotatingBullet(runtime.x, runtime.y, base + (i / count) * TAU, 10, 65, 1.9, 6, "#9a7dff"));
+      }
+      runtime.stateText = "회전 탄막";
+    },
+
+    safeLane(runtime, options = {}) {
+      const player = runtime.player;
+      let angle = Utils.angleTo(runtime.x, runtime.y, player.x, player.y);
+      if (options.randomize) angle += Utils.rand(-1.2, 1.2);
+      hazards.push(new SafeLaneCurtain({
+        centerX: runtime.x,
+        centerY: runtime.y,
+        startAngle: angle,
+        laneWidth: options.randomize ? 0.52 : 0.68,
+        color: options.randomize ? "#ff6bb5" : "#7df9ff",
+        speed: options.randomize ? 220 : 190,
+        count: options.randomize ? 56 : 46,
+        radius: options.randomize ? 6 : 7
+      }));
+      runtime.stateText = options.randomize ? "랜덤 안전지대" : "안전지대 탄막";
+    },
+
+    doubleRing(runtime) {
+      const outer = 18;
+      const inner = 12;
+      for (let i = 0; i < outer; i++) {
+        const a = (i / outer) * TAU;
+        bullets.push(new Bullet(runtime.x, runtime.y, Math.cos(a) * 120, Math.sin(a) * 120, 7, "#ffb347", 6, 10));
+      }
+      for (let i = 0; i < inner; i++) {
+        const a = (i / inner) * TAU + Math.PI / inner;
+        bullets.push(new Bullet(runtime.x, runtime.y, Math.cos(a) * 260, Math.sin(a) * 260, 6, "#ff6bb5", 4.8, 12));
+      }
+      runtime.stateText = "이중 탄막";
+    },
+
+    teleportBlast(runtime) {
+      const player = runtime.player;
+      const a = Utils.rand(0, TAU);
+      const r = Utils.rand(110, 160);
+      runtime.x = Utils.clamp(player.x + Math.cos(a) * r, 80, canvas.width - 80);
+      runtime.y = Utils.clamp(player.y + Math.sin(a) * r, 80, canvas.height * 0.6);
+      for (let i = 0; i < 14; i++) effects.push(new Spark(runtime.x, runtime.y, "#ff6bb5"));
+      effects.push(new RingEffect(runtime.x, runtime.y, 14, "#ff6bb5", 0.24));
+      hazards.push(new DelayedBlast(runtime.x, runtime.y, 0.45, 88, "#ff6bb5", false));
+      runtime.stateText = "텔포 폭발";
+    }
+  };
+
+  const BossRegistry = {
+    basic: {
+      id: "basic",
+      label: "기본형",
+      code: "CTRL-A",
+      radius: 34,
+      maxHp: 220,
+      colors(runtime) {
+        return { body: "#79ffbf", glow: "#48ffc5" };
+      },
+      movement(runtime, dt) {
+        runtime.x = Utils.lerp(runtime.x, canvas.width * 0.5, dt * 0.4);
+        runtime.y = Utils.lerp(runtime.y, canvas.height * 0.24, dt * 0.4);
+      },
+      phases: [
+        {
+          threshold: 1,
+          cooldown: () => 1.0 + Utils.rand(0.0, 0.35),
+          patternOrder: [
+            { name: "single" },
+            { name: "single" },
+            { name: "danger" },
+            { name: "radial", options: { count: 10, speed: 135, color: "#9a7dff" } }
+          ]
+        }
+      ],
+      panel(runtime) {
+        return [
+          "기본형 컨셉: 움직이면 살고, 멈추면 죽는다",
+          "- 이동 거의 없음 / 느린 공격 템포",
+          "- 단일 탄: 기본 회피 유도",
+          "- 원형 확산: 공간 벌리기 학습",
+          "- 위험지대: 예측 이동 학습",
+          "- 루프: 단일탄 -> 단일탄 -> 위험지대 -> 원형탄"
+        ];
+      }
+    },
+
+    advanced: {
+      id: "advanced",
+      label: "강화형",
+      code: "CTRL-X",
+      radius: 42,
+      maxHp: 500,
+      colors(runtime) {
+        if (runtime.phase === 1) return { body: "#7a5cff", glow: "#9a7dff" };
+        return { body: "#ff6bb5", glow: "#ff8fab" };
+      },
+      movement(runtime, dt) {
+        const player = runtime.player;
+        if (runtime.phase === 1) {
+          const orbit = performance.now() / 1000 * 0.65;
+          const tx = canvas.width * 0.5 + Math.cos(orbit) * 110;
+          const ty = canvas.height * 0.24 + Math.sin(orbit * 2) * 26;
+          runtime.x = Utils.lerp(runtime.x, tx, dt * 1.3);
+          runtime.y = Utils.lerp(runtime.y, ty, dt * 1.3);
+        } else {
+          const desired = Utils.angleTo(runtime.x, runtime.y, player.x, player.y) + Math.PI / 2;
+          const tx = player.x + Math.cos(desired) * 170;
+          const ty = Utils.clamp(player.y + Math.sin(desired) * 110, 80, canvas.height * 0.58);
+          runtime.x = Utils.lerp(runtime.x, tx, dt * 1.6);
+          runtime.y = Utils.lerp(runtime.y, ty, dt * 1.6);
+        }
+      },
+      onPhaseEnter(runtime, newPhase) {
+        if (newPhase !== 2) return;
+        runtime.phaseTransition = 1.4;
+        runtime.stateText = "PHASE SHIFT";
+        for (let i = 0; i < 26; i++) effects.push(new Spark(runtime.x, runtime.y, "#ff6bb5"));
+        effects.push(new RingEffect(runtime.x, runtime.y, 18, "#ff6bb5", 0.55));
+      },
+      duringPhaseTransition(runtime) {
+        if (runtime.phaseTransition > 0.7 && runtime.aiTimer <= 0) {
+          runtime.aiTimer = 0.22;
+          PatternLibrary.single(runtime);
+        }
+      },
+      phases: [
+        {
+          threshold: 1,
+          cooldown: () => 0.95,
+          patternOrder: [
+            { name: "rotating" },
+            { name: "trackingZone" },
+            { name: "safeLane", options: { randomize: false } }
+          ]
+        },
+        {
+          threshold: 0.5,
+          cooldown: () => 0.78,
+          patternOrder: [
+            { name: "doubleRing" },
+            { name: "safeLane", options: { randomize: true } },
+            { name: "teleportBlast" }
+          ]
+        }
+      ],
+      panel(runtime) {
+        if (runtime.phase === 1) {
+          return [
+            "강화형 Phase 1: 안전지대 찾기",
+            "- 회전 탄막: 지속 압박",
+            "- 추적 위험지대: 이동 제한",
+            "- 안전지대 탄막: 빈 각도를 읽어야 생존",
+            "- AI: 상단 선회로 화면을 설계"
+          ];
+        }
+        return [
+          "강화형 Phase 2: 생존 난이도 급상승",
+          "- 이중 탄막: 속도 차이로 타이밍 압박",
+          "- 랜덤 안전지대: 정답 위치가 바뀜",
+          "- 텔포 폭발: 근처 등장 후 강제 이탈",
+          "- AI: 측면을 잡고 짧은 템포로 패턴 연결"
+        ];
+      }
+    }
+  };
+
+  class BossRuntime {
+    constructor(type, player) {
+      this.player = player;
+      this.setDefinition(type);
+    }
+
+    setDefinition(type) {
+      const definition = BossRegistry[type];
+      if (!definition) throw new Error(`Unknown boss type: ${type}`);
+      this.definition = definition;
+      this.type = definition.id;
+      this.x = canvas.width * 0.5;
+      this.y = canvas.height * 0.24;
+      this.radius = definition.radius;
+      this.maxHp = definition.maxHp;
+      this.hp = this.maxHp;
+      this.phase = 1;
+      this.phaseTransition = 0;
+      this.aiTimer = 0;
+      this.stateText = "IDLE";
+      this.loopCursor = 0;
+      this.currentPhaseData = this.getPhaseData();
+    }
+
+    getPhaseData() {
+      let selected = this.definition.phases[0];
+      const ratio = this.hp / this.maxHp;
+      for (const phase of this.definition.phases) {
+        if (ratio <= phase.threshold) selected = phase;
+      }
+      return selected;
+    }
+
+    syncPhase() {
+      const previousPhase = this.phase;
+      const nextPhaseData = this.getPhaseData();
+      const nextPhase = this.definition.phases.indexOf(nextPhaseData) + 1;
+      if (nextPhase !== previousPhase) {
+        this.phase = nextPhase;
+        this.currentPhaseData = nextPhaseData;
+        this.loopCursor = 0;
+        if (this.definition.onPhaseEnter) this.definition.onPhaseEnter(this, nextPhase);
+      } else {
+        this.currentPhaseData = nextPhaseData;
+      }
+    }
+
+    forcePhase2() {
+      if (this.definition.phases.length < 2 || this.phase !== 1) return;
+      this.hp = this.maxHp * this.definition.phases[1].threshold;
+      this.syncPhase();
+    }
+
+    update(dt) {
+      this.syncPhase();
+      this.definition.movement(this, dt);
+      this.aiTimer -= dt;
+
+      if (this.phaseTransition > 0) {
+        this.phaseTransition -= dt;
+        if (this.definition.duringPhaseTransition) this.definition.duringPhaseTransition(this);
+        return;
+      }
+
+      if (this.aiTimer > 0) return;
+
+      const phaseData = this.currentPhaseData;
+      this.aiTimer = phaseData.cooldown();
+      const pattern = phaseData.patternOrder[this.loopCursor % phaseData.patternOrder.length];
+      this.loopCursor++;
+      const fn = PatternLibrary[pattern.name];
+      if (fn) fn(this, pattern.options || {});
+    }
+
+    draw() {
+      const colors = this.definition.colors(this);
+      drawGlowCircle(this.x, this.y, this.radius, colors.glow, 0.92);
+      ctx.save();
+      ctx.strokeStyle = colors.body;
+      ctx.lineWidth = 4;
+      ctx.shadowBlur = 22;
+      ctx.shadowColor = colors.glow;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, this.radius + 4, 0, TAU);
+      ctx.stroke();
+      const c = this.radius * 0.65;
+      ctx.beginPath();
+      ctx.moveTo(this.x - c, this.y);
+      ctx.lineTo(this.x + c, this.y);
+      ctx.moveTo(this.x, this.y - c);
+      ctx.lineTo(this.x, this.y + c);
+      ctx.stroke();
+      ctx.restore();
+
+      drawText(this.definition.code, this.x, this.y + 5, "#fff", 13, "center");
+      if (this.phaseTransition > 0) {
+        ctx.save();
+        ctx.globalAlpha = 0.3 + Math.sin(performance.now() / 100) * 0.2;
+        ctx.strokeStyle = "#fff";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.radius + 16, 0, TAU);
+        ctx.stroke();
+        ctx.restore();
+      }
+    }
+  }
+
+  let player;
+  let boss;
+  let selectedBossType = "basic";
+
+  function resetGame(type = selectedBossType) {
+    selectedBossType = type;
+    bullets.length = 0;
+    hazards.length = 0;
+    effects.length = 0;
+    texts.length = 0;
+    player = new Player(canvas.width * 0.5, canvas.height * 0.82);
+    boss = new BossRuntime(type, player);
+  }
+
+  addEventListener("keydown", (e) => {
+    const k = e.key.toLowerCase();
+    if (k === "1") resetGame("basic");
+    if (k === "2") resetGame("advanced");
+    if (k === "p" && boss.type === "advanced") boss.forcePhase2();
+    if (k === "r") resetGame(selectedBossType);
+    if (k === "h" && boss) {
+      boss.hp = Math.max(0, boss.hp - boss.maxHp * 0.1);
+      texts.push(new FloatText("Boss HP -10%", boss.x, boss.y - 46, "#ffd166"));
+    }
+  });
+
+  function updateList(arr, dt, extra) {
+    for (let i = arr.length - 1; i >= 0; i--) {
+      const alive = extra ? arr[i].update(dt, extra) : arr[i].update(dt);
+      if (!alive) arr.splice(i, 1);
+    }
+  }
+
+  function drawArena() {
+    ctx.save();
+    ctx.globalAlpha = 0.16;
+    ctx.strokeStyle = "#2b3e72";
+    ctx.lineWidth = 1;
+    const grid = 40;
+    for (let x = 0; x < canvas.width; x += grid) {
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, canvas.height);
+      ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += grid) {
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(canvas.width, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawBar(x, y, w, h, ratio, fill) {
+    ctx.save();
+    ctx.fillStyle = "rgba(255,255,255,0.08)";
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = fill;
+    ctx.fillRect(x, y, w * Utils.clamp(ratio, 0, 1), h);
+    ctx.strokeStyle = "#fff";
+    ctx.strokeRect(x, y, w, h);
+    ctx.restore();
+  }
+
+  function drawPanel() {
+    drawBar(20, 20, 240, 18, player.hp / 100, "#66f2ff");
+    drawText("Player HP", 20, 14, "#fff", 14);
+
+    const bossColors = boss.definition.colors(boss);
+    drawBar(20, 50, 240, 18, boss.hp / boss.maxHp, bossColors.glow);
+    drawText("Boss HP", 20, 44, "#fff", 14);
+
+    drawText(`Boss Type: ${boss.definition.label}`, 20, 92, "#fff", 14);
+    drawText(`Phase: ${boss.phase}`, 20, 114, "#fff", 14);
+    drawText(`Current Pattern: ${boss.stateText}`, 20, 136, "#fff", 14);
+
+    ctx.save();
+    ctx.fillStyle = "rgba(4,8,20,0.62)";
+    ctx.fillRect(canvas.width - 420, 18, 400, 258);
+    ctx.strokeStyle = "rgba(255,255,255,0.18)";
+    ctx.strokeRect(canvas.width - 420, 18, 400, 258);
+    ctx.restore();
+
+    drawText("패턴 / AI 설명", canvas.width - 398, 44, "#fff", 16);
+    const lines = boss.definition.panel(boss);
+    for (let i = 0; i < lines.length; i++) {
+      drawText(lines[i], canvas.width - 398, 76 + i * 28, "#dce7ff", 14);
+    }
+
+    drawText("구조: PatternLibrary + BossRegistry + BossRuntime", canvas.width - 398, 232, "#9ecbff", 13);
+    drawText("새 보스 추가: BossRegistry에 정의 + 필요한 패턴만 PatternLibrary에 추가", canvas.width - 398, 254, "#9ecbff", 13);
+
+    drawText("이동: WASD / 방향키", 20, canvas.height - 74, "#fff", 14);
+    drawText("대시: Shift 또는 Space", 20, canvas.height - 52, "#fff", 14);
+    drawText("1: 기본형  2: 강화형  P: 2페이즈  H: 보스HP -10%  R: 리셋", 20, canvas.height - 30, "#fff", 14);
+  }
+
+  resetGame("basic");
+
+  let lastTime = performance.now();
+  function loop(now) {
+    const dt = Math.min((now - lastTime) / 1000, 0.033);
+    lastTime = now;
+
+    player.update(dt);
+    boss.update(dt);
+    updateList(bullets, dt, player);
+    updateList(hazards, dt, player);
+    updateList(effects, dt);
+    updateList(texts, dt);
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawArena();
+    for (const h of hazards) h.draw();
+    for (const b of bullets) b.draw();
+    for (const e of effects) e.draw();
+    boss.draw();
+    player.draw();
+    for (const t of texts) t.draw();
+    drawPanel();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

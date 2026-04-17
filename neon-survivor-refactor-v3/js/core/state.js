@@ -15,6 +15,8 @@ window.GameState = {
   player: null,
   decoys: [],
   bullets: [],
+  enemyBullets: [],
+  beams: [],
   missiles: [],
   enemies: [],
   particles: [],
@@ -62,7 +64,8 @@ window.GameState = {
     level: 1,
     xp: 0,
     xpToNext: GAME_BALANCE.XP.BASE_TO_NEXT,
-    pendingLevelUps: 0
+    pendingLevelUps: 0,
+    deathTimer: 0
   },
 
   activeSkillState: {
@@ -71,8 +74,25 @@ window.GameState = {
       { key:"KeyE", label:"E", skillId:null, cooldown:0, autoCast:false },
       { key:"KeyR", label:"R", skillId:null, cooldown:0, autoCast:false }
     ],
+    levels: {
+      boost: 1
+    },
+    boostDir: 0,
+    boostDrag: 0.9,
+    boostMitigationT: 0,
+    boostMitigationMul: 1,
     boostT: 0,
     afterburnerT: 0
+  },
+
+  weaponState: {
+    current: "machinegun",
+    levels: {
+      machinegun: 1,
+      laser: 1,
+      shotgun: 1
+    },
+    laserChannel: null
   },
 
   shake: 0

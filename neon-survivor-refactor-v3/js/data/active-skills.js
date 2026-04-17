@@ -17,7 +17,7 @@ window.ACTIVE_SKILL_DEFINITIONS = [
   {
     id: "boost",
     name: "Boost",
-    desc: "Burst toward your aim direction with a short defensive window.",
+    desc: "Directional burst based on movement input, or aim direction when idle.",
     type: "mobility",
     mpCost: 18,
     cooldown: 72,
@@ -26,8 +26,9 @@ window.ACTIVE_SKILL_DEFINITIONS = [
     autoCast: false,
     slotType: "active",
     effectData: {
-      speed: 20,
-      invulnerability: 16
+      forward: { speed: 18, drag: 0.93, mitigationMul: 0.9 },
+      side: { speed: 16, drag: 0.91, mitigationMul: 0.88 },
+      back: { speed: 21, drag: 0.84, mitigationMul: 0.82 }
     }
   },
   {

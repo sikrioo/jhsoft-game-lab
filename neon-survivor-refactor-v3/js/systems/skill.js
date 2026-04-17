@@ -10,8 +10,8 @@ window.SkillSystem = (() => {
     return true;
   }
 
-  function applyStartingLoadout(){
-    const starting = (GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_UPGRADES) || [];
+  function applyStartingLoadout(testMode=false){
+    const starting = testMode ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_UPGRADES) || []) : [];
     for (const id of starting) applyUpgradeById(id);
   }
 

@@ -2,12 +2,12 @@ window.UPGRADE_DEFINITIONS = [
   {
     id:"firerate",
     name:"Fire Rate",
-    desc:"Fire interval -15%",
+    desc:"Fire interval -8%",
     apply:()=>{
       const S = GameState;
       S.stats.fireRate = Math.max(
         GAME_BALANCE.PLAYER.FIRE_RATE_MIN,
-        Math.floor(S.stats.fireRate * 0.85)
+        Math.floor(S.stats.fireRate * 0.92)
       );
     }
   },
@@ -30,18 +30,18 @@ window.UPGRADE_DEFINITIONS = [
   {
     id:"speed",
     name:"Thruster Tune",
-    desc:"Move speed +12%",
+    desc:"Move speed +8%",
     apply:()=>{
-      GameState.stats.speed *= 1.12;
+      GameState.stats.speed *= 1.08;
     }
   },
   {
     id:"dash",
     name:"Dash Cooling",
-    desc:"Dash cooldown -20%",
+    desc:"Dash cooldown -10%",
     apply:()=>{
       const S = GameState;
-      S.stats.dashCdMax = Math.max(25, Math.floor(S.stats.dashCdMax * 0.80));
+      S.stats.dashCdMax = Math.max(25, Math.floor(S.stats.dashCdMax * 0.90));
     }
   },
   {
@@ -72,7 +72,7 @@ window.UPGRADE_DEFINITIONS = [
       const S = GameState;
       S.stats.homingMissileLevel += 1;
       S.stats.homingMissileDamage += 1;
-      S.stats.homingMissileCdMax = Math.max(28, Math.floor(S.stats.homingMissileCdMax * 0.90));
+      S.stats.homingMissileCdMax = Math.max(28, Math.floor(S.stats.homingMissileCdMax * 0.92));
     }
   },
   {
@@ -104,9 +104,9 @@ window.UPGRADE_DEFINITIONS = [
   {
     id:"bulletspeed",
     name:"Velocity",
-    desc:"Bullet speed +15%",
+    desc:"Bullet speed +8%",
     apply:()=>{
-      GameState.stats.bulletSpeed *= 1.15;
+      GameState.stats.bulletSpeed *= 1.08;
     }
   }
 ];
