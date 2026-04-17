@@ -52,12 +52,19 @@ window.BossSystem = (() => {
   // ─── 웨이브 판단 ────────────────────────────────────────────────────────────
 
   function isBossWave(wave = GameState.progression.wave) {
+    if (GameState.progression && GameState.progression.stageDuration > 0) return false;
     return !GameState.stats.practice && wave > 0 && wave % 5 === 0;
   }
 
   function getWaveBossId(wave = GameState.progression.wave) {
     const order = ["basic", "advanced", "knight", "split", "summoner"];
     const index = Math.max(0, Math.floor(wave / 5) - 1) % order.length;
+    return order[index];
+  }
+
+  function getStageBossId(stage = GameState.progression.stage || 1) {
+    const order = ["basic", "advanced", "knight", "split", "summoner"];
+    const index = Math.max(0, stage - 1) % order.length;
     return order[index];
   }
 
@@ -68,7 +75,8 @@ window.BossSystem = (() => {
   }
 
   function shouldSuppressEnemySpawns() {
-    return shouldSuppressPracticeSpawns() || hasActiveBoss() || isBossWave();
+    const stageBossActive = !GameState.stats.practice && GameState.progression.stageState === "boss";
+    return shouldSuppressPracticeSpawns() || hasActiveBoss() || stageBossActive || isBossWave();
   }
 
   // ─── 아레나 클리어 ─────────────────────────────────────────────────────────
@@ -177,7 +185,27 @@ window.BossSystem = (() => {
     boss.fireCd     = 24;
     boss.patternIndex = 0;
     boss.orbitT     = 0;
+    boss.pendingBlast = null;
     boss.spr.addChild(boss.core);
+
+    function triggerAreaBlast(blast) {
+      if (!blast) return;
+      Effects.emitPulse(blast.x, blast.y, blast.color, blast.radius, 14);
+      Effects.emitParticle(blast.x, blast.y, blast.color, 18, 1.15);
+      const player = GameState.player;
+      const rr = blast.radius + player.r;
+      if (Helpers.dist2(blast.x, blast.y, player.spr.x, player.spr.y) <= rr * rr) {
+        const ang = Math.atan2(player.spr.y - blast.y, player.spr.x - blast.x);
+        EnemySystem.hitPlayerWithEnemyDamage(blast.damage, blast.color, Math.cos(ang), Math.sin(ang), {
+          invFrames: 22,
+          push: 5.2,
+          particleCount: 14,
+          particlePower: 1.0,
+          pulseRadius: blast.radius * 0.65,
+          pulseLife: 10
+        });
+      }
+    }
 
     boss.updateBoss = (dt) => {
       const w = GameState.app.renderer.width;
@@ -191,16 +219,25 @@ window.BossSystem = (() => {
 
       // 발사 예고
       if (boss.fireCd <= 14 && boss.fireCd + dt > 14) {
-        if (boss.patternIndex % 3 === 0) {
+        const pattern = boss.patternIndex % 3;
+        if (pattern === 0) {
           const aim = Math.atan2(GameState.player.spr.y - boss.y, GameState.player.spr.x - boss.x);
           Effects.emitLineTelegraph(boss.x, boss.y, boss.x + Math.cos(aim) * 220, boss.y + Math.sin(aim) * 220, 0x79ffbf, 14, 6);
-        } else {
+        } else if (pattern === 1) {
           Effects.emitGroundTelegraph(boss.x, boss.y, boss.hp <= boss.maxHp * 0.5 ? 86 : 70, 0xffd166, 14);
+        } else {
+          const player = GameState.player;
+          const radius = boss.hp <= boss.maxHp * 0.5 ? 76 : 62;
+          const tx = Helpers.clamp(player.spr.x + player.vx * 5, 44, GameState.app.renderer.width - 44);
+          const ty = Helpers.clamp(player.spr.y + player.vy * 5, 64, GameState.app.renderer.height - 44);
+          boss.pendingBlast = { x: tx, y: ty, radius, damage: boss.hp <= boss.maxHp * 0.5 ? 12 : 10, color: 0xff6b6b };
+          Effects.emitGroundTelegraph(tx, ty, radius, 0xff6b6b, 14);
         }
       }
 
       if (boss.fireCd <= 0) {
-        if (boss.patternIndex % 3 === 0) {
+        const pattern = boss.patternIndex % 3;
+        if (pattern === 0) {
           const aim = Math.atan2(GameState.player.spr.y - boss.y, GameState.player.spr.x - boss.x);
           for (let i = -2; i <= 2; i++) {
             GameState.enemyBullets.push(BossBullets.make(boss.x, boss.y + 16, aim + i * 0.16, {
@@ -208,13 +245,17 @@ window.BossSystem = (() => {
             }));
           }
           boss.fireCd = 34;
-        } else {
+        } else if (pattern === 1) {
           const isEnraged = boss.hp <= boss.maxHp * 0.5;
           const count  = isEnraged ? 14 : 10;
           const speed  = isEnraged ? 5.8 : 5.0;
           const spin   = performance.now() * 0.0025;
           BossBullets.radialBurst(boss.x, boss.y, count, speed, 0xffd166, 7, spin, 7);
           boss.fireCd  = isEnraged ? 48 : 58;
+        } else {
+          triggerAreaBlast(boss.pendingBlast);
+          boss.pendingBlast = null;
+          boss.fireCd = boss.hp <= boss.maxHp * 0.5 ? 44 : 52;
         }
         boss.patternIndex += 1;
       }
@@ -272,8 +313,8 @@ window.BossSystem = (() => {
     function doubleRing() {
       boss.currentAction = "DOUBLE";
       Effects.emitGroundTelegraph(boss.x, boss.y, 76, 0xff6bb5, 12);
-      boss.scheduler.schedule(12, () => radialBurst(boss.x, boss.y, 12, 5.0, 0xff8fab, 9, performance.now() * 0.002));
-      boss.scheduler.schedule(24, () => radialBurst(boss.x, boss.y, 18, 6.1, 0xff6bb5, 10, performance.now() * 0.003));
+      boss.scheduler.schedule(12, () => radialBurst(boss.x, boss.y, 10, 4.7, 0xff8fab, 8, performance.now() * 0.002));
+      boss.scheduler.schedule(26, () => radialBurst(boss.x, boss.y, 14, 5.5, 0xff6bb5, 9, performance.now() * 0.003));
     }
 
     function teleportBlast() {
@@ -284,12 +325,12 @@ window.BossSystem = (() => {
       Effects.emitGroundTelegraph(preX, preY, 72, 0xff6bb5, 14);
       boss.scheduler.schedule(14, () => {
         const angle = Math.atan2(player.spr.y - boss.y, player.spr.x - boss.x) + Math.PI / 2;
-        boss.x = Helpers.clamp(player.spr.x + Math.cos(angle) * 150, 42, GameState.app.renderer.width - 42);
-        boss.y = Helpers.clamp(player.spr.y + Math.sin(angle) * 96,  54, GameState.app.renderer.height * 0.62);
+        boss.x = Helpers.clamp(player.spr.x + Math.cos(angle) * 250, 42, GameState.app.renderer.width - 42);
+        boss.y = Helpers.clamp(player.spr.y + Math.sin(angle) * 156,  54, GameState.app.renderer.height * 0.52);
         boss.spr.x = boss.x;
         boss.spr.y = boss.y;
         Effects.emitPulse(boss.x, boss.y, 0xff6bb5, 62, 10);
-        radialBurst(boss.x, boss.y, 16, 6.2, 0xff6bb5, 10, performance.now() * 0.0025);
+        radialBurst(boss.x, boss.y, 10, 5.0, 0xff6bb5, 8, performance.now() * 0.0025);
       });
     }
 
@@ -299,7 +340,7 @@ window.BossSystem = (() => {
         boss.phaseShiftPlayed = true;
         Effects.emitPulse(boss.x, boss.y, 0xff6bb5, 90, 18);
         Effects.emitParticle(boss.x, boss.y, 0xff8fab, 20, 1.5);
-        boss.aiCd = Math.min(boss.aiCd, 10);
+        boss.aiCd = Math.min(boss.aiCd, 22);
       }
     }
 
@@ -315,12 +356,12 @@ window.BossSystem = (() => {
         boss.y = Helpers.lerp(boss.y, targetY, 0.06 * dt);
       } else {
         const player  = GameState.player;
-        boss.orbitT  += dt * 0.02;
+        boss.orbitT  += dt * 0.01;
         const desired = Math.atan2(player.spr.y - boss.y, player.spr.x - boss.x) + Math.PI / 2;
-        const targetX = player.spr.x + Math.cos(desired) * 165;
-        const targetY = Helpers.clamp(player.spr.y + Math.sin(desired) * 104, 80, GameState.app.renderer.height * 0.62);
-        boss.x = Helpers.lerp(boss.x, targetX, 0.07 * dt);
-        boss.y = Helpers.lerp(boss.y, targetY, 0.07 * dt);
+        const targetX = player.spr.x + Math.cos(desired) * 290;
+        const targetY = Helpers.clamp(player.spr.y + Math.sin(desired) * 172, 88, GameState.app.renderer.height * 0.48);
+        boss.x = Helpers.lerp(boss.x, targetX, 0.03 * dt);
+        boss.y = Helpers.lerp(boss.y, targetY, 0.03 * dt);
       }
       boss.spr.x = boss.x;
       boss.spr.y = boss.y;
@@ -334,7 +375,7 @@ window.BossSystem = (() => {
         } else {
           const actions = [doubleRing, () => BossBullets.safeLaneBurst(boss.x, boss.y, { randomize: true, onSchedule: boss.scheduler.schedule }), teleportBlast];
           actions[boss.attackIndex % actions.length]();
-          boss.aiCd = boss.attackIndex % 3 === 0 ? 30 : 26;
+          boss.aiCd = boss.attackIndex % 3 === 0 ? 44 : 40;
         }
         boss.attackIndex += 1;
       }
@@ -383,6 +424,14 @@ window.BossSystem = (() => {
         fireCd: isBlue ? 32 : 0,
         pulse:  Math.random() * Math.PI * 2,
         dashTelegraphShown: false,
+        state: isBlue ? "ORBIT" : "APPROACH",
+        stateTime: 0,
+        stateDuration: isBlue ? 0 : 18,
+        lockAngle: 0,
+        attackPattern: "FORWARD_SLASH",
+        attackSide: 1,
+        attackFxPlayed: false,
+        afterSlash: 0,
         frame: BossVisuals.buildFrame({
           radius:    22,
           code:      isBlue ? "B" : "R",
@@ -417,6 +466,94 @@ window.BossSystem = (() => {
         if (child.frame && child.frame.parent) child.frame.parent.removeChild(child.frame);
         return false;
       });
+    }
+
+    function setRedState(child, next, duration) {
+      child.state = next;
+      child.stateTime = 0;
+      child.stateDuration = duration;
+      child.attackFxPlayed = false;
+      if (next !== "CHARGE") child.dashTelegraphShown = false;
+    }
+
+    function chooseRedAttackPattern(child, distToPlayer) {
+      if (distToPlayer > 170) return "FORWARD_SLASH";
+      child.attackSide *= -1;
+      return child.attackSide > 0 ? "LEFT_STEP_SLASH" : "RIGHT_STEP_SLASH";
+    }
+
+    function getRedSlashAngles(child) {
+      if (child.attackPattern === "LEFT_STEP_SLASH") return { start: child.lockAngle - Math.PI * 1.05, end: child.lockAngle - Math.PI * 0.12 };
+      if (child.attackPattern === "RIGHT_STEP_SLASH") return { start: child.lockAngle + Math.PI * 0.12, end: child.lockAngle + Math.PI * 1.05 };
+      return { start: child.lockAngle - Math.PI * 0.75, end: child.lockAngle + Math.PI * 0.15 };
+    }
+
+    function updateRedKnightChild(child, dt, player, alone) {
+      child.stateTime += dt;
+      const angleToPlayer = Math.atan2(player.spr.y - child.y, player.spr.x - child.x);
+      const distToPlayer = Math.hypot(player.spr.x - child.x, player.spr.y - child.y) || 1;
+      const moveSpeed = alone ? 4.0 : 3.1;
+      const targetDist = alone ? 136 : 154;
+      const dashDistance = alone ? 220 : 190;
+
+      if (child.state === "APPROACH") {
+        if (distToPlayer > targetDist) {
+          child.x += Math.cos(angleToPlayer) * moveSpeed * dt;
+          child.y += Math.sin(angleToPlayer) * moveSpeed * dt;
+        } else {
+          child.x -= Math.cos(angleToPlayer) * moveSpeed * 0.22 * dt;
+          child.y -= Math.sin(angleToPlayer) * moveSpeed * 0.22 * dt;
+        }
+        if (child.stateTime >= child.stateDuration || distToPlayer < targetDist + 10) setRedState(child, "STRAFE", alone ? 12 : 16);
+      } else if (child.state === "STRAFE") {
+        const side = Math.sin(performance.now() * 0.004 + child.pulse) > 0 ? 1 : -1;
+        child.x += Math.cos(angleToPlayer + Math.PI / 2 * side) * moveSpeed * 0.75 * dt;
+        child.y += Math.sin(angleToPlayer + Math.PI / 2 * side) * moveSpeed * 0.75 * dt;
+        if (child.stateTime >= child.stateDuration) {
+          child.lockAngle = angleToPlayer;
+          child.attackPattern = chooseRedAttackPattern(child, distToPlayer);
+          setRedState(child, "CHARGE", alone ? 9 : 12);
+        }
+      } else if (child.state === "CHARGE") {
+        child.lockAngle = angleToPlayer;
+        if (!child.dashTelegraphShown) {
+          Effects.emitLineTelegraph(child.x, child.y, child.x + Math.cos(child.lockAngle) * dashDistance, child.y + Math.sin(child.lockAngle) * dashDistance, 0xff5f90, alone ? 10 : 12, 6);
+          child.dashTelegraphShown = true;
+        }
+        if (child.stateTime >= child.stateDuration) setRedState(child, "ATTACK", alone ? 7 : 9);
+      } else if (child.state === "ATTACK") {
+        const attackProgress = Math.min(1, child.stateTime / Math.max(0.001, child.stateDuration));
+        const stepDistance = dashDistance / Math.max(1, child.stateDuration);
+        child.x += Math.cos(child.lockAngle) * stepDistance * dt;
+        child.y += Math.sin(child.lockAngle) * stepDistance * dt;
+        if (!child.attackFxPlayed && attackProgress >= 0.72) {
+          child.attackFxPlayed = true;
+          const slash = getRedSlashAngles(child);
+          const arcX = child.x + Math.cos(child.lockAngle) * 34;
+          const arcY = child.y + Math.sin(child.lockAngle) * 34;
+          Effects.emitSlashArc(arcX, arcY, slash.start, slash.end, 0xffffff, 7, alone ? 52 : 46, 8);
+          Effects.emitSlashArc(arcX - Math.cos(child.lockAngle) * 7, arcY - Math.sin(child.lockAngle) * 7, slash.start + 0.05, slash.end - 0.05, 0xff5f90, 6, alone ? 46 : 40, 5);
+        }
+        if (child.afterSlash <= 0) {
+          child.afterSlash = alone ? 5 : 6;
+          BossBullets.aimSpread(child.x, child.y, alone ? 1 : 0, {
+            color: 0xff8fab,
+            speed: alone ? 5.8 : 5.0,
+            damage: alone ? 9 : 7,
+            radius: 6
+          });
+        } else {
+          child.afterSlash -= dt;
+        }
+        if (child.stateTime >= child.stateDuration) {
+          child.afterSlash = 0;
+          setRedState(child, "RECOVERY", alone ? 10 : 12);
+        }
+      } else if (child.state === "RECOVERY") {
+        child.x -= Math.cos(angleToPlayer) * moveSpeed * 0.45 * dt;
+        child.y -= Math.sin(angleToPlayer) * moveSpeed * 0.45 * dt;
+        if (child.stateTime >= child.stateDuration) setRedState(child, "APPROACH", alone ? 18 : 22);
+      }
     }
 
     boss.getHitCircles = () => {
@@ -490,27 +627,7 @@ window.BossSystem = (() => {
             }
           } else {
             // red: 대시 추적
-            child.dashCd -= dt;
-            if (!child.dashTelegraphShown && child.dashCd <= 12) {
-              const angle = Math.atan2(player.spr.y - child.y, player.spr.x - child.x);
-              Effects.emitLineTelegraph(child.x, child.y, child.x + Math.cos(angle) * 180, child.y + Math.sin(angle) * 180, 0xff5f90, 12, 6);
-              child.dashTelegraphShown = true;
-            }
-            if (child.dashCd <= 0) {
-              const alone = boss.children.length === 1;
-              const angle = Math.atan2(player.spr.y - child.y, player.spr.x - child.x);
-              child.x += Math.cos(angle) * (alone ? 105 : 82);
-              child.y += Math.sin(angle) * (alone ? 105 : 82);
-              Effects.emitPulse(child.x, child.y, 0xff5f90, 44, 10);
-              child.dashCd = alone ? 34 : 48;
-              child.dashTelegraphShown = false;
-            } else {
-              const desired = Math.atan2(player.spr.y - child.y, player.spr.x - child.x) + Math.sin(child.pulse) * 0.6;
-              child.targetX = player.spr.x + Math.cos(desired) * 160;
-              child.targetY = Math.max(80, Math.min(GameState.app.renderer.height * 0.65, player.spr.y + Math.sin(desired) * 90));
-              child.x = Helpers.lerp(child.x, child.targetX, 0.055 * dt);
-              child.y = Helpers.lerp(child.y, child.targetY, 0.055 * dt);
-            }
+            updateRedKnightChild(child, dt, player, boss.children.length === 1);
           }
 
           child.frame.x = child.x - boss.x;
@@ -555,6 +672,9 @@ window.BossSystem = (() => {
     boss.orbitT = Math.random() * Math.PI * 2;
     boss.aiCd   = 24;
     boss.minions = [];
+    boss.totalSummons = 0;
+    boss.maxSummons = 5;
+    boss.phase2SummonBonusApplied = false;
 
     function createMinion(role, angle) {
       const isShooter = role === "shooter";
@@ -595,13 +715,14 @@ window.BossSystem = (() => {
 
     function spawnWave() {
       const limit = boss.phase === 1 ? 2 : 3;
-      if (boss.minions.length >= limit) return false;
-      const missing = limit - boss.minions.length;
+      if (boss.minions.length >= limit || boss.totalSummons >= boss.maxSummons) return false;
+      const missing = Math.min(limit - boss.minions.length, boss.maxSummons - boss.totalSummons);
       const roles   = boss.phase === 1 ? ["shooter", "chaser"] : ["shooter", "chaser", "shooter"];
       for (let i = 0; i < missing; i++) {
         const role  = roles[(boss.minions.length + i) % roles.length];
         const angle = boss.orbitT + (Math.PI * 2 * (i + 1)) / (missing + 1);
         boss.minions.push(createMinion(role, angle));
+        boss.totalSummons += 1;
       }
       Effects.emitPulse(boss.x, boss.y, boss.phase === 1 ? 0xa2a8ff : 0xff6bd6, 64, 12);
       Effects.emitParticle(boss.x, boss.y, boss.phase === 1 ? 0xa2a8ff : 0xff6bd6, 16, 1.1);
@@ -610,6 +731,31 @@ window.BossSystem = (() => {
 
     function checkPhaseTransition() {
       if (boss.hp <= boss.maxHp * 0.5) boss.phase = 2;
+      if (boss.phase === 2 && !boss.phase2SummonBonusApplied) {
+        boss.phase2SummonBonusApplied = true;
+        boss.maxSummons += 2;
+      }
+    }
+
+    function fireShooterLaser(minion, aim) {
+      const color = boss.phase === 1 ? 0xd8dcff : 0xffd6fa;
+      const speed = boss.phase === 1 ? 8.8 : 9.8;
+      const damage = boss.phase === 1 ? 6 : 7;
+      const spacing = 18;
+      for (let i = 0; i < 4; i++) {
+        const ox = Math.cos(aim) * spacing * i;
+        const oy = Math.sin(aim) * spacing * i;
+        GameState.enemyBullets.push(BossBullets.make(minion.x + ox, minion.y + oy, aim, {
+          color,
+          speed: speed + i * 0.2,
+          damage,
+          radius: 7 + (i > 1 ? 1 : 0),
+          life: 90,
+          scaleX: 1.2,
+          scaleY: 1.45
+        }));
+      }
+      Effects.emitPulse(minion.x, minion.y, color, 24, 8);
     }
 
     boss.getHitCircles = () => {
@@ -655,11 +801,11 @@ window.BossSystem = (() => {
 
       boss.aiCd -= dt;
       if (boss.aiCd <= 14 && boss.aiCd + dt > 14) {
-        if (boss.minions.length < (boss.phase === 1 ? 2 : 3)) {
+        if (boss.minions.length < (boss.phase === 1 ? 2 : 3) && boss.totalSummons < boss.maxSummons) {
           Effects.emitGroundTelegraph(boss.x, boss.y, boss.phase === 1 ? 56 : 68, boss.phase === 1 ? 0xa2a8ff : 0xff6bd6, 14);
         } else {
           const aim = Math.atan2(player.spr.y - boss.y, player.spr.x - boss.x);
-          Effects.emitLineTelegraph(boss.x, boss.y, boss.x + Math.cos(aim) * 220, boss.y + Math.sin(aim) * 220, boss.phase === 1 ? 0xa2a8ff : 0xff6bd6, 14, 6);
+          Effects.emitLineTelegraph(boss.x, boss.y, boss.x + Math.cos(aim) * (boss.phase === 1 ? 420 : 520), boss.y + Math.sin(aim) * (boss.phase === 1 ? 420 : 520), boss.phase === 1 ? 0xa2a8ff : 0xff6bd6, 14, 6);
         }
       }
       if (boss.aiCd <= 0) {
@@ -668,9 +814,10 @@ window.BossSystem = (() => {
           const shotCount = boss.phase === 1 ? 3 : 5;
           BossBullets.aimSpread(boss.x, boss.y, Math.floor(shotCount / 2), {
             color:  boss.phase === 1 ? 0xa2a8ff : 0xff6bd6,
-            speed:  boss.phase === 1 ? 5.8 : 6.4,
+            speed:  boss.phase === 1 ? 7.8 : 8.6,
             damage: boss.phase === 1 ? 8   : 9,
-            radius: 8
+            radius: 8,
+            life: boss.phase === 1 ? 210 : 240
           });
         }
         boss.aiCd = didSummon ? (boss.phase === 1 ? 72 : 58) : (boss.phase === 1 ? 34 : 28);
@@ -688,16 +835,11 @@ window.BossSystem = (() => {
           minion.fireCd -= dt;
           if (minion.fireCd <= 10 && minion.fireCd + dt > 10) {
             const aim = Math.atan2(player.spr.y - minion.y, player.spr.x - minion.x);
-            Effects.emitLineTelegraph(minion.x, minion.y, minion.x + Math.cos(aim) * 160, minion.y + Math.sin(aim) * 160, 0xd8dcff, 10, 4);
+            Effects.emitLineTelegraph(minion.x, minion.y, minion.x + Math.cos(aim) * 240, minion.y + Math.sin(aim) * 240, boss.phase === 1 ? 0xd8dcff : 0xffd6fa, 10, 5);
           }
           if (minion.fireCd <= 0) {
             const aim = Math.atan2(player.spr.y - minion.y, player.spr.x - minion.x);
-            GameState.enemyBullets.push(BossBullets.make(minion.x, minion.y, aim, {
-              color:  0xd8dcff,
-              speed:  boss.phase === 1 ? 6.1 : 6.8,
-              damage: boss.phase === 1 ? 6   : 7,
-              radius: 6
-            }));
+            fireShooterLaser(minion, aim);
             minion.fireCd = boss.phase === 1 ? 32 : 24;
           }
         } else {
@@ -951,6 +1093,10 @@ window.BossSystem = (() => {
     return spawnBoss(getWaveBossId(wave), { replaceExisting: false });
   }
 
+  function spawnStageBoss(stage = GameState.progression.stage || 1) {
+    return spawnBoss(getStageBossId(stage), { replaceExisting: true });
+  }
+
   // ─── Public API ────────────────────────────────────────────────────────────
 
   return {
@@ -962,10 +1108,12 @@ window.BossSystem = (() => {
     hasActiveBoss,
     isBossWave,
     getWaveBossId,
+    getStageBossId,
     shouldSuppressPracticeSpawns,
     shouldSuppressEnemySpawns,
     spawnBoss,
     spawnSelectedPracticeBoss,
-    spawnWaveBoss
+    spawnWaveBoss,
+    spawnStageBoss
   };
 })();

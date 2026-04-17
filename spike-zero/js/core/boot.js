@@ -53,6 +53,10 @@ window.Boot = (() => {
     S.progression.score = 0;
     S.progression.combo = 1;
     S.progression.comboT = 0;
+    S.progression.stage = 1;
+    S.progression.stageDuration = 180 * 60;
+    S.progression.stageTime = S.progression.stageDuration;
+    S.progression.stageState = "combat";
     S.progression.wave = 1;
     S.progression.waveAlive = 0;
     S.progression.waveTarget = 8;
@@ -80,7 +84,11 @@ window.Boot = (() => {
     SkillSystem.applyStartingLoadout(testMode);
     ActiveSkillSystem.assignStartingLoadout(testMode);
 
-    WaveSystem.startNextWave();
+    if (testMode) {
+      WaveSystem.startNextWave();
+    } else {
+      WaveSystem.startStage(1);
+    }
     if (testMode && window.BossSystem) BossSystem.spawnSelectedPracticeBoss();
     UI.hudUpdate();
     UI.showCard(null);
@@ -113,8 +121,8 @@ window.Boot = (() => {
       if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
       if (e.code === "Digit1") ActiveSkillSystem.tryUseBoostDirection("forward");
       if (e.code === "Digit2") ActiveSkillSystem.tryUseBoostDirection("left");
-      if (e.code === "Digit3") ActiveSkillSystem.tryUseBoostDirection("back");
-      if (e.code === "Digit4") ActiveSkillSystem.tryUseBoostDirection("right");
+      if (e.code === "Digit3") ActiveSkillSystem.tryUseBoostDirection("right");
+      if (e.code === "Digit4") ActiveSkillSystem.tryUseBoostDirection("back");
       ActiveSkillSystem.tryUseSlotByKey(e.code);
     }, { passive:false });
 
@@ -307,6 +315,14 @@ window.Boot = (() => {
       if (P.combo < 1.02) P.combo = 1;
     }
 
+    if (!S.stats.practice && P.stageState === "combat" && !(window.BossSystem && BossSystem.hasActiveBoss())) {
+      P.stageTime = Math.max(0, P.stageTime - dt);
+      if (P.stageTime <= 0) {
+        WaveSystem.triggerStageBoss();
+        return;
+      }
+    }
+
     P.spawnT += dt;
     const suppressEnemySpawns = window.BossSystem && BossSystem.shouldSuppressEnemySpawns();
     if (!suppressEnemySpawns) {
@@ -317,7 +333,12 @@ window.Boot = (() => {
       }
     }
 
-    if (P.spawnedCount >= P.waveTarget && P.waveAlive <= 0 && S.enemies.length === 0){
+    if (!S.stats.practice && P.stageState === "boss" && (!window.BossSystem || !BossSystem.hasActiveBoss()) && S.enemies.length === 0){
+      WaveSystem.completeStage();
+      return;
+    }
+
+    if (P.stageState === "combat" && P.spawnedCount >= P.waveTarget && P.waveAlive <= 0 && S.enemies.length === 0){
       WaveSystem.completeCurrentWave();
     }
   }

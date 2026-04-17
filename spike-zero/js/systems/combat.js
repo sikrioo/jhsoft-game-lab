@@ -3,10 +3,6 @@ window.CombatSystem = (() => {
     return WEAPON_DEFINITIONS[GameState.weaponState.current];
   }
 
-  function getWeaponLevel(type=GameState.weaponState.current){
-    return GameState.weaponState.levels[type] || 1;
-  }
-
   function setWeaponType(type){
     if (!WEAPON_DEFINITIONS[type]) return false;
     GameState.weaponState.current = type;
@@ -15,11 +11,6 @@ window.CombatSystem = (() => {
   }
 
   function applyStartingWeaponLoadout(testMode=false){
-    const startingLevels = testMode ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_WEAPON_LEVELS) || {}) : {};
-    for (const type of Object.keys(WEAPON_DEFINITIONS)){
-      const def = WEAPON_DEFINITIONS[type];
-      GameState.weaponState.levels[type] = Math.max(1, Math.min(def.maxLevel, startingLevels[type] || 1));
-    }
     GameState.weaponState.current = testMode
       ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_WEAPON) || "machinegun")
       : "machinegun";
@@ -78,15 +69,38 @@ window.CombatSystem = (() => {
     g.x = beam.x;
     g.y = beam.y;
     g.clear();
-    g.lineStyle(beam.width + 8, beam.color, 0.10 * alpha);
+    const cos = Math.cos(beam.ang);
+    const sin = Math.sin(beam.ang);
+    const nx = -sin;
+    const ny = cos;
+    const flicker = Math.sin(performance.now() * 0.05) * 1.6;
+    const arcJitter = beam.width * 0.45 + flicker;
+    const endX = cos * beam.length;
+    const endY = sin * beam.length;
+
+    g.lineStyle(beam.width + 10, beam.color, 0.10 * alpha);
     g.moveTo(0, 0);
-    g.lineTo(Math.cos(beam.ang) * beam.length, Math.sin(beam.ang) * beam.length);
-    g.lineStyle(beam.width + 3, beam.color, 0.24 * alpha);
+    g.lineTo(endX, endY);
+
+    g.lineStyle(beam.width + 5, beam.color, 0.22 * alpha);
+    g.moveTo(nx * arcJitter, ny * arcJitter);
+    g.quadraticCurveTo(endX * 0.38 + nx * arcJitter * 1.8, endY * 0.38 + ny * arcJitter * 1.8, endX - nx * arcJitter * 0.7, endY - ny * arcJitter * 0.7);
+    g.moveTo(-nx * arcJitter, -ny * arcJitter);
+    g.quadraticCurveTo(endX * 0.42 - nx * arcJitter * 1.9, endY * 0.42 - ny * arcJitter * 1.9, endX + nx * arcJitter * 0.7, endY + ny * arcJitter * 0.7);
+
+    g.lineStyle(beam.width + 2, beam.color, 0.34 * alpha);
+    g.moveTo(nx * (arcJitter * 0.45), ny * (arcJitter * 0.45));
+    g.lineTo(endX + nx * (arcJitter * 0.3), endY + ny * (arcJitter * 0.3));
+    g.moveTo(-nx * (arcJitter * 0.45), -ny * (arcJitter * 0.45));
+    g.lineTo(endX - nx * (arcJitter * 0.3), endY - ny * (arcJitter * 0.3));
+
+    g.lineStyle(beam.width, beam.color, 0.95 * alpha);
     g.moveTo(0, 0);
-    g.lineTo(Math.cos(beam.ang) * beam.length, Math.sin(beam.ang) * beam.length);
-    g.lineStyle(beam.width, beam.color, 0.96 * alpha);
+    g.lineTo(endX, endY);
+
+    g.lineStyle(Math.max(2, beam.width * 0.42), 0xffffff, 0.9 * alpha);
     g.moveTo(0, 0);
-    g.lineTo(Math.cos(beam.ang) * beam.length, Math.sin(beam.ang) * beam.length);
+    g.lineTo(endX, endY);
   }
 
   function makeMissile(x, y, target){
@@ -100,7 +114,7 @@ window.CombatSystem = (() => {
       spr,
       x, y,
       vx:0,
-      vy:-3,
+      vy:-2.4,
       r:12,
       dmg:S.stats.homingMissileDamage,
       color: 0xffb347,
@@ -214,25 +228,23 @@ window.CombatSystem = (() => {
     if (player.fireCd > 0) return;
     if (!(S.mouse.down || S.keys.has("Space"))) return;
 
-    const weaponDef = getWeaponDef();
-    const weaponLevel = getWeaponLevel();
     const { fireRateMul, bulletSpeedMul } = getAfterburnerMultipliers();
     const ang = Math.atan2(S.mouse.y - player.spr.y, S.mouse.x - player.spr.x);
 
-    if (S.weaponState.current === "machinegun") fireMachinegun(ang, weaponLevel, bulletSpeedMul);
-    if (S.weaponState.current === "laser") fireLaser(ang, weaponLevel);
-    if (S.weaponState.current === "shotgun") fireShotgun(ang, weaponLevel, bulletSpeedMul);
+    if (S.weaponState.current === "machinegun") fireMachinegun(ang, bulletSpeedMul);
+    if (S.weaponState.current === "laser") fireLaser(ang);
+    if (S.weaponState.current === "shotgun") fireShotgun(ang, bulletSpeedMul);
 
     if (S.weaponState.current !== "laser"){
-      player.fireCd = weaponDef.fireInterval * fireRateMul;
+      player.fireCd = S.stats.fireRate * fireRateMul;
     }
   }
 
-  function fireMachinegun(ang, level, bulletSpeedMul){
+  function fireMachinegun(ang, bulletSpeedMul){
     const S = GameState;
     const px = S.player.spr.x;
     const py = S.player.spr.y;
-    const count = Math.min(5, Math.max(level, S.stats.bulletCount));
+    const count = Math.min(5, Math.max(1, S.stats.bulletCount));
     const spread = count === 1 ? 0 : Math.min(0.42, 0.10 * (count - 1));
 
     for (let i=0; i<count; i++){
@@ -243,7 +255,7 @@ window.CombatSystem = (() => {
         py + Math.sin(shotAng) * 18,
         shotAng,
         S.stats.bulletDamage,
-        WEAPON_DEFINITIONS.machinegun.projectileSpeed * bulletSpeedMul,
+        S.stats.bulletSpeed * WEAPON_DEFINITIONS.machinegun.projectileSpeedMul * bulletSpeedMul,
         S.stats.bulletPierce,
         {
           color:0x32f6ff,
@@ -260,24 +272,23 @@ window.CombatSystem = (() => {
     Effects.emitParticle(px + Math.cos(ang) * 18, py + Math.sin(ang) * 18, 0x32f6ff, 6 + count, 0.9);
   }
 
-  function fireLaser(ang, level){
+  function fireLaser(ang){
     const S = GameState;
     if (S.weaponState.laserChannel) return;
     if (S.player.fireCd > 0) return;
     const def = WEAPON_DEFINITIONS.laser;
-    const color = def.colors[Math.min(def.colors.length - 1, level - 1)];
-    const width = 4 + level * 2.4;
+    const color = def.color;
+    const width = 5 + Math.max(0, S.stats.bulletCount - 1) * 1.35;
     const originX = S.player.spr.x + Math.cos(ang) * 18;
     const originY = S.player.spr.y + Math.sin(ang) * 18;
     const beam = makeBeam(originX, originY, ang, def.range, width, color);
     Effects.emitParticle(originX, originY, color, 12, 1.1);
     S.weaponState.laserChannel = {
       beam,
-      remaining: 22 + level * 8,
-      maxRemaining: 22 + level * 8,
+      remaining: 28 + Math.max(0, S.stats.bulletCount - 1) * 6,
+      maxRemaining: 28 + Math.max(0, S.stats.bulletCount - 1) * 6,
       damageTick: 0,
       damageInterval: 4,
-      level,
       color,
       width,
       length: def.range
@@ -286,7 +297,7 @@ window.CombatSystem = (() => {
 
   function damageLaserChannel(channel){
     const S = GameState;
-    const damage = S.stats.bulletDamage * (1.35 + channel.level * 0.3);
+    const damage = S.stats.bulletDamage * (1.55 + Math.max(0, S.stats.bulletCount - 1) * 0.12);
     const cos = Math.cos(channel.beam.ang);
     const sin = Math.sin(channel.beam.ang);
     const originX = channel.beam.x;
@@ -314,16 +325,16 @@ window.CombatSystem = (() => {
     channel.beam.maxLife = channel.beam.life;
     S.beams.push(channel.beam);
     S.weaponState.laserChannel = null;
-    S.player.fireCd = WEAPON_DEFINITIONS.laser.fireInterval;
+    S.player.fireCd = S.stats.fireRate;
   }
 
-  function fireShotgun(ang, level, bulletSpeedMul){
+  function fireShotgun(ang, bulletSpeedMul){
     const S = GameState;
     const px = S.player.spr.x;
     const py = S.player.spr.y;
-    const pelletCount = 6 + Math.min(4, level);
-    const spread = 0.42 + level * 0.045;
-    const pelletDamage = Math.max(0.8, S.stats.bulletDamage * (0.65 + level * 0.16));
+    const pelletCount = 6 + Math.min(8, S.stats.bulletCount * 2);
+    const spread = 0.26 + Math.max(0, S.stats.bulletCount - 1) * 0.025;
+    const pelletDamage = Math.max(0.72, S.stats.bulletDamage * (0.72 + Math.max(0, S.stats.bulletCount - 1) * 0.05));
 
     for (let i=0; i<pelletCount; i++){
       const shotAng = ang + Helpers.rand(-spread, spread);
@@ -332,7 +343,7 @@ window.CombatSystem = (() => {
         py + Math.sin(shotAng) * 18,
         shotAng,
         pelletDamage,
-        WEAPON_DEFINITIONS.shotgun.projectileSpeed * bulletSpeedMul,
+        S.stats.bulletSpeed * WEAPON_DEFINITIONS.shotgun.projectileSpeedMul * bulletSpeedMul,
         0,
         {
           color:0xffbf7a,
@@ -357,7 +368,7 @@ window.CombatSystem = (() => {
     if (S.enemies.length <= 0) return;
 
     const taken = new Set();
-    const spawnCount = Math.min(S.stats.homingMissileLevel, S.enemies.length);
+    const spawnCount = Math.min(1 + Math.floor(Math.max(0, S.stats.homingMissileLevel - 1) / 2), S.enemies.length);
     for (let i=0; i<spawnCount; i++){
       const target = findNearestEnemy(S.player.spr.x, S.player.spr.y, taken);
       if (!target) break;
@@ -451,6 +462,13 @@ window.CombatSystem = (() => {
         redrawBeam(channel.beam, 1);
         channel.remaining -= dt;
         channel.damageTick -= dt;
+        if ((performance.now() | 0) % 2 === 0){
+          const sparkDist = Helpers.rand(26, channel.length * 0.55);
+          const sparkSpread = Helpers.rand(-channel.width * 1.2, channel.width * 1.2);
+          const sparkX = channel.beam.x + Math.cos(ang) * sparkDist - Math.sin(ang) * sparkSpread;
+          const sparkY = channel.beam.y + Math.sin(ang) * sparkDist + Math.cos(ang) * sparkSpread;
+          Effects.emitParticle(sparkX, sparkY, channel.color, 2, 0.38);
+        }
         if (channel.damageTick <= 0){
           channel.damageTick = channel.damageInterval;
           damageLaserChannel(channel);
@@ -488,8 +506,8 @@ window.CombatSystem = (() => {
         const dx = m.target.x - m.x;
         const dy = m.target.y - m.y;
         const d = Math.hypot(dx, dy) || 1;
-        const baseSpeed = m.heavy ? 10.5 : 8.8;
-        const steer = m.heavy ? 0.12 : 0.16;
+        const baseSpeed = m.heavy ? 10.0 : 7.6;
+        const steer = m.heavy ? 0.11 : 0.12;
         const desiredX = (dx / d) * baseSpeed;
         const desiredY = (dy / d) * baseSpeed;
         m.vx = Helpers.lerp(m.vx, desiredX, steer);

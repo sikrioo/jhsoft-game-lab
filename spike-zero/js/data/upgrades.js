@@ -1,6 +1,37 @@
 window.UPGRADE_DEFINITIONS = [
   {
+    id:"weapon_machinegun",
+    upgradeType:"weapon",
+    name:"Equip Machinegun",
+    desc:"Switch weapon type to Machinegun. Shared weapon stats stay the same.",
+    requires:(S)=>S.weaponState.current !== "machinegun",
+    apply:()=>{
+      CombatSystem.setWeaponType("machinegun");
+    }
+  },
+  {
+    id:"weapon_laser",
+    upgradeType:"weapon",
+    name:"Equip Laser",
+    desc:"Switch weapon type to Laser. Shared weapon stats stay the same.",
+    requires:(S)=>S.weaponState.current !== "laser",
+    apply:()=>{
+      CombatSystem.setWeaponType("laser");
+    }
+  },
+  {
+    id:"weapon_shotgun",
+    upgradeType:"weapon",
+    name:"Equip Shotgun",
+    desc:"Switch weapon type to Shotgun. Shared weapon stats stay the same.",
+    requires:(S)=>S.weaponState.current !== "shotgun",
+    apply:()=>{
+      CombatSystem.setWeaponType("shotgun");
+    }
+  },
+  {
     id:"firerate",
+    upgradeType:"weapon",
     name:"Fire Rate",
     desc:"Fire interval -8%",
     apply:()=>{
@@ -13,6 +44,7 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"damage",
+    upgradeType:"weapon",
     name:"Damage Up",
     desc:"Bullet damage +1",
     apply:()=>{
@@ -21,6 +53,7 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"defense",
+    upgradeType:"passive",
     name:"Defense Up",
     desc:"Incoming hit damage -2",
     apply:()=>{
@@ -29,6 +62,7 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"speed",
+    upgradeType:"passive",
     name:"Thruster Tune",
     desc:"Move speed +8%",
     apply:()=>{
@@ -37,8 +71,9 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"dash",
-    name:"Dash Cooling",
-    desc:"Dash cooldown -10%",
+    upgradeType:"passive",
+    name:"Thruster Cooling",
+    desc:"Shift dash cooldown -10%",
     apply:()=>{
       const S = GameState;
       S.stats.dashCdMax = Math.max(25, Math.floor(S.stats.dashCdMax * 0.90));
@@ -46,6 +81,7 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"pierce",
+    upgradeType:"weapon",
     name:"Pierce",
     desc:"Bullet pierce +1",
     apply:()=>{
@@ -54,6 +90,7 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"shield",
+    upgradeType:"passive",
     name:"Shield Matrix",
     desc:"Shield max +35, shield regen +4/s",
     apply:()=>{
@@ -66,17 +103,25 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"homingmissile",
+    upgradeType:"weapon",
     name:"Homing Missile",
-    desc:"Launches tracking missiles automatically",
+    desc:"Unlocks tracking missiles. Further picks improve output.",
     apply:()=>{
       const S = GameState;
+      const firstPickup = S.stats.homingMissileLevel <= 0;
       S.stats.homingMissileLevel += 1;
-      S.stats.homingMissileDamage += 1;
-      S.stats.homingMissileCdMax = Math.max(28, Math.floor(S.stats.homingMissileCdMax * 0.92));
+      if (firstPickup) {
+        S.stats.homingMissileDamage = Math.max(2, S.stats.homingMissileDamage);
+        S.stats.homingMissileCdMax = Math.max(120, Math.floor(S.stats.homingMissileCdMax * 0.96));
+      } else {
+        S.stats.homingMissileDamage += 0.5;
+        S.stats.homingMissileCdMax = Math.max(84, Math.floor(S.stats.homingMissileCdMax * 0.94));
+      }
     }
   },
   {
     id:"multishot",
+    upgradeType:"weapon",
     name:"Multi Shot",
     desc:"Bullets fired per shot +1",
     apply:()=>{
@@ -85,6 +130,7 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"hp",
+    upgradeType:"passive",
     name:"Max HP",
     desc:"Max HP +25",
     apply:()=>{
@@ -95,6 +141,7 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"regen",
+    upgradeType:"passive",
     name:"Regen",
     desc:"HP regen +0.6/s",
     apply:()=>{
@@ -103,6 +150,7 @@ window.UPGRADE_DEFINITIONS = [
   },
   {
     id:"bulletspeed",
+    upgradeType:"weapon",
     name:"Velocity",
     desc:"Bullet speed +8%",
     apply:()=>{

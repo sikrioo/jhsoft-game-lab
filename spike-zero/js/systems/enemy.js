@@ -205,6 +205,9 @@ window.EnemySystem = (() => {
     p.vx += hitDx * (options.push || 3.5);
     p.vy += hitDy * (options.push || 3.5);
     Effects.emitParticle(p.spr.x, p.spr.y, color, options.particleCount || 12, options.particlePower || 0.9);
+    Effects.emitParticle(p.spr.x, p.spr.y, 0xff4d4d, Math.max(10, Math.round((options.particleCount || 12) * 0.8)), (options.particlePower || 0.9) * 1.05);
+    Effects.emitPulse(p.spr.x, p.spr.y, 0xff5a5a, options.impactRadius || 34, options.impactLife || 8);
+    S.shake = Math.min(24, S.shake + (options.impactShake || 4));
     if (options.pulseRadius) Effects.emitPulse(p.spr.x, p.spr.y, color, options.pulseRadius, options.pulseLife || 10);
     if (S.stats.hp <= 0){
       S.stats.hp = 0;
@@ -646,7 +649,7 @@ window.EnemySystem = (() => {
           target.decoy.hp -= 1;
           e.hitT = 8;
           Effects.emitParticle(target.x, target.y, isDashHit ? 0xff6b6b : 0xffd27a, isDashHit ? 16 : 10, isDashHit ? 1.15 : 0.8);
-          const impactPush = e.tier === "tank" ? -4.5 : (isDashHit ? -7 : -2);
+          const impactPush = e.tier === "tank" ? 4.5 : (isDashHit ? 7 : 3.5);
           p.vx += hitDx * impactPush;
           p.vy += hitDy * impactPush;
           if (isDashHit){
@@ -657,7 +660,7 @@ window.EnemySystem = (() => {
         } else if (p.inv <= 0 && !S.stats.practice){
           let baseDamage = isDashHit ? e.dmg * 1.8 : e.dmg;
           if (e.tier === "tank") baseDamage *= 1.15;
-          const playerPush = e.tier === "tank" ? 6.5 : (isDashHit ? 9 : -2);
+          const playerPush = e.tier === "tank" ? 6.5 : (isDashHit ? 9 : 4.2);
           const didHit = hitPlayerWithEnemyDamage(baseDamage, e.glowColor, hitDx, hitDy, {
             invFrames: 30,
             push: playerPush,
@@ -675,7 +678,7 @@ window.EnemySystem = (() => {
             S.shake = Math.min(24, S.shake + 6);
           }
         } else {
-          const grazePush = e.tier === "tank" ? 5.5 : (isDashHit ? 8 : -6);
+          const grazePush = e.tier === "tank" ? 5.5 : (isDashHit ? 8 : 4.6);
           p.vx += hitDx * grazePush;
           p.vy += hitDy * grazePush;
         }

@@ -1,10 +1,13 @@
 window.UI = (() => {
   const $score = document.getElementById("score");
+  const $stage = document.getElementById("stage");
+  const $stageTime = document.getElementById("stageTime");
   const $wave = document.getElementById("wave");
   const $level = document.getElementById("level");
   const $xp = document.getElementById("xp");
   const $hp = document.getElementById("hp");
   const $mp = document.getElementById("mp");
+  const $speed = document.getElementById("speed");
   const $shield = document.getElementById("shield");
   const $atk = document.getElementById("atk");
   const $def = document.getElementById("def");
@@ -32,32 +35,48 @@ window.UI = (() => {
   const bossHudMeta = document.getElementById("bossHudMeta");
   const bossHudFill = document.getElementById("bossHudFill");
 
+  function getUpgradeTypeMeta(upgrade){
+    const type = upgrade && upgrade.upgradeType ? upgrade.upgradeType : "passive";
+    if (type === "weapon") return { label: "WEAPON", className: "weapon" };
+    if (type === "active") return { label: "ACTIVE", className: "active" };
+    return { label: "PASSIVE", className: "passive" };
+  }
+
+  function formatStageTime(frames = 0) {
+    const totalSeconds = Math.max(0, Math.ceil(frames / 60));
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
   function hudUpdate() {
     const S = GameState;
     const P = S.progression;
     const weaponDef = WEAPON_DEFINITIONS[S.weaponState.current];
-    const weaponLevel = S.weaponState.levels[S.weaponState.current] || 1;
     $score.textContent = String(Math.floor(P.score));
+    $stage.textContent = String(P.stage || 1);
+    $stageTime.textContent = S.stats.practice ? "TEST" : formatStageTime(P.stageTime);
     $wave.textContent = String(P.wave);
     $level.textContent = String(P.level);
     $xp.textContent = `${Math.floor(P.xp)} / ${Math.floor(P.xpToNext)}`;
     $hp.textContent = String(Math.max(0, Math.floor(S.stats.hp)));
     $mp.textContent = `${Math.floor(S.stats.mp)} / ${Math.floor(S.stats.mpMax)}`;
+    $speed.textContent = (Math.round(S.stats.speed * 10) / 10).toFixed(1);
     $shield.textContent = S.stats.shieldMax > 0
       ? `${Math.max(0, Math.floor(S.stats.shield))} / ${Math.floor(S.stats.shieldMax)}`
       : "-";
     $atk.textContent = String(S.stats.bulletDamage);
     $def.textContent = String(S.stats.defense);
-    $fireRate.textContent = weaponDef ? String(weaponDef.fireInterval) : String(S.stats.fireRate);
+    $fireRate.textContent = String(Math.round(S.stats.fireRate));
     $shots.textContent = S.weaponState.current === "machinegun"
-      ? String(Math.min(5, Math.max(weaponLevel, S.stats.bulletCount)))
+      ? String(Math.min(5, Math.max(1, S.stats.bulletCount)))
       : S.weaponState.current === "shotgun"
-        ? String(6 + Math.min(4, weaponLevel))
+        ? String(4 + Math.min(6, S.stats.bulletCount * 2))
         : "1";
     $pierce.textContent = String(S.stats.bulletPierce);
     $combo.textContent = "x" + P.combo.toFixed(1).replace(/\.0$/,"");
     $weaponName.textContent = weaponDef ? weaponDef.name : "-";
-    $weaponLevel.textContent = weaponDef && weaponLevel >= weaponDef.maxLevel ? "Lv.MAX" : `Lv.${weaponLevel}`;
+    $weaponLevel.textContent = "Type Shift";
     for (const radio of weaponRadioEls) radio.checked = radio.value === S.weaponState.current;
     weaponHud.style.display = S.stats.practice ? "block" : "none";
     if (bossSelect && window.BossSystem) {
@@ -174,9 +193,10 @@ window.UI = (() => {
   function renderUpgradeChoices(choices, onPick) {
     upgradeGrid.innerHTML = "";
     for (const choice of choices) {
+      const typeMeta = getUpgradeTypeMeta(choice);
       const el = document.createElement("div");
-      el.className = "upgrade";
-      el.innerHTML = `<h3>${choice.name}</h3><p>${choice.desc}</p>`;
+      el.className = `upgrade ${typeMeta.className}`;
+      el.innerHTML = `<div class="upgradeType">${typeMeta.label}</div><h3>${choice.name}</h3><p>${choice.desc}</p>`;
       el.onclick = () => onPick(choice);
       upgradeGrid.appendChild(el);
     }

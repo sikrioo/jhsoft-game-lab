@@ -15,8 +15,14 @@ window.SkillSystem = (() => {
     for (const id of starting) applyUpgradeById(id);
   }
 
+  function isUpgradeAvailable(upgrade){
+    if (!upgrade) return false;
+    if (typeof upgrade.requires === "function" && !upgrade.requires(GameState)) return false;
+    return true;
+  }
+
   function pickChoices(n=3){
-    const pool = [...UPGRADE_DEFINITIONS];
+    const pool = UPGRADE_DEFINITIONS.filter(isUpgradeAvailable);
     const picks = [];
     while (picks.length < n && pool.length){
       const idx = Helpers.randi(0, pool.length - 1);

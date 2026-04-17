@@ -56,6 +56,10 @@ window.GameState = {
     score: 0,
     combo: 1,
     comboT: 0,
+    stage: 1,
+    stageTime: 180 * 60,
+    stageDuration: 180 * 60,
+    stageState: "combat",
     wave: 1,
     waveAlive: 0,
     waveTarget: 8,
@@ -88,11 +92,6 @@ window.GameState = {
 
   weaponState: {
     current: "machinegun",
-    levels: {
-      machinegun: 1,
-      laser: 1,
-      shotgun: 1
-    },
     laserChannel: null
   },
 
