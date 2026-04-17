@@ -9,7 +9,10 @@ window.Boot = (() => {
     for (const b of S.enemyBullets) S.fx.removeChild(b.spr);
     for (const beam of S.beams) S.fx.removeChild(beam.spr);
     for (const m of S.missiles) S.fx.removeChild(m.spr);
-    for (const e of S.enemies) S.uiLayer.removeChild(e.spr);
+    for (const e of S.enemies) {
+      if (e.destroyVisuals) e.destroyVisuals();
+      else S.uiLayer.removeChild(e.spr);
+    }
     for (const p of S.particles) S.fx.removeChild(p.spr);
 
     S.decoys.length = 0;
@@ -78,6 +81,7 @@ window.Boot = (() => {
     ActiveSkillSystem.assignStartingLoadout(testMode);
 
     WaveSystem.startNextWave();
+    if (testMode && window.BossSystem) BossSystem.spawnSelectedPracticeBoss();
     UI.hudUpdate();
     UI.showCard(null);
   }
@@ -226,14 +230,50 @@ window.Boot = (() => {
       p.vx *= p.drag || 0.92;
       p.vy *= p.drag || 0.92;
       p.life -= dt;
-      p.spr.x = p.x;
-      p.spr.y = p.y;
       if (p.pulse){
+        p.spr.x = p.x;
+        p.spr.y = p.y;
         const progress = 1 - (p.life / (p.maxLife || 1));
         const scale = 1 + progress * p.pulseRadius;
         p.spr.scale.set(scale);
         p.spr.alpha = Math.max(0, 1 - progress);
+      } else if (p.telegraphLine){
+        const progress = 1 - (p.life / (p.maxLife || 1));
+        const alpha = Math.max(0, 0.8 - progress * 0.7);
+        p.spr.x = p.telegraphLine.x1;
+        p.spr.y = p.telegraphLine.y1;
+        p.spr.clear();
+        p.spr.lineStyle(p.telegraphLine.width + 6, p.telegraphLine.color, alpha * 0.12);
+        p.spr.moveTo(0, 0);
+        p.spr.lineTo(p.telegraphLine.x2 - p.telegraphLine.x1, p.telegraphLine.y2 - p.telegraphLine.y1);
+        p.spr.lineStyle(p.telegraphLine.width, p.telegraphLine.color, alpha);
+        p.spr.moveTo(0, 0);
+        p.spr.lineTo(p.telegraphLine.x2 - p.telegraphLine.x1, p.telegraphLine.y2 - p.telegraphLine.y1);
+      } else if (p.telegraphRing){
+        const progress = 1 - (p.life / (p.maxLife || 1));
+        const alpha = Math.max(0, 0.75 - progress * 0.6);
+        const scale = 0.85 + progress * 0.2;
+        p.spr.x = p.telegraphRing.x;
+        p.spr.y = p.telegraphRing.y;
+        p.spr.clear();
+        p.spr.lineStyle(3, p.telegraphRing.color, alpha);
+        p.spr.beginFill(p.telegraphRing.color, alpha * 0.08);
+        p.spr.drawCircle(0, 0, p.telegraphRing.radius * scale);
+        p.spr.endFill();
+      } else if (p.slashArc){
+        const progress = 1 - (p.life / (p.maxLife || 1));
+        const alpha = Math.max(0, 0.8 - progress * 0.7);
+        const radius = p.slashArc.radius * (0.96 + progress * 0.08);
+        p.spr.x = p.slashArc.x;
+        p.spr.y = p.slashArc.y;
+        p.spr.clear();
+        p.spr.lineStyle(p.slashArc.width + 6, p.slashArc.color, alpha * 0.14);
+        p.spr.arc(0, 0, radius, p.slashArc.startAngle, p.slashArc.endAngle);
+        p.spr.lineStyle(p.slashArc.width, p.slashArc.color, alpha);
+        p.spr.arc(0, 0, radius, p.slashArc.startAngle, p.slashArc.endAngle);
       } else {
+        p.spr.x = p.x;
+        p.spr.y = p.y;
         p.spr.alpha = Math.max(0, p.life / 36);
       }
       if (p.life <= 0){
@@ -268,10 +308,13 @@ window.Boot = (() => {
     }
 
     P.spawnT += dt;
-    const spawnRate = Math.max(11, 46 - P.wave * 1.15);
-    while (P.spawnT >= spawnRate && P.spawnedCount < P.waveTarget){
-      P.spawnT -= spawnRate;
-      EnemySystem.spawnEnemy();
+    const suppressEnemySpawns = window.BossSystem && BossSystem.shouldSuppressEnemySpawns();
+    if (!suppressEnemySpawns) {
+      const spawnRate = Math.max(11, 46 - P.wave * 1.15);
+      while (P.spawnT >= spawnRate && P.spawnedCount < P.waveTarget){
+        P.spawnT -= spawnRate;
+        EnemySystem.spawnEnemy();
+      }
     }
 
     if (P.spawnedCount >= P.waveTarget && P.waveAlive <= 0 && S.enemies.length === 0){
@@ -349,9 +392,18 @@ window.Boot = (() => {
       onStart: ()=>resetAll(false),
       onPractice: ()=>resetAll(true),
       onRetry: ()=>resetAll(S.stats.practice),
-      onBack: ()=>UI.showCard("start")
+      onBack: ()=>UI.showCard("start"),
+      onBossChange: (bossId) => {
+        if (!window.BossSystem) return;
+        BossSystem.setPracticeBossId(bossId);
+        UI.hudUpdate();
+      },
+      onSpawnBoss: () => {
+        if (window.BossSystem) BossSystem.spawnSelectedPracticeBoss();
+      }
     });
 
+    UI.populateBossOptions();
     UI.showCard("start");
     ActiveSkillSystem.assignStartingLoadout(false);
     UI.hudUpdate();

@@ -21,6 +21,7 @@ window.GameState = {
   enemies: [],
   particles: [],
   textureCache: {},
+  practiceBossId: "basic",
 
   stats: {
     maxHp: 100,

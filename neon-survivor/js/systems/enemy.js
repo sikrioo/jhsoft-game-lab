@@ -213,6 +213,11 @@ window.EnemySystem = (() => {
     return true;
   }
 
+  function getHitCircles(enemy){
+    if (enemy && typeof enemy.getHitCircles === "function") return enemy.getHitCircles();
+    return [{ x: enemy.x, y: enemy.y, radius: enemy.r }];
+  }
+
   function beginFlankerOrbit(enemy, target){
     const state = enemy.enemyState;
     const baseAngle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
@@ -529,6 +534,38 @@ window.EnemySystem = (() => {
 
     for (let i=S.enemies.length-1; i>=0; i--){
       const e = S.enemies[i];
+      if (typeof e.updateBoss === "function"){
+        if (e.slowT > 0){
+          e.slowT -= dt;
+        } else {
+          e.slowMul = 1;
+        }
+        e.updateBoss(dt);
+
+        if (e.hitT > 0){
+          e.hitT -= dt;
+          e.spr.alpha = 0.82;
+        } else {
+          e.spr.alpha = 1;
+        }
+
+        for (const hitCircle of getHitCircles(e)){
+          const rr = hitCircle.radius + p.r;
+          if (Helpers.dist2(hitCircle.x, hitCircle.y, p.spr.x, p.spr.y) < rr * rr){
+            const ang = Math.atan2(p.spr.y - hitCircle.y, p.spr.x - hitCircle.x);
+            if (typeof e.onPlayerCollide === "function"){
+              e.onPlayerCollide({
+                player: p,
+                hitCircle,
+                dx: Math.cos(ang),
+                dy: Math.sin(ang)
+              });
+            }
+            break;
+          }
+        }
+        continue;
+      }
       const target = getTargetForEnemy(e);
       let dx = target.x - e.x;
       let dy = target.y - e.y;
@@ -692,6 +729,7 @@ window.EnemySystem = (() => {
   return {
     spawnEnemy,
     updateEnemies,
-    updateEnemyBullets
+    updateEnemyBullets,
+    hitPlayerWithEnemyDamage
   };
 })();

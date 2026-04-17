@@ -13,6 +13,46 @@ html,body{
 .hud .row{
   display:flex; gap:10px; align-items:center; flex-wrap:wrap;
 }
+.bossHud{
+  position:fixed;
+  right:14px;
+  top:14px;
+  transform:none;
+  z-index:14;
+  width:min(360px, calc(100vw - 28px));
+  padding:12px 14px;
+  border-radius:16px;
+  background:rgba(7,10,24,.82);
+  border:1px solid rgba(255,120,120,.18);
+  box-shadow:0 0 24px rgba(255,98,98,.12);
+  color:#eef4ff;
+  opacity:0;
+  pointer-events:none;
+  transition:opacity .18s ease;
+}
+.bossHud.visible{ opacity:1; }
+.bossHudName{
+  font-weight:800;
+  letter-spacing:.4px;
+}
+.bossHudMeta{
+  margin-top:4px;
+  font-size:12px;
+  opacity:.78;
+}
+.bossHudBar{
+  height:10px;
+  margin-top:10px;
+  border-radius:999px;
+  overflow:hidden;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.08);
+}
+.bossHudFill{
+  height:100%;
+  width:0%;
+  background:linear-gradient(90deg, rgba(255,94,120,.9), rgba(255,209,102,.95));
+}
 .pill{
   display:inline-flex; align-items:center; gap:8px;
   padding:8px 10px; border-radius:999px;
@@ -30,7 +70,7 @@ html,body{
   width:min(560px, calc(100vw - 28px));
 }
 .weaponHud{
-  position:fixed; right:14px; top:14px; z-index:16;
+  position:fixed; right:14px; top:122px; z-index:16;
   width:min(220px, calc(100vw - 28px));
   padding:12px; border-radius:16px;
   background:rgba(7,10,24,.82);
@@ -46,6 +86,31 @@ html,body{
 .weaponState{
   margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,.08);
   font-size:12px; opacity:.9;
+}
+.bossHead{
+  margin-top:14px;
+  padding-top:12px;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+.bossLabel{
+  display:block;
+  margin:8px 0 6px;
+  font-size:12px;
+  opacity:.85;
+}
+.bossSelect{
+  width:100%;
+  box-sizing:border-box;
+  padding:10px 12px;
+  border-radius:10px;
+  border:1px solid rgba(120,180,255,.2);
+  background:rgba(255,255,255,.06);
+  color:#eef4ff;
+  outline:none;
+}
+.bossBtn{
+  width:100%;
+  margin-top:10px;
 }
 .activeSlot{
   padding:11px 12px; border-radius:16px;
@@ -146,6 +211,12 @@ html,body{
 
 @media (max-width:560px){
   .upgradeGrid{ grid-template-columns:1fr; }
+  .bossHud{
+    left:14px;
+    right:14px;
+    top:72px;
+    width:auto;
+  }
   .weaponHud{ left:14px; right:14px; top:auto; bottom:180px; width:auto; }
   .activeHud{ grid-template-columns:1fr; bottom:12px; }
 }

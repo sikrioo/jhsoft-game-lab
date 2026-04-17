@@ -325,14 +325,6 @@ function weightedSum(weights, values){
   return weights.reduce((sum, {key, w}) => sum + (values[key] ?? 50) * w, 0);
 }
 
-function weightedAvg(weights, values){
-  return weightedSum(weights, values);
-}
-
-function isEntryYearAtLeast(ctx, year){
-  return ctx.entryYear >= year;
-}
-
 // ══════════════════════════════════════════════════════
 // 12. RISK ANALYSIS
 // ══════════════════════════════════════════════════════
@@ -632,29 +624,8 @@ function buildCareers(v, comp, charm, decade, gender){
   const iF=gender==='female',iM=gender==='male';
   const lH=v.looks>=78,mL=v.morality<=30,mM=v.morality>30&&v.morality<=55;
   const {careers:A, avg, addCareer:add} = createCareerAccumulator(v, charm);
-  const ctx = {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM};
 
-  addAppearanceCareers(v, comp, avg, add, ctx);
-  addBusinessCareers(v, comp, avg, add, ctx);
-  addItCareers(v, comp, avg, add, ctx);
-  addResearchCareers(v, comp, avg, add, ctx);
-  addArtsCareers(v, comp, avg, add, ctx);
-  addSportsCareers(v, comp, avg, add, ctx);
-  addMediaCareers(v, comp, avg, add, ctx);
-  addEducationCareers(v, comp, avg, add, ctx);
-  addPublicCareers(v, comp, avg, add, ctx);
-  addTradesCareers(v, comp, avg, add, ctx);
-  addLogisticsCareers(v, comp, avg, add, ctx);
-  addPrimaryCareers(v, comp, avg, add, ctx);
-  addEmergingCareers(v, comp, avg, add, ctx);
-  addGrayZoneCareers(v, comp, avg, add, ctx);
-  addCareerExpansionPack(v, comp, avg, add, ctx);
-
-  return A.sort((a,b)=>b.fit-a.fit);
-}
-
-function addAppearanceCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 외모기반 ───────────────────────────────────────
   add('외모기반','모델·광고모델','#e87ab0',true,avg(v.looks*0.45,v.social_sk*0.25,v.art_sense*0.15,v.execution*0.15),'외모가 핵심 자산. 사회성으로 계약 전환');
   add('외모기반','배우·영화배우','#e87ab0',true,avg(v.looks*0.30,v.art_expr*0.28,v.social_sk*0.20,v.mental*0.12,v.expression*0.10),'외모+연기+멘탈. 데뷔 자체가 운의 영역');
   add('외모기반','아이돌·가수','#e87ab0',true,avg(v.looks*0.25,v.art_sense*0.28,v.stamina*0.20,v.social_sk*0.15,v.willpower*0.12),'외모+음악재능+체력. 훈련 의지력이 데뷔 결정');
@@ -670,10 +641,8 @@ function addAppearanceCareers(v, comp, avg, add, ctx){
   if(lH&&mL)     add('외모기반','성인 콘텐츠·유흥업','#e05a5a',true,avg(v.looks*0.55,v.risk_pref*0.25,(100-v.morality)*0.20),'외모 자본 직접 현금화',true);
   if(lH&&mM)     add('외모기반','호스트바·유흥 종사','#e87ab0',true,avg(v.looks*0.40,v.social_sk*0.35,v.expression*0.25),'외모+사회성');
   if(lH&&v.family_bg>=65) add('외모기반','상류층 결혼','#c9a84c',true,avg(v.looks*0.40,v.social_sk*0.30,v.family_bg*0.20,v.expression*0.10),'외모+배경 계층 상승');
-}
 
-function addBusinessCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 영업·비즈니스 ──────────────────────────────────
   add('영업비즈니스','영업·세일즈','#4eb87a',true,avg(v.social_sk*0.30,v.expression*0.25,v.execution*0.20,v.adapt*0.15,v.looks*0.10),'사회성·언어력·실행력이 직접 수익');
   add('영업비즈니스','창업·스타트업','#c9a84c',true,avg(v.execution*0.25,v.risk_pref*0.25,v.adapt*0.20,v.social_sk*0.15,v.creative_c*0.15),'실행력+리스크. 적응력으로 피벗');
   add('영업비즈니스','마케터·브랜드 전략','#4eb87a',true,avg(v.creative_c*0.28,v.social_sk*0.25,v.expression*0.27,v.hum_sense*0.20),'창의성+언어력+인간 심리');
@@ -688,40 +657,36 @@ function addBusinessCareers(v, comp, avg, add, ctx){
   add('영업비즈니스','무역·수출입 영업','#4eb87a',true,avg(v.social_sk*0.28,v.expression*0.28,v.adapt*0.22,v.execution*0.22),'언어력+사회성. 국제 감각');
   add('영업비즈니스','기업 컨설턴트','#5a9ef0',true,avg(v.reasoning*0.28,v.expression*0.27,v.hum_sense*0.23,v.social_sk*0.22),'분석력+언어력. 구조화 능력');
   add('영업비즈니스','기술영업','#3db8a8',webEra,avg(v.eng_sense*0.28,v.expression*0.27,v.social_sk*0.25,v.execution*0.20),'기술 이해+설득력. B2B 실무형');
-  add('영업비즈니스','솔루션 컨설턴트','#5a9ef0',isEntryYearAtLeast(ctx, 2005),weightedAvg([{key:'reasoning',w:0.28},{key:'expression',w:0.26},{key:'eng_sense',w:0.24},{key:'social_sk',w:0.22}], v),'분석력+설명력. 문제를 구조로 푸는 직무');
-  add('영업비즈니스','고객성공 매니저','#4eb87a',platformEra,weightedAvg([{key:'social_sk',w:0.30},{key:'expression',w:0.27},{key:'ops_skill',w:0.23},{key:'empathy',w:0.20}], v),'관계 유지+실무 조율. 장기 고객 관리');
+  add('영업비즈니스','솔루션 컨설턴트','#5a9ef0',entryYear>=2005,avg(v.reasoning*0.28,v.expression*0.26,v.eng_sense*0.24,v.social_sk*0.22),'분석력+설명력. 문제를 구조로 푸는 직무');
+  add('영업비즈니스','고객성공 매니저','#4eb87a',platformEra,avg(v.social_sk*0.30,v.expression*0.27,v.ops_skill*0.23,v.empathy*0.20),'관계 유지+실무 조율. 장기 고객 관리');
   add('영업비즈니스','헤드헌터','#4eb87a',true,avg(v.social_sk*0.35,v.hum_sense*0.25,v.expression*0.25,v.execution*0.15),'사람 읽기+네트워크');
   add('영업비즈니스','광고 AE·기획','#4eb87a',true,avg(v.social_sk*0.28,v.creative_c*0.27,v.expression*0.25,v.execution*0.20),'사회성+창의성+실행력');
-  add('영업비즈니스','구매·SCM','#5a9ef0',isEntryYearAtLeast(ctx, 1995),weightedAvg([{key:'reasoning',w:0.27},{key:'ops_skill',w:0.28},{key:'execution',w:0.25},{key:'adapt',w:0.20}], v),'운영 감각+조율 능력. 공급망 실무');
+  add('영업비즈니스','구매·SCM','#5a9ef0',entryYear>=1995,avg(v.reasoning*0.27,v.ops_skill*0.28,v.execution*0.25,v.adapt*0.20),'운영 감각+조율 능력. 공급망 실무');
   add('영업비즈니스','다단계 판매','#e05a5a',true,avg(v.social_sk*0.40,v.expression*0.30,(100-v.morality)*0.15,v.execution*0.15),'사회성+언어력. 도덕 경계 모호',true);
   add('영업비즈니스','경매사','#c9a84c',true,avg(v.expression*0.35,v.social_sk*0.28,v.hum_sense*0.20,v.adapt*0.17),'언어력+순발력');
-}
 
-function addItCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── IT·공학 ─────────────────────────────────────────
   add('IT공학','개발자·소프트웨어 엔지니어','#3db8a8',dig,avg(v.eng_sense*0.35,v.reasoning*0.30,v.execution*0.20,v.creative_c*0.15),'공학감각+지능. 실행력이 생산성');
-  add('IT공학','AI·머신러닝 엔지니어','#3db8a8',isEntryYearAtLeast(ctx, 2015),weightedAvg([{key:'eng_sense',w:0.30},{key:'reasoning',w:0.35},{key:'creative_c',w:0.20},{key:'willpower',w:0.15}], v),'수학적 직관+고도 지능');
-  add('IT공학','데이터 사이언티스트','#3db8a8',isEntryYearAtLeast(ctx, 2010),weightedAvg([{key:'eng_sense',w:0.35},{key:'reasoning',w:0.30},{key:'creative_c',w:0.20},{key:'expression',w:0.15}], v),'통계+프로그래밍+비즈니스 언어');
+  add('IT공학','AI·머신러닝 엔지니어','#3db8a8',entryYear>=2015,avg(v.eng_sense*0.30,v.reasoning*0.35,v.creative_c*0.20,v.willpower*0.15),'수학적 직관+고도 지능');
+  add('IT공학','데이터 사이언티스트','#3db8a8',entryYear>=2010,avg(v.eng_sense*0.35,v.reasoning*0.30,v.creative_c*0.20,v.expression*0.15),'통계+프로그래밍+비즈니스 언어');
   add('IT공학','IT 창업가','#3db8a8',dig,avg(v.eng_sense*0.25,v.execution*0.25,v.risk_pref*0.25,v.creative_c*0.25),'기술+실행+리스크');
   add('IT공학','게임 개발자','#3db8a8',dig,avg(v.eng_sense*0.30,v.creative_c*0.30,v.art_sense*0.20,v.willpower*0.20),'공학+예술감각');
-  add('IT공학','프로게이머','#4eb87a',isEntryYearAtLeast(ctx, 2000),avg(v.body_skill*0.25,v.mental*0.25,v.willpower*0.25,v.adapt*0.15,v.focus*0.10),'신체재능+정신력+의지력. 1만 시간');
+  add('IT공학','프로게이머','#4eb87a',entryYear>=2000,avg(v.body_skill*0.25,v.mental*0.25,v.willpower*0.25,v.adapt*0.15,v.focus*0.10),'신체재능+정신력+의지력. 1만 시간');
   add('IT공학','게임 스트리머','#4eb87a',platformEra,avg(v.social_sk*0.30,v.expression*0.25,v.creative_c*0.25,v.adapt*0.20),'엔터테인먼트+언어력');
   add('IT공학','사이버보안 전문가','#3db8a8',dig,avg(v.eng_sense*0.35,v.reasoning*0.30,v.creative_c*0.20,v.morality*0.15),'공학+창의적 해킹+윤리');
   add('IT공학','전자·반도체 엔지니어','#3db8a8',true,avg(v.eng_sense*0.40,v.reasoning*0.30,v.willpower*0.20,v.execution*0.10),'공학감각 절대적');
-  add('IT공학','클라우드·DevOps','#3db8a8',isEntryYearAtLeast(ctx, 2010),weightedAvg([{key:'eng_sense',w:0.33},{key:'reasoning',w:0.27},{key:'execution',w:0.25},{key:'adapt',w:0.15}], v),'자동화+시스템 사고');
-  add('IT공학','UX·UI 디자이너','#a594ff',isEntryYearAtLeast(ctx, 2005),avg(v.art_sense*0.30,v.eng_sense*0.28,v.hum_sense*0.22,v.creative_c*0.20),'예술+공학+인간 이해');
+  add('IT공학','클라우드·DevOps','#3db8a8',entryYear>=2010,avg(v.eng_sense*0.33,v.reasoning*0.27,v.execution*0.25,v.adapt*0.15),'자동화+시스템 사고');
+  add('IT공학','UX·UI 디자이너','#a594ff',entryYear>=2005,avg(v.art_sense*0.30,v.eng_sense*0.28,v.hum_sense*0.22,v.creative_c*0.20),'예술+공학+인간 이해');
   add('IT공학','프롬프트 엔지니어','#3db8a8',aiEra,avg(v.expression*0.32,v.creative_c*0.28,v.reasoning*0.25,v.adapt*0.15),'언어력+창의성. AI 최적화');
   add('IT공학','블록체인 개발자','#3db8a8',cryptoEra,avg(v.eng_sense*0.35,v.reasoning*0.30,v.risk_pref*0.20,v.creative_c*0.15),'공학감각+리스크 마인드');
   add('IT공학','QA 엔지니어','#3db8a8',dig,avg(v.eng_sense*0.32,v.reasoning*0.28,v.morality*0.22,v.execution*0.18),'꼼꼼함+공학. 품질 기준');
-  add('IT공학','프로덕트 매니저','#5a9ef0',isEntryYearAtLeast(ctx, 2010),weightedAvg([{key:'reasoning',w:0.25},{key:'expression',w:0.26},{key:'hum_sense',w:0.24},{key:'execution',w:0.25}], v),'문제정의+조율+실행. 제품 방향 설정');
-  add('IT공학','프로젝트 매니저','#5a9ef0',isEntryYearAtLeast(ctx, 2000),weightedAvg([{key:'ops_skill',w:0.28},{key:'execution',w:0.27},{key:'expression',w:0.23},{key:'social_sk',w:0.22}], v),'운영 조율+실행 통제. 일정과 사람 관리');
+  add('IT공학','프로덕트 매니저','#5a9ef0',entryYear>=2010,avg(v.reasoning*0.25,v.expression*0.26,v.hum_sense*0.24,v.execution*0.25),'문제정의+조율+실행. 제품 방향 설정');
+  add('IT공학','프로젝트 매니저','#5a9ef0',entryYear>=2000,avg(v.ops_skill*0.28,v.execution*0.27,v.expression*0.23,v.social_sk*0.22),'운영 조율+실행 통제. 일정과 사람 관리');
   add('IT공학','임베디드 시스템','#3db8a8',true,avg(v.eng_sense*0.42,v.reasoning*0.28,v.execution*0.20,v.willpower*0.10),'하드웨어+소프트웨어 경계');
   add('IT공학','IT 강사·부트캠프','#3db8a8',dig,avg(v.expression*0.30,v.eng_sense*0.28,v.social_sk*0.25,v.execution*0.17),'기술+언어력+가르치는 능력');
   add('IT공학','드론·로봇 엔지니어','#3db8a8',mod,avg(v.eng_sense*0.38,v.body_skill*0.22,v.execution*0.25,v.creative_c*0.15),'공학+신체 감각');
-}
 
-function addResearchCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 연구·의료·법 ────────────────────────────────────
   add('연구의료법','연구자·과학자','#5a9ef0',true,avg(v.reasoning*0.35,v.eng_sense*0.25,v.willpower*0.20,v.creative_c*0.20),'지능+공학감각+장기 집중력');
   add('연구의료법','의사','#5a9ef0',true,avg(v.reasoning*0.35,v.willpower*0.25,v.morality*0.20,v.mental*0.20),'지능+의지력+도덕성');
   add('연구의료법','치과의사','#5a9ef0',true,avg(v.reasoning*0.32,v.willpower*0.25,v.body_skill*0.18,v.execution*0.25),'지능+손 숙련도');
@@ -746,10 +711,8 @@ function addResearchCareers(v, comp, avg, add, ctx){
   add('연구의료법','방사선사','#5a9ef0',true,avg(v.reasoning*0.28,v.execution*0.25,v.body_skill*0.22,v.morality*0.25),'정확성+숙련도. 영상 장비 운용');
   add('연구의료법','작업치료사','#5a9ef0',true,avg(v.social_sk*0.25,v.morality*0.25,v.execution*0.24,v.hum_sense*0.26),'공감+실행. 재활 보조 실무');
   add('연구의료법','병원행정','#5a9ef0',true,avg(v.ops_skill*0.30,v.execution*0.25,v.social_sk*0.23,v.morality*0.22),'운영 감각+정확성. 의료 시스템 실무');
-}
 
-function addArtsCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 예술·창작 ──────────────────────────────────────
   add('예술창작','화가·조각가','#a594ff',true,avg(v.art_sense*0.45,v.creative_c*0.30,v.willpower*0.15,v.mental*0.10),'예술감각 절대적. 무명 버팀목');
   add('예술창작','음악가·작곡가','#a594ff',true,avg(v.art_sense*0.40,v.creative_c*0.30,v.hum_sense*0.15,v.willpower*0.15),'예술감각+창의성');
   add('예술창작','소설가·작가','#a594ff',true,avg(v.hum_sense*0.35,v.expression*0.30,v.creative_c*0.25,v.art_sense*0.10),'인문감각+언어력');
@@ -770,10 +733,8 @@ function addArtsCareers(v, comp, avg, add, ctx){
   add('예술창작','제빵사·파티시에','#c9a84c',true,avg(v.art_sense*0.32,v.execution*0.30,v.willpower*0.22,v.stamina*0.16),'예술+실행. 새벽 노동');
   add('예술창작','플로리스트·인테리어','#a594ff',true,avg(v.art_sense*0.40,v.creative_c*0.28,v.execution*0.20,v.social_sk*0.12),'예술+창의. 공간 감각');
   add('예술창작','NFT 아티스트','#a594ff',cryptoEra,avg(v.art_sense*0.35,v.creative_c*0.30,v.eng_sense*0.20,v.risk_pref*0.15),'예술+공학+리스크');
-}
 
-function addSportsCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 스포츠 ─────────────────────────────────────────
   add('스포츠','프로 스포츠 선수','#4eb87a',true,avg(v.stamina*0.40,v.willpower*0.30,v.mental*0.15,v.body_skill*0.15),'체력+의지+신체재능');
   add('스포츠','격투기·무술가','#4eb87a',true,avg(v.stamina*0.35,v.body_skill*0.25,v.mental*0.25,v.willpower*0.15),'체력+신체재능+정신력');
   add('스포츠','스포츠 지도자·코치','#4eb87a',true,avg(v.hum_sense*0.28,v.social_sk*0.27,v.expression*0.25,v.adapt*0.20),'인간 이해+지도력');
@@ -781,13 +742,11 @@ function addSportsCareers(v, comp, avg, add, ctx){
   add('스포츠','피트니스 트레이너','#4eb87a',true,avg(v.stamina*0.35,v.social_sk*0.28,v.expression*0.22,v.morality*0.15),'체력+사회성');
   add('스포츠','스포츠 해설위원','#4eb87a',dig,avg(v.expression*0.38,v.hum_sense*0.25,v.social_sk*0.22,v.adapt*0.15),'언어력+스포츠 이해');
   add('스포츠','스턴트맨','#4eb87a',true,avg(v.stamina*0.40,v.body_skill*0.28,v.mental*0.18,v.risk_pref*0.14),'체력+신체재능+리스크');
-  add('스포츠','e스포츠 감독','#4eb87a',isEntryYearAtLeast(ctx, 2005),avg(v.hum_sense*0.28,v.social_sk*0.28,v.adapt*0.25,v.expression*0.19),'전략분석+지도력');
+  add('스포츠','e스포츠 감독','#4eb87a',entryYear>=2005,avg(v.hum_sense*0.28,v.social_sk*0.28,v.adapt*0.25,v.expression*0.19),'전략분석+지도력');
   add('스포츠','스포츠 마케터','#4eb87a',dig,avg(v.social_sk*0.30,v.creative_c*0.25,v.expression*0.25,v.execution*0.20),'사회성+창의성');
   add('스포츠','레저 스포츠 강사','#4eb87a',true,avg(v.stamina*0.35,v.social_sk*0.30,v.expression*0.20,v.execution*0.15),'체력+사회성');
-}
 
-function addMediaCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 미디어 ──────────────────────────────────────────
   add('미디어','PD·방송 연출','#e87ab0',true,avg(v.creative_c*0.28,v.hum_sense*0.27,v.expression*0.25,v.social_sk*0.20),'콘텐츠기획+인간이해');
   add('미디어','방송작가','#e87ab0',true,avg(v.expression*0.32,v.creative_c*0.28,v.hum_sense*0.25,v.execution*0.15),'언어력+창의성');
   add('미디어','저널리스트·기자','#e87ab0',true,avg(v.hum_sense*0.32,v.expression*0.30,v.morality*0.20,v.execution*0.18),'인문+언어+도덕성');
@@ -797,10 +756,8 @@ function addMediaCareers(v, comp, avg, add, ctx){
   add('미디어','출판 편집자','#e87ab0',true,avg(v.expression*0.35,v.hum_sense*0.30,v.execution*0.22,v.morality*0.13),'언어+인문');
   add('미디어','영상 편집자','#e87ab0',dig,avg(v.art_sense*0.28,v.execution*0.30,v.creative_c*0.25,v.eng_sense*0.17),'예술+실행+공학');
   add('미디어','팟캐스터','#e87ab0',dig,avg(v.expression*0.33,v.hum_sense*0.27,v.creative_c*0.23,v.execution*0.17),'언어력+창의성');
-}
 
-function addEducationCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 교육·사회서비스 ─────────────────────────────────
   add('교육사회','교사·교육자','#4eb87a',true,avg(v.expression*0.28,v.morality*0.25,v.hum_sense*0.27,v.social_sk*0.20),'언어+인문+도덕');
   add('교육사회','학원 강사','#4eb87a',true,avg(v.expression*0.30,v.reasoning*0.25,v.social_sk*0.25,v.execution*0.20),'언어력+지능');
   add('교육사회','입시 컨설턴트','#4eb87a',dig,avg(v.hum_sense*0.28,v.social_sk*0.28,v.expression*0.25,v.reasoning*0.19),'인문+사회성');
@@ -813,10 +770,8 @@ function addEducationCareers(v, comp, avg, add, ctx){
   add('교육사회','학교 상담교사','#4eb87a',true,avg(v.hum_sense*0.32,v.social_sk*0.28,v.morality*0.25,v.expression*0.15),'인문+사회성+도덕');
   add('교육사회','미술·음악 치료사','#a594ff',true,avg(v.art_sense*0.30,v.morality*0.28,v.social_sk*0.27,v.hum_sense*0.15),'예술+도덕+사회성');
   add('교육사회','사회적 기업가','#4eb87a',dig,avg(v.morality*0.28,v.social_sk*0.28,v.execution*0.22,v.creative_c*0.22),'도덕+사회+실행');
-}
 
-function addPublicCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 공공·군사 ────────────────────────────────────────
   add('공공군사','정치인·국회의원','#e05a5a',true,avg(v.social_sk*0.25,v.expression*0.25,v.hum_sense*0.20,v.adapt*0.15,v.morality*0.15),'대중 설득+인문');
   add('공공군사','공무원·행정관료','#5a9ef0',true,avg(v.reasoning*0.25,v.willpower*0.30,v.morality*0.25,v.adapt*0.20),'안정+의지력+도덕');
   add('공공군사','외교관','#5a9ef0',true,avg(v.expression*0.30,v.social_sk*0.25,v.reasoning*0.25,v.hum_sense*0.20),'언어+사회성+지능');
@@ -826,13 +781,11 @@ function addPublicCareers(v, comp, avg, add, ctx){
   add('공공군사','교도관','#3db8a8',true,avg(v.stamina*0.28,v.mental*0.28,v.morality*0.25,v.social_sk*0.19),'체력+정신+도덕');
   add('공공군사','지방의원','#e05a5a',true,avg(v.social_sk*0.30,v.hum_sense*0.25,v.expression*0.25,v.morality*0.20),'지역사회성+인문');
   add('공공군사','세관·국세청','#5a9ef0',true,avg(v.morality*0.30,v.reasoning*0.28,v.execution*0.25,v.mental*0.17),'도덕+지능');
-  add('공공군사','공기업 실무','#5a9ef0',isEntryYearAtLeast(ctx, 1990),weightedAvg([{key:'reasoning',w:0.26},{key:'execution',w:0.26},{key:'morality',w:0.24},{key:'stability',w:0.24}], v),'안정지향+실무 정확성. 중간층 선호');
-  add('공공군사','정책연구원','#5a9ef0',isEntryYearAtLeast(ctx, 2000),weightedAvg([{key:'reasoning',w:0.30},{key:'hum_sense',w:0.24},{key:'expression',w:0.23},{key:'morality',w:0.23}], v),'분석력+인문 감각. 공공 문제 연구');
-  add('공공군사','감사·심사 실무','#5a9ef0',isEntryYearAtLeast(ctx, 1995),weightedAvg([{key:'reasoning',w:0.28},{key:'morality',w:0.28},{key:'execution',w:0.24},{key:'self_ctrl',w:0.20}], v),'정확성+도덕성. 규정과 리스크 관리');
-}
+  add('공공군사','공기업 실무','#5a9ef0',entryYear>=1990,avg(v.reasoning*0.26,v.execution*0.26,v.morality*0.24,v.stability*0.24),'안정지향+실무 정확성. 중간층 선호');
+  add('공공군사','정책연구원','#5a9ef0',entryYear>=2000,avg(v.reasoning*0.30,v.hum_sense*0.24,v.expression*0.23,v.morality*0.23),'분석력+인문 감각. 공공 문제 연구');
+  add('공공군사','감사·심사 실무','#5a9ef0',entryYear>=1995,avg(v.reasoning*0.28,v.morality*0.28,v.execution*0.24,v.self_ctrl*0.20),'정확성+도덕성. 규정과 리스크 관리');
 
-function addTradesCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 기능·기술 ────────────────────────────────────────
   add('기능노동','전기기사','#888',true,avg(v.eng_sense*0.38,v.stamina*0.28,v.execution*0.22,v.willpower*0.12),'공학+체력. 안전 실행력');
   add('기능노동','배관공·설비 기술자','#888',true,avg(v.eng_sense*0.32,v.stamina*0.32,v.execution*0.24,v.adapt*0.12),'공학+체력+실행');
   add('기능노동','용접공','#888',true,avg(v.eng_sense*0.30,v.stamina*0.32,v.execution*0.28,v.willpower*0.10),'공학+체력. 정밀 실행');
@@ -846,19 +799,17 @@ function addTradesCareers(v, comp, avg, add, ctx){
   add('기능노동','제조업 생산직','#888',true,avg(v.stamina*0.38,v.execution*0.32,v.willpower*0.22,v.mental*0.08),'체력+실행+의지');
   add('기능노동','안전 관리자','#3db8a8',true,avg(v.morality*0.28,v.eng_sense*0.27,v.execution*0.25,v.social_sk*0.20),'도덕+공학');
   add('기능노동','3D·CNC 기술자','#3db8a8',dig,avg(v.eng_sense*0.35,v.execution*0.30,v.creative_c*0.20,v.adapt*0.15),'공학+실행+창의');
-  add('기능노동','생산관리','#5a9ef0',isEntryYearAtLeast(ctx, 1990),weightedAvg([{key:'ops_skill',w:0.30},{key:'execution',w:0.27},{key:'stamina',w:0.23},{key:'reasoning',w:0.20}], v),'운영 통제+실행력. 현장과 사무의 중간층');
-  add('기능노동','품질관리·품질보증','#5a9ef0',isEntryYearAtLeast(ctx, 1990),weightedAvg([{key:'reasoning',w:0.28},{key:'execution',w:0.24},{key:'morality',w:0.24},{key:'focus',w:0.24}], v),'정확성+기준 준수. 품질 책임');
-  add('기능노동','공정 엔지니어','#3db8a8',isEntryYearAtLeast(ctx, 1995),weightedAvg([{key:'eng_sense',w:0.32},{key:'reasoning',w:0.27},{key:'execution',w:0.24},{key:'ops_skill',w:0.17}], v),'공학 감각+공정 최적화');
-  add('기능노동','설비 엔지니어','#3db8a8',isEntryYearAtLeast(ctx, 1995),weightedAvg([{key:'eng_sense',w:0.33},{key:'execution',w:0.25},{key:'stamina',w:0.22},{key:'adapt',w:0.20}], v),'공학+실행. 설비 유지와 복구');
+  add('기능노동','생산관리','#5a9ef0',entryYear>=1990,avg(v.ops_skill*0.30,v.execution*0.27,v.stamina*0.23,v.reasoning*0.20),'운영 통제+실행력. 현장과 사무의 중간층');
+  add('기능노동','품질관리·품질보증','#5a9ef0',entryYear>=1990,avg(v.reasoning*0.28,v.execution*0.24,v.morality*0.24,v.focus*0.24),'정확성+기준 준수. 품질 책임');
+  add('기능노동','공정 엔지니어','#3db8a8',entryYear>=1995,avg(v.eng_sense*0.32,v.reasoning*0.27,v.execution*0.24,v.ops_skill*0.17),'공학 감각+공정 최적화');
+  add('기능노동','설비 엔지니어','#3db8a8',entryYear>=1995,avg(v.eng_sense*0.33,v.execution*0.25,v.stamina*0.22,v.adapt*0.20),'공학+실행. 설비 유지와 복구');
   add('기능노동','항공기 정비사','#3db8a8',true,avg(v.eng_sense*0.40,v.morality*0.25,v.execution*0.25,v.willpower*0.10),'공학+도덕. 극한 정밀도');
   add('기능노동','귀금속·보석 세공','#a594ff',true,avg(v.art_sense*0.35,v.execution*0.32,v.stamina*0.18,v.willpower*0.15),'예술+정밀 실행');
   add('기능노동','조리사·급식','#c9a84c',true,avg(v.stamina*0.32,v.execution*0.32,v.willpower*0.22,v.art_sense*0.14),'체력+실행+의지');
   add('기능노동','도배사·타일 기술자','#888',true,avg(v.stamina*0.35,v.execution*0.32,v.willpower*0.22,v.adapt*0.11),'체력+실행+의지');
   add('기능노동','냉난방 공조 기술자','#888',true,avg(v.eng_sense*0.35,v.stamina*0.30,v.execution*0.25,v.adapt*0.10),'공학+체력');
-}
 
-function addLogisticsCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 물류·서비스 ────────────────────────────────────
   add('물류서비스','배달·라이더','#888',platformEra,avg(v.stamina*0.35,v.execution*0.30,v.adapt*0.25,v.risk_pref*0.10),'체력+실행. 플랫폼 노동');
   add('물류서비스','택배·물류 기사','#888',true,avg(v.stamina*0.38,v.execution*0.30,v.willpower*0.22,v.adapt*0.10),'체력+실행+의지');
   add('물류서비스','트럭 운전사','#888',true,avg(v.stamina*0.32,v.willpower*0.28,v.execution*0.28,v.mental*0.12),'체력+의지. 장거리 정신력');
@@ -868,45 +819,39 @@ function addLogisticsCareers(v, comp, avg, add, ctx){
   add('물류서비스','창고·물류 운영','#888',true,avg(v.execution*0.35,v.stamina*0.28,v.adapt*0.22,v.willpower*0.15),'실행+체력+적응');
   add('물류서비스','경비·보안 요원','#888',true,avg(v.stamina*0.30,v.mental*0.28,v.morality*0.25,v.execution*0.17),'체력+정신+도덕');
   add('물류서비스','고객상담·고객서비스','#888',callCenterEra,avg(v.social_sk*0.32,v.expression*0.30,v.mental*0.25,v.willpower*0.13),'사회성+언어. 감정 노동');
-  add('물류서비스','총무·사무운영','#5a9ef0',isEntryYearAtLeast(ctx, 1985),weightedAvg([{key:'execution',w:0.27},{key:'ops_skill',w:0.27},{key:'social_sk',w:0.23},{key:'stability',w:0.23}], v),'실무 정리+조율 능력. 조직 유지형');
-  add('물류서비스','인사·채용 운영','#5a9ef0',isEntryYearAtLeast(ctx, 1995),weightedAvg([{key:'social_sk',w:0.27},{key:'hum_sense',w:0.24},{key:'ops_skill',w:0.25},{key:'expression',w:0.24}], v),'사람 이해+실무 운영. 내부 조율형');
+  add('물류서비스','총무·사무운영','#5a9ef0',entryYear>=1985,avg(v.execution*0.27,v.ops_skill*0.27,v.social_sk*0.23,v.stability*0.23),'실무 정리+조율 능력. 조직 유지형');
+  add('물류서비스','인사·채용 운영','#5a9ef0',entryYear>=1995,avg(v.social_sk*0.27,v.hum_sense*0.24,v.ops_skill*0.25,v.expression*0.24),'사람 이해+실무 운영. 내부 조율형');
   add('물류서비스','호텔리어·관광 기획','#4eb87a',true,avg(v.social_sk*0.30,v.expression*0.28,v.execution*0.22,v.adapt*0.20),'사회성+언어+실행');
   add('물류서비스','여행 가이드','#4eb87a',true,avg(v.social_sk*0.30,v.expression*0.30,v.adapt*0.22,v.hum_sense*0.18),'사회성+언어+적응');
   add('물류서비스','부동산 개발·시행','#c9a84c',true,avg(v.risk_pref*0.30,v.family_bg*0.28,v.execution*0.25,v.social_sk*0.17),'리스크+자본+실행');
-}
 
-function addPrimaryCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 농수산·1차 ──────────────────────────────────────
   add('농수산','농업·귀농인','#4eb87a',true,avg(v.stamina*0.40,v.willpower*0.30,v.execution*0.20,v.adapt*0.10),'체력+의지. 자연과 싸우는 생존');
   add('농수산','스마트팜 운영','#4eb87a',smartEra,avg(v.eng_sense*0.28,v.stamina*0.25,v.execution*0.25,v.adapt*0.22),'공학+체력. 데이터 농업');
   add('농수산','수산업·어부','#4eb87a',true,avg(v.stamina*0.42,v.willpower*0.30,v.mental*0.18,v.risk_pref*0.10),'체력+의지. 극한 환경');
   add('농수산','축산업자','#4eb87a',true,avg(v.stamina*0.38,v.willpower*0.28,v.execution*0.24,v.morality*0.10),'체력+의지. 생명 책임');
-  add('농수산','6차산업 농장','#4eb87a',isEntryYearAtLeast(ctx, 2010),avg(v.creative_c*0.25,v.execution*0.28,v.stamina*0.25,v.social_sk*0.22),'창의+실행+체력');
+  add('농수산','6차산업 농장','#4eb87a',entryYear>=2010,avg(v.creative_c*0.25,v.execution*0.28,v.stamina*0.25,v.social_sk*0.22),'창의+실행+체력');
   add('농수산','수산물 유통','#4eb87a',true,avg(v.social_sk*0.30,v.stamina*0.28,v.execution*0.25,v.adapt*0.17),'사회성+체력+실행');
   add('농수산','조경·산림 기술자','#4eb87a',true,avg(v.stamina*0.32,v.art_sense*0.25,v.execution*0.25,v.eng_sense*0.18),'체력+예술+공학');
   add('농수산','반려동물 훈련사','#4eb87a',petEra,avg(v.social_sk*0.28,v.morality*0.28,v.execution*0.25,v.stamina*0.19),'사회성+도덕');
-  add('농수산','곤충 양식·미래 식품','#4eb87a',isEntryYearAtLeast(ctx, 2015),avg(v.eng_sense*0.28,v.risk_pref*0.28,v.execution*0.25,v.adapt*0.19),'공학+리스크. 신산업');
-}
+  add('농수산','곤충 양식·미래 식품','#4eb87a',entryYear>=2015,avg(v.eng_sense*0.28,v.risk_pref*0.28,v.execution*0.25,v.adapt*0.19),'공학+리스크. 신산업');
 
-function addEmergingCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 신종직종 ─────────────────────────────────────────
   add('신종직종','가상자산 거래','#c9a84c',cryptoEra,avg(v.risk_pref*0.35,v.reasoning*0.28,v.adapt*0.22,v.mental*0.15),'리스크+분석. 극한 변동성');
-  add('신종직종','디지털 노마드','#3db8a8',isEntryYearAtLeast(ctx, 2015),avg(v.execution*0.28,v.adapt*0.28,v.expression*0.24,v.creative_c*0.20),'실행+적응+언어');
+  add('신종직종','디지털 노마드','#3db8a8',entryYear>=2015,avg(v.execution*0.28,v.adapt*0.28,v.expression*0.24,v.creative_c*0.20),'실행+적응+언어');
   add('신종직종','구독 큐레이터','#e87ab0',mod,avg(v.expression*0.32,v.hum_sense*0.28,v.creative_c*0.25,v.execution*0.15),'언어+인문+창의');
-  add('신종직종','메타버스·VR 기획','#3db8a8',isEntryYearAtLeast(ctx, 2020),avg(v.eng_sense*0.28,v.creative_c*0.28,v.art_sense*0.22,v.execution*0.22),'공학+창의+예술');
-  add('신종직종','AI 활용 컨설턴트','#3db8a8',aiEra,weightedAvg([{key:'expression',w:0.28},{key:'eng_sense',w:0.27},{key:'creative_c',w:0.25},{key:'adapt',w:0.20}], v),'AI이해+언어+적응');
+  add('신종직종','메타버스·VR 기획','#3db8a8',entryYear>=2020,avg(v.eng_sense*0.28,v.creative_c*0.28,v.art_sense*0.22,v.execution*0.22),'공학+창의+예술');
+  add('신종직종','AI 활용 컨설턴트','#3db8a8',aiEra,avg(v.expression*0.28,v.eng_sense*0.27,v.creative_c*0.25,v.adapt*0.20),'AI이해+언어+적응');
   add('신종직종','ESG·지속가능성 컨설팅','#4eb87a',mod,avg(v.morality*0.30,v.hum_sense*0.28,v.expression*0.25,v.social_sk*0.17),'도덕+인문+언어');
-  add('신종직종','라이브커머스 진행','#e87ab0',isEntryYearAtLeast(ctx, 2020),avg(v.social_sk*0.30,v.expression*0.32,v.looks*0.18,v.execution*0.20),'사회성+언어+실행');
+  add('신종직종','라이브커머스 진행','#e87ab0',entryYear>=2020,avg(v.social_sk*0.30,v.expression*0.32,v.looks*0.18,v.execution*0.20),'사회성+언어+실행');
   add('신종직종','헬스 인플루언서','#4eb87a',platformEra,avg(v.stamina*0.28,v.social_sk*0.28,v.expression*0.25,v.looks*0.19),'체력+사회성+언어');
-  add('신종직종','드론 조종사','#3db8a8',isEntryYearAtLeast(ctx, 2015),avg(v.eng_sense*0.32,v.execution*0.30,v.body_skill*0.22,v.adapt*0.16),'공학+실행. 공간 지각');
+  add('신종직종','드론 조종사','#3db8a8',entryYear>=2015,avg(v.eng_sense*0.32,v.execution*0.30,v.body_skill*0.22,v.adapt*0.16),'공학+실행. 공간 지각');
   add('신종직종','반려동물 케어','#4eb87a',petEra,avg(v.morality*0.30,v.social_sk*0.28,v.execution*0.25,v.adapt*0.17),'도덕+사회성+실행');
   add('신종직종','유튜브 10만 미만','#888',platformEra,avg(v.creative_c*0.25,v.execution*0.25,v.willpower*0.30,v.adapt*0.20),'대부분 크리에이터의 현실');
   add('신종직종','구독형 코칭','#4eb87a',mod,avg(v.expression*0.30,v.hum_sense*0.28,v.social_sk*0.25,v.morality*0.17),'언어+인문+도덕');
   add('신종직종','리걸테크 기획','#5a9ef0',mod,avg(v.eng_sense*0.28,v.reasoning*0.27,v.expression*0.25,v.execution*0.20),'공학+법률+언어');
-}
 
-function addGrayZoneCareers(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+  // ─── 회색지대 ─────────────────────────────────────────
   if(v.morality<=22){
     add('회색지대','사기꾼·보이스피싱','#e05a5a',true,avg(v.social_sk*0.35,v.expression*0.30,(100-v.morality)*0.25,v.reasoning*0.10),'사회성+언어. 도덕 결여',true);
     add('회색지대','전세사기','#e05a5a',dig,avg(v.reasoning*0.28,v.social_sk*0.28,(100-v.morality)*0.28,v.execution*0.16),'지능+도덕 결여',true);
@@ -914,10 +859,9 @@ function addGrayZoneCareers(v, comp, avg, add, ctx){
     add('회색지대','조직폭력','#e05a5a',old||d<=1990,avg(v.stamina*0.30,v.risk_pref*0.30,(100-v.morality)*0.25,v.social_sk*0.15),'체력+리스크. 극저 도덕성',true);
     add('회색지대','마약 관련 범죄','#e05a5a',mod,avg(v.risk_pref*0.35,(100-v.morality)*0.35,v.social_sk*0.20,v.adapt*0.10),'리스크+도덕 결여',true);
   }
-}
 
-function addCareerExpansionPack(v, comp, avg, add, ctx){
-  const {d, entryYear, webEra, platformEra, aiEra, cryptoEra, callCenterEra, petEra, smartEra, dig, mod, old, pre00, iF, iM, lH, mL, mM} = ctx;
+
+  // ─── 추가 직업 (200개 달성) ────────────────────────
   add('스포츠','수영·골프 강사','#4eb87a',true,avg(v.stamina*0.35,v.social_sk*0.28,v.expression*0.22,v.morality*0.15),'체력+사회성+전달력');
   add('공공군사','군무원·방위산업','#5a9ef0',true,avg(v.eng_sense*0.28,v.morality*0.25,v.willpower*0.27,v.execution*0.20),'공학+도덕. 공직 의지력');
   add('공공군사','소년원·교화 전문가','#4eb87a',true,avg(v.morality*0.32,v.social_sk*0.28,v.hum_sense*0.25,v.mental*0.15),'도덕+인문+정신력');
@@ -926,13 +870,14 @@ function addCareerExpansionPack(v, comp, avg, add, ctx){
   add('물류서비스','청소·시설 관리','#888',true,avg(v.stamina*0.38,v.execution*0.30,v.willpower*0.22,v.morality*0.10),'체력+실행. 성실한 의지력');
   add('물류서비스','카카오·플랫폼 기사','#888',platformEra,avg(v.stamina*0.30,v.adapt*0.30,v.social_sk*0.25,v.execution*0.15),'체력+적응력. 플랫폼 생태계');
   add('농수산','임업·산림 관리','#4eb87a',true,avg(v.stamina*0.38,v.willpower*0.28,v.execution*0.22,v.eng_sense*0.12),'체력+의지+공학');
-  add('신종직종','탄소·환경 컨설팅','#4eb87a',isEntryYearAtLeast(ctx, 2020),weightedAvg([{key:'morality',w:0.28},{key:'eng_sense',w:0.27},{key:'expression',w:0.25},{key:'execution',w:0.20}], v),'도덕+공학+언어');
+  add('신종직종','탄소·환경 컨설팅','#4eb87a',entryYear>=2020,avg(v.morality*0.28,v.eng_sense*0.27,v.expression*0.25,v.execution*0.20),'도덕+공학+언어');
   add('신종직종','구독형 뉴스레터','#e87ab0',platformEra,avg(v.expression*0.32,v.hum_sense*0.28,v.creative_c*0.25,v.execution*0.15),'언어+인문+창의');
   add('신종직종','AI 아트 디렉터','#a594ff',aiEra,avg(v.art_sense*0.35,v.creative_c*0.30,v.eng_sense*0.20,v.execution*0.15),'예술+창의+AI활용');
-  add('신종직종','헬스케어 IT 기획','#3db8a8',isEntryYearAtLeast(ctx, 2015),weightedAvg([{key:'eng_sense',w:0.28},{key:'hum_sense',w:0.25},{key:'expression',w:0.25},{key:'execution',w:0.22}], v),'공학+인문. 의료IT');
+  add('신종직종','헬스케어 IT 기획','#3db8a8',entryYear>=2015,avg(v.eng_sense*0.28,v.hum_sense*0.25,v.expression*0.25,v.execution*0.22),'공학+인문. 의료IT');
   add('미디어','포토그래퍼·영상 기자','#e87ab0',true,avg(v.art_sense*0.28,v.execution*0.28,v.adapt*0.25,v.social_sk*0.19),'예술+실행. 현장 적응');
   add('교육사회','다문화 지원 활동가','#4eb87a',true,avg(v.morality*0.30,v.expression*0.28,v.social_sk*0.25,v.adapt*0.17),'도덕+언어+적응');
 
+    return A.sort((a,b)=>b.fit-a.fit);
 }
 
 // ══════════════════════════════════════════════════════
@@ -957,3 +902,5 @@ function getVerdict(human, success, comp, v, careers){
 // ══════════════════════════════════════════════════════
 // 17. MAIN RUN FUNCTION
 // ══════════════════════════════════════════════════════
+
+

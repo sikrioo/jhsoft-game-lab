@@ -140,25 +140,57 @@ window.CombatSystem = (() => {
     list.splice(index, 1);
   }
 
-  function damageEnemy(enemy, damage, hitColor, particleCount=10, particlePower=1){
+  function getEnemyHitCircles(enemy){
+    if (enemy && typeof enemy.getHitCircles === "function") return enemy.getHitCircles();
+    return [{ x: enemy.x, y: enemy.y, radius: enemy.r }];
+  }
+
+  function removeEnemy(enemy){
+    const S = GameState;
+    if (typeof enemy.onDefeat === "function") enemy.onDefeat();
+    if (typeof enemy.destroyVisuals === "function") enemy.destroyVisuals();
+    else S.uiLayer.removeChild(enemy.spr);
+    const enemyIndex = S.enemies.indexOf(enemy);
+    if (enemyIndex >= 0) S.enemies.splice(enemyIndex, 1);
+  }
+
+  function rewardEnemyKill(enemy){
+    const P = GameState.progression;
+    P.waveAlive--;
+    P.combo = Math.min(6, P.combo + (enemy.tier === "boss" ? 0.55 : enemy.tier === "midboss" ? 0.28 : 0.12));
+    P.comboT = 120;
+    P.score += enemy.scoreBase * P.combo;
+    SkillSystem.gainXp(enemy.xp);
+    if (enemy.tier === "boss") {
+      P.score += Math.round(enemy.scoreBase * 0.35);
+      SkillSystem.gainXp(Math.round(enemy.xp * 0.35));
+      Effects.emitPulse(enemy.x, enemy.y, 0xffffff, 140, 24);
+    }
+    Effects.emitParticle(enemy.x, enemy.y, enemy.glowColor, enemy.tier === "boss" ? 36 : 22, 1.5);
+  }
+
+  function damageEnemy(enemy, damage, hitColor, particleCount=10, particlePower=1, hitCircle=null){
     const S = GameState;
     const P = S.progression;
 
-    enemy.hp -= damage;
-    enemy.hitT = 6;
-    enemy.hpText.text = String(Math.max(0, Math.floor(enemy.hp)));
-    Effects.emitParticle(enemy.x, enemy.y, hitColor || enemy.glowColor, particleCount, particlePower);
+    const effectX = hitCircle ? hitCircle.x : enemy.x;
+    const effectY = hitCircle ? hitCircle.y : enemy.y;
+
+    if (typeof enemy.takeDamage === "function"){
+      const didDamage = enemy.takeDamage(damage, { hitCircle, hitColor, particleCount, particlePower });
+      if (!didDamage) return false;
+      enemy.hitT = 6;
+    } else {
+      enemy.hp -= damage;
+      enemy.hitT = 6;
+      enemy.hpText.text = String(Math.max(0, Math.floor(enemy.hp)));
+    }
+    Effects.emitParticle(effectX, effectY, hitColor || enemy.glowColor, particleCount, particlePower);
 
     if (enemy.hp <= 0){
-      S.uiLayer.removeChild(enemy.spr);
-      const enemyIndex = S.enemies.indexOf(enemy);
-      if (enemyIndex >= 0) S.enemies.splice(enemyIndex, 1);
-      P.waveAlive--;
-      P.combo = Math.min(6, P.combo + (enemy.tier === "boss" ? 0.55 : enemy.tier === "midboss" ? 0.28 : 0.12));
-      P.comboT = 120;
-      P.score += enemy.scoreBase * P.combo;
-      SkillSystem.gainXp(enemy.xp);
-      Effects.emitParticle(enemy.x, enemy.y, enemy.glowColor, enemy.tier === "boss" ? 36 : 22, 1.5);
+      removeEnemy(enemy);
+      rewardEnemyKill(enemy);
+      UI.hudUpdate();
       return true;
     }
 
@@ -260,12 +292,16 @@ window.CombatSystem = (() => {
     const originX = channel.beam.x;
     const originY = channel.beam.y;
     for (const enemy of [...S.enemies]){
-      const rx = enemy.x - originX;
-      const ry = enemy.y - originY;
-      const along = rx * cos + ry * sin;
-      const side = Math.abs(rx * -sin + ry * cos);
-      if (along >= 0 && along <= channel.length && side <= channel.width + enemy.r){
-        damageEnemy(enemy, damage, channel.color, enemy.tier === "boss" ? 12 : 8, 0.75);
+      const hitCircles = getEnemyHitCircles(enemy);
+      for (const hitCircle of hitCircles){
+        const rx = hitCircle.x - originX;
+        const ry = hitCircle.y - originY;
+        const along = rx * cos + ry * sin;
+        const side = Math.abs(rx * -sin + ry * cos);
+        if (along >= 0 && along <= channel.length && side <= channel.width + hitCircle.radius){
+          damageEnemy(enemy, damage, channel.color, enemy.tier === "boss" ? 12 : 8, 0.75, hitCircle);
+          break;
+        }
       }
     }
   }
@@ -368,11 +404,14 @@ window.CombatSystem = (() => {
 
       for (let j=S.enemies.length-1; j>=0; j--){
         const e = S.enemies[j];
-        const rr = b.r + e.r;
-        if (Helpers.dist2(b.x, b.y, e.x, e.y) < rr * rr){
+        const hitCircle = getEnemyHitCircles(e).find((circle) => {
+          const rr = b.r + circle.radius;
+          return Helpers.dist2(b.x, b.y, circle.x, circle.y) < rr * rr;
+        });
+        if (hitCircle){
           const particleCount = b.kind === "shotgun" ? 14 : (e.tier === "boss" ? 18 : 10);
           const particlePower = b.kind === "shotgun" ? 1.35 : (e.tier === "boss" ? 1.3 : 1.0);
-          damageEnemy(e, b.dmg, b.color || e.glowColor, particleCount, particlePower);
+          damageEnemy(e, b.dmg, b.color || e.glowColor, particleCount, particlePower, hitCircle);
           if (b.pierce > 0){
             b.pierce -= 1;
           } else {
@@ -466,14 +505,18 @@ window.CombatSystem = (() => {
 
       const target = m.target;
       if (target){
-        const rr = m.r + target.r;
-        if (Helpers.dist2(m.x, m.y, target.x, target.y) < rr * rr){
-          damageEnemy(target, m.dmg, m.color || 0xffb347, target.tier === "boss" ? 24 : 14, m.heavy ? 1.7 : 1.25);
+        const hitCircle = getEnemyHitCircles(target).find((circle) => {
+          const rr = m.r + circle.radius;
+          return Helpers.dist2(m.x, m.y, circle.x, circle.y) < rr * rr;
+        });
+        if (hitCircle){
+          damageEnemy(target, m.dmg, m.color || 0xffb347, target.tier === "boss" ? 24 : 14, m.heavy ? 1.7 : 1.25, hitCircle);
           Effects.emitParticle(m.x, m.y, 0xffd27a, m.heavy ? 22 : 14, m.heavy ? 1.8 : 1.4);
           if (m.heavy){
             for (const enemy of S.enemies){
-              if (enemy !== target && Helpers.dist2(m.x, m.y, enemy.x, enemy.y) < 110 * 110){
-                damageEnemy(enemy, Math.max(1, m.dmg * 0.45), 0xffb347, 8, 0.9);
+              const splashCircle = getEnemyHitCircles(enemy)[0];
+              if (enemy !== target && splashCircle && Helpers.dist2(m.x, m.y, splashCircle.x, splashCircle.y) < 110 * 110){
+                damageEnemy(enemy, Math.max(1, m.dmg * 0.45), 0xffb347, 8, 0.9, splashCircle);
               }
             }
             Effects.emitPulse(m.x, m.y, 0xffb347, 110, 18);

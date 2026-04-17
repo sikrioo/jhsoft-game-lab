@@ -28,6 +28,14 @@
     </div>
   </div>
 
+  <div class="bossHud" id="bossHud">
+    <div class="bossHudName" id="bossHudName">-</div>
+    <div class="bossHudMeta" id="bossHudMeta">No Active Boss</div>
+    <div class="bossHudBar">
+      <div class="bossHudFill" id="bossHudFill"></div>
+    </div>
+  </div>
+
   <div class="activeHud" id="activeHud">
     <div class="activeSlot" data-key="KeyQ">
       <div class="slotTop"><span class="slotKey">Q</span><span class="slotCd">READY</span></div>
@@ -50,24 +58,28 @@
     <div class="weaponHead">Weapon Test</div>
     <label class="weaponOption">
       <input type="radio" name="weaponType" value="machinegun" checked />
-      <span>기관포</span>
+      <span>Machinegun</span>
     </label>
     <label class="weaponOption">
       <input type="radio" name="weaponType" value="laser" />
-      <span>레이저</span>
+      <span>Laser</span>
     </label>
     <label class="weaponOption">
       <input type="radio" name="weaponType" value="shotgun" />
-      <span>샷건</span>
+      <span>Shotgun</span>
     </label>
-    <div class="weaponState">현재 무기: <b id="weaponName">기관포</b> <span id="weaponLevel">Lv.MAX</span></div>
+    <div class="weaponState">Current Weapon: <b id="weaponName">Machinegun</b> <span id="weaponLevel">Lv.MAX</span></div>
+    <div class="weaponHead bossHead">Boss Test</div>
+    <label class="bossLabel" for="bossSelect">Target Boss</label>
+    <select id="bossSelect" class="bossSelect"></select>
+    <button class="btn bossBtn" id="btnSpawnBoss" type="button">Spawn Boss</button>
   </div>
 
   <div class="centerOverlay" id="overlayRoot">
     <div class="card" id="startCard">
       <h1>NEON SURVIVOR</h1>
-      <p>시작 모드를 선택하세요. 플레이 모드는 일반 시작, 테스트 모드는 스킬/무기 테스트 세팅으로 시작합니다.</p>
-      <p class="hint">테스트 모드에서는 시작 로드아웃과 무기 교체 UI가 활성화됩니다.</p>
+      <p>시작 모드를 선택하세요. 플레이 모드는 일반 웨이브 진행, 테스트 모드는 무기와 보스를 바로 확인하는 연습 모드입니다.</p>
+      <p class="hint">테스트 모드에서는 시작 직후 선택한 보스가 등장하고 무기 변경 UI가 활성화됩니다.</p>
       <div class="btnRow">
         <button class="btn" id="btnStart">Play Mode</button>
         <button class="btn secondary" id="btnPractice">Test Mode</button>
@@ -103,6 +115,7 @@
   <script src="./js/data/upgrades.js"></script>
   <script src="./js/data/active-skills.js"></script>
   <script src="./js/data/weapon-types.js"></script>
+  <script src="./js/data/boss-types.js"></script>
 
   <script src="./js/core/utils.js"></script>
   <script src="./js/core/state.js"></script>
@@ -115,6 +128,7 @@
   <script src="./js/systems/active-skills.js"></script>
   <script src="./js/systems/wave.js"></script>
   <script src="./js/systems/enemy.js"></script>
+  <script src="./js/systems/boss.js"></script>
   <script src="./js/systems/combat.js"></script>
 
   <script src="./js/entities/player.js"></script>

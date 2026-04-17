@@ -142,6 +142,54 @@ window.Effects = (() => {
     });
   }
 
+  function emitLineTelegraph(x1, y1, x2, y2, color=0xffffff, life=18, width=8){
+    const S = GameState;
+    const g = new PIXI.Graphics();
+    S.fx.addChild(g);
+    S.particles.push({
+      spr: g,
+      x: x1,
+      y: y1,
+      vx: 0,
+      vy: 0,
+      life,
+      maxLife: life,
+      telegraphLine: { x1, y1, x2, y2, color, width }
+    });
+  }
+
+  function emitGroundTelegraph(x, y, radius=40, color=0xffffff, life=20){
+    const S = GameState;
+    const g = new PIXI.Graphics();
+    S.fx.addChild(g);
+    S.particles.push({
+      spr: g,
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      life,
+      maxLife: life,
+      telegraphRing: { x, y, radius, color }
+    });
+  }
+
+  function emitSlashArc(x, y, startAngle, endAngle, color=0xffffff, life=10, radius=58, width=10){
+    const S = GameState;
+    const g = new PIXI.Graphics();
+    S.fx.addChild(g);
+    S.particles.push({
+      spr: g,
+      x,
+      y,
+      vx: 0,
+      vy: 0,
+      life,
+      maxLife: life,
+      slashArc: { x, y, startAngle, endAngle, color, radius, width }
+    });
+  }
+
   function emitParticle(x, y, color=0x32f6ff, count=10, power=1){
     const S = GameState;
     for (let i=0;i<count;i++){
@@ -202,6 +250,9 @@ window.Effects = (() => {
     asFilters,
     emitParticle,
     emitPulse,
+    emitLineTelegraph,
+    emitGroundTelegraph,
+    emitSlashArc,
     emitPlayerExplosion,
     makeParticleSprite,
     makeTrailSprite,

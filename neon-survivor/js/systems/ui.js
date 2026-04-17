@@ -25,6 +25,12 @@ window.UI = (() => {
   const activeSlotEls = [...document.querySelectorAll(".activeSlot")];
   const weaponRadioEls = [...document.querySelectorAll("input[name='weaponType']")];
   const weaponHud = document.getElementById("weaponHud");
+  const bossSelect = document.getElementById("bossSelect");
+  const spawnBossBtn = document.getElementById("btnSpawnBoss");
+  const bossHud = document.getElementById("bossHud");
+  const bossHudName = document.getElementById("bossHudName");
+  const bossHudMeta = document.getElementById("bossHudMeta");
+  const bossHudFill = document.getElementById("bossHudFill");
 
   function hudUpdate() {
     const S = GameState;
@@ -54,7 +60,25 @@ window.UI = (() => {
     $weaponLevel.textContent = weaponDef && weaponLevel >= weaponDef.maxLevel ? "Lv.MAX" : `Lv.${weaponLevel}`;
     for (const radio of weaponRadioEls) radio.checked = radio.value === S.weaponState.current;
     weaponHud.style.display = S.stats.practice ? "block" : "none";
+    if (bossSelect && window.BossSystem) {
+      bossSelect.value = BossSystem.getPracticeBossId();
+    }
+    if (spawnBossBtn) spawnBossBtn.disabled = !S.stats.practice;
+    renderBossHud();
     renderActiveSlots();
+  }
+
+  function populateBossOptions() {
+    if (!bossSelect || !window.BossSystem) return;
+    const selected = BossSystem.getPracticeBossId();
+    bossSelect.innerHTML = "";
+    for (const boss of BossSystem.getDefinitions()) {
+      const option = document.createElement("option");
+      option.value = boss.id;
+      option.textContent = boss.name;
+      if (boss.id === selected) option.selected = true;
+      bossSelect.appendChild(option);
+    }
   }
 
   function renderActiveSlots(){
@@ -83,6 +107,34 @@ window.UI = (() => {
       el.classList.toggle("cooldown", slot.cooldown > 0);
       el.classList.toggle("noMp", GameState.stats.mp < skill.mpCost);
     }
+  }
+
+  function renderBossHud() {
+    if (!bossHud || !window.BossSystem) return;
+    const boss = BossSystem.getActiveBoss();
+    if (!boss) {
+      bossHud.classList.remove("visible");
+      bossHudName.textContent = "-";
+      bossHudMeta.textContent = "No Active Boss";
+      bossHudFill.style.width = "0%";
+      return;
+    }
+    const ratio = boss.maxHp > 0 ? Math.max(0, boss.hp / boss.maxHp) : 0;
+    const phaseLabel = boss.phase ? `Phase ${boss.phase}` : "Boss";
+    let extra = "";
+    if (boss.bossId === "summoner" && boss.minions) {
+      extra = boss.minions.length > 0 ? ` | Shielded by ${boss.minions.length}` : " | Core Exposed";
+    } else if (boss.bossId === "split" && boss.children) {
+      extra = ` | Cores ${boss.children.length}`;
+    } else if (boss.bossId === "knight" && boss.state) {
+      extra = ` | ${boss.state}`;
+    } else if (boss.bossId === "advanced" && boss.currentAction) {
+      extra = ` | ${boss.currentAction}`;
+    }
+    bossHud.classList.add("visible");
+    bossHudName.textContent = boss.displayName || boss.name || boss.bossId || "Boss";
+    bossHudMeta.textContent = `${phaseLabel} | HP ${Math.ceil(Math.max(0, boss.hp))} / ${Math.ceil(boss.maxHp)}${extra}`;
+    bossHudFill.style.width = `${Math.max(0, Math.min(100, ratio * 100))}%`;
   }
 
   function flashActiveSlot(key, reason="cast"){
@@ -130,11 +182,13 @@ window.UI = (() => {
     }
   }
 
-  function bindButtons({ onStart, onPractice, onRetry, onBack }) {
+  function bindButtons({ onStart, onPractice, onRetry, onBack, onBossChange, onSpawnBoss }) {
     document.getElementById("btnStart").onclick = onStart;
     document.getElementById("btnPractice").onclick = onPractice;
     document.getElementById("btnRetry").onclick = onRetry;
     document.getElementById("btnBack").onclick = onBack;
+    if (bossSelect) bossSelect.onchange = () => onBossChange && onBossChange(bossSelect.value);
+    if (spawnBossBtn) spawnBossBtn.onclick = () => onSpawnBoss && onSpawnBoss();
     for (const radio of weaponRadioEls){
       radio.onchange = () => {
         if (radio.checked) CombatSystem.setWeaponType(radio.value);
@@ -149,6 +203,7 @@ window.UI = (() => {
     triggerBossWarning,
     renderUpgradeChoices,
     bindButtons,
-    flashActiveSlot
+    flashActiveSlot,
+    populateBossOptions
   };
 })();
