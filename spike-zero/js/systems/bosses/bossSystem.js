@@ -49,6 +49,31 @@ window.BossSystem = (() => {
     return GameState.enemies.find((e) => e && e.isBoss && e.hp > 0) || null;
   }
 
+  function getStealthAwarePlayerTarget() {
+    const S = GameState;
+    if (S.activeSkillState && S.activeSkillState.stealthT > 0) {
+      return {
+        x: S.activeSkillState.stealthLastKnownX || S.player.spr.x,
+        y: S.activeSkillState.stealthLastKnownY || S.player.spr.y,
+        vx: 0,
+        vy: 0,
+        hidden: true
+      };
+    }
+    return {
+      x: S.player.spr.x,
+      y: S.player.spr.y,
+      vx: S.player.vx || 0,
+      vy: S.player.vy || 0,
+      hidden: false
+    };
+  }
+
+  function getAngleToTrackedPlayer(x, y) {
+    const target = getStealthAwarePlayerTarget();
+    return Math.atan2(target.y - y, target.x - x);
+  }
+
   // ─── 웨이브 판단 ────────────────────────────────────────────────────────────
 
   function isBossWave(wave = GameState.progression.wave) {
@@ -71,7 +96,7 @@ window.BossSystem = (() => {
   // ─── 스폰 억제 판단 ────────────────────────────────────────────────────────
 
   function shouldSuppressPracticeSpawns() {
-    return !!GameState.stats.practice;
+    return !!GameState.stats.practice && GameState.stats.practiceMode === "boss";
   }
 
   function shouldSuppressEnemySpawns() {
@@ -221,15 +246,15 @@ window.BossSystem = (() => {
       if (boss.fireCd <= 14 && boss.fireCd + dt > 14) {
         const pattern = boss.patternIndex % 3;
         if (pattern === 0) {
-          const aim = Math.atan2(GameState.player.spr.y - boss.y, GameState.player.spr.x - boss.x);
+          const aim = getAngleToTrackedPlayer(boss.x, boss.y);
           Effects.emitLineTelegraph(boss.x, boss.y, boss.x + Math.cos(aim) * 220, boss.y + Math.sin(aim) * 220, 0x79ffbf, 14, 6);
         } else if (pattern === 1) {
           Effects.emitGroundTelegraph(boss.x, boss.y, boss.hp <= boss.maxHp * 0.5 ? 86 : 70, 0xffd166, 14);
         } else {
-          const player = GameState.player;
+          const player = getStealthAwarePlayerTarget();
           const radius = boss.hp <= boss.maxHp * 0.5 ? 76 : 62;
-          const tx = Helpers.clamp(player.spr.x + player.vx * 5, 44, GameState.app.renderer.width - 44);
-          const ty = Helpers.clamp(player.spr.y + player.vy * 5, 64, GameState.app.renderer.height - 44);
+          const tx = Helpers.clamp(player.x + player.vx * 5, 44, GameState.app.renderer.width - 44);
+          const ty = Helpers.clamp(player.y + player.vy * 5, 64, GameState.app.renderer.height - 44);
           boss.pendingBlast = { x: tx, y: ty, radius, damage: boss.hp <= boss.maxHp * 0.5 ? 12 : 10, color: 0xff6b6b };
           Effects.emitGroundTelegraph(tx, ty, radius, 0xff6b6b, 14);
         }
@@ -238,7 +263,7 @@ window.BossSystem = (() => {
       if (boss.fireCd <= 0) {
         const pattern = boss.patternIndex % 3;
         if (pattern === 0) {
-          const aim = Math.atan2(GameState.player.spr.y - boss.y, GameState.player.spr.x - boss.x);
+          const aim = getAngleToTrackedPlayer(boss.x, boss.y);
           for (let i = -2; i <= 2; i++) {
             GameState.enemyBullets.push(BossBullets.make(boss.x, boss.y + 16, aim + i * 0.16, {
               color: 0x79ffbf, speed: 6.6, damage: 8, radius: 8
@@ -291,9 +316,9 @@ window.BossSystem = (() => {
     }
 
     function trackingZone() {
-      const player = GameState.player;
-      const tx = player.spr.x;
-      const ty = player.spr.y;
+      const player = getStealthAwarePlayerTarget();
+      const tx = player.x;
+      const ty = player.y;
       boss.currentAction = "TRACKING";
       Effects.emitGroundTelegraph(tx, ty, boss.phase === 1 ? 54 : 64, 0xffb347, 16);
       boss.scheduler.schedule(16, () => {
@@ -318,15 +343,15 @@ window.BossSystem = (() => {
     }
 
     function teleportBlast() {
-      const player = GameState.player;
-      const preX   = player.spr.x;
-      const preY   = player.spr.y;
+      const player = getStealthAwarePlayerTarget();
+      const preX   = player.x;
+      const preY   = player.y;
       boss.currentAction = "TELEPORT";
       Effects.emitGroundTelegraph(preX, preY, 72, 0xff6bb5, 14);
       boss.scheduler.schedule(14, () => {
-        const angle = Math.atan2(player.spr.y - boss.y, player.spr.x - boss.x) + Math.PI / 2;
-        boss.x = Helpers.clamp(player.spr.x + Math.cos(angle) * 250, 42, GameState.app.renderer.width - 42);
-        boss.y = Helpers.clamp(player.spr.y + Math.sin(angle) * 156,  54, GameState.app.renderer.height * 0.52);
+        const angle = Math.atan2(player.y - boss.y, player.x - boss.x) + Math.PI / 2;
+        boss.x = Helpers.clamp(player.x + Math.cos(angle) * 250, 42, GameState.app.renderer.width - 42);
+        boss.y = Helpers.clamp(player.y + Math.sin(angle) * 156,  54, GameState.app.renderer.height * 0.52);
         boss.spr.x = boss.x;
         boss.spr.y = boss.y;
         Effects.emitPulse(boss.x, boss.y, 0xff6bb5, 62, 10);
@@ -355,11 +380,11 @@ window.BossSystem = (() => {
         boss.x = Helpers.lerp(boss.x, targetX, 0.06 * dt);
         boss.y = Helpers.lerp(boss.y, targetY, 0.06 * dt);
       } else {
-        const player  = GameState.player;
+        const player  = getStealthAwarePlayerTarget();
         boss.orbitT  += dt * 0.01;
-        const desired = Math.atan2(player.spr.y - boss.y, player.spr.x - boss.x) + Math.PI / 2;
-        const targetX = player.spr.x + Math.cos(desired) * 290;
-        const targetY = Helpers.clamp(player.spr.y + Math.sin(desired) * 172, 88, GameState.app.renderer.height * 0.48);
+        const desired = Math.atan2(player.y - boss.y, player.x - boss.x) + Math.PI / 2;
+        const targetX = player.x + Math.cos(desired) * 290;
+        const targetY = Helpers.clamp(player.y + Math.sin(desired) * 172, 88, GameState.app.renderer.height * 0.48);
         boss.x = Helpers.lerp(boss.x, targetX, 0.03 * dt);
         boss.y = Helpers.lerp(boss.y, targetY, 0.03 * dt);
       }
@@ -369,11 +394,11 @@ window.BossSystem = (() => {
       boss.aiCd -= dt;
       if (boss.aiCd <= 0) {
         if (boss.phase === 1) {
-          const actions = [rotatingBurst, trackingZone, () => BossBullets.safeLaneBurst(boss.x, boss.y, { randomize: false, onSchedule: boss.scheduler.schedule })];
+          const actions = [rotatingBurst, trackingZone, () => BossBullets.safeLaneBurst(boss.x, boss.y, { randomize: false, onSchedule: boss.scheduler.schedule, laneAngle: getAngleToTrackedPlayer(boss.x, boss.y) })];
           actions[boss.attackIndex % actions.length]();
           boss.aiCd = boss.attackIndex % 3 === 0 ? 34 : 30;
         } else {
-          const actions = [doubleRing, () => BossBullets.safeLaneBurst(boss.x, boss.y, { randomize: true, onSchedule: boss.scheduler.schedule }), teleportBlast];
+          const actions = [doubleRing, () => BossBullets.safeLaneBurst(boss.x, boss.y, { randomize: true, onSchedule: boss.scheduler.schedule, laneAngle: getAngleToTrackedPlayer(boss.x, boss.y) }), teleportBlast];
           actions[boss.attackIndex % actions.length]();
           boss.aiCd = boss.attackIndex % 3 === 0 ? 44 : 40;
         }
@@ -488,10 +513,11 @@ window.BossSystem = (() => {
       return { start: child.lockAngle - Math.PI * 0.75, end: child.lockAngle + Math.PI * 0.15 };
     }
 
-    function updateRedKnightChild(child, dt, player, alone) {
+    function updateRedKnightChild(child, dt, alone) {
       child.stateTime += dt;
-      const angleToPlayer = Math.atan2(player.spr.y - child.y, player.spr.x - child.x);
-      const distToPlayer = Math.hypot(player.spr.x - child.x, player.spr.y - child.y) || 1;
+      const player = getStealthAwarePlayerTarget();
+      const angleToPlayer = Math.atan2(player.y - child.y, player.x - child.x);
+      const distToPlayer = Math.hypot(player.x - child.x, player.y - child.y) || 1;
       const moveSpeed = alone ? 4.0 : 3.1;
       const targetDist = alone ? 136 : 154;
       const dashDistance = alone ? 220 : 190;
@@ -576,7 +602,7 @@ window.BossSystem = (() => {
     };
 
     boss.updateBoss = (dt) => {
-      const player = GameState.player;
+      const player = getStealthAwarePlayerTarget();
       boss.phaseT += dt * 0.015;
 
       if (boss.phase === 1) {
@@ -592,7 +618,7 @@ window.BossSystem = (() => {
           if (useRadial) {
             Effects.emitGroundTelegraph(boss.x, boss.y, 80, 0xffd166, 10);
           } else {
-            const aim = Math.atan2(player.spr.y - boss.y, player.spr.x - boss.x);
+            const aim = getAngleToTrackedPlayer(boss.x, boss.y);
             Effects.emitLineTelegraph(boss.x, boss.y, boss.x + Math.cos(aim) * 220, boss.y + Math.sin(aim) * 220, 0xff8fab, 10, 6);
           }
         }
@@ -601,7 +627,7 @@ window.BossSystem = (() => {
             BossBullets.radialBurst(boss.x, boss.y, 12, 5.4, 0xffd166, 8, boss.phaseT * 0.8, 7);
             boss.aiCd = 54;
           } else {
-            BossBullets.aimSpread(boss.x, boss.y, 1, { color: 0xff8fab, speed: 6.4, damage: 9, radius: 8 });
+            BossBullets.aimSpread(boss.x, boss.y, 1, { color: 0xff8fab, speed: 6.4, damage: 9, radius: 8, aimAngle: getAngleToTrackedPlayer(boss.x, boss.y) });
             boss.aiCd = 32;
           }
         }
@@ -627,7 +653,7 @@ window.BossSystem = (() => {
             }
           } else {
             // red: 대시 추적
-            updateRedKnightChild(child, dt, player, boss.children.length === 1);
+            updateRedKnightChild(child, dt, boss.children.length === 1);
           }
 
           child.frame.x = child.x - boss.x;
@@ -789,7 +815,7 @@ window.BossSystem = (() => {
     };
 
     boss.updateBoss = (dt) => {
-      const player = GameState.player;
+      const player = getStealthAwarePlayerTarget();
       boss.orbitT += dt * (boss.phase === 1 ? 0.011 : 0.016);
 
       const targetX = GameState.app.renderer.width * 0.5 + Math.cos(boss.orbitT) * (boss.phase === 1 ? 84 : 132);
@@ -804,7 +830,7 @@ window.BossSystem = (() => {
         if (boss.minions.length < (boss.phase === 1 ? 2 : 3) && boss.totalSummons < boss.maxSummons) {
           Effects.emitGroundTelegraph(boss.x, boss.y, boss.phase === 1 ? 56 : 68, boss.phase === 1 ? 0xa2a8ff : 0xff6bd6, 14);
         } else {
-          const aim = Math.atan2(player.spr.y - boss.y, player.spr.x - boss.x);
+          const aim = getAngleToTrackedPlayer(boss.x, boss.y);
           Effects.emitLineTelegraph(boss.x, boss.y, boss.x + Math.cos(aim) * (boss.phase === 1 ? 420 : 520), boss.y + Math.sin(aim) * (boss.phase === 1 ? 420 : 520), boss.phase === 1 ? 0xa2a8ff : 0xff6bd6, 14, 6);
         }
       }
@@ -817,7 +843,8 @@ window.BossSystem = (() => {
             speed:  boss.phase === 1 ? 7.8 : 8.6,
             damage: boss.phase === 1 ? 8   : 9,
             radius: 8,
-            life: boss.phase === 1 ? 210 : 240
+            life: boss.phase === 1 ? 210 : 240,
+            aimAngle: getAngleToTrackedPlayer(boss.x, boss.y)
           });
         }
         boss.aiCd = didSummon ? (boss.phase === 1 ? 72 : 58) : (boss.phase === 1 ? 34 : 28);
@@ -834,11 +861,11 @@ window.BossSystem = (() => {
           minion.y = boss.y + orbitY;
           minion.fireCd -= dt;
           if (minion.fireCd <= 10 && minion.fireCd + dt > 10) {
-            const aim = Math.atan2(player.spr.y - minion.y, player.spr.x - minion.x);
+            const aim = getAngleToTrackedPlayer(minion.x, minion.y);
             Effects.emitLineTelegraph(minion.x, minion.y, minion.x + Math.cos(aim) * 240, minion.y + Math.sin(aim) * 240, boss.phase === 1 ? 0xd8dcff : 0xffd6fa, 10, 5);
           }
           if (minion.fireCd <= 0) {
-            const aim = Math.atan2(player.spr.y - minion.y, player.spr.x - minion.x);
+            const aim = getAngleToTrackedPlayer(minion.x, minion.y);
             fireShooterLaser(minion, aim);
             minion.fireCd = boss.phase === 1 ? 32 : 24;
           }
@@ -846,12 +873,12 @@ window.BossSystem = (() => {
           // chaser 미니언
           minion.dashCd -= dt;
           if (!minion.dashTelegraphShown && minion.dashCd <= 12) {
-            const angle = Math.atan2(player.spr.y - minion.y, player.spr.x - minion.x);
+            const angle = getAngleToTrackedPlayer(minion.x, minion.y);
             Effects.emitLineTelegraph(minion.x, minion.y, minion.x + Math.cos(angle) * 140, minion.y + Math.sin(angle) * 140, 0xd85cf0, 12, 5);
             minion.dashTelegraphShown = true;
           }
           if (minion.dashCd <= 0) {
-            const angle = Math.atan2(player.spr.y - minion.y, player.spr.x - minion.x);
+            const angle = getAngleToTrackedPlayer(minion.x, minion.y);
             minion.x += Math.cos(angle) * (boss.phase === 1 ? 46 : 70);
             minion.y += Math.sin(angle) * (boss.phase === 1 ? 46 : 70);
             Effects.emitPulse(minion.x, minion.y, 0xd85cf0, 28, 8);
@@ -953,12 +980,12 @@ window.BossSystem = (() => {
     }
 
     boss.updateBoss = (dt) => {
-      const player = GameState.player;
+      const player = getStealthAwarePlayerTarget();
       boss.stateTime += dt;
       if (boss.hp <= boss.maxHp * 0.5) boss.phase = 2;
 
-      const angleToPlayer = Math.atan2(player.spr.y - boss.y, player.spr.x - boss.x);
-      const distToPlayer  = Math.hypot(player.spr.x - boss.x, player.spr.y - boss.y) || 1;
+      const angleToPlayer = Math.atan2(player.y - boss.y, player.x - boss.x);
+      const distToPlayer  = Math.hypot(player.x - boss.x, player.y - boss.y) || 1;
       const moveSpeed     = boss.phase === 1 ? 3.2 : 4.1;
 
       if (boss.state === "APPROACH") {
@@ -1015,7 +1042,8 @@ window.BossSystem = (() => {
             color:  boss.phase === 1 ? 0x7df9ff : 0xff8be4,
             speed:  boss.phase === 1 ? 5.6 : 6.4,
             damage: boss.phase === 1 ? 8   : 10,
-            radius: 7
+            radius: 7,
+            aimAngle: boss.lockAngle
           });
           Effects.emitPulse(boss.x, boss.y, boss.phase === 1 ? 0x7df9ff : 0xff8be4, boss.phase === 1 ? 34 : 42, 8);
         } else {
@@ -1079,14 +1107,17 @@ window.BossSystem = (() => {
     GameState.enemies.push(boss);
     GameState.progression.waveAlive    = 1;
     GameState.progression.spawnedCount = 1;
-    UI.triggerBossWarning();
+    if (options.playWarning !== false) {
+      if (window.SoundSystem) SoundSystem.play("boss_alarm");
+      UI.triggerBossWarning();
+    }
     UI.hudUpdate();
     return boss;
   }
 
   function spawnSelectedPracticeBoss() {
     if (!GameState.stats.practice) return null;
-    return spawnBoss(getPracticeBossId(), { replaceExisting: true });
+    return spawnBoss(getPracticeBossId(), { replaceExisting: true, playWarning: false });
   }
 
   function spawnWaveBoss(wave = GameState.progression.wave) {
@@ -1094,7 +1125,7 @@ window.BossSystem = (() => {
   }
 
   function spawnStageBoss(stage = GameState.progression.stage || 1) {
-    return spawnBoss(getStageBossId(stage), { replaceExisting: true });
+    return spawnBoss(getStageBossId(stage), { replaceExisting: true, playWarning: false });
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────

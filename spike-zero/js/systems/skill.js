@@ -64,6 +64,7 @@ window.SkillSystem = (() => {
       P.level += 1;
       P.pendingLevelUps += 1;
       P.xpToNext = Math.ceil(P.xpToNext * GAME_BALANCE.XP.GROWTH);
+      if (window.SoundSystem) SoundSystem.play("level_up");
     }
 
     UI.hudUpdate();

@@ -3,7 +3,18 @@ window.Boot = (() => {
 
   function addShake(v){ S.shake = Math.min(24, S.shake + v); }
 
-  function resetAll(testMode=false){
+  function resetAll(options=false){
+    const testMode = typeof options === "boolean" ? options : !!options.testMode;
+    const practiceMode = typeof options === "object" && options
+      ? (options.practiceMode || (testMode ? "boss" : "none"))
+      : (testMode ? "boss" : "none");
+    const practiceStageId = typeof options === "object" && options ? (options.practiceStageId || S.practiceStageId || 1) : (S.practiceStageId || 1);
+    const practiceStageDurationSec = typeof options === "object" && options
+      ? Math.max(10, Math.floor(options.practiceStageDurationSec || S.practiceStageDurationSec || 180))
+      : Math.max(10, Math.floor(S.practiceStageDurationSec || 180));
+    if (window.DialogueSystem) DialogueSystem.cancel();
+    if (window.UI) UI.resetDialogueLog();
+    if (window.BgmSystem) BgmSystem.stopAll();
     for (const d of S.decoys) S.uiLayer.removeChild(d.spr);
     for (const b of S.bullets) S.fx.removeChild(b.spr);
     for (const b of S.enemyBullets) S.fx.removeChild(b.spr);
@@ -49,12 +60,15 @@ window.Boot = (() => {
     S.stats.homingMissileCd = 0;
     S.stats.homingMissileCdMax = GAME_BALANCE.PLAYER.HOMING_MISSILE_CD_MAX;
     S.stats.practice = !!testMode;
+    S.stats.practiceMode = practiceMode;
+    S.practiceStageId = practiceStageId;
+    S.practiceStageDurationSec = practiceStageDurationSec;
 
     S.progression.score = 0;
     S.progression.combo = 1;
     S.progression.comboT = 0;
-    S.progression.stage = 1;
-    S.progression.stageDuration = 180 * 60;
+    S.progression.stage = practiceMode === "stage" ? practiceStageId : 1;
+    S.progression.stageDuration = practiceStageDurationSec * 60;
     S.progression.stageTime = S.progression.stageDuration;
     S.progression.stageState = "combat";
     S.progression.wave = 1;
@@ -76,20 +90,28 @@ window.Boot = (() => {
     S.activeSkillState.boostMitigationMul = 1;
     S.activeSkillState.boostT = 0;
     S.activeSkillState.afterburnerT = 0;
+    S.activeSkillState.stealthT = 0;
+    S.activeSkillState.stealthAlpha = 1;
+    S.activeSkillState.stealthLastKnownX = 0;
+    S.activeSkillState.stealthLastKnownY = 0;
     S.weaponState.laserChannel = null;
 
     if (S.player) S.uiLayer.removeChild(S.player.spr);
-    S.player = PlayerFactory.makePlayer();
+    // S.player = PlayerFactory.makePlayer();
+    S.player = PlayerFactory.makePlayer("power"); // "standard" | "power" | "agility"
     CombatSystem.applyStartingWeaponLoadout(testMode);
     SkillSystem.applyStartingLoadout(testMode);
     ActiveSkillSystem.assignStartingLoadout(testMode);
 
-    if (testMode) {
+    if (testMode && practiceMode === "boss") {
       WaveSystem.startNextWave();
+    } else if (testMode && practiceMode === "stage") {
+      WaveSystem.startStage(practiceStageId, { stageDurationFrames: practiceStageDurationSec * 60 });
     } else {
       WaveSystem.startStage(1);
     }
-    if (testMode && window.BossSystem) BossSystem.spawnSelectedPracticeBoss();
+    if (testMode && practiceMode === "boss" && window.BossSystem) BossSystem.spawnSelectedPracticeBoss();
+    if (window.BgmSystem) BgmSystem.refresh();
     UI.hudUpdate();
     UI.showCard(null);
   }
@@ -112,11 +134,18 @@ window.Boot = (() => {
       S.player.spr.visible = false;
     }
 
+    if (window.SoundSystem) {
+      SoundSystem.play("player_death", { playbackRate: 0.8 });
+      SoundSystem.play("low_explosion", { playbackRate: 0.68, volume: 0.42, cooldownMs: 0 });
+      SoundSystem.play("debris_glass", { playbackRate: 0.82, volume: 0.2, cooldownMs: 0 });
+    }
     addShake(16);
   }
 
   function bindInput(){
     window.addEventListener("keydown", (e)=>{
+      if (window.SoundSystem) SoundSystem.prime();
+      if (window.BgmSystem) BgmSystem.prime();
       S.keys.add(e.code);
       if (["Space","ArrowUp","ArrowDown","ArrowLeft","ArrowRight"].includes(e.code)) e.preventDefault();
       if (e.code === "Digit1") ActiveSkillSystem.tryUseBoostDirection("forward");
@@ -134,7 +163,11 @@ window.Boot = (() => {
       S.mouse.y = (e.clientY - rect.top) * (S.app.renderer.height / rect.height);
     });
 
-    S.app.view.addEventListener("pointerdown", ()=>{ S.mouse.down = true; });
+    S.app.view.addEventListener("pointerdown", ()=>{
+      if (window.SoundSystem) SoundSystem.prime();
+      if (window.BgmSystem) BgmSystem.prime();
+      S.mouse.down = true;
+    });
     window.addEventListener("pointerup", ()=>{ S.mouse.down = false; });
   }
 
@@ -228,6 +261,11 @@ window.Boot = (() => {
 
     const ang = Math.atan2(S.mouse.y - p.spr.y, S.mouse.x - p.spr.x);
     p.spr.rotation = ang + Math.PI / 2;
+    const stealthAlpha = S.activeSkillState.stealthT > 0
+      ? S.activeSkillState.stealthAlpha + Math.sin(performance.now() / 90) * 0.06
+      : 1;
+    p.spr.alpha = Helpers.clamp(stealthAlpha, 0.22, 1);
+    if (p.shieldSpr) p.shieldSpr.alpha *= p.spr.alpha;
   }
 
   function updateParticles(dt){
@@ -293,6 +331,7 @@ window.Boot = (() => {
 
   function updateProgress(dt){
     const P = S.progression;
+    const stageRunEnabled = !S.stats.practice || S.stats.practiceMode === "stage";
 
     if (S.stats.regen > 0 && S.stats.hp < S.stats.maxHp){
       S.stats.hp = Math.min(S.stats.maxHp, S.stats.hp + S.stats.regen * (dt / 60));
@@ -315,7 +354,7 @@ window.Boot = (() => {
       if (P.combo < 1.02) P.combo = 1;
     }
 
-    if (!S.stats.practice && P.stageState === "combat" && !(window.BossSystem && BossSystem.hasActiveBoss())) {
+    if (stageRunEnabled && P.stageState === "combat" && !(window.BossSystem && BossSystem.hasActiveBoss())) {
       P.stageTime = Math.max(0, P.stageTime - dt);
       if (P.stageTime <= 0) {
         WaveSystem.triggerStageBoss();
@@ -333,7 +372,11 @@ window.Boot = (() => {
       }
     }
 
-    if (!S.stats.practice && P.stageState === "boss" && (!window.BossSystem || !BossSystem.hasActiveBoss()) && S.enemies.length === 0){
+    if (stageRunEnabled && P.stageState === "boss" && (!window.BossSystem || !BossSystem.hasActiveBoss()) && S.enemies.length === 0){
+      if (P.bossFinishTimer > 0) {
+        P.bossFinishTimer = Math.max(0, P.bossFinishTimer - dt);
+        return;
+      }
       WaveSystem.completeStage();
       return;
     }
@@ -378,6 +421,7 @@ window.Boot = (() => {
     CombatSystem.updateBeams(dt);
     CombatSystem.updateMissiles(dt);
     updateParticles(dt);
+    if (window.BgmSystem) BgmSystem.refresh();
     UI.hudUpdate();
   }
 
@@ -411,9 +455,16 @@ window.Boot = (() => {
 
     UI.bindButtons({
       onStart: ()=>resetAll(false),
-      onPractice: ()=>resetAll(true),
-      onRetry: ()=>resetAll(S.stats.practice),
-      onBack: ()=>UI.showCard("start"),
+      onPracticeBoss: ()=>resetAll({ testMode:true, practiceMode:"boss" }),
+      onPracticeStage: ()=>resetAll({ testMode:true, practiceMode:"stage", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 }),
+      onRetry: ()=>resetAll(S.stats.practice
+        ? { testMode:true, practiceMode:S.stats.practiceMode || "boss", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 }
+        : false),
+      onBack: ()=>{
+        if (window.DialogueSystem) DialogueSystem.cancel();
+        UI.resetDialogueLog();
+        UI.showCard("start");
+      },
       onBossChange: (bossId) => {
         if (!window.BossSystem) return;
         BossSystem.setPracticeBossId(bossId);
@@ -421,6 +472,18 @@ window.Boot = (() => {
       },
       onSpawnBoss: () => {
         if (window.BossSystem) BossSystem.spawnSelectedPracticeBoss();
+      },
+      onPracticeTypeChange: (mode) => {
+        if (mode === "boss") resetAll({ testMode:true, practiceMode:"boss" });
+        if (mode === "stage") resetAll({ testMode:true, practiceMode:"stage", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 });
+      },
+      onApplyStageTest: ({ stageId, durationSec }) => {
+        resetAll({
+          testMode: true,
+          practiceMode: "stage",
+          practiceStageId: Math.max(1, stageId || 1),
+          practiceStageDurationSec: Math.max(10, durationSec || 180)
+        });
       }
     });
 

@@ -47,5 +47,39 @@ window.ACTIVE_SKILL_DEFINITIONS = [
       fireRateMultiplier: 0.72,
       bulletSpeedMultiplier: 1.2
     }
+  },
+  {
+    id: "nova_pulse",
+    name: "Nova Pulse",
+    desc: "Emit a close-range shockwave that damages nearby enemies and wipes hostile shots.",
+    type: "offense",
+    mpCost: 28,
+    cooldown: 210,
+    duration: 1,
+    manualCast: true,
+    autoCast: false,
+    slotType: "active",
+    effectData: {
+      radius: 150,
+      damage: 8,
+      bossDamage: 5,
+      bulletClearRadius: 190,
+      knockback: 26
+    }
+  },
+  {
+    id: "stealth_field",
+    name: "Stealth Field",
+    desc: "Vanish for a short time. Normal enemies lose your position until you attack.",
+    type: "utility",
+    mpCost: 24,
+    cooldown: 260,
+    duration: 180,
+    manualCast: true,
+    autoCast: false,
+    slotType: "active",
+    effectData: {
+      alpha: 0.42
+    }
   }
 ];

@@ -1,5 +1,55 @@
 window.UPGRADE_DEFINITIONS = [
   {
+    id:"active_boost_unlock",
+    upgradeType:"active",
+    name:"Unlock Boost",
+    desc:"Gain the Boost active skill. It auto-fills the first empty slot in Q > E > R order.",
+    requires:(S)=>!S.activeSkillState.ownedSkillIds.includes("boost"),
+    apply:()=>{
+      ActiveSkillSystem.unlockSkill("boost");
+    }
+  },
+  {
+    id:"active_afterburner_unlock",
+    upgradeType:"active",
+    name:"Unlock Afterburner",
+    desc:"Gain Afterburner. If a slot is empty, it is mapped automatically.",
+    requires:(S)=>!S.activeSkillState.ownedSkillIds.includes("afterburner"),
+    apply:()=>{
+      ActiveSkillSystem.unlockSkill("afterburner");
+    }
+  },
+  {
+    id:"active_decoy_unlock",
+    upgradeType:"active",
+    name:"Unlock Decoy Drone",
+    desc:"Gain Decoy Drone. Extra active skills stay owned even when every slot is full.",
+    requires:(S)=>!S.activeSkillState.ownedSkillIds.includes("decoy_drone"),
+    apply:()=>{
+      ActiveSkillSystem.unlockSkill("decoy_drone");
+    }
+  },
+  {
+    id:"active_nova_unlock",
+    upgradeType:"active",
+    name:"Unlock Nova Pulse",
+    desc:"Gain Nova Pulse, a close-range emergency shockwave for clearing pressure.",
+    requires:(S)=>!S.activeSkillState.ownedSkillIds.includes("nova_pulse"),
+    apply:()=>{
+      ActiveSkillSystem.unlockSkill("nova_pulse");
+    }
+  },
+  {
+    id:"active_stealth_unlock",
+    upgradeType:"active",
+    name:"Unlock Stealth Field",
+    desc:"Gain Stealth Field for short repositioning. It ends immediately when you attack.",
+    requires:(S)=>!S.activeSkillState.ownedSkillIds.includes("stealth_field"),
+    apply:()=>{
+      ActiveSkillSystem.unlockSkill("stealth_field");
+    }
+  },
+  {
     id:"weapon_machinegun",
     upgradeType:"weapon",
     name:"Equip Machinegun",

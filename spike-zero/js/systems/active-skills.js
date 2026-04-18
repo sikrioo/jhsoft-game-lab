@@ -11,14 +11,85 @@ window.ActiveSkillSystem = (() => {
     return slot && slot.skillId ? getDefinition(slot.skillId) : null;
   }
 
+  function getOwnedSkills(){
+    return GameState.activeSkillState.ownedSkillIds
+      .map(getDefinition)
+      .filter(Boolean);
+  }
+
+  function getAssignedSkillIds(excludeKey=null){
+    return GameState.activeSkillState.slots
+      .filter(slot => slot.key !== excludeKey && slot.skillId)
+      .map(slot => slot.skillId);
+  }
+
+  function autoAssignSkill(skillId){
+    const slots = GameState.activeSkillState.slots;
+    if (slots.some(slot => slot.skillId === skillId)) return true;
+    const empty = slots.find(slot => !slot.skillId);
+    if (!empty) return false;
+    empty.skillId = skillId;
+    empty.cooldown = 0;
+    empty.autoCast = false;
+    return true;
+  }
+
+  function unlockSkill(skillId, options={}){
+    const skill = getDefinition(skillId);
+    if (!skill) return false;
+    const owned = GameState.activeSkillState.ownedSkillIds;
+    if (!owned.includes(skillId)) owned.push(skillId);
+    if (options.autoAssign !== false) autoAssignSkill(skillId);
+    UI.hudUpdate();
+    return true;
+  }
+
+  function clearSlot(slotKey){
+    const slot = getSlotByKey(slotKey);
+    if (!slot) return false;
+    slot.skillId = null;
+    slot.cooldown = 0;
+    slot.autoCast = false;
+    UI.hudUpdate();
+    return true;
+  }
+
+  function assignSkillToSlot(slotKey, skillId){
+    const slot = getSlotByKey(slotKey);
+    const skill = getDefinition(skillId);
+    if (!slot || !skill) return false;
+    if (!GameState.activeSkillState.ownedSkillIds.includes(skillId)) return false;
+
+    const fromSlot = GameState.activeSkillState.slots.find(item => item.skillId === skillId);
+    if (fromSlot && fromSlot !== slot) {
+      fromSlot.skillId = null;
+      fromSlot.cooldown = 0;
+      fromSlot.autoCast = false;
+    }
+
+    slot.skillId = skillId;
+    slot.cooldown = 0;
+    slot.autoCast = false;
+    UI.hudUpdate();
+    return true;
+  }
+
+  function getAssignableSkills(slotKey){
+    const blocked = new Set(getAssignedSkillIds(slotKey));
+    return getOwnedSkills().filter(skill => !blocked.has(skill.id));
+  }
+
   function assignStartingLoadout(testMode=false){
     const slots = GameState.activeSkillState.slots;
-    const loadout = testMode ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_ACTIVE_SKILLS) || []) : [];
     for (let i=0; i<slots.length; i++){
-      slots[i].skillId = loadout[i] || null;
+      slots[i].skillId = null;
       slots[i].cooldown = 0;
       slots[i].autoCast = false;
     }
+    GameState.activeSkillState.ownedSkillIds = [];
+
+    const loadout = testMode ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_ACTIVE_SKILLS) || []) : [];
+    for (const skillId of loadout) unlockSkill(skillId, { autoAssign: true });
 
     const startingLevels = testMode ? ((GAME_BALANCE.TEST && GAME_BALANCE.TEST.STARTING_ACTIVE_SKILL_LEVELS) || {}) : {};
     GameState.activeSkillState.levels.boost = Math.max(1, startingLevels.boost || 1);
@@ -56,6 +127,8 @@ window.ActiveSkillSystem = (() => {
     if (skill.id === "decoy_drone") casted = castDecoyDrone(skill);
     if (skill.id === "boost") casted = castBoost(skill, context);
     if (skill.id === "afterburner") casted = castAfterburner(skill);
+    if (skill.id === "nova_pulse") casted = castNovaPulse(skill);
+    if (skill.id === "stealth_field") casted = castStealthField(skill);
     if (!casted) return false;
 
     GameState.stats.mp = Math.max(0, GameState.stats.mp - skill.mpCost);
@@ -153,6 +226,85 @@ window.ActiveSkillSystem = (() => {
     return true;
   }
 
+  function castNovaPulse(skill){
+    const S = GameState;
+    const px = S.player.spr.x;
+    const py = S.player.spr.y;
+    const radius = skill.effectData.radius || 140;
+    const bulletClearRadius = skill.effectData.bulletClearRadius || radius + 30;
+    const damage = skill.effectData.damage || 6;
+    const bossDamage = skill.effectData.bossDamage || Math.max(1, damage - 2);
+    const knockback = skill.effectData.knockback || 22;
+    const radiusSq = radius * radius;
+    const bulletRadiusSq = bulletClearRadius * bulletClearRadius;
+
+    Effects.emitPulse(px, py, 0x7df9ff, radius, 14);
+    Effects.emitPulse(px, py, 0xffffff, Math.max(54, radius * 0.62), 9);
+    Effects.emitParticle(px, py, 0x7df9ff, 22, 1.35);
+    Effects.emitParticle(px, py, 0xff9ae8, 12, 1.0);
+    S.shake = Math.min(24, S.shake + 4);
+
+    for (const enemy of [...S.enemies]){
+      const hitCircles = enemy && typeof enemy.getHitCircles === "function"
+        ? enemy.getHitCircles()
+        : [{ x: enemy.x, y: enemy.y, radius: enemy.r }];
+      const hitCircle = hitCircles.find((circle) => {
+        const rr = radius + circle.radius;
+        return Helpers.dist2(px, py, circle.x, circle.y) <= rr * rr;
+      });
+      if (!hitCircle) continue;
+
+      const dist = Math.max(1, Math.hypot(hitCircle.x - px, hitCircle.y - py));
+      const dx = (hitCircle.x - px) / dist;
+      const dy = (hitCircle.y - py) / dist;
+
+      if (enemy.x != null) enemy.x += dx * knockback;
+      if (enemy.y != null) enemy.y += dy * knockback;
+      if (enemy.spr) {
+        enemy.spr.x = enemy.x;
+        enemy.spr.y = enemy.y;
+      }
+      if (enemy.hpText) enemy.hpText.rotation = -enemy.spr.rotation;
+
+      const appliedDamage = enemy.tier === "boss" ? bossDamage : damage;
+      CombatSystem.damageEnemy(enemy, appliedDamage, 0x7df9ff, enemy.tier === "boss" ? 16 : 10, 1.0, hitCircle);
+    }
+
+    for (let i = S.enemyBullets.length - 1; i >= 0; i--){
+      const bullet = S.enemyBullets[i];
+      if (Helpers.dist2(px, py, bullet.x, bullet.y) > bulletRadiusSq) continue;
+      Effects.emitParticle(bullet.x, bullet.y, 0x7df9ff, 6, 0.7);
+      Effects.emitPulse(bullet.x, bullet.y, 0xc18dff, 18, 6);
+      S.fx.removeChild(bullet.spr);
+      S.enemyBullets.splice(i, 1);
+    }
+
+    UI.hudUpdate();
+    return true;
+  }
+
+  function castStealthField(skill){
+    const S = GameState;
+    S.activeSkillState.stealthT = Math.max(S.activeSkillState.stealthT, skill.duration);
+    S.activeSkillState.stealthAlpha = skill.effectData.alpha || 0.42;
+    S.activeSkillState.stealthLastKnownX = S.player.spr.x;
+    S.activeSkillState.stealthLastKnownY = S.player.spr.y;
+    Effects.emitParticle(S.player.spr.x, S.player.spr.y, 0x6cf5ff, 8, 0.55);
+    Effects.emitParticle(S.player.spr.x, S.player.spr.y, 0xc595ff, 4, 0.45);
+    UI.hudUpdate();
+    return true;
+  }
+
+  function breakStealth(reason="attack"){
+    const S = GameState;
+    if (S.activeSkillState.stealthT <= 0) return false;
+    S.activeSkillState.stealthT = 0;
+    S.activeSkillState.stealthAlpha = 1;
+    Effects.emitParticle(S.player.spr.x, S.player.spr.y, reason === "attack" ? 0xff8a66 : 0x6cf5ff, 5, 0.42);
+    UI.hudUpdate();
+    return true;
+  }
+
   function updateDecoys(dt){
     const S = GameState;
     for (let i=S.decoys.length-1; i>=0; i--){
@@ -212,13 +364,37 @@ window.ActiveSkillSystem = (() => {
       }
     }
 
+    if (S.activeSkillState.stealthT > 0){
+      S.activeSkillState.stealthT = Math.max(0, S.activeSkillState.stealthT - dt);
+      if ((performance.now() | 0) % 4 === 0){
+        const p = Effects.makeTrailSprite(
+          S.player.spr.x + Helpers.rand(-6, 6),
+          S.player.spr.y + Helpers.rand(-6, 6),
+          Math.random() < 0.5 ? 0x6cf5ff : 0xc595ff,
+          Helpers.rand(0.14, 0.24),
+          0.18
+        );
+        S.fx.addChild(p);
+        S.particles.push({ spr:p, x:p.x, y:p.y, vx:Helpers.rand(-0.35, 0.35), vy:Helpers.rand(-0.35, 0.35), life:12, drag:0.86 });
+      }
+      if (S.activeSkillState.stealthT <= 0) {
+        breakStealth("expire");
+      }
+    }
+
     updateDecoys(dt);
   }
 
   return {
     getDefinition,
+    getOwnedSkills,
     getSlotSkill,
+    getAssignableSkills,
     assignStartingLoadout,
+    unlockSkill,
+    clearSlot,
+    assignSkillToSlot,
+    breakStealth,
     tryUseSlotByKey,
     tryUseBoostDirection,
     update

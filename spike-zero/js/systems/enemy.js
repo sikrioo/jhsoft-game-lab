@@ -11,6 +11,14 @@ window.EnemySystem = (() => {
       }
     }
     if (bestDecoy) return { x: bestDecoy.x, y: bestDecoy.y, r: bestDecoy.r, decoy: bestDecoy };
+    if (S.activeSkillState.stealthT > 0){
+      return {
+        x: S.activeSkillState.stealthLastKnownX || S.player.spr.x,
+        y: S.activeSkillState.stealthLastKnownY || S.player.spr.y,
+        r: S.player.r,
+        hidden: true
+      };
+    }
     return { x: S.player.spr.x, y: S.player.spr.y, r: S.player.r, player: S.player };
   }
 
@@ -204,6 +212,10 @@ window.EnemySystem = (() => {
     p.inv = options.invFrames || 24;
     p.vx += hitDx * (options.push || 3.5);
     p.vy += hitDy * (options.push || 3.5);
+    if (window.SoundSystem) {
+      SoundSystem.play("player_hit", { playbackRate: 0.96 + Helpers.rand(-0.05, 0.04) });
+      SoundSystem.play("armor_hit", { playbackRate: 0.9 + Helpers.rand(-0.04, 0.04), volume: 0.14, cooldownMs: 0 });
+    }
     Effects.emitParticle(p.spr.x, p.spr.y, color, options.particleCount || 12, options.particlePower || 0.9);
     Effects.emitParticle(p.spr.x, p.spr.y, 0xff4d4d, Math.max(10, Math.round((options.particleCount || 12) * 0.8)), (options.particlePower || 0.9) * 1.05);
     Effects.emitPulse(p.spr.x, p.spr.y, 0xff5a5a, options.impactRadius || 34, options.impactLife || 8);

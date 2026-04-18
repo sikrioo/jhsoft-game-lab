@@ -42,23 +42,46 @@
   <div class="activeHud" id="activeHud">
     <div class="activeSlot" data-key="KeyQ">
       <div class="slotTop"><span class="slotKey">Q</span><span class="slotCd">READY</span></div>
-      <div class="slotName">Empty</div>
+      <button class="slotName slotNameBtn" type="button">Empty</button>
       <div class="slotMeta"><span class="slotType">-</span><span class="slotCost">0 MP</span></div>
     </div>
     <div class="activeSlot" data-key="KeyE">
       <div class="slotTop"><span class="slotKey">E</span><span class="slotCd">READY</span></div>
-      <div class="slotName">Empty</div>
+      <button class="slotName slotNameBtn" type="button">Empty</button>
       <div class="slotMeta"><span class="slotType">-</span><span class="slotCost">0 MP</span></div>
     </div>
     <div class="activeSlot" data-key="KeyR">
       <div class="slotTop"><span class="slotKey">R</span><span class="slotCd">READY</span></div>
-      <div class="slotName">Empty</div>
+      <button class="slotName slotNameBtn" type="button">Empty</button>
       <div class="slotMeta"><span class="slotType">-</span><span class="slotCost">0 MP</span></div>
     </div>
   </div>
 
+  <div class="skillMapPanel" id="skillMapPanel" hidden>
+    <div class="skillMapCard">
+      <div class="skillMapHead">
+        <div class="skillMapTitle" id="skillMapTitle">Map Active Skill</div>
+        <button class="skillMapClose" id="btnCloseSkillMap" type="button">Close</button>
+      </div>
+      <div class="skillMapList" id="skillMapList"></div>
+    </div>
+  </div>
+
+  <div class="dialogueOverlay" id="dialogueOverlay" hidden>
+    <div class="dialogueLog" id="dialogueLog"></div>
+  </div>
+
   <div class="weaponHud" id="weaponHud">
-    <div class="weaponHead">Weapon Test</div>
+    <div class="weaponHead">Test Mode</div>
+    <label class="weaponOption">
+      <input type="radio" name="practiceType" value="boss" checked />
+      <span>Test Boss</span>
+    </label>
+    <label class="weaponOption">
+      <input type="radio" name="practiceType" value="stage" />
+      <span>Test Stage</span>
+    </label>
+    <div class="weaponHead bossHead">Weapon Test</div>
     <label class="weaponOption">
       <input type="radio" name="weaponType" value="machinegun" checked />
       <span>Machinegun</span>
@@ -76,6 +99,17 @@
     <label class="bossLabel" for="bossSelect">Target Boss</label>
     <select id="bossSelect" class="bossSelect"></select>
     <button class="btn bossBtn" id="btnSpawnBoss" type="button">Spawn Boss</button>
+    <div class="stageTestPanel" id="stageTestPanel">
+      <div class="weaponHead bossHead">Stage Test</div>
+      <label class="bossLabel" for="stageSelect">Target Stage</label>
+      <select id="stageSelect" class="bossSelect">
+        <option value="1">Stage 1</option>
+        <option value="2">Stage 2</option>
+      </select>
+      <label class="bossLabel" for="stageDurationInput">Boss Timer Sec</label>
+      <input id="stageDurationInput" class="bossSelect" type="number" min="10" step="5" value="180" />
+      <button class="btn bossBtn" id="btnApplyStageTest" type="button">Apply Stage</button>
+    </div>
   </div>
 
   <div class="centerOverlay" id="overlayRoot">
@@ -85,7 +119,8 @@
       <p class="hint">테스트 모드에서는 시작 직후 선택한 보스가 등장하고 무기 변경 UI가 활성화됩니다.</p>
       <div class="btnRow">
         <button class="btn" id="btnStart">Play Mode</button>
-        <button class="btn secondary" id="btnPractice">Test Mode</button>
+        <button class="btn secondary" id="btnPracticeBoss">Test Boss</button>
+        <button class="btn secondary" id="btnPracticeStage">Test Stage</button>
       </div>
     </div>
 
@@ -104,6 +139,15 @@
         <button class="btn secondary" id="btnBack">Back</button>
       </div>
     </div>
+
+    <div class="card" id="stageClearCard" style="display:none;">
+      <h1>Stage Clear</h1>
+      <p id="stageClearLabel">Stage 1 secured.</p>
+      <p class="hint">Proceed when you're ready for the next combat zone.</p>
+      <div class="btnRow">
+        <button class="btn" id="btnNextStage" type="button">Next Stage</button>
+      </div>
+    </div>
   </div>
 
   <div class="warningOverlay" id="warningOverlay">
@@ -119,6 +163,7 @@
   <script src="./js/data/active-skills.js"></script>
   <script src="./js/data/weapon-types.js"></script>
   <script src="./js/data/boss-types.js"></script>
+  <script src="./js/data/dialogue.js"></script>
 
   <script src="./js/core/utils.js"></script>
   <script src="./js/core/state.js"></script>
@@ -126,7 +171,10 @@
   <script src="./js/render/background.js"></script>
   <script src="./js/render/effects.js"></script>
 
+  <script src="./js/systems/sound.js"></script>
+  <script src="./js/systems/bgm.js"></script>
   <script src="./js/systems/ui.js"></script>
+  <script src="./js/systems/dialogue.js"></script>
   <script src="./js/systems/skill.js"></script>
   <script src="./js/systems/active-skills.js"></script>
   <script src="./js/systems/wave.js"></script>

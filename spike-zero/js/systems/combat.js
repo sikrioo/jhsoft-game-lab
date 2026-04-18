@@ -178,7 +178,20 @@ window.CombatSystem = (() => {
     if (enemy.tier === "boss") {
       P.score += Math.round(enemy.scoreBase * 0.35);
       SkillSystem.gainXp(Math.round(enemy.xp * 0.35));
+      P.bossFinishTimer = Math.max(P.bossFinishTimer || 0, 42);
       Effects.emitPulse(enemy.x, enemy.y, 0xffffff, 140, 24);
+      if (window.SoundSystem) {
+        SoundSystem.play("boss_destroy", { playbackRate: 0.84 });
+        SoundSystem.play("low_explosion", { playbackRate: 0.76, volume: 0.34, cooldownMs: 0 });
+        SoundSystem.play("debris_glass", { playbackRate: 0.9, volume: 0.16, cooldownMs: 0 });
+      }
+    } else if (window.SoundSystem) {
+      SoundSystem.play("enemy_destroy", {
+        playbackRate: enemy.tier === "midboss" ? 0.86 : 0.96 + Helpers.rand(-0.05, 0.03)
+      });
+      if (enemy.tier === "midboss") {
+        SoundSystem.play("low_explosion", { playbackRate: 0.86, volume: 0.18, cooldownMs: 0 });
+      }
     }
     Effects.emitParticle(enemy.x, enemy.y, enemy.glowColor, enemy.tier === "boss" ? 36 : 22, 1.5);
   }
@@ -227,6 +240,9 @@ window.CombatSystem = (() => {
     const player = S.player;
     if (player.fireCd > 0) return;
     if (!(S.mouse.down || S.keys.has("Space"))) return;
+    if (S.activeSkillState.stealthT > 0 && window.ActiveSkillSystem) {
+      ActiveSkillSystem.breakStealth("attack");
+    }
 
     const { fireRateMul, bulletSpeedMul } = getAfterburnerMultipliers();
     const ang = Math.atan2(S.mouse.y - player.spr.y, S.mouse.x - player.spr.x);
@@ -270,6 +286,7 @@ window.CombatSystem = (() => {
     }
 
     Effects.emitParticle(px + Math.cos(ang) * 18, py + Math.sin(ang) * 18, 0x32f6ff, 6 + count, 0.9);
+    if (window.SoundSystem) SoundSystem.play("player_fire", { playbackRate: 1 + Helpers.rand(-0.04, 0.04) });
   }
 
   function fireLaser(ang){
@@ -283,6 +300,7 @@ window.CombatSystem = (() => {
     const originY = S.player.spr.y + Math.sin(ang) * 18;
     const beam = makeBeam(originX, originY, ang, def.range, width, color);
     Effects.emitParticle(originX, originY, color, 12, 1.1);
+    if (window.SoundSystem) SoundSystem.play("laser_fire", { playbackRate: 1 + Helpers.rand(-0.03, 0.03) });
     S.weaponState.laserChannel = {
       beam,
       remaining: 28 + Math.max(0, S.stats.bulletCount - 1) * 6,
@@ -359,12 +377,14 @@ window.CombatSystem = (() => {
     }
 
     Effects.emitParticle(px + Math.cos(ang) * 18, py + Math.sin(ang) * 18, 0xffbf7a, 15, 1.2);
+    if (window.SoundSystem) SoundSystem.play("shotgun_fire", { playbackRate: 0.96 + Helpers.rand(-0.03, 0.03) });
   }
 
   function tryShootMissiles(){
     const S = GameState;
     if (S.stats.homingMissileLevel <= 0) return;
     if (S.stats.homingMissileCd > 0) return;
+    if (S.activeSkillState.stealthT > 0) return;
     if (S.enemies.length <= 0) return;
 
     const taken = new Set();
@@ -376,6 +396,10 @@ window.CombatSystem = (() => {
       const missile = makeMissile(S.player.spr.x, S.player.spr.y - 12, target);
       S.missiles.push(missile);
       Effects.emitParticle(missile.x, missile.y, 0xffb347, 6, 0.8);
+    }
+
+    if (spawnCount > 0 && window.SoundSystem) {
+      SoundSystem.play("missile_launch", { playbackRate: 1.04 });
     }
 
     S.stats.homingMissileCd = S.stats.homingMissileCdMax;
@@ -552,6 +576,7 @@ window.CombatSystem = (() => {
   }
 
   return {
+    damageEnemy,
     tryShoot,
     tryShootMissiles,
     launchMissileVolley,

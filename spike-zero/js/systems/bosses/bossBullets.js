@@ -69,10 +69,12 @@ window.BossBullets = (() => {
    * @param {function} [options.onSchedule] - 딜레이 발사 콜백 등록 (scheduler.schedule 등)
    */
   function safeLaneBurst(bossX, bossY, options = {}) {
-    const { randomize = false, onSchedule } = options;
+    const { randomize = false, onSchedule, laneAngle: explicitLaneAngle } = options;
     const player    = GameState.player;
-    const laneAngle = Math.atan2(player.spr.y - bossY, player.spr.x - bossX)
-                      + (randomize ? Helpers.rand(-0.45, 0.45) : 0);
+    const baseLaneAngle = explicitLaneAngle != null
+      ? explicitLaneAngle
+      : Math.atan2(player.spr.y - bossY, player.spr.x - bossX);
+    const laneAngle = baseLaneAngle + (randomize ? Helpers.rand(-0.45, 0.45) : 0);
     const laneWidth = randomize ? 0.4  : 0.62;
     const count     = randomize ? 40   : 34;
     const speed     = randomize ? 6.2  : 5.4;
@@ -113,9 +115,13 @@ window.BossBullets = (() => {
    */
   function aimSpread(bossX, bossY, spread, bulletOpts = {}) {
     const player = GameState.player;
-    const aim    = Math.atan2(player.spr.y - bossY, player.spr.x - bossX);
+    const aim    = bulletOpts.aimAngle != null
+      ? bulletOpts.aimAngle
+      : Math.atan2(player.spr.y - bossY, player.spr.x - bossX);
+    const options = { ...bulletOpts };
+    delete options.aimAngle;
     for (let i = -spread; i <= spread; i++) {
-      GameState.enemyBullets.push(make(bossX, bossY, aim + i * 0.14, bulletOpts));
+      GameState.enemyBullets.push(make(bossX, bossY, aim + i * 0.14, options));
     }
   }
 

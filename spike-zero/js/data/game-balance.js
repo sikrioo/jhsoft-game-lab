@@ -34,7 +34,9 @@ window.GAME_BALANCE = {
     STARTING_ACTIVE_SKILLS: [
       "decoy_drone",
       "boost",
-      "afterburner"
+      "afterburner",
+      "nova_pulse",
+      "stealth_field"
     ]
   }
 };

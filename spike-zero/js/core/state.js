@@ -22,6 +22,8 @@ window.GameState = {
   particles: [],
   textureCache: {},
   practiceBossId: "basic",
+  practiceStageId: 1,
+  practiceStageDurationSec: 180,
 
   stats: {
     maxHp: 100,
@@ -49,7 +51,8 @@ window.GameState = {
     homingMissileDamage: GAME_BALANCE.PLAYER.HOMING_MISSILE_DAMAGE,
     homingMissileCd: 0,
     homingMissileCdMax: GAME_BALANCE.PLAYER.HOMING_MISSILE_CD_MAX,
-    practice: false
+    practice: false,
+    practiceMode: "none"
   },
 
   progression: {
@@ -70,6 +73,7 @@ window.GameState = {
     xp: 0,
     xpToNext: GAME_BALANCE.XP.BASE_TO_NEXT,
     pendingLevelUps: 0,
+    bossFinishTimer: 0,
     deathTimer: 0
   },
 
@@ -79,6 +83,7 @@ window.GameState = {
       { key:"KeyE", label:"E", skillId:null, cooldown:0, autoCast:false },
       { key:"KeyR", label:"R", skillId:null, cooldown:0, autoCast:false }
     ],
+    ownedSkillIds: [],
     levels: {
       boost: 1
     },
@@ -87,7 +92,11 @@ window.GameState = {
     boostMitigationT: 0,
     boostMitigationMul: 1,
     boostT: 0,
-    afterburnerT: 0
+    afterburnerT: 0,
+    stealthT: 0,
+    stealthAlpha: 1,
+    stealthLastKnownX: 0,
+    stealthLastKnownY: 0
   },
 
   weaponState: {
