@@ -8,25 +8,13 @@ window.BossVisuals = (() => {
   /**
    * 보스 프레임 컨테이너 생성
    * @param {object} config - { radius, code, bodyColor, glowColor }
-   * @returns {PIXI.Container} root - .valueText, .codeText 프로퍼티 포함
+   * @returns {PIXI.Container} root - .valueText 프로퍼티 포함
    */
   function buildFrame(config) {
     const root = new PIXI.Container();
     const aura  = new PIXI.Graphics();
     const shell = new PIXI.Graphics();
     const core  = new PIXI.Graphics();
-
-    const code = new PIXI.Text(config.code, {
-      fontFamily: "Arial",
-      fontSize: 12,
-      fontWeight: "900",
-      fill: 0xffffff,
-      stroke: 0x000000,
-      strokeThickness: 3,
-      align: "center"
-    });
-    code.anchor.set(0.5);
-    code.y = 4;
 
     const value = new PIXI.Text("", {
       fontFamily: "Arial",
@@ -58,7 +46,7 @@ window.BossVisuals = (() => {
     core.moveTo(0, -config.radius * 0.45);
     core.lineTo(0,  config.radius * 0.45);
 
-    root.addChild(aura, shell, core, value, code);
+    root.addChild(aura, shell, core, value);
 
     const glow = Effects.makeGlowFilter({
       color: config.glowColor,
@@ -69,7 +57,6 @@ window.BossVisuals = (() => {
     root.filters = Effects.asFilters(glow);
 
     root.valueText = value;
-    root.codeText  = code;
     return root;
   }
 

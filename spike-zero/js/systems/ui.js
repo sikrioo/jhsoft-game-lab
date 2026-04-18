@@ -52,6 +52,17 @@ window.UI = (() => {
   let skillMapState = null;
   let pendingStageClearResolve = null;
 
+  function getStageLineup() {
+    if (window.BossSystem && BossSystem.getStageBossLineup) {
+      return BossSystem.getStageBossLineup();
+    }
+    return [
+      { stage: 1, bossId: "basic", name: "Sentinel Core" },
+      { stage: 2, bossId: "knight", name: "Crimson Knight" },
+      { stage: 3, bossId: "split", name: "Gemini Splitter" }
+    ];
+  }
+
   function getUpgradeTypeMeta(upgrade){
     const type = upgrade && upgrade.upgradeType ? upgrade.upgradeType : "passive";
     if (type === "weapon") return { label: "WEAPON", className: "weapon" };
@@ -128,6 +139,18 @@ window.UI = (() => {
       option.textContent = boss.name;
       if (boss.id === selected) option.selected = true;
       bossSelect.appendChild(option);
+    }
+
+    if (stageSelect) {
+      const selectedStage = String(Math.max(1, GameState.practiceStageId || 1));
+      stageSelect.innerHTML = "";
+      for (const stageInfo of getStageLineup()) {
+        const option = document.createElement("option");
+        option.value = String(stageInfo.stage);
+        option.textContent = `Stage ${stageInfo.stage} - ${stageInfo.name}`;
+        if (option.value === selectedStage) option.selected = true;
+        stageSelect.appendChild(option);
+      }
     }
   }
 
@@ -311,8 +334,14 @@ window.UI = (() => {
     resolve();
   }
 
-  function showStageClear(stage = 1) {
-    if (stageClearLabel) stageClearLabel.textContent = `Stage ${stage} secured.`;
+  function showStageClear(stage = 1, options = {}) {
+    const isFinalStage = !!options.isFinalStage;
+    if (stageClearLabel) {
+      stageClearLabel.textContent = isFinalStage
+        ? `Stage ${stage} secured. Demo route complete.`
+        : `Stage ${stage} secured.`;
+    }
+    if (nextStageBtn) nextStageBtn.textContent = isFinalStage ? "Return to Title" : "Next Stage";
     if (pendingStageClearResolve) resolveStageClear();
     showCard("clear");
     if (window.SoundSystem) SoundSystem.play("stage_clear");

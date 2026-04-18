@@ -1,4 +1,8 @@
 window.WaveSystem = (() => {
+  function getMaxStage() {
+    return window.BossSystem && BossSystem.getStageCount ? BossSystem.getStageCount() : 3;
+  }
+
   function getDefaultStageDurationFrames() {
     const sec = GameState.stats.practice && GameState.stats.practiceMode === "stage"
       ? Math.max(10, Math.floor(GameState.practiceStageDurationSec || 180))
@@ -13,7 +17,8 @@ window.WaveSystem = (() => {
 
   function startStage(stage = 1, options = {}){
     const P = GameState.progression;
-    P.stage = Math.max(1, stage);
+    P.stage = Math.min(getMaxStage(), Math.max(1, stage));
+    if (window.BackgroundRenderer) BackgroundRenderer.drawBackground();
     P.stageDuration = options.stageDurationFrames || getDefaultStageDurationFrames();
     P.stageTime = P.stageDuration;
     P.stageState = "combat";
@@ -63,6 +68,8 @@ window.WaveSystem = (() => {
 
   function completeStage(){
       const currentStage = GameState.progression.stage;
+      const maxStage = getMaxStage();
+      const isFinalStage = currentStage >= maxStage;
       const nextStage = currentStage + 1;
       GameState.progression.waveState = "dialogue";
       setTimeout(() => {
@@ -73,7 +80,14 @@ window.WaveSystem = (() => {
           if (window.BgmSystem) BgmSystem.stopAll();
         }
       }, 550);
-      const continueToClear = () => UI.showStageClear(currentStage).then(() => startStage(nextStage));
+      const continueToClear = () => UI.showStageClear(currentStage, { isFinalStage }).then(() => {
+        if (isFinalStage) {
+          GameState.progression.waveState = "idle";
+          UI.showCard("start");
+          return;
+        }
+        startStage(nextStage);
+      });
       if (!window.DialogueSystem || !window.BossSystem) {
         continueToClear();
         return;
@@ -103,6 +117,7 @@ window.WaveSystem = (() => {
   }
 
   return {
+    getMaxStage,
     startStage,
     triggerStageBoss,
     completeStage,

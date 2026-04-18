@@ -19,6 +19,18 @@ window.BgmSystem = (() => {
     "stage2:boss:phase2": {
       src: "./assets/bgm/stage-2/boss/phase2/racing tecno_v2.ogg",
       volume: 0.46
+    },
+    "stage3:gameplay": {
+      src: "./assets/bgm/stage-3/gameplay/ente_evil.ogg",
+      volume: 0.35
+    },
+    "stage3:boss:phase1": {
+      src: "./assets/bgm/stage-3/boss/phase1/Boss Battle 6 V1.wav",
+      volume: 0.42
+    },
+    "stage3:boss:phase2": {
+      src: "./assets/bgm/stage-3/boss/phase2/litesaturation-nu-metal-no-solo-109317.mp3",
+      volume: 0.48
     }
   };
 

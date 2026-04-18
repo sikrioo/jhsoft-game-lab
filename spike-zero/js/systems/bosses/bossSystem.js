@@ -12,6 +12,8 @@
  */
 window.BossSystem = (() => {
   const PRACTICE_DEFAULT = "basic";
+  const STAGE_BOSS_ORDER = ["basic", "knight", "split"];
+  const WAVE_BOSS_ORDER = ["basic", "advanced", "knight", "split", "summoner"];
 
   // ─── 정의 조회 ────────────────────────────────────────────────────────────
 
@@ -82,15 +84,28 @@ window.BossSystem = (() => {
   }
 
   function getWaveBossId(wave = GameState.progression.wave) {
-    const order = ["basic", "advanced", "knight", "split", "summoner"];
-    const index = Math.max(0, Math.floor(wave / 5) - 1) % order.length;
-    return order[index];
+    const index = Math.max(0, Math.floor(wave / 5) - 1) % WAVE_BOSS_ORDER.length;
+    return WAVE_BOSS_ORDER[index];
   }
 
   function getStageBossId(stage = GameState.progression.stage || 1) {
-    const order = ["basic", "advanced", "knight", "split", "summoner"];
-    const index = Math.max(0, stage - 1) % order.length;
-    return order[index];
+    const index = Math.max(0, stage - 1) % STAGE_BOSS_ORDER.length;
+    return STAGE_BOSS_ORDER[index];
+  }
+
+  function getStageBossLineup() {
+    return STAGE_BOSS_ORDER.map((bossId, index) => {
+      const def = getDefinition(bossId);
+      return {
+        stage: index + 1,
+        bossId,
+        name: def ? def.name : bossId
+      };
+    });
+  }
+
+  function getStageCount() {
+    return STAGE_BOSS_ORDER.length;
   }
 
   // ─── 스폰 억제 판단 ────────────────────────────────────────────────────────
@@ -475,6 +490,10 @@ window.BossSystem = (() => {
       if (boss.phase === 2) return;
       boss.phase      = 2;
       boss.core.visible = false;
+      if (boss.hpBar) {
+        boss.hpBar.barBg.visible = false;
+        boss.hpBar.barFill.visible = false;
+      }
       boss.children   = [
         makeChild("blue", -120,  18),
         makeChild("red",   120, -14)
@@ -518,9 +537,9 @@ window.BossSystem = (() => {
       const player = getStealthAwarePlayerTarget();
       const angleToPlayer = Math.atan2(player.y - child.y, player.x - child.x);
       const distToPlayer = Math.hypot(player.x - child.x, player.y - child.y) || 1;
-      const moveSpeed = alone ? 4.0 : 3.1;
-      const targetDist = alone ? 136 : 154;
-      const dashDistance = alone ? 220 : 190;
+        const moveSpeed = alone ? 3.2 : 2.48;
+        const targetDist = alone ? 136 : 154;
+        const dashDistance = alone ? 176 : 152;
 
       if (child.state === "APPROACH") {
         if (distToPlayer > targetDist) {
@@ -530,7 +549,7 @@ window.BossSystem = (() => {
           child.x -= Math.cos(angleToPlayer) * moveSpeed * 0.22 * dt;
           child.y -= Math.sin(angleToPlayer) * moveSpeed * 0.22 * dt;
         }
-        if (child.stateTime >= child.stateDuration || distToPlayer < targetDist + 10) setRedState(child, "STRAFE", alone ? 12 : 16);
+          if (child.stateTime >= child.stateDuration || distToPlayer < targetDist + 10) setRedState(child, "STRAFE", alone ? 14 : 19);
       } else if (child.state === "STRAFE") {
         const side = Math.sin(performance.now() * 0.004 + child.pulse) > 0 ? 1 : -1;
         child.x += Math.cos(angleToPlayer + Math.PI / 2 * side) * moveSpeed * 0.75 * dt;
@@ -538,7 +557,7 @@ window.BossSystem = (() => {
         if (child.stateTime >= child.stateDuration) {
           child.lockAngle = angleToPlayer;
           child.attackPattern = chooseRedAttackPattern(child, distToPlayer);
-          setRedState(child, "CHARGE", alone ? 9 : 12);
+            setRedState(child, "CHARGE", alone ? 11 : 14);
         }
       } else if (child.state === "CHARGE") {
         child.lockAngle = angleToPlayer;
@@ -546,7 +565,7 @@ window.BossSystem = (() => {
           Effects.emitLineTelegraph(child.x, child.y, child.x + Math.cos(child.lockAngle) * dashDistance, child.y + Math.sin(child.lockAngle) * dashDistance, 0xff5f90, alone ? 10 : 12, 6);
           child.dashTelegraphShown = true;
         }
-        if (child.stateTime >= child.stateDuration) setRedState(child, "ATTACK", alone ? 7 : 9);
+          if (child.stateTime >= child.stateDuration) setRedState(child, "ATTACK", alone ? 9 : 11);
       } else if (child.state === "ATTACK") {
         const attackProgress = Math.min(1, child.stateTime / Math.max(0.001, child.stateDuration));
         const stepDistance = dashDistance / Math.max(1, child.stateDuration);
@@ -573,12 +592,12 @@ window.BossSystem = (() => {
         }
         if (child.stateTime >= child.stateDuration) {
           child.afterSlash = 0;
-          setRedState(child, "RECOVERY", alone ? 10 : 12);
+            setRedState(child, "RECOVERY", alone ? 12 : 14);
         }
       } else if (child.state === "RECOVERY") {
         child.x -= Math.cos(angleToPlayer) * moveSpeed * 0.45 * dt;
         child.y -= Math.sin(angleToPlayer) * moveSpeed * 0.45 * dt;
-        if (child.stateTime >= child.stateDuration) setRedState(child, "APPROACH", alone ? 18 : 22);
+          if (child.stateTime >= child.stateDuration) setRedState(child, "APPROACH", alone ? 22 : 26);
       }
     }
 
@@ -656,10 +675,6 @@ window.BossSystem = (() => {
             updateRedKnightChild(child, dt, boss.children.length === 1);
           }
 
-          child.frame.x = child.x - boss.x;
-          child.frame.y = child.y - boss.y;
-          BossVisuals.redrawMiniHpBar(child.hpBar, child.hp / child.maxHp, child.role === "blue" ? 0x7df9ff : 0xff8fab);
-          BossVisuals.setFrameValue(child.frame, child.hp);
         }
 
         if (boss.children.length > 0) {
@@ -667,10 +682,20 @@ window.BossSystem = (() => {
           boss.y = boss.children.reduce((sum, c) => sum + c.y, 0) / boss.children.length;
           boss.spr.x = boss.x;
           boss.spr.y = boss.y;
+          for (const child of boss.children) {
+            child.frame.x = child.x - boss.x;
+            child.frame.y = child.y - boss.y;
+            BossVisuals.redrawMiniHpBar(child.hpBar, child.hp / child.maxHp, child.role === "blue" ? 0x7df9ff : 0xff8fab);
+            BossVisuals.setFrameValue(child.frame, child.hp);
+          }
         }
       }
 
-      BossVisuals.redrawHpBar(boss.hpBar, boss.hp / boss.maxHp, boss.phase === 1 ? 0xffd166 : 0xff8fab);
+      if (boss.phase === 1 && boss.hpBar) {
+        boss.hpBar.barBg.visible = true;
+        boss.hpBar.barFill.visible = true;
+        BossVisuals.redrawHpBar(boss.hpBar, boss.hp / boss.maxHp, 0xffd166);
+      }
       if (boss.core.visible) BossVisuals.setFrameValue(boss.core, boss.hp);
     };
 
@@ -1070,7 +1095,6 @@ window.BossSystem = (() => {
         ? (boss.phase === 1 ? 0x7df9ff : 0xff9be8)
         : (boss.phase === 1 ? 0x9a7dff : 0xff6bd6);
 
-      boss.core.codeText.text = def.code;
       BossVisuals.redrawHpBar(boss.hpBar, boss.hp / boss.maxHp, glowColor);
       BossVisuals.setFrameValue(boss.core, boss.hp);
       boss.core.scale.set(1 + Math.sin(performance.now() * 0.02) * 0.02);
@@ -1100,16 +1124,22 @@ window.BossSystem = (() => {
   // ─── 스폰 API ──────────────────────────────────────────────────────────────
 
   function spawnBoss(id, options = {}) {
-    const factory = factories[id];
-    if (!factory) return null;
-    if (options.replaceExisting !== false) clearCurrentArena();
-    const boss = factory();
-    GameState.enemies.push(boss);
-    GameState.progression.waveAlive    = 1;
-    GameState.progression.spawnedCount = 1;
-    if (options.playWarning !== false) {
-      if (window.SoundSystem) SoundSystem.play("boss_alarm");
-      UI.triggerBossWarning();
+      const factory = factories[id];
+      if (!factory) return null;
+      const replacingExisting = options.replaceExisting !== false;
+      if (replacingExisting) clearCurrentArena();
+      const boss = factory();
+      GameState.enemies.push(boss);
+      if (replacingExisting) {
+        GameState.progression.waveAlive = 1;
+        GameState.progression.spawnedCount = 1;
+      } else {
+        GameState.progression.waveAlive += 1;
+        GameState.progression.spawnedCount += 1;
+      }
+      if (options.playWarning !== false) {
+        if (window.SoundSystem) SoundSystem.play("boss_alarm");
+        UI.triggerBossWarning();
     }
     UI.hudUpdate();
     return boss;
@@ -1125,7 +1155,7 @@ window.BossSystem = (() => {
   }
 
   function spawnStageBoss(stage = GameState.progression.stage || 1) {
-    return spawnBoss(getStageBossId(stage), { replaceExisting: true, playWarning: false });
+    return spawnBoss(getStageBossId(stage), { replaceExisting: false, playWarning: false });
   }
 
   // ─── Public API ────────────────────────────────────────────────────────────
@@ -1134,6 +1164,8 @@ window.BossSystem = (() => {
     getActiveBoss,
     getDefinitions,
     getDefinition,
+    getStageBossLineup,
+    getStageCount,
     getPracticeBossId,
     setPracticeBossId,
     hasActiveBoss,

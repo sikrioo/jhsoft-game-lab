@@ -3,12 +3,18 @@ window.Boot = (() => {
 
   function addShake(v){ S.shake = Math.min(24, S.shake + v); }
 
+  function normalizePracticeStageId(stageId) {
+    const maxStage = window.WaveSystem && WaveSystem.getMaxStage ? WaveSystem.getMaxStage() : 3;
+    return Math.min(maxStage, Math.max(1, Math.floor(stageId || 1)));
+  }
+
   function resetAll(options=false){
     const testMode = typeof options === "boolean" ? options : !!options.testMode;
     const practiceMode = typeof options === "object" && options
       ? (options.practiceMode || (testMode ? "boss" : "none"))
       : (testMode ? "boss" : "none");
-    const practiceStageId = typeof options === "object" && options ? (options.practiceStageId || S.practiceStageId || 1) : (S.practiceStageId || 1);
+    const requestedStageId = typeof options === "object" && options ? (options.practiceStageId || S.practiceStageId || 1) : (S.practiceStageId || 1);
+    const practiceStageId = normalizePracticeStageId(requestedStageId);
     const practiceStageDurationSec = typeof options === "object" && options
       ? Math.max(10, Math.floor(options.practiceStageDurationSec || S.practiceStageDurationSec || 180))
       : Math.max(10, Math.floor(S.practiceStageDurationSec || 180));
@@ -481,7 +487,7 @@ window.Boot = (() => {
         resetAll({
           testMode: true,
           practiceMode: "stage",
-          practiceStageId: Math.max(1, stageId || 1),
+          practiceStageId: normalizePracticeStageId(stageId),
           practiceStageDurationSec: Math.max(10, durationSec || 180)
         });
       }
