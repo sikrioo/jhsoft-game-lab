@@ -1,0 +1,1102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>SPIKE-ZERO // Entry</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #02040a;
+      font-family: "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      color: #f3f7ff;
+    }
+    body {
+      user-select: none;
+    }
+    .screen {
+      position: absolute;
+      inset: 0;
+    }
+    #introScreen {
+      background:
+        radial-gradient(circle at 50% 38%, rgba(104, 140, 196, 0.10), transparent 26%),
+        linear-gradient(180deg, #010203 0%, #03050a 56%, #02040a 100%);
+      cursor: pointer;
+      transition: opacity 0.8s ease, visibility 0.8s ease;
+    }
+    #introScreen.hidden {
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+    }
+    #introCanvas,
+    #menuStars {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+    #introGlow {
+      position: absolute;
+      left: 50%;
+      top: 39%;
+      width: min(44vw, 460px);
+      height: min(44vw, 460px);
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(210,235,255,.07) 0%, rgba(160,205,255,.04) 28%, rgba(130,180,255,.02) 45%, transparent 70%);
+      opacity: 0;
+      transition: opacity 1.2s ease;
+      pointer-events: none;
+    }
+    #introScreen.on #introGlow {
+      opacity: 1;
+    }
+    #introNoise,
+    #introScan,
+    #introVignette,
+    #menuVignette {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    #introNoise {
+      opacity: 0.05;
+      background-image: radial-gradient(circle, rgba(255, 255, 255, 0.55) 0.7px, transparent 1px);
+      background-size: 8px 8px;
+      mix-blend-mode: screen;
+      animation: noiseShift 0.35s steps(2) infinite;
+    }
+    #introScan {
+      opacity: 0.05;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, 0.05) 0px,
+        rgba(255, 255, 255, 0.05) 1px,
+        transparent 2px,
+        transparent 4px
+      );
+    }
+    #introVignette,
+    #menuVignette {
+      background: radial-gradient(circle at center, transparent 34%, rgba(0, 0, 0, 0.38) 68%, rgba(0, 0, 0, 0.84) 100%);
+    }
+    #introPlateWrap {
+      position: absolute;
+      left: 50%;
+      bottom: 12vh;
+      transform: translateX(-50%);
+      width: min(62vw, 580px);
+      max-width: calc(100vw - 40px);
+      text-align: center;
+      pointer-events: none;
+    }
+    #introPlate {
+      position: relative;
+      min-height: 120px;
+      border-radius: 22px;
+      padding: 24px 34px 28px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.024), rgba(255, 255, 255, 0.032));
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02), 0 18px 60px rgba(0, 0, 0, 0.48);
+      overflow: hidden;
+    }
+    #introPlate::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.10) 50%, transparent 100%);
+      transform: translateX(-120%);
+      opacity: 0;
+    }
+    #introScreen.on #introPlate::before {
+      opacity: 1;
+      animation: plateSweep 0.85s ease-out 1;
+    }
+    #introTag {
+      position: absolute;
+      top: -22px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: 10px;
+      letter-spacing: 0.3em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.22);
+      opacity: 0;
+      transition: opacity 0.8s ease;
+      white-space: nowrap;
+    }
+    #introScreen.on #introTag {
+      opacity: 1;
+    }
+    #introLogo {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      font-size: clamp(37px, 6.4vw, 74px);
+      letter-spacing: 0.24em;
+      font-weight: 300;
+      text-transform: uppercase;
+      color: #57636e;
+      opacity: 0.58;
+      filter: brightness(0.58);
+      text-shadow: none;
+      transition: color 0.16s linear, opacity 0.16s linear, filter 0.16s linear, text-shadow 0.16s linear;
+    }
+    #introScreen.on #introLogo {
+      color: #eef4fb;
+      opacity: 1;
+      filter: brightness(1.04);
+      text-shadow: 0 0 12px rgba(255, 255, 255, 0.52), 0 0 28px rgba(186, 222, 255, 0.20);
+    }
+    #introSubtitle {
+      font-family: "Cormorant Garamond", Georgia, serif;
+      margin-top: 10px;
+      font-size: 11px;
+      letter-spacing: 0.42em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.30);
+      white-space: nowrap;
+    }
+    #introHint {
+      position: absolute;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      font-size: 11px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.34);
+      transition: opacity 0.5s ease;
+    }
+    #audioPrompt {
+      position: absolute;
+      left: 50%;
+      top: 22px;
+      transform: translateX(-50%);
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(8, 12, 24, 0.72);
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      color: rgba(245, 248, 255, 0.82);
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+      pointer-events: none;
+    }
+    #audioPrompt.visible {
+      opacity: 1;
+    }
+    #menuScreen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.9s ease;
+      background:
+        radial-gradient(circle at 50% 34%, rgba(78, 118, 186, 0.14), transparent 24%),
+        radial-gradient(circle at 50% 70%, rgba(255, 255, 255, 0.03), transparent 28%),
+        linear-gradient(180deg, #03060a 0%, #08111d 56%, #04070c 100%);
+    }
+    #menuScreen.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    #menuPanel {
+      position: relative;
+      z-index: 2;
+      width: min(540px, calc(100vw - 40px));
+      padding: 42px 34px 32px;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.018));
+      border: 1px solid rgba(255, 255, 255, 0.10);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 24px 80px rgba(0, 0, 0, 0.46);
+      backdrop-filter: blur(7px);
+      text-align: center;
+      transition: transform 0.6s ease, opacity 0.6s ease;
+    }
+    #menuScreen.leaving #menuPanel {
+      transform: translateY(10px) scale(0.985);
+      opacity: 0;
+    }
+    #menuKicker {
+      font-size: 11px;
+      letter-spacing: 0.34em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.34);
+      margin-bottom: 18px;
+    }
+    #menuTitle {
+      margin: 0;
+      font-size: clamp(34px, 5.3vw, 58px);
+      line-height: 1;
+      letter-spacing: 0.10em;
+      text-transform: uppercase;
+      font-weight: 300;
+      color: rgba(244, 248, 255, 0.96);
+      text-shadow: 0 0 16px rgba(255, 255, 255, 0.10), 0 0 32px rgba(168, 212, 255, 0.08);
+    }
+    #menuSubtitle {
+      margin: 14px auto 0;
+      max-width: 360px;
+      font-size: 13px;
+      line-height: 1.75;
+      letter-spacing: 0.08em;
+      color: rgba(255, 255, 255, 0.52);
+    }
+    #menuDivider {
+      width: 74px;
+      height: 1px;
+      margin: 24px auto 28px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.30), transparent);
+    }
+    #menuDifficulty {
+      display: grid;
+      gap: 8px;
+      margin: 0 auto 24px;
+      width: min(280px, 100%);
+      text-align: left;
+    }
+    #menuDifficultyLabel {
+      font-size: 11px;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.32);
+    }
+    .menuDifficultyOption {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+      transition: border-color 0.18s ease, background 0.18s ease;
+    }
+    .menuDifficultyOption:hover {
+      border-color: rgba(255, 255, 255, 0.18);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .menuDifficultyOption input {
+      margin: 0;
+    }
+    .menuDifficultyOption span {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .menuDifficultyOption small {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.48);
+    }
+    #startButton {
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      border-radius: 999px;
+      min-width: 224px;
+      padding: 16px 34px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.11), rgba(255, 255, 255, 0.05));
+      color: #f2f6fb;
+      font-size: 15px;
+      font-weight: 600;
+      letter-spacing: 0.28em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 12px 34px rgba(0, 0, 0, 0.34);
+      transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+    #startButton:hover {
+      transform: translateY(-1px);
+      border-color: rgba(255, 255, 255, 0.24);
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.06));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 18px 40px rgba(0, 0, 0, 0.38), 0 0 26px rgba(171, 214, 255, 0.08);
+    }
+    #menuFooter {
+      margin-top: 18px;
+      font-size: 11px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.24);
+    }
+    #transitionMask {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at 50% 42%, rgba(255, 255, 255, 0.16), rgba(3, 6, 12, 0.94) 44%, rgba(2, 4, 10, 1) 100%);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.65s ease;
+    }
+    #transitionMask.show {
+      opacity: 1;
+    }
+    @keyframes noiseShift {
+      0% { transform: translate(0, 0); }
+      25% { transform: translate(-2px, 1px); }
+      50% { transform: translate(1px, -1px); }
+      75% { transform: translate(2px, 1px); }
+      100% { transform: translate(0, 0); }
+    }
+    @keyframes plateSweep {
+      from { transform: translateX(-120%); }
+      to { transform: translateX(120%); }
+    }
+    @media (max-width: 560px) {
+      #introPlateWrap {
+        bottom: 14vh;
+      }
+      #menuPanel {
+        padding: 34px 24px 28px;
+      }
+      #startButton {
+        min-width: 100%;
+      }
+      #introSubtitle {
+        letter-spacing: 0.22em;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="screen" id="introScreen">
+    <canvas id="introCanvas"></canvas>
+    <div id="introGlow"></div>
+    <div id="introNoise"></div>
+    <div id="introScan"></div>
+    <div id="introVignette"></div>
+    <div id="introPlateWrap">
+      <div id="introTag">SORTIE SIGNAL // VERIFIED</div>
+      <div id="introPlate">
+        <div id="introLogo">JHStudio</div>
+        <div id="introSubtitle">Production Signal Online</div>
+      </div>
+    </div>
+    <div id="audioPrompt">click to enable intro audio</div>
+    <div id="introHint">click / space / enter to skip</div>
+  </div>
+
+  <div class="screen" id="menuScreen" aria-label="SPIKE-ZERO Main Menu">
+    <canvas id="menuStars"></canvas>
+    <div id="menuVignette"></div>
+    <div id="menuPanel">
+      <div id="menuKicker">Arcade Space Assault</div>
+      <h1 id="menuTitle">SPIKE-ZERO</h1>
+      <div id="menuSubtitle">
+        Push into the outer defense line and break through escalating combat zones.
+        Start immediately and enter the live route.
+      </div>
+      <div id="menuDivider"></div>
+      <div id="menuDifficulty">
+        <div id="menuDifficultyLabel">Difficulty</div>
+        <label class="menuDifficultyOption">
+          <input type="radio" name="menuDifficulty" value="easy" />
+          <span>Easy</span>
+          <small>-25%</small>
+        </label>
+        <label class="menuDifficultyOption">
+          <input type="radio" name="menuDifficulty" value="normal" checked />
+          <span>Normal</span>
+          <small>Default</small>
+        </label>
+      </div>
+      <button id="startButton" type="button">Start Mission</button>
+      <div id="menuFooter">Normal entry route // play mode direct</div>
+    </div>
+  </div>
+
+  <div id="transitionMask"></div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", () => {
+      const introScreen = document.getElementById("introScreen");
+      const introCanvas = document.getElementById("introCanvas");
+      const introCtx = introCanvas.getContext("2d");
+      const introLogo = document.getElementById("introLogo");
+      const introHint = document.getElementById("introHint");
+      const audioPrompt = document.getElementById("audioPrompt");
+
+      const menuScreen = document.getElementById("menuScreen");
+      const menuStars = document.getElementById("menuStars");
+      const menuCtx = menuStars.getContext("2d");
+      const startButton = document.getElementById("startButton");
+      const transitionMask = document.getElementById("transitionMask");
+      const difficultyEls = [...document.querySelectorAll("input[name='menuDifficulty']")];
+      const menuDifficultyOptions = [...document.querySelectorAll(".menuDifficultyOption")];
+
+      const introAudio = new Audio("./assets/bgm/intro-logo/jeremusic70-space-intro-no-copyright-music-124261.mp3");
+      introAudio.loop = false;
+      introAudio.volume = 0.36;
+      introAudio.preload = "auto";
+      const uiHoverAudio = new Audio("./assets/sfx/kenney_ui-audio/Audio/rollover2.ogg");
+      uiHoverAudio.volume = 0.22;
+      uiHoverAudio.preload = "auto";
+      const uiClickAudio = new Audio("./assets/sfx/kenney_ui-audio/Audio/click3.ogg");
+      uiClickAudio.volume = 0.28;
+      uiClickAudio.preload = "auto";
+
+      let w = 0;
+      let h = 0;
+      let cx = 0;
+      let cy = 0;
+      let baseRadius = 0;
+      let sw = 0;
+      let sh = 0;
+      let dpr = Math.min(window.devicePixelRatio || 1, 2);
+      let stars = [];
+      let menuVisible = false;
+      let introFinished = false;
+      let introOn = false;
+      let audioStarted = false;
+      let audioBlocked = false;
+      let introAnimationStarted = false;
+      let introAnimationStart = 0;
+      let introRenderQueued = false;
+      let introStartFallbackTimer = null;
+
+      function startIntroAnimation() {
+        if (introAnimationStarted) return;
+        introAnimationStarted = true;
+        introAnimationStart = performance.now();
+        if (!introRenderQueued) {
+          introRenderQueued = true;
+          requestAnimationFrame(renderIntro);
+        }
+      }
+
+      function tryPlayIntroAudio() {
+        if (audioStarted) return;
+        const playPromise = introAudio.play();
+        if (playPromise && typeof playPromise.then === "function") {
+          playPromise.then(() => {
+            audioStarted = true;
+            audioBlocked = false;
+            if (audioPrompt) audioPrompt.classList.remove("visible");
+            if (introStartFallbackTimer) {
+              clearTimeout(introStartFallbackTimer);
+              introStartFallbackTimer = null;
+            }
+            startIntroAnimation();
+          }).catch(() => {
+            audioBlocked = true;
+            if (audioPrompt && !menuVisible) audioPrompt.classList.add("visible");
+          });
+        }
+      }
+
+      function playMenuHover() {
+        uiHoverAudio.pause();
+        uiHoverAudio.currentTime = 0;
+        const playPromise = uiHoverAudio.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(() => {});
+        }
+      }
+
+      function playMenuClick() {
+        uiClickAudio.pause();
+        uiClickAudio.currentTime = 0;
+        const playPromise = uiClickAudio.play();
+        if (playPromise && typeof playPromise.catch === "function") {
+          playPromise.catch(() => {});
+        }
+      }
+
+      function fadeOutAudio(durationMs = 420) {
+        if (!audioStarted || introAudio.paused) return;
+        const fromVolume = introAudio.volume;
+        const startedAt = performance.now();
+        function step(now) {
+          const progress = Math.min(1, (now - startedAt) / durationMs);
+          introAudio.volume = fromVolume * (1 - progress);
+          if (progress < 1) {
+            requestAnimationFrame(step);
+            return;
+          }
+          introAudio.pause();
+          introAudio.currentTime = 0;
+          introAudio.volume = fromVolume;
+        }
+        requestAnimationFrame(step);
+      }
+
+      function resizeIntro() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        w = window.innerWidth;
+        h = window.innerHeight;
+        introCanvas.width = Math.floor(w * dpr);
+        introCanvas.height = Math.floor(h * dpr);
+        introCanvas.style.width = w + "px";
+        introCanvas.style.height = h + "px";
+        introCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        cx = w * 0.5;
+        cy = h * 0.38;
+        baseRadius = Math.min(w, h) * 0.148;
+      }
+
+      function resizeMenu() {
+        sw = window.innerWidth;
+        sh = window.innerHeight;
+        menuStars.width = Math.floor(sw * dpr);
+        menuStars.height = Math.floor(sh * dpr);
+        menuStars.style.width = sw + "px";
+        menuStars.style.height = sh + "px";
+        menuCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        const starCount = Math.max(80, Math.floor((sw * sh) / 12000));
+        if (stars.length !== starCount) {
+          stars = Array.from({ length: starCount }, () => ({
+            x: Math.random() * sw,
+            y: Math.random() * sh,
+            z: 0.2 + Math.random() * 0.8,
+            size: 0.6 + Math.random() * 1.6,
+            alpha: 0.15 + Math.random() * 0.55,
+            speed: 0.08 + Math.random() * 0.35
+          }));
+        }
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function easeOutCubic(t) {
+        return 1 - Math.pow(1 - t, 3);
+      }
+
+      function seededRand(seed) {
+        let state = seed;
+        return function next() {
+          state = (state * 1664525 + 1013904223) & 0xffffffff;
+          return (state >>> 0) / 0xffffffff;
+        };
+      }
+
+      function buildLogogram(index) {
+        const rand = seededRand(index * 7919 + 31);
+        const ellipseX = 0.88 + rand() * 0.22;
+        const ellipseY = 0.88 + rand() * 0.22;
+        const globalRot = rand() * Math.PI * 2;
+        const arcCount = 2 + Math.floor(rand() * 3);
+        const arcs = [];
+        let cursor = 0;
+        for (let i = 0; i < arcCount; i++) {
+          const span = (Math.PI * 2 / arcCount) * (0.7 + rand() * 0.6);
+          arcs.push({ start: cursor, span, thick: 1.8 + rand() * 2.4 });
+          cursor += span + rand() * 0.22;
+        }
+        const spurCount = 3 + Math.floor(rand() * 6);
+        const spurs = [];
+        for (let i = 0; i < spurCount; i++) {
+          spurs.push({
+            angle: rand() * Math.PI * 2,
+            inward: rand() > 0.5,
+            length: 0.22 + rand() * 0.52,
+            curve: (rand() - 0.5) * 0.6,
+            endBlob: rand() > 0.42,
+            thick: 0.8 + rand() * 1.6
+          });
+        }
+        const dotCount = Math.floor(rand() * 5);
+        const dots = [];
+        for (let i = 0; i < dotCount; i++) {
+          dots.push({ da: rand() * Math.PI * 2, dr: rand() * 0.72, ds: 0.04 + rand() * 0.12 });
+        }
+        return { ellipseX, ellipseY, globalRot, arcs, spurs, dots };
+      }
+
+      function cubicPoint(p0, c1, c2, p1, t) {
+        const mt = 1 - t;
+        return {
+          x: mt * mt * mt * p0.x + 3 * mt * mt * t * c1.x + 3 * mt * t * t * c2.x + t * t * t * p1.x,
+          y: mt * mt * mt * p0.y + 3 * mt * mt * t * c1.y + 3 * mt * t * t * c2.y + t * t * t * p1.y
+        };
+      }
+
+      function buildContinuousSPath(innerRadius) {
+        const segments = [
+          { p0: { x: -0.42, y: -0.58 }, c1: { x: -0.74, y: -0.44 }, c2: { x: -0.66, y: -0.04 }, p1: { x: -0.18, y: -0.08 }, w0: 3.2, w1: 2.7 },
+          { p0: { x: -0.18, y: -0.08 }, c1: { x: 0.28, y: -0.12 }, c2: { x: 0.54, y: -0.42 }, p1: { x: 0.36, y: -0.62 }, w0: 2.7, w1: 1.8 },
+          { p0: { x: 0.36, y: -0.62 }, c1: { x: 0.58, y: -0.26 }, c2: { x: 0.26, y: 0.02 }, p1: { x: -0.06, y: 0.10 }, w0: 1.8, w1: 2.5 },
+          { p0: { x: -0.06, y: 0.10 }, c1: { x: -0.48, y: 0.18 }, c2: { x: -0.58, y: 0.54 }, p1: { x: -0.18, y: 0.66 }, w0: 2.5, w1: 1.5 },
+          { p0: { x: -0.18, y: 0.66 }, c1: { x: 0.08, y: 0.74 }, c2: { x: 0.34, y: 0.60 }, p1: { x: 0.46, y: 0.42 }, w0: 1.5, w1: 0.5 }
+        ];
+
+        const points = [];
+        const perSeg = 44;
+        for (let segmentIndex = 0; segmentIndex < segments.length; segmentIndex++) {
+          const segment = segments[segmentIndex];
+          for (let i = 0; i <= perSeg; i++) {
+            if (segmentIndex > 0 && i === 0) continue;
+            const t = i / perSeg;
+            const point = cubicPoint(segment.p0, segment.c1, segment.c2, segment.p1, t);
+            const width = segment.w0 + (segment.w1 - segment.w0) * t;
+            points.push({ x: point.x * innerRadius, y: point.y * innerRadius, width });
+          }
+        }
+        return points;
+      }
+
+      function drawContinuousS(innerRadius, progress, time) {
+        if (progress <= 0) return;
+        const points = buildContinuousSPath(innerRadius);
+        const total = points.length;
+        const reveal = Math.max(2, Math.floor(total * easeOutCubic(progress)));
+
+        introCtx.save();
+        introCtx.translate(cx, cy);
+        introCtx.beginPath();
+        introCtx.arc(0, 0, innerRadius * 1.2, 0, Math.PI * 2);
+        introCtx.clip();
+
+        const mist = clamp((progress - 0.08) / 0.9, 0, 1);
+        if (mist > 0) {
+          const radial = introCtx.createRadialGradient(0, 0, 0, 0, 0, innerRadius * 0.92);
+          radial.addColorStop(0, "rgba(245,251,255," + (0.06 * mist) + ")");
+          radial.addColorStop(0.55, "rgba(215,230,244," + (0.035 * mist) + ")");
+          radial.addColorStop(1, "rgba(255,255,255,0)");
+          introCtx.fillStyle = radial;
+          introCtx.beginPath();
+          introCtx.arc(0, 0, innerRadius * 0.92, 0, Math.PI * 2);
+          introCtx.fill();
+        }
+
+        if (progress > 0.03) {
+          const startPoint = points[0];
+          const blotAlpha = clamp((progress - 0.03) / 0.14, 0, 1) * 0.68;
+          const blotRadius = innerRadius * 0.12;
+          for (let i = 0; i < 4; i++) {
+            const angle = i * Math.PI / 2 + time * 0.06;
+            const offsetX = Math.cos(angle) * blotRadius * 0.16;
+            const offsetY = Math.sin(angle) * blotRadius * 0.16;
+            introCtx.beginPath();
+            introCtx.ellipse(
+              startPoint.x + offsetX,
+              startPoint.y + offsetY,
+              blotRadius * (0.48 + i * 0.08),
+              blotRadius * (0.28 + i * 0.03),
+              angle * 0.35,
+              0,
+              Math.PI * 2
+            );
+            introCtx.fillStyle = "rgba(242,248,255," + (blotAlpha * (0.64 - i * 0.1)) + ")";
+            introCtx.shadowBlur = 14;
+            introCtx.shadowColor = "rgba(255,255,255," + (blotAlpha * 0.5) + ")";
+            introCtx.fill();
+          }
+        }
+
+        for (let i = 1; i < reveal; i++) {
+          const a = points[i - 1];
+          const b = points[i];
+          const mid = i / total;
+          const bulge = Math.sin(mid * Math.PI) * 0.18;
+          const lineWidth = Math.max(0.65, (b.width + bulge * b.width) * innerRadius * 0.04);
+          const jitterX = Math.sin(i * 0.19 + time * 0.08) * innerRadius * 0.0035;
+          const jitterY = Math.cos(i * 0.17 + time * 0.07) * innerRadius * 0.0035;
+          const alphaBase = 0.22 + 0.56 * clamp(progress * 1.15, 0, 1);
+          const tailFade = 1 - Math.pow(mid, 3) * 0.22;
+
+          introCtx.beginPath();
+          introCtx.moveTo(a.x + jitterX, a.y + jitterY);
+          introCtx.lineTo(b.x + jitterX, b.y + jitterY);
+          introCtx.strokeStyle = "rgba(238,246,255," + (alphaBase * tailFade) + ")";
+          introCtx.lineWidth = lineWidth;
+          introCtx.lineCap = "round";
+          introCtx.lineJoin = "round";
+          introCtx.shadowBlur = 8 + lineWidth * 1.5;
+          introCtx.shadowColor = "rgba(255,255,255," + (alphaBase * 0.34) + ")";
+          introCtx.stroke();
+        }
+
+        if (progress > 0.08) {
+          const highlightIndex = Math.min(total - 1, Math.floor(total * progress));
+          const highlightPoint = points[highlightIndex];
+          const glow = introCtx.createRadialGradient(highlightPoint.x, highlightPoint.y, 0, highlightPoint.x, highlightPoint.y, innerRadius * 0.28);
+          glow.addColorStop(0, "rgba(255,255,255," + (0.12 * progress) + ")");
+          glow.addColorStop(0.45, "rgba(225,238,250," + (0.06 * progress) + ")");
+          glow.addColorStop(1, "rgba(255,255,255,0)");
+          introCtx.globalCompositeOperation = "screen";
+          introCtx.fillStyle = glow;
+          introCtx.beginPath();
+          introCtx.arc(highlightPoint.x, highlightPoint.y, innerRadius * 0.26, 0, Math.PI * 2);
+          introCtx.fill();
+          introCtx.globalCompositeOperation = "source-over";
+        }
+
+        introCtx.restore();
+      }
+
+      function drawLogogram(logogram, radius, alpha, time, index, appear) {
+        if (appear <= 0) return;
+        const breatheX = 1 + Math.sin(time * 0.18 + index * 1.1) * 0.012;
+        const breatheY = 1 + Math.cos(time * 0.14 + index * 0.9) * 0.012;
+        const baseAlpha = alpha * appear;
+
+        introCtx.save();
+        introCtx.rotate(logogram.globalRot + time * 0.04 * (index % 2 === 0 ? 1 : -1) * 0.5);
+        introCtx.scale(logogram.ellipseX * breatheX, logogram.ellipseY * breatheY);
+
+        for (const arc of logogram.arcs) {
+          const segments = 32;
+          const revealEnd = arc.start + arc.span * easeOutCubic(appear);
+          const step = arc.span / segments;
+          for (let s = 0; s < segments; s++) {
+            const t0 = arc.start + s * step;
+            if (t0 > revealEnd) break;
+            const t1 = Math.min(t0 + step, revealEnd);
+            const mid = (s + 0.5) / segments;
+            const pressure = Math.sin(mid * Math.PI) * arc.thick;
+            const lineWidth = Math.max(0.4, pressure * (radius * 0.062));
+            const wobble = Math.sin(t0 * 4.5 + time * 0.3 + index) * radius * 0.018;
+
+            introCtx.beginPath();
+            for (let tt = t0; tt <= t1 + 0.001; tt += 0.06) {
+              const warp = wobble * Math.sin(tt * 3.2 + time * 0.2);
+              const rr = radius + warp;
+              const x = Math.cos(tt) * rr;
+              const y = Math.sin(tt) * rr;
+              if (tt === t0) introCtx.moveTo(x, y);
+              else introCtx.lineTo(x, y);
+            }
+            introCtx.strokeStyle = "rgba(232,242,250," + (baseAlpha * (0.62 + pressure * 0.08)) + ")";
+            introCtx.lineWidth = lineWidth;
+            introCtx.shadowBlur = 8 + pressure * 4;
+            introCtx.shadowColor = "rgba(255,255,255," + (baseAlpha * 0.28) + ")";
+            introCtx.lineCap = "round";
+            introCtx.stroke();
+          }
+        }
+
+        const dotReveal = clamp((appear - 0.55) / 0.35, 0, 1);
+        if (dotReveal > 0) {
+          for (const dot of logogram.dots) {
+            const dotRadius = dot.dr * radius * 0.82;
+            introCtx.beginPath();
+            introCtx.arc(Math.cos(dot.da) * dotRadius, Math.sin(dot.da) * dotRadius, dot.ds * radius, 0, Math.PI * 2);
+            introCtx.fillStyle = "rgba(235,244,255," + (baseAlpha * dotReveal * 0.58) + ")";
+            introCtx.shadowBlur = 12;
+            introCtx.shadowColor = "rgba(255,255,255," + (baseAlpha * 0.38) + ")";
+            introCtx.fill();
+          }
+        }
+
+        introCtx.restore();
+      }
+
+      function buildRingPoints(steps, time) {
+        const points = [];
+        for (let i = 0; i <= steps; i++) {
+          const angle = (Math.PI * 2 * i) / steps;
+          const warp = Math.sin(angle * 3 + time * 0.7) * 4.5
+            + Math.sin(angle * 7 - time * 0.55) * 2.2
+            + Math.cos(angle * 11 + time * 0.28) * 1.0;
+          points.push({ x: Math.cos(angle) * (baseRadius + warp), y: Math.sin(angle) * (baseRadius + warp), a: angle });
+        }
+        return points;
+      }
+
+      const GLYPH_COUNT = 14;
+      const logograms = Array.from({ length: GLYPH_COUNT }, (_, index) => buildLogogram(index));
+
+      function drawFilledCore(progress, time) {
+        const fillProgress = clamp((progress - 0.18) / 0.82, 0, 1);
+        if (fillProgress <= 0) return;
+
+        const revealedAngle = Math.PI * 2 * easeOutCubic(fillProgress);
+        const points = buildRingPoints(220, time);
+        introCtx.save();
+        introCtx.translate(cx, cy);
+        const alpha = 0.020 + fillProgress * 0.085;
+        const radial = introCtx.createRadialGradient(0, 0, 6, 0, 0, baseRadius * 1.05);
+        radial.addColorStop(0, "rgba(255,255,255," + (alpha * 1.1) + ")");
+        radial.addColorStop(0.35, "rgba(220,235,246," + (alpha * 0.72) + ")");
+        radial.addColorStop(0.8, "rgba(180,210,235," + (alpha * 0.34) + ")");
+        radial.addColorStop(1, "rgba(120,160,190,0)");
+        introCtx.fillStyle = radial;
+        introCtx.beginPath();
+        introCtx.moveTo(0, 0);
+        for (const point of points) {
+          if (point.a <= revealedAngle) introCtx.lineTo(point.x, point.y);
+        }
+        introCtx.closePath();
+        introCtx.fill();
+        introCtx.restore();
+      }
+
+      function strokeRing(progress, time) {
+        const drawAmount = clamp(progress / 0.9, 0, 1);
+        introCtx.save();
+        introCtx.translate(cx, cy);
+        introCtx.lineCap = "round";
+        introCtx.lineJoin = "round";
+        introCtx.shadowBlur = 18;
+        introCtx.shadowColor = "rgba(255,255,255,0.24)";
+        introCtx.strokeStyle = "rgba(236,243,250," + (0.10 + drawAmount * 0.72) + ")";
+        introCtx.lineWidth = 2.2;
+        introCtx.beginPath();
+        const maxAngle = Math.PI * 2 * drawAmount;
+        for (let angle = 0; angle <= maxAngle; angle += 0.025) {
+          const warp = Math.sin(angle * 3 + time * 0.7) * 5
+            + Math.sin(angle * 7 - time * 0.55) * 2.4
+            + Math.cos(angle * 11 + time * 0.28) * 1.2;
+          const radius = baseRadius + warp;
+          if (angle === 0) introCtx.moveTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+          else introCtx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+        }
+        introCtx.stroke();
+        introCtx.restore();
+      }
+
+      function drawOrbitDots(progress, time) {
+        if (progress < 0.6) return;
+        introCtx.save();
+        for (let i = 0; i < 16; i++) {
+          const angle = (Math.PI * 2 / 16) * i + time * 0.05;
+          const radius = baseRadius + 16 + Math.sin(time * 1.2 + i) * 5;
+          const alpha = 0.08 + Math.sin(time * 3 + i) * 0.04 + (progress - 0.6) * 0.4;
+          introCtx.beginPath();
+          introCtx.arc(cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, 1.5 + (i % 3) * 0.4, 0, Math.PI * 2);
+          introCtx.fillStyle = "rgba(255,255,255," + alpha + ")";
+          introCtx.shadowBlur = 12;
+          introCtx.shadowColor = "rgba(255,255,255,0.3)";
+          introCtx.fill();
+        }
+        introCtx.restore();
+      }
+
+      function drawSignal(progress, time) {
+        const glowAlpha = clamp((progress - 0.08) / 0.92, 0, 1) * 0.22;
+        introCtx.save();
+        const radial = introCtx.createRadialGradient(cx, cy, 10, cx, cy, baseRadius * 1.75);
+        radial.addColorStop(0, "rgba(180,210,255," + (glowAlpha * 0.75) + ")");
+        radial.addColorStop(0.45, "rgba(140,180,255," + (glowAlpha * 0.30) + ")");
+        radial.addColorStop(1, "rgba(0,0,0,0)");
+        introCtx.fillStyle = radial;
+        introCtx.beginPath();
+        introCtx.arc(cx, cy, baseRadius * 1.75, 0, Math.PI * 2);
+        introCtx.fill();
+        introCtx.restore();
+
+        drawFilledCore(progress, time);
+        const innerProgress = clamp((progress - 0.18) / 0.82, 0, 1);
+        drawContinuousS(baseRadius * 0.78, innerProgress, time);
+        strokeRing(progress, time);
+
+        for (let i = 0; i < GLYPH_COUNT; i++) {
+          const localAppear = clamp((progress - 0.14 - i * 0.03) / 0.55, 0, 1);
+          if (localAppear <= 0) continue;
+          const appear = easeOutCubic(localAppear);
+          const angle = (Math.PI * 2 / GLYPH_COUNT) * i + 0.1;
+          const drift = Math.sin(time * 0.15 + i * 0.7) * 0.08;
+          const actualAngle = angle + drift;
+          const orbitRadius = baseRadius + 10 + Math.sin(i * 0.7 + time * 0.28) * 3;
+
+          introCtx.save();
+          introCtx.translate(cx + Math.cos(actualAngle) * orbitRadius, cy + Math.sin(actualAngle) * orbitRadius);
+          introCtx.rotate(actualAngle + Math.PI / 2);
+          drawLogogram(logograms[i], baseRadius * (0.30 + (i % 3) * 0.04), 0.18 + appear * 0.62, time, i, appear);
+          introCtx.restore();
+        }
+
+        drawOrbitDots(progress, time);
+      }
+
+      function drawFloorReflection(time, onFactor) {
+        const top = h * 0.78;
+        const gradient = introCtx.createLinearGradient(0, top, 0, h);
+        gradient.addColorStop(0, "rgba(255,255,255,0)");
+        gradient.addColorStop(1, "rgba(255,255,255," + (0.04 + onFactor * 0.055) + ")");
+        introCtx.fillStyle = gradient;
+        introCtx.beginPath();
+        introCtx.ellipse(w * 0.5, h * 0.88, Math.min(340, w * 0.22), 30, 0, 0, Math.PI * 2);
+        introCtx.fill();
+      }
+
+      function setLampIntensity(level) {
+        const clamped = clamp(level, 0, 1);
+        const base = 86 + Math.round(clamped * 164);
+        introLogo.style.color = "rgb(" + base + "," + (base + 5) + "," + (base + 10) + ")";
+        introLogo.style.opacity = String(0.46 + clamped * 0.54);
+        introLogo.style.filter = "brightness(" + (0.58 + clamped * 0.50) + ")";
+        introLogo.style.textShadow = clamped < 0.2
+          ? "none"
+          : "0 0 " + (8 + clamped * 10) + "px rgba(255,255,255," + (0.16 + clamped * 0.26) + "), 0 0 " + (14 + clamped * 22) + "px rgba(190,220,255," + (0.08 + clamped * 0.16) + ")";
+      }
+
+      const flickers = [
+        { t: 4.32, v: 0.2 },
+        { t: 4.52, v: 0.78 },
+        { t: 4.68, v: 0.08 },
+        { t: 4.92, v: 0.56 },
+        { t: 5.12, v: 0.22 },
+        { t: 5.36, v: 1.0 }
+      ];
+
+      function lampLevel(elapsed) {
+        let level = 0;
+        if (elapsed < 4.2) return 0;
+        for (const flicker of flickers) {
+          if (elapsed >= flicker.t) level = flicker.v;
+        }
+        return level;
+      }
+
+      function drawMenuStars(time) {
+        menuCtx.clearRect(0, 0, sw, sh);
+
+        const background = menuCtx.createLinearGradient(0, 0, 0, sh);
+        background.addColorStop(0, "#04070b");
+        background.addColorStop(0.52, "#08111d");
+        background.addColorStop(1, "#05070c");
+        menuCtx.fillStyle = background;
+        menuCtx.fillRect(0, 0, sw, sh);
+
+        const nebula = menuCtx.createRadialGradient(sw * 0.5, sh * 0.38, 0, sw * 0.5, sh * 0.38, Math.min(sw, sh) * 0.42);
+        nebula.addColorStop(0, "rgba(90,130,190,0.10)");
+        nebula.addColorStop(0.45, "rgba(70,100,150,0.05)");
+        nebula.addColorStop(1, "rgba(0,0,0,0)");
+        menuCtx.fillStyle = nebula;
+        menuCtx.fillRect(0, 0, sw, sh);
+
+        for (const star of stars) {
+          star.y += star.speed * star.z;
+          if (star.y > sh + 4) {
+            star.y = -4;
+            star.x = Math.random() * sw;
+          }
+          const pulse = 0.82 + Math.sin(time * 0.001 + star.x * 0.01) * 0.18;
+          menuCtx.beginPath();
+          menuCtx.arc(star.x, star.y, star.size * star.z, 0, Math.PI * 2);
+          menuCtx.fillStyle = "rgba(255,255,255," + (star.alpha * pulse) + ")";
+          menuCtx.fill();
+        }
+      }
+
+      function animateMenu() {
+        if (!menuVisible) return;
+        drawMenuStars(performance.now());
+        requestAnimationFrame(animateMenu);
+      }
+
+      function showMenu() {
+        if (menuVisible) return;
+        introScreen.classList.add("hidden");
+        menuScreen.classList.add("show");
+        if (audioPrompt) audioPrompt.classList.remove("visible");
+        menuVisible = true;
+        drawMenuStars(performance.now());
+        animateMenu();
+        startButton.focus({ preventScroll: true });
+      }
+
+      function finishIntro() {
+        if (introFinished) return;
+        introFinished = true;
+        showMenu();
+      }
+
+      function renderIntro(now) {
+        if (introFinished) return;
+        if (!introAnimationStarted) {
+          introCtx.clearRect(0, 0, w, h);
+          return;
+        }
+        const elapsed = (now - introAnimationStart) / 1000;
+        const revealProgress = clamp(elapsed / 4.8, 0, 1);
+        const onFactor = lampLevel(elapsed);
+
+        introCtx.clearRect(0, 0, w, h);
+        drawSignal(revealProgress, elapsed);
+        drawFloorReflection(elapsed, onFactor);
+        setLampIntensity(onFactor);
+
+        if (onFactor >= 1 && !introOn) {
+          introScreen.classList.add("on");
+          introHint.style.opacity = "0.22";
+          introOn = true;
+        }
+
+        if (elapsed > 10.5) {
+          finishIntro();
+          return;
+        }
+
+        requestAnimationFrame(renderIntro);
+      }
+
+      function skipIntro() {
+        if (introFinished) return;
+        tryPlayIntroAudio();
+        startIntroAnimation();
+        introScreen.classList.add("on");
+        setLampIntensity(1);
+        introHint.style.opacity = "0.22";
+        setTimeout(finishIntro, 220);
+      }
+
+      function enterGame() {
+        const selectedDifficulty = (difficultyEls.find((el) => el.checked) || { value: "normal" }).value;
+        playMenuClick();
+        menuScreen.classList.add("leaving");
+        transitionMask.classList.add("show");
+        fadeOutAudio(420);
+        setTimeout(() => {
+          window.location.href = "./index.html?autostart=play&difficulty=" + encodeURIComponent(selectedDifficulty);
+        }, 620);
+      }
+
+      introScreen.addEventListener("click", skipIntro);
+      window.addEventListener("keydown", (event) => {
+        if (event.code === "Space" || event.code === "Enter" || event.code === "Escape") {
+          skipIntro();
+        }
+      });
+      startButton.addEventListener("click", enterGame);
+      startButton.addEventListener("mouseenter", playMenuHover);
+      startButton.addEventListener("focus", playMenuHover);
+      for (const option of menuDifficultyOptions) {
+        option.addEventListener("mouseenter", playMenuHover);
+      }
+      for (const difficultyEl of difficultyEls) {
+        difficultyEl.addEventListener("change", () => {
+          if (difficultyEl.checked) playMenuClick();
+        });
+      }
+      window.addEventListener("pointerdown", () => {
+        tryPlayIntroAudio();
+        if (audioBlocked && audioPrompt && !menuVisible) {
+          audioPrompt.classList.remove("visible");
+        }
+      }, { passive: true });
+      window.addEventListener("keydown", () => {
+        tryPlayIntroAudio();
+        if (audioBlocked && audioPrompt && !menuVisible) {
+          audioPrompt.classList.remove("visible");
+        }
+      }, { passive: true });
+      window.addEventListener("resize", () => {
+        resizeIntro();
+        resizeMenu();
+      });
+
+      resizeIntro();
+      resizeMenu();
+      introAudio.load();
+      introStartFallbackTimer = setTimeout(startIntroAnimation, 650);
+      tryPlayIntroAudio();
+    });
+  </script>
+</body>
+</html>

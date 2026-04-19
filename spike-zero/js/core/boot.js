@@ -17,6 +17,14 @@ window.Boot = (() => {
     return value === "easy" ? "easy" : "normal";
   }
 
+  function getLaunchOptions() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      autostartPlay: params.get("autostart") === "play",
+      difficulty: normalizeDifficulty(params.get("difficulty") || S.difficulty || "normal")
+    };
+  }
+
   function resetAll(options=false){
     const testMode = typeof options === "boolean" ? options : !!options.testMode;
     const practiceMode = typeof options === "object" && options
@@ -512,10 +520,17 @@ window.Boot = (() => {
       }
     });
 
+    const launchOptions = getLaunchOptions();
     UI.populateBossOptions();
-    UI.showCard("start");
     ActiveSkillSystem.assignStartingLoadout(false);
     UI.hudUpdate();
+
+    if (launchOptions.autostartPlay) {
+      S.difficulty = launchOptions.difficulty;
+      resetAll({ difficulty: launchOptions.difficulty });
+    } else {
+      UI.showCard("start");
+    }
 
     S.app.ticker.add(tick);
     window.addEventListener("resize", resize);
