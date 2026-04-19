@@ -13,6 +13,10 @@ window.Boot = (() => {
     return Math.min(maxStage, Math.max(1, Math.floor(stageId || 1)));
   }
 
+  function normalizeDifficulty(value) {
+    return value === "easy" ? "easy" : "normal";
+  }
+
   function resetAll(options=false){
     const testMode = typeof options === "boolean" ? options : !!options.testMode;
     const practiceMode = typeof options === "object" && options
@@ -23,6 +27,9 @@ window.Boot = (() => {
     const practiceStageDurationSec = typeof options === "object" && options
       ? Math.max(10, Math.floor(options.practiceStageDurationSec || S.practiceStageDurationSec || 180))
       : Math.max(10, Math.floor(S.practiceStageDurationSec || 180));
+    const difficulty = typeof options === "object" && options
+      ? normalizeDifficulty(options.difficulty || S.difficulty || "normal")
+      : normalizeDifficulty(S.difficulty || "normal");
     if (window.DialogueSystem) DialogueSystem.cancel();
     if (window.UI) UI.resetDialogueLog();
     if (window.BgmSystem) BgmSystem.stopAll();
@@ -74,6 +81,7 @@ window.Boot = (() => {
     S.stats.practiceMode = practiceMode;
     S.practiceStageId = practiceStageId;
     S.practiceStageDurationSec = practiceStageDurationSec;
+    S.difficulty = difficulty;
 
     S.progression.score = 0;
     S.progression.combo = 1;
@@ -465,12 +473,12 @@ window.Boot = (() => {
     bindInput();
 
     UI.bindButtons({
-      onStart: ()=>{ primeAudioSystems(); resetAll(false); },
+      onStart: ()=>{ primeAudioSystems(); resetAll({ difficulty:S.difficulty || "normal" }); },
       onPracticeBoss: ()=>{ primeAudioSystems(); resetAll({ testMode:true, practiceMode:"boss" }); },
       onPracticeStage: ()=>{ primeAudioSystems(); resetAll({ testMode:true, practiceMode:"stage", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 }); },
       onRetry: ()=>{ primeAudioSystems(); resetAll(S.stats.practice
-        ? { testMode:true, practiceMode:S.stats.practiceMode || "boss", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 }
-        : false); },
+        ? { testMode:true, practiceMode:S.stats.practiceMode || "boss", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180, difficulty:S.difficulty || "normal" }
+        : { difficulty:S.difficulty || "normal" }); },
       onBack: ()=>{
         if (window.DialogueSystem) DialogueSystem.cancel();
         UI.resetDialogueLog();
@@ -488,6 +496,10 @@ window.Boot = (() => {
         primeAudioSystems();
         if (mode === "boss") resetAll({ testMode:true, practiceMode:"boss" });
         if (mode === "stage") resetAll({ testMode:true, practiceMode:"stage", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 });
+      },
+      onDifficultyChange: (difficulty) => {
+        S.difficulty = normalizeDifficulty(difficulty);
+        UI.hudUpdate();
       },
       onApplyStageTest: ({ stageId, durationSec }) => {
         primeAudioSystems();

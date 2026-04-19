@@ -10,9 +10,26 @@ window.WaveSystem = (() => {
     return sec * 60;
   }
 
+  function getWaveCountMultiplier() {
+    if (GameState.stats.practice) return 1;
+    return GameState.difficulty === "easy" ? 0.75 : 1;
+  }
+
   function resumeCombat() {
     GameState.progression.waveState = "running";
     UI.hudUpdate();
+  }
+
+  function beginStageCombat(stage = 1) {
+    const startCombat = () => {
+      startNextWave();
+      resumeCombat();
+    };
+    if (!window.UI || !UI.showStageStart) {
+      startCombat();
+      return;
+    }
+    UI.showStageStart(stage, { durationMs: 2665, exitDelayMs: 235 }).then(startCombat);
   }
 
   function startStage(stage = 1, options = {}){
@@ -26,13 +43,11 @@ window.WaveSystem = (() => {
     P.wave = 1;
     const shouldSkipDialogue = options.skipDialogue || (GameState.stats.practice && GameState.stats.practiceMode === "boss");
     if (shouldSkipDialogue || !window.DialogueSystem) {
-      startNextWave();
-      resumeCombat();
+      beginStageCombat(P.stage);
       return;
     }
     DialogueSystem.playStageIntro(P.stage, () => {
-      startNextWave();
-      resumeCombat();
+      beginStageCombat(P.stage);
     });
   }
 
@@ -98,7 +113,8 @@ window.WaveSystem = (() => {
   function startNextWave(){
     const P = GameState.progression;
     P.stageState = P.stageState === "boss" ? "boss" : "combat";
-    P.waveTarget = 10 + Math.floor(P.wave * 3.1);
+    const baseTarget = 10 + Math.floor(P.wave * 3.1);
+    P.waveTarget = Math.max(6, Math.floor(baseTarget * getWaveCountMultiplier()));
     P.waveAlive = 0;
     P.spawnT = 0;
     P.spawnedCount = 0;

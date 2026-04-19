@@ -23,6 +23,9 @@ window.UI = (() => {
   const upgradeCard = document.getElementById("upgradeCard");
   const gameOverCard = document.getElementById("gameOverCard");
   const stageClearCard = document.getElementById("stageClearCard");
+  const stageStartCard = document.getElementById("stageStartCard");
+  const stageStartTitle = document.getElementById("stageStartTitle");
+  const stageStartSubtitle = document.getElementById("stageStartSubtitle");
   const stageClearLabel = document.getElementById("stageClearLabel");
   const nextStageBtn = document.getElementById("btnNextStage");
   const upgradeGrid = document.getElementById("upgradeGrid");
@@ -31,6 +34,7 @@ window.UI = (() => {
   const activeSlotEls = [...document.querySelectorAll(".activeSlot")];
   const weaponRadioEls = [...document.querySelectorAll("input[name='weaponType']")];
   const practiceTypeEls = [...document.querySelectorAll("input[name='practiceType']")];
+  const difficultyEls = [...document.querySelectorAll("input[name='difficulty']")];
   const weaponHud = document.getElementById("weaponHud");
   const bossSelect = document.getElementById("bossSelect");
   const spawnBossBtn = document.getElementById("btnSpawnBoss");
@@ -50,6 +54,9 @@ window.UI = (() => {
   const dialogueLog = document.getElementById("dialogueLog");
   let skillMapState = null;
   let pendingStageClearResolve = null;
+  let pendingStageStartResolve = null;
+  let stageStartTimer = null;
+  let stageStartAnimation = null;
 
   function getCharacterProfile(characterId) {
     const profiles = window.CHARACTER_PROFILES || {};
@@ -126,6 +133,7 @@ window.UI = (() => {
     $weaponName.textContent = weaponDef ? weaponDef.name : "-";
     $weaponLevel.textContent = "Type Shift";
     for (const radio of weaponRadioEls) radio.checked = radio.value === S.weaponState.current;
+    for (const radio of difficultyEls) radio.checked = radio.value === (S.difficulty || "normal");
     weaponHud.style.display = S.stats.practice ? "block" : "none";
     const isBossTest = S.stats.practice && S.stats.practiceMode === "boss";
     const isStageTest = S.stats.practice && S.stats.practiceMode === "stage";
@@ -301,6 +309,7 @@ window.UI = (() => {
     upgradeCard.style.display = which === "upgrade" ? "block" : "none";
     gameOverCard.style.display = which === "over" ? "block" : "none";
     if (stageClearCard) stageClearCard.style.display = which === "clear" ? "block" : "none";
+    if (stageStartCard) stageStartCard.style.display = "none";
     overlayRoot.style.display = which ? "flex" : "none";
   }
 
@@ -350,6 +359,56 @@ window.UI = (() => {
     pendingStageClearResolve = null;
     showCard(null);
     resolve();
+  }
+
+  function resolveStageStart() {
+    if (stageStartTimer) {
+      clearTimeout(stageStartTimer);
+      stageStartTimer = null;
+    }
+    if (stageStartAnimation) {
+      stageStartAnimation.cancel();
+      stageStartAnimation = null;
+    }
+    if (stageStartCard) stageStartCard.style.display = "none";
+    if (!startCard || startCard.style.display === "none") overlayRoot.style.display = "none";
+    if (!pendingStageStartResolve) return;
+    const resolve = pendingStageStartResolve;
+    pendingStageStartResolve = null;
+    resolve();
+  }
+
+  function showStageStart(stage = 1, options = {}) {
+    const durationMs = Math.max(1200, Number(options.durationMs) || 2665);
+    const exitDelayMs = Math.max(0, Number(options.exitDelayMs) || 235);
+    if (!stageStartCard || !overlayRoot) return Promise.resolve();
+    if (pendingStageStartResolve) resolveStageStart();
+    if (stageStartTitle) stageStartTitle.textContent = `Stage ${stage} Start`;
+    if (stageStartSubtitle) stageStartSubtitle.textContent = options.subtitle || "Combat zone opening.";
+    startCard.style.display = "none";
+    upgradeCard.style.display = "none";
+    gameOverCard.style.display = "none";
+    if (stageClearCard) stageClearCard.style.display = "none";
+    overlayRoot.style.display = "flex";
+    stageStartCard.style.display = "block";
+    stageStartAnimation = stageStartCard.animate(
+      [
+        { opacity: 0, transform: "translateY(28px) scale(0.94)", filter: "blur(12px)" },
+        { opacity: 1, transform: "translateY(0) scale(1)", filter: "blur(0px)", offset: 0.26 },
+        { opacity: 1, transform: "translateY(0) scale(1)", filter: "blur(0px)", offset: 0.66 },
+        { opacity: 0, transform: "translateY(-14px) scale(1.015)", filter: "blur(6px)" }
+      ],
+      {
+        duration: durationMs,
+        easing: "cubic-bezier(0.22, 1, 0.36, 1)",
+        fill: "both"
+      }
+    );
+    if (window.SoundSystem) SoundSystem.play("ui_hover", { playbackRate: 0.9, volume: 0.2, cooldownMs: 0 });
+    return new Promise((resolve) => {
+      pendingStageStartResolve = resolve;
+      stageStartTimer = setTimeout(resolveStageStart, durationMs + exitDelayMs);
+    });
   }
 
   function showStageClear(stage = 1, options = {}) {
@@ -468,7 +527,7 @@ window.UI = (() => {
     }
   }
 
-  function bindButtons({ onStart, onPracticeBoss, onPracticeStage, onRetry, onBack, onBossChange, onSpawnBoss, onPracticeTypeChange, onApplyStageTest }) {
+  function bindButtons({ onStart, onPracticeBoss, onPracticeStage, onRetry, onBack, onBossChange, onSpawnBoss, onPracticeTypeChange, onApplyStageTest, onDifficultyChange }) {
     document.getElementById("btnStart").onclick = onStart;
     document.getElementById("btnPracticeBoss").onclick = onPracticeBoss;
     document.getElementById("btnPracticeStage").onclick = onPracticeStage;
@@ -484,6 +543,11 @@ window.UI = (() => {
     for (const radio of practiceTypeEls){
       radio.onchange = () => {
         if (radio.checked && onPracticeTypeChange) onPracticeTypeChange(radio.value);
+      };
+    }
+    for (const radio of difficultyEls){
+      radio.onchange = () => {
+        if (radio.checked && onDifficultyChange) onDifficultyChange(radio.value);
       };
     }
     if (closeSkillMapBtn) closeSkillMapBtn.onclick = closeSkillMapPanel;
@@ -511,6 +575,7 @@ window.UI = (() => {
     showGameOver,
     triggerBossWarning,
     playBossWarning,
+    showStageStart,
     showStageClear,
     openDialogueOverlay,
     createDialogueCard,

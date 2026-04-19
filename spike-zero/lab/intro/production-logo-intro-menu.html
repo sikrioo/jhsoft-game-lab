@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JhSoft Intro + Main Menu</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400&display=swap" rel="stylesheet">
+  <style>
+    *{box-sizing:border-box}
+    html,body{
+      margin:0;width:100%;height:100%;overflow:hidden;background:#000;
+      font-family:'Cormorant Garamond',Georgia,serif;
+    }
+    body{color:white;user-select:none;}
+
+    #intro{
+      position:relative;width:100vw;height:100vh;
+      background:linear-gradient(to bottom,#010101 0%,#020305 100%);
+      overflow:hidden;cursor:pointer;
+    }
+    #grain,#vignette,#scan{position:absolute;inset:0;pointer-events:none;}
+    #grain{
+      opacity:.055;
+      background-image:radial-gradient(circle,rgba(255,255,255,.6) 0.7px,transparent 1px);
+      background-size:8px 8px;mix-blend-mode:screen;
+      animation:grainShift .35s steps(2) infinite;
+    }
+    #scan{
+      opacity:.06;
+      background:repeating-linear-gradient(to bottom,
+        rgba(255,255,255,.07) 0px,rgba(255,255,255,.07) 1px,
+        transparent 2px,transparent 4px);
+    }
+    #vignette{
+      background:radial-gradient(circle at center,transparent 40%,
+        rgba(0,0,0,.45) 72%,rgba(0,0,0,.90) 100%);
+    }
+    #signalCanvas{
+      position:absolute;inset:0;width:100%;height:100%;display:block;filter:blur(.1px);
+    }
+    #centerGlow{
+      position:absolute;left:50%;top:39%;
+      width:min(44vw,460px);height:min(44vw,460px);
+      transform:translate(-50%,-50%);border-radius:50%;
+      background:radial-gradient(circle,rgba(210,235,255,.07) 0%,rgba(160,205,255,.04) 28%,
+        rgba(130,180,255,.02) 45%,transparent 70%);
+      opacity:0;transition:opacity 1.2s ease;pointer-events:none;
+    }
+    #signWrap{
+      position:absolute;left:50%;bottom:10vh;transform:translateX(-50%);
+      width:min(62vw,580px);max-width:88vw;pointer-events:none;text-align:center;
+    }
+    #signPlate{
+      position:relative;min-height:110px;border-radius:20px;
+      background:linear-gradient(to bottom,rgba(255,255,255,.018),rgba(255,255,255,.032));
+      border:1px solid rgba(255,255,255,.07);
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.018),0 14px 50px rgba(0,0,0,.44);
+      display:flex;flex-direction:column;align-items:center;justify-content:center;
+      padding:22px 36px 28px;overflow:hidden;
+    }
+    #signPlate::before{
+      content:"";position:absolute;inset:0;
+      background:linear-gradient(90deg,transparent 0%,rgba(255,255,255,.08) 50%,transparent 100%);
+      transform:translateX(-120%);opacity:0;
+    }
+    #logo{
+      font-weight:300;font-size:clamp(46px,7.5vw,90px);
+      letter-spacing:.22em;text-transform:uppercase;
+      color:#52606a;text-shadow:none;opacity:.55;
+      transition:color .14s linear,text-shadow .14s linear,opacity .14s linear,filter .14s linear;
+      filter:brightness(.52);
+    }
+    #subtitle{
+      margin-top:10px;font-size:11px;letter-spacing:.42em;
+      color:rgba(255,255,255,.22);white-space:nowrap;text-transform:uppercase;font-weight:300;
+    }
+    #logoline{
+      position:absolute;top:-22px;left:50%;transform:translateX(-50%);
+      font-size:9px;letter-spacing:.28em;color:rgba(255,255,255,.18);
+      white-space:nowrap;text-transform:uppercase;opacity:0;transition:opacity 1s ease;
+    }
+    #hint{
+      position:absolute;left:50%;bottom:18px;transform:translateX(-50%);
+      color:rgba(255,255,255,.32);font-size:11px;letter-spacing:.22em;text-transform:uppercase;opacity:.7;
+    }
+    .on #centerGlow{opacity:1;}
+    .on #logo{
+      color:#eef2f6;opacity:1;filter:brightness(1.06);
+      text-shadow:0 0 10px rgba(255,255,255,.68),0 0 22px rgba(255,255,255,.36),0 0 52px rgba(190,220,255,.22);
+    }
+    .on #signPlate{
+      border-color:rgba(255,255,255,.16);
+      box-shadow:inset 0 0 0 1px rgba(255,255,255,.03),0 0 22px rgba(255,255,255,.06),0 14px 50px rgba(0,0,0,.48);
+    }
+    .on #signPlate::before{opacity:1;animation:sweep .85s ease-out 1;}
+    .on #logoline{opacity:1;}
+    .skipFlash{animation:whiteOut .48s ease-out forwards;}
+
+    #mainMenu{
+      position:absolute;
+      inset:0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      opacity:0;
+      pointer-events:none;
+      transition:opacity .9s ease;
+      background:
+        radial-gradient(circle at 50% 40%, rgba(40,58,84,.18), transparent 28%),
+        radial-gradient(circle at 50% 75%, rgba(255,255,255,.03), transparent 30%),
+        linear-gradient(to bottom, #030507 0%, #070b12 52%, #04060a 100%);
+    }
+    #mainMenu.show{
+      opacity:1;
+      pointer-events:auto;
+    }
+    #starCanvas{
+      position:absolute;
+      inset:0;
+      width:100%;
+      height:100%;
+      display:block;
+      opacity:.95;
+    }
+    #menuVignette{
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      background:
+        radial-gradient(circle at center, transparent 36%, rgba(0,0,0,.28) 68%, rgba(0,0,0,.72) 100%);
+    }
+    #menuPanel{
+      position:relative;
+      z-index:2;
+      width:min(520px, 84vw);
+      padding:38px 34px 30px;
+      border-radius:24px;
+      background:linear-gradient(to bottom, rgba(255,255,255,.028), rgba(255,255,255,.018));
+      border:1px solid rgba(255,255,255,.10);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.05),
+        0 24px 80px rgba(0,0,0,.46);
+      backdrop-filter: blur(6px);
+      text-align:center;
+    }
+    #menuTopLine{
+      font-size:11px;
+      letter-spacing:.34em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.32);
+      margin-bottom:16px;
+    }
+    #gameTitle{
+      font-size:clamp(38px, 6vw, 68px);
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      font-weight:300;
+      color:rgba(243,247,252,.95);
+      text-shadow:
+        0 0 14px rgba(255,255,255,.10),
+        0 0 36px rgba(180,215,255,.08);
+      margin:0;
+      line-height:1.02;
+    }
+    #gameSubtitle{
+      margin-top:12px;
+      font-size:13px;
+      line-height:1.7;
+      letter-spacing:.08em;
+      color:rgba(255,255,255,.46);
+    }
+    #menuDivider{
+      width:72px;
+      height:1px;
+      margin:22px auto 26px;
+      background:linear-gradient(to right, transparent, rgba(255,255,255,.32), transparent);
+    }
+    #startButton{
+      appearance:none;
+      border:none;
+      border-radius:999px;
+      padding:16px 34px;
+      min-width:210px;
+      background:linear-gradient(to bottom, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      color:#f2f6fb;
+      font-size:15px;
+      letter-spacing:.28em;
+      text-transform:uppercase;
+      cursor:pointer;
+      border:1px solid rgba(255,255,255,.16);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.06),
+        0 10px 30px rgba(0,0,0,.34);
+      transition:transform .18s ease, box-shadow .18s ease, background .18s ease, border-color .18s ease;
+    }
+    #startButton:hover{
+      transform:translateY(-1px);
+      background:linear-gradient(to bottom, rgba(255,255,255,.13), rgba(255,255,255,.06));
+      border-color:rgba(255,255,255,.24);
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.08),
+        0 14px 40px rgba(0,0,0,.40),
+        0 0 24px rgba(180,220,255,.08);
+    }
+    #menuFooter{
+      margin-top:18px;
+      font-size:11px;
+      letter-spacing:.18em;
+      text-transform:uppercase;
+      color:rgba(255,255,255,.22);
+    }
+
+    @keyframes grainShift{
+      0%{transform:translate(0,0)}
+      25%{transform:translate(-2px,1px)}
+      50%{transform:translate(1px,-1px)}
+      75%{transform:translate(2px,1px)}
+      100%{transform:translate(0,0)}
+    }
+    @keyframes sweep{
+      from{transform:translateX(-120%)}
+      to{transform:translateX(120%)}
+    }
+    @keyframes whiteOut{
+      0%{filter:brightness(1);opacity:1}
+      100%{filter:brightness(1.8);opacity:0}
+    }
+  </style>
+</head>
+<body>
+<div id="intro">
+  <canvas id="signalCanvas"></canvas>
+  <div id="centerGlow"></div>
+  <div id="grain"></div>
+  <div id="scan"></div>
+  <div id="vignette"></div>
+  <div id="signWrap">
+    <div id="logoline">LOGOGRAM SEQUENCE 07 — DECODED</div>
+    <div id="signPlate">
+      <div id="logo">JhSoft</div>
+      <div id="subtitle">Unknown Signal Interface</div>
+    </div>
+  </div>
+  <div id="hint">click · space · enter to skip</div>
+</div>
+
+<div id="mainMenu" aria-label="Game Main Menu">
+  <canvas id="starCanvas"></canvas>
+  <div id="menuVignette"></div>
+  <div id="menuPanel">
+    <div id="menuTopLine">Arcade Flight Interface</div>
+    <h1 id="gameTitle">Star Drift</h1>
+    <div id="gameSubtitle">
+      Dark minimalist arcade shooter main menu.<br>
+      Enter the battlefield and begin the next sortie.
+    </div>
+    <div id="menuDivider"></div>
+    <button id="startButton" type="button">Start Game</button>
+    <div id="menuFooter">Press Start to continue</div>
+  </div>
+</div>
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+  const intro  = document.getElementById("intro");
+  const canvas = document.getElementById("signalCanvas");
+  const ctx    = canvas.getContext("2d");
+  const logo   = document.getElementById("logo");
+  const hint   = document.getElementById("hint");
+
+  const mainMenu = document.getElementById("mainMenu");
+  const starCanvas = document.getElementById("starCanvas");
+  const starCtx = starCanvas.getContext("2d");
+  const startButton = document.getElementById("startButton");
+  const menuFooter = document.getElementById("menuFooter");
+
+  let w=0,h=0,cx=0,cy=0,baseRadius=0;
+  let sw=0,sh=0;
+  let stars=[];
+  let menuVisible=false;
+  let dpr=Math.min(window.devicePixelRatio||1,2);
+  const start=performance.now();
+  let isOn=false,finished=false;
+
+  function resize(){
+    dpr=Math.min(window.devicePixelRatio||1,2);
+    w=window.innerWidth; h=window.innerHeight;
+    canvas.width=Math.floor(w*dpr); canvas.height=Math.floor(h*dpr);
+    canvas.style.width=w+"px"; canvas.style.height=h+"px";
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    cx=w*.5; cy=h*.38; baseRadius=Math.min(w,h)*.148;
+  }
+
+  function resizeStarfield(){
+    sw=window.innerWidth; sh=window.innerHeight;
+    starCanvas.width=Math.floor(sw*dpr);
+    starCanvas.height=Math.floor(sh*dpr);
+    starCanvas.style.width=sw+"px";
+    starCanvas.style.height=sh+"px";
+    starCtx.setTransform(dpr,0,0,dpr,0,0);
+
+    const starCount=Math.max(80,Math.floor((sw*sh)/12000));
+    if(stars.length!==starCount){
+      stars=Array.from({length:starCount},()=>({
+        x:Math.random()*sw,
+        y:Math.random()*sh,
+        z:0.2+Math.random()*0.8,
+        size:0.6+Math.random()*1.6,
+        alpha:0.15+Math.random()*0.55,
+        speed:0.08+Math.random()*0.35
+      }));
+    }
+  }
+
+  window.addEventListener("resize", () => {
+    resize();
+    resizeStarfield();
+  });
+  resize();
+  resizeStarfield();
+
+  function easeOutCubic(t){return 1-Math.pow(1-t,3);}
+  function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+  function seededRand(seed){
+    let s=seed;
+    return function(){
+      s=(s*1664525+1013904223)&0xffffffff;
+      return (s>>>0)/0xffffffff;
+    };
+  }
+
+  function buildLogogram(index){
+    const rng=seededRand(index*7919+31),r=()=>rng();
+    const ellipseX=0.88+r()*.22, ellipseY=0.88+r()*.22;
+    const globalRot=r()*Math.PI*2;
+    const arcCount=2+Math.floor(r()*3);
+    const arcs=[];let cursor=0;
+    for(let i=0;i<arcCount;i++){
+      const span=(Math.PI*2/arcCount)*(0.7+r()*.6);
+      arcs.push({start:cursor,span,thick:1.8+r()*2.4});
+      cursor+=span+r()*.22;
+    }
+    const spurCount=3+Math.floor(r()*6);
+    const spurs=[];
+    for(let i=0;i<spurCount;i++){
+      spurs.push({
+        angle:r()*Math.PI*2,
+        inward:r()>.5,
+        length:.22+r()*.52,
+        curve:(r()-.5)*.6,
+        endBlob:r()>.42,
+        thick:.8+r()*1.6
+      });
+    }
+    const dotCount=Math.floor(r()*5);
+    const dots=[];
+    for(let i=0;i<dotCount;i++) dots.push({da:r()*Math.PI*2,dr:r()*.72,ds:.04+r()*.12});
+    return{ellipseX,ellipseY,globalRot,arcs,spurs,dots};
+  }
+
+  const GLYPH_COUNT=14;
+  const logograms=Array.from({length:GLYPH_COUNT},(_,i)=>buildLogogram(i));
+
+  function drawLogogram(logoData,r,alpha,time,index,appear){
+    if(appear<=0)return;
+    const{ellipseX,ellipseY,globalRot,arcs,spurs,dots}=logoData;
+    const breatheX=1+Math.sin(time*.18+index*1.1)*.012;
+    const breatheY=1+Math.cos(time*.14+index*.9)*.012;
+    const baseAlpha=alpha*appear;
+    ctx.save();
+    ctx.rotate(globalRot+time*.04*(index%2===0?1:-1)*.5);
+    ctx.scale(ellipseX*breatheX,ellipseY*breatheY);
+
+    for(const arc of arcs){
+      const segments=32;
+      const revealEnd=arc.start+arc.span*easeOutCubic(appear);
+      const step=arc.span/segments;
+      for(let s=0;s<segments;s++){
+        const t0=arc.start+s*step;
+        if(t0>revealEnd)break;
+        const t1=Math.min(t0+step,revealEnd);
+        const mid=(s+.5)/segments;
+        const pressure=Math.sin(mid*Math.PI)*arc.thick;
+        const lw=Math.max(.4,pressure*(r*.062));
+        const wobble=Math.sin(t0*4.5+time*.3+index)*r*.018;
+        ctx.beginPath();
+        for(let tt=t0;tt<=t1+.001;tt+=.06){
+          const warp=wobble*Math.sin(tt*3.2+time*.2);
+          const rr=r+warp;
+          const x=Math.cos(tt)*rr,y=Math.sin(tt)*rr;
+          if(tt===t0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+        }
+        ctx.strokeStyle=`rgba(232,242,250,${baseAlpha*(.62+pressure*.08)})`;
+        ctx.lineWidth=lw;
+        ctx.shadowBlur=8+pressure*4;
+        ctx.shadowColor=`rgba(255,255,255,${baseAlpha*.28})`;
+        ctx.lineCap="round";
+        ctx.stroke();
+      }
+    }
+
+    const dotReveal=clamp((appear-.55)/.35,0,1);
+    if(dotReveal>0){
+      for(const dot of dots){
+        const dr=dot.dr*r*.82;
+        ctx.beginPath();
+        ctx.arc(Math.cos(dot.da)*dr,Math.sin(dot.da)*dr,dot.ds*r,0,Math.PI*2);
+        ctx.fillStyle=`rgba(235,244,255,${baseAlpha*dotReveal*.58})`;
+        ctx.shadowBlur=12;
+        ctx.shadowColor=`rgba(255,255,255,${baseAlpha*.38})`;
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function cubicPoint(p0, c1, c2, p1, t){
+    const mt = 1 - t;
+    return {
+      x: mt*mt*mt*p0.x + 3*mt*mt*t*c1.x + 3*mt*t*t*c2.x + t*t*t*p1.x,
+      y: mt*mt*mt*p0.y + 3*mt*mt*t*c1.y + 3*mt*t*t*c2.y + t*t*t*p1.y
+    };
+  }
+
+  function buildContinuousSPath(innerR){
+    const segments = [
+      {p0:{x:-0.42,y:-0.58}, c1:{x:-0.74,y:-0.44}, c2:{x:-0.66,y:-0.04}, p1:{x:-0.18,y:-0.08}, w0:3.2, w1:2.7},
+      {p0:{x:-0.18,y:-0.08}, c1:{x: 0.28,y:-0.12}, c2:{x: 0.54,y:-0.42}, p1:{x: 0.36,y:-0.62}, w0:2.7, w1:1.8},
+      {p0:{x: 0.36,y:-0.62}, c1:{x: 0.58,y:-0.26}, c2:{x: 0.26,y: 0.02}, p1:{x:-0.06,y: 0.10}, w0:1.8, w1:2.5},
+      {p0:{x:-0.06,y: 0.10}, c1:{x:-0.48,y: 0.18}, c2:{x:-0.58,y: 0.54}, p1:{x:-0.18,y: 0.66}, w0:2.5, w1:1.5},
+      {p0:{x:-0.18,y: 0.66}, c1:{x: 0.08,y: 0.74}, c2:{x: 0.34,y: 0.60}, p1:{x: 0.46,y: 0.42}, w0:1.5, w1:0.5}
+    ];
+
+    const pts = [];
+    const perSeg = 44;
+    for(let si=0; si<segments.length; si++){
+      const seg = segments[si];
+      for(let i=0; i<=perSeg; i++){
+        if(si > 0 && i === 0) continue;
+        const t = i / perSeg;
+        const p = cubicPoint(seg.p0, seg.c1, seg.c2, seg.p1, t);
+        const width = seg.w0 + (seg.w1 - seg.w0) * t;
+        pts.push({x:p.x*innerR, y:p.y*innerR, width});
+      }
+    }
+    return pts;
+  }
+
+  function drawContinuousS(innerR, progress, time){
+    if(progress <= 0) return;
+    const pts = buildContinuousSPath(innerR);
+    const total = pts.length;
+    const reveal = Math.max(2, Math.floor(total * easeOutCubic(progress)));
+
+    ctx.save();
+    ctx.translate(cx, cy);
+
+    ctx.beginPath();
+    ctx.arc(0, 0, innerR * 0.94, 0, Math.PI * 2);
+    ctx.clip();
+
+    const mist = clamp((progress - 0.08) / 0.9, 0, 1);
+    if(mist > 0){
+      const rg = ctx.createRadialGradient(0, 0, 0, 0, 0, innerR * 0.92);
+      rg.addColorStop(0, `rgba(245,251,255,${0.06 * mist})`);
+      rg.addColorStop(0.55, `rgba(215,230,244,${0.035 * mist})`);
+      rg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.fillStyle = rg;
+      ctx.beginPath();
+      ctx.arc(0, 0, innerR * 0.92, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if(progress > 0.03){
+      const p0 = pts[0];
+      const blotA = clamp((progress - 0.03) / 0.14, 0, 1) * 0.68;
+      const br = innerR * 0.12;
+      for(let i=0; i<4; i++){
+        const a = i * Math.PI / 2 + time * 0.06;
+        const ox = Math.cos(a) * br * 0.16;
+        const oy = Math.sin(a) * br * 0.16;
+        ctx.beginPath();
+        ctx.ellipse(
+          p0.x + ox, p0.y + oy,
+          br * (0.48 + i * 0.08),
+          br * (0.28 + i * 0.03),
+          a * 0.35, 0, Math.PI * 2
+        );
+        ctx.fillStyle = `rgba(242,248,255,${blotA * (0.64 - i * 0.1)})`;
+        ctx.shadowBlur = 14;
+        ctx.shadowColor = `rgba(255,255,255,${blotA * 0.5})`;
+        ctx.fill();
+      }
+    }
+
+    for(let i=1; i<reveal; i++){
+      const a = pts[i - 1];
+      const b = pts[i];
+      const mid = i / total;
+      const bulge = Math.sin(mid * Math.PI) * 0.18;
+      const lw = Math.max(0.65, (b.width + bulge * b.width) * innerR * 0.040);
+
+      const jitterX = Math.sin(i * 0.19 + time * 0.08) * innerR * 0.0035;
+      const jitterY = Math.cos(i * 0.17 + time * 0.07) * innerR * 0.0035;
+
+      const alphaBase = 0.22 + 0.56 * clamp(progress * 1.15, 0, 1);
+      const tailFade = 1 - Math.pow(mid, 3.0) * 0.22;
+
+      ctx.beginPath();
+      ctx.moveTo(a.x + jitterX, a.y + jitterY);
+      ctx.lineTo(b.x + jitterX, b.y + jitterY);
+      ctx.strokeStyle = `rgba(238,246,255,${alphaBase * tailFade})`;
+      ctx.lineWidth = lw;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.shadowBlur = 8 + lw * 1.5;
+      ctx.shadowColor = `rgba(255,255,255,${alphaBase * 0.34})`;
+      ctx.stroke();
+    }
+
+    if(progress > 0.08){
+      const hiIndex = Math.min(total - 1, Math.floor(total * progress));
+      const hp = pts[hiIndex];
+      const hg = ctx.createRadialGradient(hp.x, hp.y, 0, hp.x, hp.y, innerR * 0.28);
+      hg.addColorStop(0, `rgba(255,255,255,${0.12 * progress})`);
+      hg.addColorStop(0.45, `rgba(225,238,250,${0.06 * progress})`);
+      hg.addColorStop(1, "rgba(255,255,255,0)");
+      ctx.globalCompositeOperation = "screen";
+      ctx.fillStyle = hg;
+      ctx.beginPath();
+      ctx.arc(hp.x, hp.y, innerR * 0.26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    if(progress > 0.72){
+      const tp = pts[Math.max(0, reveal - 1)];
+      const tailA = clamp((progress - 0.72) / 0.2, 0, 1) * 0.42;
+      const tr = innerR * 0.05;
+      ctx.beginPath();
+      ctx.ellipse(tp.x, tp.y, tr * 1.5, tr * 0.7, -0.35, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(233,244,255,${tailA})`;
+      ctx.shadowBlur = 10;
+      ctx.shadowColor = `rgba(255,255,255,${tailA * 0.55})`;
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function buildRingPoints(steps,time){
+    const pts=[];
+    for(let i=0;i<=steps;i++){
+      const a=(Math.PI*2*i)/steps;
+      const warp=Math.sin(a*3+time*.7)*4.5+Math.sin(a*7-time*.55)*2.2+Math.cos(a*11+time*.28)*1.0;
+      pts.push({x:Math.cos(a)*(baseRadius+warp),y:Math.sin(a)*(baseRadius+warp),a});
+    }
+    return pts;
+  }
+
+  function drawFilledCore(progress,time){
+    const fp=clamp((progress-.18)/.82,0,1);
+    if(fp<=0)return;
+    const revealedAngle=Math.PI*2*easeOutCubic(fp);
+    const points=buildRingPoints(220,time);
+    ctx.save();
+    ctx.translate(cx,cy);
+    const coreA=0.020+fp*.085;
+    const rg=ctx.createRadialGradient(0,0,6,0,0,baseRadius*1.05);
+    rg.addColorStop(0,`rgba(255,255,255,${coreA*1.1})`);
+    rg.addColorStop(.35,`rgba(220,235,246,${coreA*.72})`);
+    rg.addColorStop(.8,`rgba(180,210,235,${coreA*.34})`);
+    rg.addColorStop(1,"rgba(120,160,190,0)");
+    ctx.fillStyle=rg;
+    ctx.beginPath();
+    ctx.moveTo(0,0);
+    for(const p of points){if(p.a<=revealedAngle)ctx.lineTo(p.x,p.y);}
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function strokeRing(progress,time){
+    const drawAmount=clamp(progress/.9,0,1);
+    ctx.save();
+    ctx.translate(cx,cy);
+    ctx.lineCap="round";
+    ctx.lineJoin="round";
+    ctx.shadowBlur=18;
+    ctx.shadowColor="rgba(255,255,255,0.24)";
+    ctx.strokeStyle=`rgba(236,243,250,${0.10+drawAmount*.72})`;
+    ctx.lineWidth=2.2;
+    ctx.beginPath();
+    const maxAngle=Math.PI*2*drawAmount;
+    for(let a=0;a<=maxAngle;a+=.025){
+      const warp=Math.sin(a*3+time*.7)*5+Math.sin(a*7-time*.55)*2.4+Math.cos(a*11+time*.28)*1.2;
+      const r=baseRadius+warp;
+      if(a===0)ctx.moveTo(Math.cos(a)*r,Math.sin(a)*r);
+      else ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawOrbitDots(progress,time){
+    if(progress<.6)return;
+    ctx.save();
+    for(let i=0;i<16;i++){
+      const a=(Math.PI*2/16)*i+time*.05;
+      const r=baseRadius+16+Math.sin(time*1.2+i)*5;
+      const alpha=0.08+Math.sin(time*3+i)*.04+(progress-.6)*.4;
+      ctx.beginPath();
+      ctx.arc(cx+Math.cos(a)*r,cy+Math.sin(a)*r,1.5+(i%3)*.4,0,Math.PI*2);
+      ctx.fillStyle=`rgba(255,255,255,${alpha})`;
+      ctx.shadowBlur=12;
+      ctx.shadowColor="rgba(255,255,255,.3)";
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  function drawSignal(progress,time){
+    const glowAlpha=clamp((progress-.08)/.92,0,1)*.22;
+    ctx.save();
+    const rg=ctx.createRadialGradient(cx,cy,10,cx,cy,baseRadius*1.75);
+    rg.addColorStop(0,`rgba(180,210,255,${glowAlpha*.75})`);
+    rg.addColorStop(.45,`rgba(140,180,255,${glowAlpha*.30})`);
+    rg.addColorStop(1,"rgba(0,0,0,0)");
+    ctx.fillStyle=rg;
+    ctx.beginPath();
+    ctx.arc(cx,cy,baseRadius*1.75,0,Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+
+    drawFilledCore(progress,time);
+
+    const innerProgress = clamp((progress-0.18)/0.82, 0, 1);
+    drawContinuousS(baseRadius*0.78, innerProgress, time);
+
+    strokeRing(progress,time);
+
+    for(let i=0;i<GLYPH_COUNT;i++){
+      const localAppear=clamp((progress-.14-i*.03)/.55,0,1);
+      if(localAppear<=0)continue;
+      const appear=easeOutCubic(localAppear);
+      const angle=(Math.PI*2/GLYPH_COUNT)*i+.1;
+      const drift=Math.sin(time*.15+i*.7)*.08;
+      const actualA=angle+drift;
+      const orbitR=baseRadius+10+Math.sin(i*.7+time*.28)*3;
+      ctx.save();
+      ctx.translate(cx+Math.cos(actualA)*orbitR, cy+Math.sin(actualA)*orbitR);
+      ctx.rotate(actualA+Math.PI/2);
+      drawLogogram(logograms[i],baseRadius*(.30+(i%3)*.04),0.18+appear*.62,time,i,appear);
+      ctx.restore();
+    }
+
+    drawOrbitDots(progress,time);
+  }
+
+  function drawFloorReflection(time,onFactor){
+    const top=h*.78;
+    const g=ctx.createLinearGradient(0,top,0,h);
+    g.addColorStop(0,"rgba(255,255,255,0)");
+    g.addColorStop(1,`rgba(255,255,255,${.04+onFactor*.055})`);
+    ctx.fillStyle=g;
+    ctx.beginPath();
+    ctx.ellipse(w*.5,h*.88,Math.min(340,w*.22),30,0,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  function setLampIntensity(level){
+    const cl=clamp(level,0,1);
+    const base=86+Math.round(cl*164);
+    logo.style.color=`rgb(${base},${base+5},${base+10})`;
+    logo.style.opacity=String(.46+cl*.54);
+    logo.style.filter=`brightness(${.58+cl*.50})`;
+    logo.style.textShadow=cl<.2?"none":
+      `0 0 ${8+cl*10}px rgba(255,255,255,${.16+cl*.26}),
+       0 0 ${14+cl*22}px rgba(190,220,255,${.08+cl*.16})`;
+  }
+
+  const flickers=[
+    {t:4.32,v:.2},{t:4.52,v:.78},{t:4.68,v:.08},
+    {t:4.92,v:.56},{t:5.12,v:.22},{t:5.36,v:1.0}
+  ];
+
+  function lampLevel(elapsed){
+    let level=0;
+    if(elapsed<4.2)return 0;
+    for(const f of flickers){if(elapsed>=f.t)level=f.v;}
+    return level;
+  }
+
+  function drawStarfield(time){
+    starCtx.clearRect(0,0,sw,sh);
+
+    const bg=starCtx.createLinearGradient(0,0,0,sh);
+    bg.addColorStop(0,"#04070b");
+    bg.addColorStop(0.52,"#08111d");
+    bg.addColorStop(1,"#05070c");
+    starCtx.fillStyle=bg;
+    starCtx.fillRect(0,0,sw,sh);
+
+    const nebula=starCtx.createRadialGradient(sw*0.5,sh*0.38,0,sw*0.5,sh*0.38,Math.min(sw,sh)*0.42);
+    nebula.addColorStop(0,"rgba(90,130,190,0.10)");
+    nebula.addColorStop(0.45,"rgba(70,100,150,0.05)");
+    nebula.addColorStop(1,"rgba(0,0,0,0)");
+    starCtx.fillStyle=nebula;
+    starCtx.fillRect(0,0,sw,sh);
+
+    for(const s of stars){
+      s.y += s.speed * s.z;
+      if(s.y > sh + 4){
+        s.y = -4;
+        s.x = Math.random() * sw;
+      }
+      const pulse = 0.82 + Math.sin(time * 0.001 + s.x * 0.01) * 0.18;
+      starCtx.beginPath();
+      starCtx.arc(s.x, s.y, s.size * s.z, 0, Math.PI * 2);
+      starCtx.fillStyle = `rgba(255,255,255,${s.alpha * pulse})`;
+      starCtx.fill();
+    }
+  }
+
+  function animateMenu(){
+    if(!menuVisible) return;
+    drawStarfield(performance.now());
+    requestAnimationFrame(animateMenu);
+  }
+
+  function showMainMenu(){
+    if(menuVisible) return;
+    intro.style.display = "none";
+    mainMenu.classList.add("show");
+    menuVisible = true;
+    drawStarfield(performance.now());
+    animateMenu();
+    startButton.focus({preventScroll:true});
+  }
+
+  function render(now){
+    if(finished)return;
+    const elapsed=(now-start)/1000;
+    const revealProgress=clamp(elapsed/4.8,0,1);
+    const onFactor=lampLevel(elapsed);
+
+    ctx.clearRect(0,0,w,h);
+    drawSignal(revealProgress,elapsed);
+    drawFloorReflection(elapsed,onFactor);
+    setLampIntensity(onFactor);
+
+    if(onFactor>=1&&!isOn){
+      intro.classList.add("on");
+      hint.style.opacity="0.22";
+      isOn=true;
+    }
+
+    if(elapsed>10.5){
+      intro.classList.add("skipFlash");
+      finished=true;
+      setTimeout(showMainMenu, 380);
+      return;
+    }
+
+    requestAnimationFrame(render);
+  }
+
+  function skipIntro(){
+    if(finished)return;
+    intro.classList.add("on");
+    setLampIntensity(1);
+    intro.classList.add("skipFlash");
+    finished=true;
+    setTimeout(showMainMenu, 220);
+  }
+
+  intro.addEventListener("click",skipIntro);
+  window.addEventListener("keydown",(e)=>{
+    if(e.code==="Space"||e.code==="Enter"||e.code==="Escape")skipIntro();
+  });
+
+  startButton.addEventListener("click", () => {
+    startButton.textContent = "Loading...";
+    menuFooter.textContent = "Game entry hook ready";
+  });
+
+  requestAnimationFrame(render);
+});
+</script>
+</body>
+</html>

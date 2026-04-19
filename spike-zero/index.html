@@ -118,6 +118,19 @@
       <h1>SPIKE-ZERO</h1>
       <p>시작 모드를 선택하세요. 플레이 모드는 일반 웨이브 진행, 테스트 모드는 무기와 보스를 바로 확인하는 연습 모드입니다.</p>
       <p class="hint">테스트 모드에서는 시작 직후 선택한 보스가 등장하고 무기 변경 UI가 활성화됩니다.</p>
+      <div class="difficultyPanel">
+        <div class="difficultyLabel">Difficulty</div>
+        <label class="difficultyOption">
+          <input type="radio" name="difficulty" value="easy" />
+          <span>Easy</span>
+          <small>Enemy count -25%</small>
+        </label>
+        <label class="difficultyOption">
+          <input type="radio" name="difficulty" value="normal" checked />
+          <span>Normal</span>
+          <small>Default balance</small>
+        </label>
+      </div>
       <div class="btnRow">
         <button class="btn" id="btnStart">Play Mode</button>
         <button class="btn secondary" id="btnPracticeBoss">Test Boss</button>
@@ -148,6 +161,12 @@
       <div class="btnRow">
         <button class="btn" id="btnNextStage" type="button">Next Stage</button>
       </div>
+    </div>
+
+    <div class="card stageStartCard" id="stageStartCard" style="display:none;">
+      <div class="stageStartEyebrow">MISSION DEPLOY</div>
+      <h1 id="stageStartTitle">Stage 1 Start</h1>
+      <p id="stageStartSubtitle">Combat zone opening.</p>
     </div>
   </div>
 

@@ -24,12 +24,19 @@ window.EnemySystem = (() => {
 
   function getTierByWaveAndRoll(){
     const wave = GameState.progression.wave;
+    const stage = Math.max(1, GameState.progression.stage || 1);
     const roll = Math.random();
-    if (wave >= 10 && roll > 0.985) return "boss";
-    if (wave >= 6  && roll > 0.94)  return "midboss";
-    if (wave >= 7  && roll > 0.88)  return "tank";
-    if (wave >= 5  && roll > 0.82)  return "rusher";
-    if (wave >= 4  && roll > 0.74)  return "flanker";
+
+    if (stage >= 3 && wave >= 10 && roll > 0.985) return "boss";
+    if (stage >= 3 && wave >= 6  && roll > 0.94)  return "midboss";
+    if (stage >= 3 && wave >= 6  && roll > 0.89)  return "turret_laser";
+    if (stage >= 3 && wave >= 5  && roll > 0.84)  return "turret_sniper";
+    if (stage >= 3 && wave >= 7  && roll > 0.88)  return "tank";
+
+    if (stage >= 2 && wave >= 4  && roll > 0.80)  return "turret_mg";
+    if (stage >= 2 && wave >= 5  && roll > 0.82)  return "rusher";
+    if (stage >= 2 && wave >= 4  && roll > 0.74)  return "flanker";
+
     if (wave >= 3  && roll > 0.66)  return "elite";
     if (wave >= 2  && roll > 0.58)  return "bomber";
     if (wave >= 2  && roll > 0.48)  return "gunner";
@@ -113,6 +120,440 @@ window.EnemySystem = (() => {
     if (dist <= state.attackDistance){
       tryShootGunner(enemy, target);
     }
+  }
+
+  function makeTurretVisual(enemy, tierKey, tier) {
+    const root = new PIXI.Container();
+
+    const aura = new PIXI.Graphics();
+    aura.beginFill(tier.fillColor, tierKey === "turret_laser" ? 0.12 : 0.1);
+    aura.drawRoundedRect(-tier.radius - 8, -tier.radius - 8, (tier.radius + 8) * 2, (tier.radius + 8) * 2, 12);
+    aura.endFill();
+    aura.filters = [new PIXI.filters.BlurFilter(tierKey === "turret_laser" ? 10 : 8)];
+
+    const frame = new PIXI.Graphics();
+    frame.beginFill(0x0a0d18, 0.98);
+    frame.lineStyle(2.5, tier.lineColor, 0.95);
+    frame.drawRoundedRect(-tier.radius, -tier.radius, tier.radius * 2, tier.radius * 2, 9);
+    frame.endFill();
+
+    const plating = new PIXI.Graphics();
+    plating.beginFill(tier.fillColor, tierKey === "turret_laser" ? 0.12 : 0.16);
+    plating.drawRoundedRect(-tier.radius + 4, -tier.radius + 4, tier.radius * 2 - 8, tier.radius * 2 - 8, 7);
+    plating.endFill();
+
+    const barrel = new PIXI.Graphics();
+    barrel.beginFill(tier.lineColor, 0.95);
+    if (tierKey === "turret_laser") {
+      barrel.drawRoundedRect(4, -5, tier.radius + 12, 10, 4);
+      barrel.beginFill(0xffffff, 0.52);
+      barrel.drawRoundedRect(10, -2, tier.radius + 2, 4, 2);
+      barrel.endFill();
+    } else if (tierKey === "turret_sniper") {
+      barrel.drawRoundedRect(2, -4, tier.radius + 18, 8, 4);
+      barrel.drawRoundedRect(10, -2, tier.radius + 12, 4, 2);
+      barrel.beginFill(0xffffff, 0.44);
+      barrel.drawRoundedRect(tier.radius + 10, -1, 10, 2, 1);
+      barrel.endFill();
+    } else {
+      barrel.drawRoundedRect(4, -4, tier.radius + 8, 8, 4);
+      barrel.drawRoundedRect(8, -10, tier.radius + 2, 5, 2);
+      barrel.drawRoundedRect(8, 5, tier.radius + 2, 5, 2);
+    }
+    barrel.endFill();
+
+    const coreRing = new PIXI.Graphics();
+    coreRing.lineStyle(2, 0xffffff, 0.25);
+    coreRing.drawCircle(0, 0, tierKey === "turret_laser" ? tier.radius * 0.48 : tierKey === "turret_sniper" ? tier.radius * 0.36 : tier.radius * 0.42);
+
+    const core = new PIXI.Graphics();
+    core.beginFill(tier.fillColor, tierKey === "turret_laser" ? 0.72 : tierKey === "turret_sniper" ? 0.7 : 0.66);
+    core.drawCircle(0, 0, tierKey === "turret_laser" ? tier.radius * 0.34 : tierKey === "turret_sniper" ? tier.radius * 0.22 : tier.radius * 0.28);
+    core.endFill();
+
+    root.addChild(aura, frame, plating, barrel, coreRing, core);
+    enemy.bodySpr.addChild(root);
+    return { root, aura, frame, plating, barrel, coreRing, core };
+  }
+
+  function updateTurretVisuals(enemy, target, dt) {
+    const visuals = enemy.visuals;
+    const state = enemy.enemyState;
+    if (!visuals || !state) return;
+
+    const aim = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+    visuals.root.rotation = aim;
+
+    const fixedMul = state.mode === "fixed" ? 1 : 0;
+    const chargeMul = state.mode === "charge" ? 1 : 0;
+    const firingMul = state.mode === "firing" ? 1 : 0;
+    const pulse = 1 + Math.sin(performance.now() * (enemy.tier === "turret_laser" ? 0.015 : 0.02)) * (enemy.tier === "turret_laser" ? 0.05 : 0.04);
+
+    visuals.root.scale.set((state.mode === "move" ? 1.02 : 1) * pulse);
+    visuals.aura.alpha = enemy.tier === "turret_laser"
+      ? 0.12 + chargeMul * 0.1 + firingMul * 0.08
+      : enemy.tier === "turret_sniper"
+        ? 0.1 + chargeMul * 0.08 + firingMul * 0.14
+        : 0.1 + fixedMul * 0.08;
+    visuals.core.scale.set(1 + chargeMul * 0.26 + firingMul * (enemy.tier === "turret_sniper" ? 0.28 : 0.18));
+    visuals.core.alpha = enemy.tier === "turret_laser"
+      ? 0.72 + chargeMul * 0.22 + firingMul * 0.14
+      : enemy.tier === "turret_sniper"
+        ? 0.68 + chargeMul * 0.18 + firingMul * 0.2
+        : 0.66 + fixedMul * 0.2;
+    visuals.barrel.alpha = state.mode === "move" ? 0.88 : 1;
+    visuals.frame.tint = state.mode === "move"
+      ? 0xffffff
+      : enemy.tier === "turret_laser" ? 0xffd8f2 : enemy.tier === "turret_sniper" ? 0xf2fbff : 0xfff0bf;
+    visuals.plating.tint = state.mode === "move"
+      ? 0xffffff
+      : enemy.tier === "turret_laser" ? 0xffd1fb : enemy.tier === "turret_sniper" ? 0xd8f3ff : 0xfff3b2;
+  }
+
+  function fireTurretMachinegun(enemy, target, accuracy = 0.08, count = 1, speed = 6.2, spread = 0.12) {
+    const baseAngle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+    for (let i = 0; i < count; i++) {
+      const offset = count === 1 ? 0 : ((i / (count - 1)) - 0.5) * spread;
+      const ang = baseAngle + offset + Helpers.rand(-accuracy, accuracy);
+      const bullet = makeEnemyBullet(
+        enemy.x + Math.cos(ang) * (enemy.r + 10),
+        enemy.y + Math.sin(ang) * (enemy.r + 10),
+        ang,
+        enemy.dmg
+      );
+      bullet.vx = Math.cos(ang) * speed;
+      bullet.vy = Math.sin(ang) * speed;
+      bullet.color = 0xffcf74;
+      bullet.spr.tint = 0xffcf74;
+      GameState.enemyBullets.push(bullet);
+    }
+    Effects.emitParticle(enemy.x + Math.cos(baseAngle) * enemy.r, enemy.y + Math.sin(baseAngle) * enemy.r, 0xffcf74, 7 + count, 0.7);
+  }
+
+  function clearTurretLaserFx(enemy) {
+    const state = enemy.enemyState;
+    if (!state || !state.laserSpr) return;
+    if (state.laserSpr.parent) state.laserSpr.parent.removeChild(state.laserSpr);
+    state.laserSpr = null;
+  }
+
+  function fireTurretLaser(enemy, target, options = {}) {
+    const S = GameState;
+    const state = enemy.enemyState;
+    const color = options.color || 0xff84da;
+    const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+    const length = options.length || 420;
+    const width = options.width || 9;
+    const life = options.life || 12;
+
+    clearTurretLaserFx(enemy);
+
+    const laser = new PIXI.Graphics();
+    S.fx.addChild(laser);
+    state.laserSpr = laser;
+    state.laserLife = life;
+    state.laserAngle = angle;
+    state.laserLength = length;
+    state.laserWidth = width;
+    state.laserDamage = options.damage || enemy.dmg;
+    state.laserDamageCd = 0;
+
+    const endX = enemy.x + Math.cos(angle) * length;
+    const endY = enemy.y + Math.sin(angle) * length;
+    Effects.emitPulse(enemy.x, enemy.y, color, width * 5.5, 10);
+    Effects.emitParticle(enemy.x, enemy.y, color, enemy.tier === "turret_laser" ? 14 : 8, enemy.tier === "turret_laser" ? 1.2 : 0.8);
+    Effects.emitLineTelegraph(enemy.x, enemy.y, endX, endY, color, 6, width + 2);
+  }
+
+  function redrawTurretLaser(enemy) {
+    const state = enemy.enemyState;
+    if (!state || !state.laserSpr) return;
+    const g = state.laserSpr;
+    const alpha = Math.max(0, Math.min(1, state.laserLife / Math.max(1, state.laserMaxLife || state.laserLife)));
+    const cos = Math.cos(state.laserAngle);
+    const sin = Math.sin(state.laserAngle);
+    const endX = cos * state.laserLength;
+    const endY = sin * state.laserLength;
+    g.x = enemy.x;
+    g.y = enemy.y;
+    g.clear();
+    g.lineStyle(state.laserWidth + 8, 0xff84da, 0.08 * alpha);
+    g.moveTo(0, 0);
+    g.lineTo(endX, endY);
+    g.lineStyle(state.laserWidth + 3, 0xff84da, 0.22 * alpha);
+    g.moveTo(0, 0);
+    g.lineTo(endX, endY);
+    g.lineStyle(state.laserWidth, 0xff84da, 0.92 * alpha);
+    g.moveTo(0, 0);
+    g.lineTo(endX, endY);
+    g.lineStyle(Math.max(2, state.laserWidth * 0.4), 0xffffff, 0.85 * alpha);
+    g.moveTo(0, 0);
+    g.lineTo(endX, endY);
+  }
+
+  function applyTurretLaserDamage(enemy, dt) {
+    const state = enemy.enemyState;
+    if (!state || !state.laserSpr) return;
+    state.laserDamageCd -= dt;
+    if (state.laserDamageCd > 0) return;
+    state.laserDamageCd = enemy.tier === "turret_laser" ? 3 : 5;
+
+    const player = GameState.player;
+    const cos = Math.cos(state.laserAngle);
+    const sin = Math.sin(state.laserAngle);
+    const rx = player.spr.x - enemy.x;
+    const ry = player.spr.y - enemy.y;
+    const along = rx * cos + ry * sin;
+    const side = Math.abs(rx * -sin + ry * cos);
+    if (along < 0 || along > state.laserLength || side > state.laserWidth + player.r) return;
+
+    hitPlayerWithEnemyDamage(state.laserDamage, 0xff84da, cos, sin, {
+      invFrames: enemy.tier === "turret_laser" ? 16 : 14,
+      push: enemy.tier === "turret_laser" ? 5.4 : 4.2,
+      particleCount: enemy.tier === "turret_laser" ? 14 : 10,
+      particlePower: enemy.tier === "turret_laser" ? 1.05 : 0.82,
+      pulseRadius: enemy.tier === "turret_laser" ? 34 : 24,
+      pulseLife: 8
+    });
+  }
+
+  function updateTurretMachinegunEnemy(enemy, target, dt) {
+    const state = enemy.enemyState;
+    const dx = target.x - enemy.x;
+    const dy = target.y - enemy.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const moveDx = dx / dist;
+    const moveDy = dy / dist;
+    const moveSpeed = enemy.sp * (enemy.slowMul || 1);
+
+    state.fireCd -= dt;
+    state.anchorCd -= dt;
+    state.stateTime += dt;
+
+    if (state.mode === "move") {
+      if (dist > state.preferredDistance + 36) {
+        enemy.x += moveDx * moveSpeed * dt;
+        enemy.y += moveDy * moveSpeed * dt;
+      } else if (dist < state.preferredDistance - 28) {
+        enemy.x -= moveDx * moveSpeed * 0.68 * dt;
+        enemy.y -= moveDy * moveSpeed * 0.68 * dt;
+      }
+
+      if (dist <= state.attackDistance && state.fireCd <= 0) {
+        fireTurretMachinegun(enemy, target, 0.24, 1, 5.6, 0);
+        state.fireCd = 42;
+      }
+
+      if (dist <= state.lockDistance && state.anchorCd <= 0 && state.stateTime >= state.minMoveTime) {
+        state.mode = "lock";
+        state.stateTime = 0;
+      }
+    } else if (state.mode === "lock") {
+      if (state.stateTime === 0 || state.stateTime <= dt) {
+        Effects.emitPulse(enemy.x, enemy.y, 0xffd879, 42, 10);
+      }
+      if (state.stateTime >= state.lockTime) {
+        state.mode = "fixed";
+        state.stateTime = 0;
+        state.fireCd = 8;
+      }
+    } else if (state.mode === "fixed") {
+      if (state.fireCd <= 0) {
+        fireTurretMachinegun(enemy, target, 0.04, 3, 7.2, 0.11);
+        state.fireCd = 10;
+      }
+      if (state.stateTime >= state.fixedTime) {
+        state.mode = "move";
+        state.stateTime = 0;
+        state.anchorCd = 72;
+      }
+    }
+
+    enemy.spr.x = enemy.x;
+    enemy.spr.y = enemy.y;
+    enemy.hpText.rotation = 0;
+    updateTurretVisuals(enemy, target, dt);
+  }
+
+  function updateTurretLaserEnemy(enemy, target, dt) {
+    const state = enemy.enemyState;
+    const dx = target.x - enemy.x;
+    const dy = target.y - enemy.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const moveDx = dx / dist;
+    const moveDy = dy / dist;
+    const moveSpeed = enemy.sp * (enemy.slowMul || 1);
+
+    state.fireCd -= dt;
+    state.anchorCd -= dt;
+    state.stateTime += dt;
+
+    if (state.mode === "move") {
+      if (dist > state.preferredDistance + 42) {
+        enemy.x += moveDx * moveSpeed * dt;
+        enemy.y += moveDy * moveSpeed * dt;
+      } else if (dist < state.preferredDistance - 36) {
+        enemy.x -= moveDx * moveSpeed * 0.64 * dt;
+        enemy.y -= moveDy * moveSpeed * 0.64 * dt;
+      }
+
+      if (dist <= state.shortAttackDistance && state.fireCd <= 0) {
+        const aim = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+        Effects.emitLineTelegraph(enemy.x, enemy.y, enemy.x + Math.cos(aim) * 170, enemy.y + Math.sin(aim) * 170, 0xffa6e8, 12, 5);
+        fireTurretLaser(enemy, target, { length: 180, width: 5, life: 8, damage: Math.max(6, enemy.dmg - 4), color: 0xffa6e8 });
+        state.laserMaxLife = 8;
+        state.fireCd = 96;
+      }
+
+      if (dist <= state.lockDistance && state.anchorCd <= 0 && state.stateTime >= state.minMoveTime) {
+        state.mode = "charge";
+        state.stateTime = 0;
+        const aim = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+        Effects.emitLineTelegraph(enemy.x, enemy.y, enemy.x + Math.cos(aim) * state.longAttackDistance, enemy.y + Math.sin(aim) * state.longAttackDistance, 0xff84da, state.chargeTime, 7);
+      }
+    } else if (state.mode === "charge") {
+      if (state.stateTime >= state.chargeTime) {
+        state.mode = "firing";
+        state.stateTime = 0;
+        fireTurretLaser(enemy, target, {
+          length: state.longAttackDistance,
+          width: 11,
+          life: state.fireTime,
+          damage: enemy.dmg,
+          color: 0xff84da
+        });
+        state.laserMaxLife = state.fireTime;
+      }
+    } else if (state.mode === "firing") {
+      if (state.stateTime >= state.fireTime) {
+        clearTurretLaserFx(enemy);
+        state.mode = "move";
+        state.stateTime = 0;
+        state.anchorCd = 110;
+        state.fireCd = 78;
+      }
+    }
+
+    if (state.laserSpr) {
+      state.laserLife -= dt;
+      redrawTurretLaser(enemy);
+      applyTurretLaserDamage(enemy, dt);
+      if (state.laserLife <= 0) clearTurretLaserFx(enemy);
+    }
+
+    enemy.spr.x = enemy.x;
+    enemy.spr.y = enemy.y;
+    enemy.hpText.rotation = 0;
+    updateTurretVisuals(enemy, target, dt);
+  }
+
+  function fireTurretSniperShot(enemy, target, options = {}) {
+    const color = options.color || 0xbfe9ff;
+    const angle = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+    const bullet = makeEnemyBullet(
+      enemy.x + Math.cos(angle) * (enemy.r + 12),
+      enemy.y + Math.sin(angle) * (enemy.r + 12),
+      angle,
+      options.damage || enemy.dmg
+    );
+    bullet.vx = Math.cos(angle) * (options.speed || 9.8);
+    bullet.vy = Math.sin(angle) * (options.speed || 9.8);
+    bullet.r = options.radius || 10;
+    bullet.life = options.life || 124;
+    bullet.color = color;
+    bullet.spr.tint = color;
+    bullet.spr.scale.set(options.scaleX || 1.3, options.scaleY || 1.85);
+    GameState.enemyBullets.push(bullet);
+
+    const endX = enemy.x + Math.cos(angle) * 240;
+    const endY = enemy.y + Math.sin(angle) * 240;
+    Effects.emitLineTelegraph(enemy.x, enemy.y, endX, endY, color, 6, 4);
+    Effects.emitPulse(enemy.x, enemy.y, color, 46, 10);
+    Effects.emitParticle(enemy.x, enemy.y, color, 12, 1.05);
+    Effects.emitParticle(enemy.x + Math.cos(angle) * (enemy.r + 18), enemy.y + Math.sin(angle) * (enemy.r + 18), 0xffffff, 8, 0.75);
+  }
+
+  function updateTurretSniperEnemy(enemy, target, dt) {
+    const state = enemy.enemyState;
+    const dx = target.x - enemy.x;
+    const dy = target.y - enemy.y;
+    const dist = Math.hypot(dx, dy) || 1;
+    const moveDx = dx / dist;
+    const moveDy = dy / dist;
+    const moveSpeed = enemy.sp * (enemy.slowMul || 1);
+
+    state.fireCd -= dt;
+    state.anchorCd -= dt;
+    state.stateTime += dt;
+
+    if (state.mode === "move") {
+      if (dist < state.preferredDistance - 36) {
+        enemy.x -= moveDx * moveSpeed * 0.9 * dt;
+        enemy.y -= moveDy * moveSpeed * 0.9 * dt;
+      } else if (dist > state.preferredDistance + 42) {
+        enemy.x += moveDx * moveSpeed * 0.46 * dt;
+        enemy.y += moveDy * moveSpeed * 0.46 * dt;
+      }
+
+      if (dist <= state.skirmishDistance && state.fireCd <= 0) {
+        fireTurretSniperShot(enemy, target, {
+          damage: Math.max(8, enemy.dmg - 7),
+          speed: 7.4,
+          radius: 8.5,
+          scaleX: 1.1,
+          scaleY: 1.55,
+          color: 0xd6f2ff
+        });
+        state.fireCd = 92;
+      }
+
+      if (dist <= state.lockDistance && state.anchorCd <= 0 && state.stateTime >= state.minMoveTime) {
+        state.mode = "charge";
+        state.stateTime = 0;
+      }
+    } else if (state.mode === "charge") {
+      const ratio = Math.min(1, state.stateTime / state.chargeTime);
+      const aim = Math.atan2(target.y - enemy.y, target.x - enemy.x);
+      const length = state.shotDistance;
+      const telegraphWidth = 11 - ratio * 8;
+      Effects.emitLineTelegraph(
+        enemy.x,
+        enemy.y,
+        enemy.x + Math.cos(aim) * length,
+        enemy.y + Math.sin(aim) * length,
+        0xbfe9ff,
+        3,
+        Math.max(2, telegraphWidth)
+      );
+      if (state.stateTime >= state.chargeTime) {
+        state.mode = "firing";
+        state.stateTime = 0;
+        fireTurretSniperShot(enemy, target, {
+          damage: enemy.dmg,
+          speed: 11.8,
+          radius: 11,
+          scaleX: 1.45,
+          scaleY: 2.2,
+          life: 136,
+          color: 0xbfe9ff
+        });
+      }
+    } else if (state.mode === "firing") {
+      if (state.stateTime <= dt) {
+        Effects.emitPulse(enemy.x, enemy.y, 0xf4fbff, 56, 8);
+      }
+      if (state.stateTime >= state.recoveryTime) {
+        state.mode = "move";
+        state.stateTime = 0;
+        state.anchorCd = 116;
+        state.fireCd = 88;
+      }
+    }
+
+    enemy.spr.x = enemy.x;
+    enemy.spr.y = enemy.y;
+    enemy.hpText.rotation = 0;
+    updateTurretVisuals(enemy, target, dt);
   }
 
   function detonateBomber(enemy){
@@ -424,7 +865,8 @@ window.EnemySystem = (() => {
     const hits = Helpers.randi(tier.hitsMin, tier.hitsMax);
     const c = new PIXI.Container();
     const signal = (tierKey === "rusher" || tierKey === "bomber") ? new PIXI.Graphics() : null;
-    const body = Effects.makeEnemySprite(tierKey, tier, 0, 0);
+    const isTurret = tierKey === "turret_mg" || tierKey === "turret_laser" || tierKey === "turret_sniper";
+    const body = isTurret ? new PIXI.Container() : Effects.makeEnemySprite(tierKey, tier, 0, 0);
 
     const hpText = new PIXI.Text(String(hits), {
       fontFamily: "Arial",
@@ -467,6 +909,27 @@ window.EnemySystem = (() => {
       glowColor: tier.glowColor
     };
 
+    if (isTurret) {
+      enemy.visuals = makeTurretVisual(enemy, tierKey, tier);
+      enemy.destroyVisuals = () => {
+        clearTurretLaserFx(enemy);
+        if (enemy.spr && enemy.spr.parent) enemy.spr.parent.removeChild(enemy.spr);
+      };
+      enemy.takeDamage = (damage) => {
+        enemy.hp = Math.max(0, enemy.hp - damage);
+        enemy.hitT = 6;
+        enemy.hpText.text = String(Math.max(0, Math.floor(enemy.hp)));
+        const state = enemy.enemyState;
+        if (state && (state.mode === "fixed" || state.mode === "charge" || state.mode === "firing")) {
+          state.mode = "move";
+          state.stateTime = 0;
+          state.anchorCd = tierKey === "turret_laser" ? 96 : 54;
+          clearTurretLaserFx(enemy);
+        }
+        return true;
+      };
+    }
+
     if (tierKey === "flanker"){
       enemy.enemyState = {
         state: "flank",
@@ -489,6 +952,58 @@ window.EnemySystem = (() => {
         preferredDistance: 260,
         retreatDistance: 150,
         attackDistance: 420
+      };
+    }
+    if (tierKey === "turret_mg"){
+      enemy.enemyState = {
+        mode: "move",
+        stateTime: 0,
+        fireCd: Helpers.randi(10, 26),
+        anchorCd: Helpers.randi(34, 72),
+        preferredDistance: 220,
+        attackDistance: 360,
+        lockDistance: 250,
+        minMoveTime: 32,
+        lockTime: 16,
+        fixedTime: 72
+      };
+    }
+    if (tierKey === "turret_laser"){
+      enemy.enemyState = {
+        mode: "move",
+        stateTime: 0,
+        fireCd: Helpers.randi(28, 52),
+        anchorCd: Helpers.randi(64, 110),
+        preferredDistance: 270,
+        shortAttackDistance: 300,
+        longAttackDistance: 520,
+        lockDistance: 320,
+        minMoveTime: 40,
+        chargeTime: 28,
+        fireTime: 14,
+        laserSpr: null,
+        laserLife: 0,
+        laserMaxLife: 0,
+        laserAngle: 0,
+        laserLength: 0,
+        laserWidth: 0,
+        laserDamage: 0,
+        laserDamageCd: 0
+      };
+    }
+    if (tierKey === "turret_sniper"){
+      enemy.enemyState = {
+        mode: "move",
+        stateTime: 0,
+        fireCd: Helpers.randi(34, 66),
+        anchorCd: Helpers.randi(72, 120),
+        preferredDistance: 320,
+        skirmishDistance: 360,
+        lockDistance: 420,
+        shotDistance: 620,
+        minMoveTime: 46,
+        chargeTime: 34,
+        recoveryTime: 18
       };
     }
     if (tierKey === "bomber"){
@@ -600,6 +1115,12 @@ window.EnemySystem = (() => {
         updateBomberEnemy(e, target, dt);
       } else if (e.tier === "gunner"){
         updateGunnerEnemy(e, target, dt);
+      } else if (e.tier === "turret_mg"){
+        updateTurretMachinegunEnemy(e, target, dt);
+      } else if (e.tier === "turret_laser"){
+        updateTurretLaserEnemy(e, target, dt);
+      } else if (e.tier === "turret_sniper"){
+        updateTurretSniperEnemy(e, target, dt);
       } else if (e.tier === "flanker"){
         updateFlankerEnemy(e, target, dt);
       } else {

@@ -338,6 +338,73 @@ html,body{
 }
 .card h1{ margin:6px 0 8px; font-size:18px; letter-spacing:.3px; }
 .card p{ margin:8px 0; opacity:.92; line-height:1.45; font-size:14px; }
+.difficultyPanel{
+  display:grid;
+  gap:8px;
+  margin-top:14px;
+}
+.difficultyLabel{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:1.2px;
+  text-transform:uppercase;
+  opacity:.72;
+}
+.difficultyOption{
+  display:grid;
+  grid-template-columns:auto 1fr auto;
+  align-items:center;
+  gap:10px;
+  padding:10px 12px;
+  border-radius:14px;
+  background:rgba(255,255,255,.04);
+  border:1px solid rgba(255,255,255,.08);
+  cursor:pointer;
+}
+.difficultyOption:hover{
+  border-color:rgba(50,246,255,.24);
+  background:rgba(50,246,255,.05);
+}
+.difficultyOption input{
+  margin:0;
+}
+.difficultyOption span{
+  font-size:14px;
+  font-weight:700;
+}
+.difficultyOption small{
+  font-size:11px;
+  opacity:.72;
+}
+.stageStartCard{
+  width:min(520px, calc(100vw - 48px));
+  text-align:center;
+  pointer-events:none;
+  padding:28px 24px;
+  background:linear-gradient(180deg, rgba(6,10,24,.84), rgba(8,14,30,.72));
+  border-color:rgba(120,180,255,.22);
+  box-shadow:0 0 28px rgba(50,246,255,.12), 0 0 56px rgba(70,100,255,.08);
+}
+.stageStartEyebrow{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:2.6px;
+  color:rgba(158,216,255,.82);
+  text-transform:uppercase;
+}
+.stageStartCard h1{
+  margin:10px 0 6px;
+  font-size:clamp(28px, 5vw, 42px);
+  letter-spacing:1.2px;
+  text-transform:uppercase;
+}
+.stageStartCard p{
+  margin:0;
+  font-size:13px;
+  opacity:.78;
+  letter-spacing:.4px;
+  text-transform:uppercase;
+}
 
 .btnRow{ display:flex; gap:10px; flex-wrap:wrap; margin-top:12px; }
 .btn{

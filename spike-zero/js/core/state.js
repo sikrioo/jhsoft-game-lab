@@ -24,6 +24,7 @@ window.GameState = {
   practiceBossId: "basic",
   practiceStageId: 1,
   practiceStageDurationSec: 180,
+  difficulty: "normal",
 
   stats: {
     maxHp: 100,
