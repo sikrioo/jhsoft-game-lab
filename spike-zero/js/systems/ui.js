@@ -48,9 +48,27 @@ window.UI = (() => {
   const closeSkillMapBtn = document.getElementById("btnCloseSkillMap");
   const dialogueOverlay = document.getElementById("dialogueOverlay");
   const dialogueLog = document.getElementById("dialogueLog");
-  const CONTROLLER_NAME = "Rhea";
   let skillMapState = null;
   let pendingStageClearResolve = null;
+
+  function getCharacterProfile(characterId) {
+    const profiles = window.CHARACTER_PROFILES || {};
+    return profiles[characterId] || null;
+  }
+
+  function resolveDialogueCharacter(line) {
+    const fallbackId = line && line.speaker === "player" ? "player" : "rhea";
+    const characterId = line && line.speakerId ? line.speakerId : fallbackId;
+    const profile = getCharacterProfile(characterId);
+    const role = profile && profile.role ? profile.role : (characterId === "player" ? "player" : "controller");
+    return {
+      id: characterId,
+      role,
+      name: profile && profile.name ? profile.name : (role === "player" ? "Player" : "Controller"),
+      shortName: profile && profile.shortName ? profile.shortName : (role === "player" ? "P" : "C"),
+      avatarSrc: profile ? profile.avatarSrc : null
+    };
+  }
 
   function getStageLineup() {
     if (window.BossSystem && BossSystem.getStageBossLineup) {
@@ -356,23 +374,34 @@ window.UI = (() => {
     dialogueOverlay.classList.add("visible");
   }
 
+  function pruneDialogueLog() {
+    if (!dialogueLog) return;
+    while (dialogueLog.children.length > 8) {
+      dialogueLog.removeChild(dialogueLog.firstElementChild);
+    }
+    while (dialogueLog.children.length > 1 && dialogueLog.scrollHeight > dialogueLog.clientHeight) {
+      dialogueLog.removeChild(dialogueLog.firstElementChild);
+    }
+  }
+
   function createDialogueCard(line) {
     if (!dialogueLog) return null;
     openDialogueOverlay();
-    const isController = !line || line.speaker !== "player";
+    const speaker = resolveDialogueCharacter(line);
+    const isController = speaker.role !== "player";
     const card = document.createElement("div");
     card.className = `dialogueCard ${isController ? "controller" : "player"} typing`;
 
     if (isController) {
       const avatar = document.createElement("img");
       avatar.className = "dialogueAvatar";
-      avatar.src = "./resources/avatar-controller.png";
-      avatar.alt = CONTROLLER_NAME;
+      avatar.src = speaker.avatarSrc || "./resources/avatar-controller.png";
+      avatar.alt = speaker.name;
       card.appendChild(avatar);
     } else {
       const stub = document.createElement("div");
       stub.className = "dialogueStub";
-      stub.textContent = "P";
+      stub.textContent = speaker.shortName;
       card.appendChild(stub);
     }
 
@@ -381,7 +410,7 @@ window.UI = (() => {
 
     const name = document.createElement("div");
     name.className = "dialogueName";
-    name.textContent = isController ? CONTROLLER_NAME : "Player";
+    name.textContent = speaker.name;
 
     const text = document.createElement("div");
     text.className = "dialogueText";
@@ -390,17 +419,15 @@ window.UI = (() => {
     bubble.appendChild(text);
     card.appendChild(bubble);
     dialogueLog.appendChild(card);
-
-    while (dialogueLog.children.length > 8) {
-      dialogueLog.removeChild(dialogueLog.firstElementChild);
-    }
-    return { card, text };
+    pruneDialogueLog();
+    return { card, text, speaker };
   }
 
   function showDialogueLine(entry, text = "") {
     if (!entry || !entry.text) return;
     entry.text.textContent = text;
     entry.card.classList.add("typing");
+    pruneDialogueLog();
   }
 
   function closeDialogueOverlay() {
@@ -412,6 +439,7 @@ window.UI = (() => {
   function commitDialogueLine(entry) {
     if (!entry || !entry.card) return;
     entry.card.classList.remove("typing");
+    pruneDialogueLog();
   }
 
   function resetDialogueLog() {

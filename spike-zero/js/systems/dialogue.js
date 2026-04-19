@@ -12,7 +12,8 @@ window.DialogueSystem = (() => {
   async function typeLine(line, currentToken) {
     const entry = UI.createDialogueCard(line);
     if (!entry) return false;
-    const isController = line && line.speaker === "controller";
+    const speakerRole = entry.speaker && entry.speaker.role ? entry.speaker.role : ((line && line.speaker === "player") ? "player" : "controller");
+    const isController = speakerRole === "controller";
     if (window.SoundSystem) {
       if (isController) {
         SoundSystem.play("radio_in", { playbackRate: 0.98 + Math.random() * 0.04 });
@@ -40,7 +41,7 @@ window.DialogueSystem = (() => {
   async function playLines(lines = [], onComplete = null) {
     const S = GameState;
     const currentToken = ++token;
-    const queue = lines.filter((line) => line && line.text).slice(0, 4);
+    const queue = lines.filter((line) => line && line.text);
     if (!queue.length) {
       if (typeof onComplete === "function") onComplete();
       return false;
@@ -77,7 +78,11 @@ window.DialogueSystem = (() => {
   }
 
   function playStageIntro(stage = 1, onComplete = null) {
-    return playLines(buildStageIntro(stage), onComplete);
+    if (window.BgmSystem) BgmSystem.setOverride("stageReady:intro");
+    return playLines(buildStageIntro(stage), () => {
+      if (window.BgmSystem) BgmSystem.clearOverride();
+      if (typeof onComplete === "function") onComplete();
+    });
   }
 
   function playBossWarning(stage = 1, bossId = "basic", onComplete = null) {
@@ -91,6 +96,7 @@ window.DialogueSystem = (() => {
 
   function cancel() {
     token += 1;
+    if (window.BgmSystem) BgmSystem.clearOverride();
     UI.resetDialogueLog();
   }
 

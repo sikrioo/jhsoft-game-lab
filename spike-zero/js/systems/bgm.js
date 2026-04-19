@@ -1,5 +1,9 @@
 window.BgmSystem = (() => {
   const TRACKS = {
+    "stageReady:intro": {
+      src: "./assets/bgm/stage-ready/the_mountain-jazz-cafe-music-496552.mp3",
+      volume: 0.34
+    },
     "stage1:gameplay": {
       src: "./assets/bgm/stage-1/gameplay/Everything falls apart.ogg",
       volume: 0.34
@@ -37,6 +41,7 @@ window.BgmSystem = (() => {
   const players = new Map();
   let unlocked = false;
   let currentKey = null;
+  let overrideKey = null;
 
   function getStageIndex() {
     return Math.max(1, GameState.progression.stage || 1);
@@ -50,6 +55,7 @@ window.BgmSystem = (() => {
   }
 
   function resolveTrackKey() {
+    if (overrideKey && TRACKS[overrideKey]) return overrideKey;
     const stageKey = `stage${getStageIndex()}`;
     if (GameState.progression.stageState === "clear") return null;
     const inBoss = GameState.progression.stageState === "boss" || (window.BossSystem && BossSystem.hasActiveBoss());
@@ -116,9 +122,21 @@ window.BgmSystem = (() => {
     return playKey(key);
   }
 
+  function setOverride(key) {
+    overrideKey = TRACKS[key] ? key : null;
+    return refresh();
+  }
+
+  function clearOverride() {
+    overrideKey = null;
+    return refresh();
+  }
+
   return {
     prime,
     refresh,
-    stopAll
+    stopAll,
+    setOverride,
+    clearOverride
   };
 })();

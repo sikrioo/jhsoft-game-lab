@@ -3,6 +3,11 @@ window.Boot = (() => {
 
   function addShake(v){ S.shake = Math.min(24, S.shake + v); }
 
+  function primeAudioSystems() {
+    if (window.SoundSystem) SoundSystem.prime();
+    if (window.BgmSystem) BgmSystem.prime();
+  }
+
   function normalizePracticeStageId(stageId) {
     const maxStage = window.WaveSystem && WaveSystem.getMaxStage ? WaveSystem.getMaxStage() : 3;
     return Math.min(maxStage, Math.max(1, Math.floor(stageId || 1)));
@@ -460,12 +465,12 @@ window.Boot = (() => {
     bindInput();
 
     UI.bindButtons({
-      onStart: ()=>resetAll(false),
-      onPracticeBoss: ()=>resetAll({ testMode:true, practiceMode:"boss" }),
-      onPracticeStage: ()=>resetAll({ testMode:true, practiceMode:"stage", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 }),
-      onRetry: ()=>resetAll(S.stats.practice
+      onStart: ()=>{ primeAudioSystems(); resetAll(false); },
+      onPracticeBoss: ()=>{ primeAudioSystems(); resetAll({ testMode:true, practiceMode:"boss" }); },
+      onPracticeStage: ()=>{ primeAudioSystems(); resetAll({ testMode:true, practiceMode:"stage", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 }); },
+      onRetry: ()=>{ primeAudioSystems(); resetAll(S.stats.practice
         ? { testMode:true, practiceMode:S.stats.practiceMode || "boss", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 }
-        : false),
+        : false); },
       onBack: ()=>{
         if (window.DialogueSystem) DialogueSystem.cancel();
         UI.resetDialogueLog();
@@ -480,10 +485,12 @@ window.Boot = (() => {
         if (window.BossSystem) BossSystem.spawnSelectedPracticeBoss();
       },
       onPracticeTypeChange: (mode) => {
+        primeAudioSystems();
         if (mode === "boss") resetAll({ testMode:true, practiceMode:"boss" });
         if (mode === "stage") resetAll({ testMode:true, practiceMode:"stage", practiceStageId:S.practiceStageId || 1, practiceStageDurationSec:S.practiceStageDurationSec || 180 });
       },
       onApplyStageTest: ({ stageId, durationSec }) => {
+        primeAudioSystems();
         resetAll({
           testMode: true,
           practiceMode: "stage",
