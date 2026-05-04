@@ -1,0 +1,1 @@
+// TODO: O2_DRAIN, FUEL_DRAIN, SUPPLY_RATE 등 밸런스 상수 분리 예정

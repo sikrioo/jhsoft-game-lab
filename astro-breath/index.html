@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>ZERO-G SURVIVAL — 태양계 탈출</title>
+<link rel="stylesheet" href="css/main.css"/>
+</head>
+<body>
+
+<!-- 타이틀 -->
+<div id="titlescreen">
+  <h1>ZERO-G</h1>
+  <div class="sub">SOLAR SURVIVAL</div>
+  <div class="rule-box">
+    <div class="rh">🎯 목표</div>
+    산소와 연료가 바닥나기 전에 태양계를 탐험하세요.<br><br>
+    <div class="rh">⛽ 보급</div>
+    <span style="color:#ffd45a">●</span> <b>Fuel Station</b> — 분사 연료 보급<br>
+    <span style="color:#54d8ff">●</span> <b>Oxygen Station</b> — 산소 보급<br>
+    <span style="color:#44dd88">●</span> <b>Supply Hub</b> — 산소+연료 보급<br>
+    <span style="color:#ff77aa">●</span> <b>Advanced Station</b> — 빠른 풀 보급<br><br>
+    <div class="rh">☀ 태양 위험구역</div>
+    태양에 너무 가까이 가면 열 데미지로 사망<br><br>
+    <div class="rh">🎮 조종</div>
+    <b>↑↓</b> 전진/후진 &nbsp; <b>←→</b> 스트레이프 &nbsp; <b>Q E</b> 회전 &nbsp; <b>Shift</b> 정밀
+  </div>
+  <button onclick="startGame()">▶ 탐험 시작</button>
+</div>
+
+<!-- HUD -->
+<div id="hud" style="display:none;">
+  <div class="title">⚡ ZERO-G SURVIVAL</div>
+
+  <div id="score-display">
+    <div class="big" id="v-score">0</div>
+    <div class="sub">SCORE</div>
+  </div>
+
+  <div class="gauge-wrap">
+    <div class="gauge-label">
+      <span class="lname">🫁 산소</span>
+      <span class="lval ok" id="v-o2">100%</span>
+    </div>
+    <div class="gauge-track"><div class="gauge-fill" id="o2-fill" style="width:100%"></div></div>
+  </div>
+
+  <div class="gauge-wrap">
+    <div class="gauge-label">
+      <span class="lname">⛽ 연료</span>
+      <span class="lval ok" id="v-fuel">100%</span>
+    </div>
+    <div class="gauge-track"><div class="gauge-fill" id="fuel-fill" style="width:100%"></div></div>
+  </div>
+
+  <div class="gauge-wrap">
+    <div class="gauge-label">
+      <span class="lname">🌡 선체온도</span>
+      <span class="lval ok" id="v-heat">0%</span>
+    </div>
+    <div class="gauge-track"><div class="gauge-fill" id="heat-fill" style="width:0%"></div></div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="stat-row"><span class="sn">경과시간</span><span class="sv" id="v-time">0:00</span></div>
+  <div class="stat-row"><span class="sn">방문 행성</span><span class="sv" id="v-visited">0 / 9</span></div>
+  <div class="stat-row"><span class="sn">속도</span><span class="sv" id="v-speed">0.00</span></div>
+  <div class="stat-row"><span class="sn">중력</span><span class="sv" id="v-planet">OFF</span></div>
+
+  <div class="divider"></div>
+  <button id="stabilize-btn" class="skill-btn" onclick="activateStabilizer()">자세 고정</button>
+  <div class="skill-meta"><span class="key">SPACE</span> 자세 안정</div>
+  <button id="decel-btn" class="skill-btn" onclick="activateDecelerator()">관성 감속</button>
+  <div class="skill-meta"><span class="key">C</span> 진행 방향 역추진</div>
+
+  <div class="divider"></div>
+  <div class="ctrl-hint">
+    <span class="key">↑↓</span> 전진/후진 &nbsp;
+    <span class="key">←→</span> 스트레이프<br>
+    <span class="key">Q</span><span class="key">E</span> 회전 &nbsp;
+    <span class="key">Shift</span> 정밀
+  </div>
+</div>
+
+<!-- 행성 이동 (테스트용) -->
+<div id="planet-nav" style="display:none;">
+  <div class="nav-title">▸ 빠른이동</div>
+  <div id="planet-buttons"></div>
+</div>
+
+<!-- 미니맵 -->
+<div id="minimap-container" style="display:none;">
+  <div id="minimap-label">SOLAR MAP</div>
+  <canvas id="minimapCanvas" width="180" height="180"></canvas>
+</div>
+
+<!-- 위험 테두리 -->
+<div id="danger-vignette"></div>
+
+<!-- 토스트 -->
+<div id="toast"></div>
+
+<!-- 게임오버 -->
+<div id="gameover">
+  <h1 id="go-title">DEAD</h1>
+  <div class="reason" id="go-reason">산소 고갈</div>
+  <div style="color:#4a7a99;font-size:13px;margin-bottom:12px;">최종 점수</div>
+  <div class="final-score" id="go-score">0</div>
+  <div class="visited" id="go-visited">방문 행성: 0 / 9</div>
+  <button onclick="location.reload()">↺ 다시 시작</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/matter-js@0.20.0/build/matter.min.js"></script>
+<script src="js/data/game-settings.js"></script>
+<script src="js/data/station-data.js"></script>
+<script src="js/core/game.js"></script>
+</body>
+</html>

@@ -1,0 +1,1172 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>WARRIOR.IO — Prototype</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Crimson+Pro:ital,wght@0,300;1,300&display=swap');
+
+:root {
+  --gold: #c9a84c;
+  --gold-dim: #7a5e28;
+  --blood: #8b1a1a;
+  --bg: #07060a;
+  --panel: rgba(10,8,14,0.92);
+  --border: #2a2018;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  overflow: hidden;
+  font-family: 'Crimson Pro', serif;
+  color: var(--gold);
+}
+
+/* ── 타이틀 화면 ── */
+#title-screen {
+  position: fixed; inset: 0;
+  background: #07060a;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 100;
+  gap: 0;
+}
+
+#title-screen h1 {
+  font-family: 'Cinzel', serif;
+  font-size: clamp(42px, 7vw, 80px);
+  font-weight: 900;
+  letter-spacing: 12px;
+  color: var(--gold);
+  text-shadow: 0 0 60px rgba(201,168,76,0.4), 0 2px 0 #3a2a08;
+  animation: titlePulse 3s ease-in-out infinite;
+}
+
+#title-screen .subtitle {
+  font-family: 'Crimson Pro', serif;
+  font-style: italic;
+  font-size: 18px;
+  color: var(--gold-dim);
+  letter-spacing: 4px;
+  margin-top: 6px;
+  margin-bottom: 60px;
+}
+
+@keyframes titlePulse {
+  0%,100% { text-shadow: 0 0 40px rgba(201,168,76,0.3); }
+  50%      { text-shadow: 0 0 80px rgba(201,168,76,0.7), 0 0 120px rgba(201,168,76,0.2); }
+}
+
+.divider {
+  width: 280px; height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+  margin: 20px 0;
+}
+
+#start-btn {
+  font-family: 'Cinzel', serif;
+  font-size: 16px;
+  letter-spacing: 6px;
+  color: var(--bg);
+  background: var(--gold);
+  border: none;
+  padding: 14px 48px;
+  cursor: pointer;
+  clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+  transition: all 0.2s;
+  text-transform: uppercase;
+}
+#start-btn:hover {
+  background: #e8c870;
+  transform: scale(1.04);
+  box-shadow: 0 0 30px rgba(201,168,76,0.5);
+}
+
+.controls-hint {
+  margin-top: 40px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  font-size: 13px;
+  color: var(--gold-dim);
+  letter-spacing: 1px;
+  text-align: center;
+}
+.controls-hint .key-group { display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.key {
+  display: inline-block;
+  background: #120f08;
+  border: 1px solid var(--gold-dim);
+  border-bottom: 3px solid #2a1e08;
+  padding: 3px 10px;
+  border-radius: 3px;
+  font-family: 'Cinzel', serif;
+  font-size: 11px;
+  color: var(--gold);
+}
+.key-label { font-size: 11px; color: #4a3a22; letter-spacing: 2px; margin-top: 2px; }
+
+/* ── HUD ── */
+#hud {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  display: none;
+}
+
+/* 플레이어 HP */
+#player-hud {
+  position: absolute; bottom: 28px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  pointer-events: none;
+}
+#player-name-label {
+  font-family: 'Cinzel', serif;
+  font-size: 12px; letter-spacing: 3px; color: var(--gold-dim);
+}
+#hp-bar-wrap {
+  width: 280px; height: 14px;
+  background: #120f08;
+  border: 1px solid var(--gold-dim);
+  position: relative;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+}
+#hp-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #8b1a1a, #c93030);
+  transition: width 0.15s;
+  width: 100%;
+}
+#hp-text {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Cinzel', serif; font-size: 10px;
+  color: rgba(255,255,255,0.85); letter-spacing: 2px;
+}
+
+/* 가드 게이지 */
+#guard-bar-wrap {
+  width: 280px; height: 8px;
+  background: #120f08;
+  border: 1px solid #2a3a4a;
+  clip-path: polygon(4px 0%, 100% 0%, calc(100% - 4px) 100%, 0% 100%);
+}
+#guard-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #1a4a6a, #3a8ab0);
+  transition: width 0.1s;
+  width: 100%;
+}
+
+/* 스탯 패널 (좌상단) */
+#stats-panel {
+  position: absolute; top: 20px; left: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 14px 18px;
+  min-width: 140px;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 0 100%);
+}
+#stats-panel h3 {
+  font-family: 'Cinzel', serif; font-size: 10px;
+  letter-spacing: 3px; color: var(--gold-dim);
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px; margin-bottom: 10px;
+}
+.stat-row {
+  display: flex; justify-content: space-between;
+  font-size: 13px; margin-bottom: 5px;
+  color: #6a5a3a;
+}
+.stat-row span:last-child { color: var(--gold); font-family: 'Cinzel', serif; font-size: 12px; }
+
+/* 상태 표시 (우상단) */
+#state-panel {
+  position: absolute; top: 20px; right: 20px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  text-align: right;
+  clip-path: polygon(10px 0, 100% 0, 100% 100%, 0 100%, 0 10px);
+}
+#state-label {
+  font-family: 'Cinzel', serif; font-size: 10px;
+  letter-spacing: 3px; color: var(--gold-dim);
+}
+#state-value {
+  font-family: 'Cinzel', serif; font-size: 18px;
+  color: var(--gold);
+  text-shadow: 0 0 20px rgba(201,168,76,0.5);
+  margin-top: 2px;
+  letter-spacing: 4px;
+}
+
+/* 킬 피드 */
+#kill-feed {
+  position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  min-width: 300px;
+}
+.kill-entry {
+  font-family: 'Crimson Pro', serif; font-style: italic;
+  font-size: 14px; color: #c9a84c;
+  background: rgba(7,6,10,0.85);
+  border: 1px solid #3a2a08;
+  padding: 4px 14px;
+  animation: killFade 3s forwards;
+  letter-spacing: 1px;
+}
+@keyframes killFade {
+  0%   { opacity: 1; transform: translateY(0); }
+  70%  { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-10px); }
+}
+
+/* 미니맵 */
+#minimap {
+  position: absolute; bottom: 28px; right: 20px;
+  width: 120px; height: 120px;
+  background: rgba(7,6,10,0.88);
+  border: 1px solid var(--border);
+}
+#minimap canvas { width: 100%; height: 100%; }
+
+/* 게임 오버 */
+#gameover-screen {
+  position: fixed; inset: 0;
+  background: rgba(7,6,10,0.9);
+  display: none; flex-direction: column;
+  align-items: center; justify-content: center;
+  z-index: 90;
+  gap: 16px;
+}
+#gameover-screen h2 {
+  font-family: 'Cinzel', serif; font-size: 56px; font-weight: 900;
+  color: var(--blood);
+  text-shadow: 0 0 60px rgba(139,26,26,0.7);
+  letter-spacing: 8px;
+}
+#gameover-screen .result-stats {
+  font-family: 'Crimson Pro', serif; font-style: italic;
+  font-size: 20px; color: var(--gold-dim); letter-spacing: 2px;
+}
+#restart-btn {
+  font-family: 'Cinzel', serif; font-size: 13px; letter-spacing: 5px;
+  color: var(--bg); background: var(--gold);
+  border: none; padding: 12px 40px; cursor: pointer;
+  clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+  margin-top: 10px;
+  transition: all 0.2s;
+}
+#restart-btn:hover { background: #e8c870; transform: scale(1.04); }
+
+/* 데미지 숫자 */
+.dmg-float {
+  position: fixed;
+  font-family: 'Cinzel', serif;
+  font-weight: 900;
+  pointer-events: none;
+  animation: floatUp 0.9s forwards;
+  z-index: 60;
+}
+@keyframes floatUp {
+  0%   { transform: translateY(0) scale(1);   opacity: 1; }
+  100% { transform: translateY(-60px) scale(0.7); opacity: 0; }
+}
+
+/* 가드 아이콘 */
+#guard-icon {
+  position: absolute; bottom: 100px; left: 50%; transform: translateX(-50%);
+  font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 3px;
+  color: #3a8ab0;
+  opacity: 0;
+  transition: opacity 0.1s;
+  text-shadow: 0 0 15px rgba(58,138,176,0.8);
+}
+
+#game-wrap {
+  position: relative;
+}
+</style>
+</head>
+<body>
+
+<!-- 타이틀 -->
+<div id="title-screen">
+  <h1>WARRIOR.IO</h1>
+  <div class="subtitle">— battle prototype —</div>
+  <div class="divider"></div>
+  <button id="start-btn" onclick="startGame()">ENTER BATTLE</button>
+  <div class="controls-hint">
+    <div class="key-group">
+      <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></div>
+      <div class="key-label">이동</div>
+    </div>
+    <div class="key-group">
+      <span class="key">Z</span>
+      <div class="key-label">공격</div>
+    </div>
+    <div class="key-group">
+      <span class="key">X</span>
+      <div class="key-label">가드 (홀드)</div>
+    </div>
+  </div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div id="stats-panel">
+    <h3>RECORD</h3>
+    <div class="stat-row"><span>KILLS</span><span id="kills-val">0</span></div>
+    <div class="stat-row"><span>DEATHS</span><span id="deaths-val">0</span></div>
+    <div class="stat-row"><span>BOTS</span><span id="bots-val">3</span></div>
+  </div>
+
+  <div id="state-panel">
+    <div id="state-label">STATE</div>
+    <div id="state-value">IDLE</div>
+  </div>
+
+  <div id="kill-feed"></div>
+
+  <div id="player-hud">
+    <div id="guard-icon">🛡 GUARDING</div>
+    <div id="player-name-label">YOU</div>
+    <div id="hp-bar-wrap">
+      <div id="hp-bar"></div>
+      <div id="hp-text">100 / 100</div>
+    </div>
+    <div id="guard-bar-wrap">
+      <div id="guard-bar"></div>
+    </div>
+  </div>
+
+  <div id="minimap"><canvas id="minimap-canvas" width="120" height="120"></canvas></div>
+</div>
+
+<!-- 게임 오버 -->
+<div id="gameover-screen">
+  <h2>DEFEATED</h2>
+  <div class="result-stats" id="result-stats"></div>
+  <div class="divider"></div>
+  <button id="restart-btn" onclick="restartGame()">RISE AGAIN</button>
+</div>
+
+<div id="game-wrap">
+  <div id="game-container"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<script>
+// ═══════════════════════════════════════════════
+//  CONSTANTS
+// ═══════════════════════════════════════════════
+const FRAME      = 192;
+const MAP_W      = 2400;
+const MAP_H      = 2400;
+const TILE       = 64;
+const VIEW_W     = 800;
+const VIEW_H     = 560;
+const SPEED      = 140;
+const MAX_HP     = 100;
+const MAX_GUARD  = 100;
+const ATK_DMG    = 22;
+const ATK_RANGE  = 90;        // 근접 공격 거리
+const ATK_ANGLE  = 70;        // 공격 각도 (도, ±)
+const GUARD_DR   = 0.15;      // 가드 시 데미지 배율 (85% 감소)
+const GUARD_DRAIN= 18;        // 가드 게이지 소모/초
+const GUARD_REGEN= 22;        // 가드 게이지 재생/초
+const KNOCKBACK  = 220;
+const BOT_COUNT  = 3;
+const RESPAWN_T  = 4000;      // ms
+
+// Bot 색상 팔레트
+const BOT_TINTS = [0xff6666, 0x66aaff, 0xaaff88];
+const BOT_NAMES = ['IRON', 'AZURE', 'VERDANT'];
+
+// ═══════════════════════════════════════════════
+//  GLOBAL STATE
+// ═══════════════════════════════════════════════
+let game, scene;
+let kills = 0, deaths = 0;
+
+// ═══════════════════════════════════════════════
+//  TITLE / RESTART
+// ═══════════════════════════════════════════════
+function startGame() {
+  document.getElementById('title-screen').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  initPhaserGame();
+}
+function restartGame() {
+  document.getElementById('gameover-screen').style.display = 'none';
+  kills = 0; deaths = 0;
+  updateStatUI();
+  if (game) { game.destroy(true); game = null; }
+  initPhaserGame();
+}
+
+// ═══════════════════════════════════════════════
+//  PHASER INIT
+// ═══════════════════════════════════════════════
+function initPhaserGame() {
+  const cfg = {
+    type: Phaser.AUTO,
+    width: VIEW_W, height: VIEW_H,
+    parent: 'game-container',
+    backgroundColor: '#07060a',
+    physics: { default: 'arcade', arcade: { gravity: { y:0 }, debug: false } },
+    scene: { preload, create, update },
+    pixelArt: true, antialias: false, roundPixels: true,
+  };
+  game = new Phaser.Game(cfg);
+}
+
+// ═══════════════════════════════════════════════
+//  SCENE VARS
+// ═══════════════════════════════════════════════
+let player, bots = [], cursors, wasd, zKey, xKey;
+let playerHP = MAX_HP, playerGuard = MAX_GUARD;
+let playerState = 'idle';
+let playerFacing = 1; // 1=right, -1=left
+let playerAttackCooldown = 0;
+let playerGuardCooldown = 0;  // 가드 게이지 완전 소진 후 딜레이
+let isGuardBroken = false;
+
+let mapGfx, decorLayer;
+let particles;
+let miniCtx;
+
+// 파티클 풀
+let hitParticles;
+let slashGfx;
+let slashTimer = 0;
+
+// ═══════════════════════════════════════════════
+//  PRELOAD
+// ═══════════════════════════════════════════════
+function preload() {
+  scene = this;
+  this.load.spritesheet('attack', 'Warrior_Attack1.png', { frameWidth: FRAME, frameHeight: FRAME });
+  this.load.spritesheet('guard',  'Warrior_Guard.png',   { frameWidth: FRAME, frameHeight: FRAME });
+  this.load.spritesheet('idle',   'Warrior_Idle.png',    { frameWidth: FRAME, frameHeight: FRAME });
+  this.load.spritesheet('run',    'Warrior_Run.png',     { frameWidth: FRAME, frameHeight: FRAME });
+}
+
+// ═══════════════════════════════════════════════
+//  CREATE
+// ═══════════════════════════════════════════════
+function create() {
+  scene = this;
+  this.physics.world.setBounds(0, 0, MAP_W, MAP_H);
+
+  // ── 맵 ──────────────────────────────────────
+  buildMap(this);
+
+  // ── 애니메이션 ────────────────────────────────
+  const anims = this.anims;
+  if (!anims.exists('anim_idle'))
+    anims.create({ key:'anim_idle',   frames: anims.generateFrameNumbers('idle',   {start:0,end:7}), frameRate:8,  repeat:-1 });
+  if (!anims.exists('anim_run'))
+    anims.create({ key:'anim_run',    frames: anims.generateFrameNumbers('run',    {start:0,end:5}), frameRate:10, repeat:-1 });
+  if (!anims.exists('anim_attack'))
+    anims.create({ key:'anim_attack', frames: anims.generateFrameNumbers('attack', {start:0,end:3}), frameRate:12, repeat:0  });
+  if (!anims.exists('anim_guard'))
+    anims.create({ key:'anim_guard',  frames: anims.generateFrameNumbers('guard',  {start:0,end:5}), frameRate:8,  repeat:-1 });
+
+  // ── 플레이어 ──────────────────────────────────
+  player = this.physics.add.sprite(MAP_W/2, MAP_H/2, 'idle');
+  player.setScale(1.4);
+  player.setCollideWorldBounds(true);
+  player.play('anim_idle');
+  player.setDepth(10);
+  playerHP = MAX_HP; playerGuard = MAX_GUARD;
+  playerState = 'idle'; isGuardBroken = false;
+
+  // ── 슬래시 이펙트 그래픽스 ───────────────────
+  slashGfx = this.add.graphics().setDepth(20);
+
+  // ── 히트 파티클 ───────────────────────────────
+  hitParticles = this.add.particles(0, 0, 'attack', {
+    frame: [1,2],
+    scale: { start:0.35, end:0 },
+    alpha: { start:0.9, end:0 },
+    tint: 0xffaa44,
+    speed: { min:40, max:100 },
+    lifespan: 250,
+    quantity: 4,
+    emitting: false,
+  });
+  hitParticles.setDepth(30);
+
+  // ── 봇 생성 ───────────────────────────────────
+  bots = [];
+  const botSpawns = [
+    { x: MAP_W*0.25, y: MAP_H*0.25 },
+    { x: MAP_W*0.75, y: MAP_H*0.25 },
+    { x: MAP_W*0.5,  y: MAP_H*0.75 },
+  ];
+  for (let i = 0; i < BOT_COUNT; i++) {
+    bots.push(createBot(this, botSpawns[i].x, botSpawns[i].y, i));
+  }
+
+  // ── 입력 ─────────────────────────────────────
+  cursors = this.input.keyboard.createCursorKeys();
+  wasd = this.input.keyboard.addKeys({
+    up: Phaser.Input.Keyboard.KeyCodes.W,
+    down: Phaser.Input.Keyboard.KeyCodes.S,
+    left: Phaser.Input.Keyboard.KeyCodes.A,
+    right: Phaser.Input.Keyboard.KeyCodes.D,
+  });
+  zKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+  xKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+
+  // ── 카메라 ────────────────────────────────────
+  this.cameras.main.startFollow(player, true, 0.08, 0.08);
+  this.cameras.main.setBounds(0, 0, MAP_W, MAP_H);
+
+  // ── 미니맵 컨텍스트 ───────────────────────────
+  miniCtx = document.getElementById('minimap-canvas').getContext('2d');
+
+  // 공격 완료 콜백
+  player.on('animationcomplete-anim_attack', () => {
+    if (playerState === 'attack') {
+      playerState = 'idle';
+      player.play('anim_idle', true);
+      setStateUI('IDLE');
+    }
+  });
+
+  document.getElementById('bots-val').textContent = BOT_COUNT;
+}
+
+// ═══════════════════════════════════════════════
+//  BOT FACTORY
+// ═══════════════════════════════════════════════
+function createBot(scene, x, y, idx) {
+  const spr = scene.physics.add.sprite(x, y, 'idle');
+  spr.setScale(1.3);
+  spr.setCollideWorldBounds(true);
+  spr.play('anim_idle');
+  spr.setDepth(9);
+  spr.setTint(BOT_TINTS[idx]);
+
+  // HP 바 (월드 공간)
+  const barBg = scene.add.rectangle(x, y - 52, 60, 7, 0x1a0808).setDepth(15);
+  const barFg = scene.add.rectangle(x - 30, y - 52, 60, 7, 0xcc3333).setDepth(16).setOrigin(0, 0.5);
+
+  const nameTag = scene.add.text(x, y - 62, BOT_NAMES[idx], {
+    fontFamily: 'Cinzel, serif', fontSize: '9px',
+    color: '#c9a84c', letterSpacing: 2,
+  }).setOrigin(0.5).setDepth(16);
+
+  const bot = {
+    spr, barBg, barFg, nameTag,
+    idx,
+    hp: MAX_HP,
+    guard: MAX_GUARD,
+    state: 'patrol',      // patrol | chase | attack | retreat | guard | dead
+    facing: 1,
+    attackCooldown: 0,
+    guardCooldown: 0,
+    isGuardBroken: false,
+    stateTimer: 0,
+    patrolTarget: { x: x + Phaser.Math.Between(-300,300), y: y + Phaser.Math.Between(-300,300) },
+    alive: true,
+    respawnTimer: 0,
+    attackJustDone: false,
+  };
+
+  return bot;
+}
+
+// ═══════════════════════════════════════════════
+//  UPDATE
+// ═══════════════════════════════════════════════
+function update(time, delta) {
+  if (!player || !player.active) return;
+  const dt = delta / 1000;
+
+  slashGfx.clear();
+  slashTimer = Math.max(0, slashTimer - dt);
+
+  // ── 플레이어 ──────────────────────────────────
+  updatePlayer(dt);
+
+  // ── 봇 ───────────────────────────────────────
+  bots.forEach(bot => updateBot(bot, dt));
+
+  // ── 미니맵 ────────────────────────────────────
+  drawMinimap();
+
+  // ── HUD ───────────────────────────────────────
+  updateHUD();
+}
+
+// ── 플레이어 업데이트 ──────────────────────────
+function updatePlayer(dt) {
+  playerAttackCooldown = Math.max(0, playerAttackCooldown - dt);
+  if (!isGuardBroken) playerGuardCooldown = 0;
+
+  const left  = cursors.left.isDown  || wasd.left.isDown;
+  const right = cursors.right.isDown || wasd.right.isDown;
+  const up    = cursors.up.isDown    || wasd.up.isDown;
+  const down  = cursors.down.isDown  || wasd.down.isDown;
+  const attackJD = Phaser.Input.Keyboard.JustDown(zKey);
+  const guardHeld = xKey.isDown && !isGuardBroken;
+
+  // 공격 중엔 이동 없음
+  if (playerState === 'attack') {
+    player.setVelocity(0, 0);
+    return;
+  }
+
+  // ── 가드 ──
+  if (guardHeld && playerGuard > 0) {
+    if (playerState !== 'guard') {
+      playerState = 'guard';
+      player.play('anim_guard', true);
+      setStateUI('GUARD');
+    }
+    player.setVelocity(0, 0);
+    playerGuard = Math.max(0, playerGuard - GUARD_DRAIN * dt);
+    if (playerGuard <= 0) {
+      isGuardBroken = true;
+      playerState = 'idle';
+      player.play('anim_idle', true);
+      setStateUI('IDLE');
+      showDmgFloat('GUARD BREAK', player.x, player.y - 30, '#3a8ab0', '13px');
+    }
+    document.getElementById('guard-icon').style.opacity = '1';
+    return;
+  } else {
+    document.getElementById('guard-icon').style.opacity = '0';
+    if (playerState === 'guard') { playerState = 'idle'; player.play('anim_idle', true); setStateUI('IDLE'); }
+  }
+
+  // 가드 게이지 회복
+  if (!guardHeld) {
+    if (isGuardBroken) {
+      playerGuardCooldown = (playerGuardCooldown || 0) + dt;
+      if (playerGuardCooldown >= 2.0) { isGuardBroken = false; playerGuardCooldown = 0; }
+      playerGuard = Math.min(MAX_GUARD, playerGuard + GUARD_REGEN * 0.3 * dt);
+    } else {
+      playerGuard = Math.min(MAX_GUARD, playerGuard + GUARD_REGEN * dt);
+    }
+  }
+
+  // ── 공격 ──
+  if (attackJD && playerAttackCooldown <= 0) {
+    playerState = 'attack';
+    player.setVelocity(0, 0);
+    player.play('anim_attack', true);
+    playerAttackCooldown = 0.8;
+    setStateUI('ATTACK');
+
+    // 히트 판정
+    bots.forEach(bot => {
+      if (!bot.alive) return;
+      const dist = Phaser.Math.Distance.Between(player.x, player.y, bot.spr.x, bot.spr.y);
+      if (dist <= ATK_RANGE) {
+        const angle = Phaser.Math.Angle.Between(player.x, player.y, bot.spr.x, bot.spr.y);
+        const facingAngle = playerFacing > 0 ? 0 : Math.PI;
+        const angleDiff = Math.abs(Phaser.Math.Angle.ShortestBetween(
+          Phaser.Math.RadToDeg(facingAngle),
+          Phaser.Math.RadToDeg(angle)
+        ));
+        if (angleDiff <= ATK_ANGLE) {
+          let dmg = ATK_DMG;
+          const isGuarding = bot.state === 'guard';
+          if (isGuarding) dmg = Math.floor(dmg * GUARD_DR);
+          botTakeDamage(bot, dmg, angle, isGuarding);
+        }
+      }
+    });
+
+    // 슬래시 이펙트
+    drawSlash(player.x, player.y, playerFacing);
+    return;
+  }
+
+  // ── 이동 ──
+  let vx = 0, vy = 0;
+  if (left)  vx = -SPEED;
+  if (right) vx =  SPEED;
+  if (up)    vy = -SPEED;
+  if (down)  vy =  SPEED;
+  if (vx && vy) { vx *= 0.707; vy *= 0.707; }
+
+  player.setVelocity(vx, vy);
+  if (vx < 0) { player.setFlipX(true);  playerFacing = -1; }
+  if (vx > 0) { player.setFlipX(false); playerFacing = 1; }
+
+  const moving = vx !== 0 || vy !== 0;
+  if (moving && playerState !== 'run') {
+    playerState = 'run'; player.play('anim_run', true); setStateUI('RUN');
+  } else if (!moving && playerState !== 'idle') {
+    playerState = 'idle'; player.play('anim_idle', true); setStateUI('IDLE');
+  }
+}
+
+// ── 봇 AI ─────────────────────────────────────
+function updateBot(bot, dt) {
+  if (!bot.alive) {
+    bot.respawnTimer -= dt * 1000;
+    if (bot.respawnTimer <= 0) respawnBot(bot);
+    return;
+  }
+
+  bot.attackCooldown = Math.max(0, bot.attackCooldown - dt);
+  bot.stateTimer = Math.max(0, bot.stateTimer - dt);
+
+  // HP 바 위치 동기화
+  bot.barBg.setPosition(bot.spr.x, bot.spr.y - 52);
+  bot.barFg.setPosition(bot.spr.x - 30, bot.spr.y - 52);
+  bot.barFg.width = 60 * (bot.hp / MAX_HP);
+  bot.nameTag.setPosition(bot.spr.x, bot.spr.y - 62);
+
+  const dist = Phaser.Math.Distance.Between(bot.spr.x, bot.spr.y, player.x, player.y);
+  const angleToPlayer = Phaser.Math.Angle.Between(bot.spr.x, bot.spr.y, player.x, player.y);
+
+  // 봇 가드 게이지 재생
+  if (bot.state !== 'guard') {
+    if (!bot.isGuardBroken) bot.guard = Math.min(MAX_GUARD, bot.guard + GUARD_REGEN * dt);
+    else bot.guard = Math.min(MAX_GUARD, bot.guard + GUARD_REGEN * 0.2 * dt);
+  }
+
+  // ── 상태 머신 ──
+  switch (bot.state) {
+
+    case 'patrol': {
+      // 랜덤 배회
+      const ptDist = Phaser.Math.Distance.Between(bot.spr.x, bot.spr.y, bot.patrolTarget.x, bot.patrolTarget.y);
+      if (ptDist < 30 || bot.stateTimer <= 0) {
+        bot.patrolTarget = {
+          x: Phaser.Math.Clamp(bot.spr.x + Phaser.Math.Between(-400,400), 60, MAP_W-60),
+          y: Phaser.Math.Clamp(bot.spr.y + Phaser.Math.Between(-400,400), 60, MAP_H-60),
+        };
+        bot.stateTimer = Phaser.Math.FloatBetween(2, 4);
+      }
+      moveToward(bot, bot.patrolTarget.x, bot.patrolTarget.y, SPEED * 0.55);
+      if (dist < 380) bot.state = 'chase';
+      break;
+    }
+
+    case 'chase': {
+      if (dist > 500) { bot.state = 'patrol'; break; }
+      if (dist < ATK_RANGE * 0.9) { bot.state = 'attack'; bot.stateTimer = 0; break; }
+      // HP 낮으면 가드하며 후퇴 고려
+      if (bot.hp < 30 && Math.random() < 0.005) { bot.state = 'retreat'; bot.stateTimer = 1.5; break; }
+      moveToward(bot, player.x, player.y, SPEED * 0.8);
+      break;
+    }
+
+    case 'attack': {
+      bot.spr.setVelocity(0, 0);
+      if (dist > ATK_RANGE * 1.3) { bot.state = 'chase'; break; }
+
+      // 가끔 가드 (플레이어가 attack 상태일 때 반응)
+      if (playerState === 'attack' && bot.guard > 20 && !bot.isGuardBroken && Math.random() < 0.04) {
+        bot.state = 'guard';
+        bot.stateTimer = 0.6;
+        bot.spr.play('anim_guard', true);
+        break;
+      }
+
+      if (bot.attackCooldown <= 0 && bot.stateTimer <= 0) {
+        // 공격 실행
+        bot.spr.play('anim_attack', true);
+        bot.attackCooldown = Phaser.Math.FloatBetween(1.0, 1.8);
+        bot.stateTimer = 0.35;
+
+        // 히트 판정 (딜레이 느낌으로 짧은 대기)
+        scene.time.delayedCall(200, () => {
+          if (!bot.alive) return;
+          const d2 = Phaser.Math.Distance.Between(bot.spr.x, bot.spr.y, player.x, player.y);
+          if (d2 <= ATK_RANGE) {
+            let dmg = ATK_DMG;
+            const guarding = playerState === 'guard' && !isGuardBroken;
+            if (guarding) {
+              dmg = Math.floor(dmg * GUARD_DR);
+              playerGuard = Math.max(0, playerGuard - 30);
+              if (playerGuard <= 0) { isGuardBroken = true; }
+            }
+            playerTakeDamage(dmg, angleToPlayer + Math.PI, guarding);
+          }
+        });
+      } else {
+        bot.spr.play('anim_idle', true);
+      }
+      break;
+    }
+
+    case 'guard': {
+      bot.spr.setVelocity(0, 0);
+      bot.guard = Math.max(0, bot.guard - GUARD_DRAIN * 0.6 * dt);
+      if (bot.stateTimer <= 0 || bot.guard <= 0) {
+        if (bot.guard <= 0) bot.isGuardBroken = true;
+        bot.state = dist < ATK_RANGE * 1.3 ? 'attack' : 'chase';
+        bot.spr.play('anim_idle', true);
+      }
+      break;
+    }
+
+    case 'retreat': {
+      const awayX = bot.spr.x - Math.cos(angleToPlayer) * SPEED * 0.9;
+      const awayY = bot.spr.y - Math.sin(angleToPlayer) * SPEED * 0.9;
+      moveToward(bot, awayX, awayY, SPEED * 0.9);
+      if (bot.stateTimer <= 0) bot.state = 'chase';
+      break;
+    }
+  }
+
+  // 방향 플립
+  const vx = bot.spr.body.velocity.x;
+  if (vx < -5)  { bot.spr.setFlipX(true);  bot.facing = -1; }
+  if (vx > 5)   { bot.spr.setFlipX(false); bot.facing = 1; }
+
+  // 이동 중 달리기 애니
+  const speed = Math.abs(bot.spr.body.velocity.x) + Math.abs(bot.spr.body.velocity.y);
+  if (bot.state !== 'attack' && bot.state !== 'guard') {
+    if (speed > 10) bot.spr.play('anim_run', true);
+    else            bot.spr.play('anim_idle', true);
+  }
+}
+
+function moveToward(bot, tx, ty, speed) {
+  const angle = Phaser.Math.Angle.Between(bot.spr.x, bot.spr.y, tx, ty);
+  bot.spr.setVelocity(Math.cos(angle) * speed, Math.sin(angle) * speed);
+}
+
+// ═══════════════════════════════════════════════
+//  DAMAGE
+// ═══════════════════════════════════════════════
+function botTakeDamage(bot, dmg, hitAngle, guarded) {
+  bot.hp = Math.max(0, bot.hp - dmg);
+
+  // 파티클
+  hitParticles.setPosition(bot.spr.x, bot.spr.y);
+  hitParticles.explode(guarded ? 2 : 6);
+
+  // 넉백
+  if (!guarded) {
+    bot.spr.setVelocity(
+      Math.cos(hitAngle) * KNOCKBACK,
+      Math.sin(hitAngle) * KNOCKBACK
+    );
+  }
+
+  // 데미지 숫자
+  const col = guarded ? '#3a8ab0' : (dmg > 15 ? '#ff4444' : '#ffaa44');
+  showDmgFloat(guarded ? `${dmg} 🛡` : `-${dmg}`, bot.spr.x, bot.spr.y - 40, col, guarded ? '12px' : '18px');
+
+  // 히트 반응
+  scene.tweens.add({
+    targets: bot.spr,
+    alpha: 0.3,
+    duration: 80,
+    yoyo: true,
+    repeat: 1,
+  });
+
+  if (bot.hp <= 0) killBot(bot);
+}
+
+function playerTakeDamage(dmg, hitAngle, guarded) {
+  playerHP = Math.max(0, playerHP - dmg);
+
+  hitParticles.setPosition(player.x, player.y);
+  hitParticles.explode(guarded ? 2 : 5);
+
+  if (!guarded) {
+    player.setVelocity(
+      Math.cos(hitAngle) * KNOCKBACK * 0.7,
+      Math.sin(hitAngle) * KNOCKBACK * 0.7
+    );
+  }
+
+  const col = guarded ? '#3a8ab0' : '#ff4444';
+  showDmgFloat(guarded ? `${dmg} 🛡` : `-${dmg}`, player.x, player.y - 50, col, guarded ? '12px' : '18px');
+
+  // 화면 레드 플래시
+  if (!guarded) {
+    scene.cameras.main.flash(120, 180, 0, 0, false);
+    scene.cameras.main.shake(100, 0.006);
+  }
+
+  scene.tweens.add({ targets: player, alpha: 0.3, duration: 80, yoyo: true, repeat: 1 });
+
+  if (playerHP <= 0) playerDie();
+}
+
+// ═══════════════════════════════════════════════
+//  KILL / DEATH / RESPAWN
+// ═══════════════════════════════════════════════
+function killBot(bot) {
+  bot.alive = false;
+  bot.hp = 0;
+  bot.state = 'dead';
+  bot.spr.setActive(false).setVisible(false);
+  bot.barBg.setVisible(false);
+  bot.barFg.setVisible(false);
+  bot.nameTag.setVisible(false);
+
+  kills++;
+  updateStatUI();
+  addKillFeed(`⚔ ${BOT_NAMES[bot.idx]} defeated`);
+  bot.respawnTimer = RESPAWN_T;
+  document.getElementById('bots-val').textContent = bots.filter(b => b.alive).length;
+}
+
+function respawnBot(bot) {
+  bot.alive = true;
+  bot.hp = MAX_HP;
+  bot.guard = MAX_GUARD;
+  bot.state = 'patrol';
+  bot.isGuardBroken = false;
+  bot.attackCooldown = 1.0;
+
+  // 플레이어에게서 멀리
+  let rx, ry;
+  do {
+    rx = Phaser.Math.Between(80, MAP_W - 80);
+    ry = Phaser.Math.Between(80, MAP_H - 80);
+  } while (Phaser.Math.Distance.Between(rx, ry, player.x, player.y) < 500);
+
+  bot.spr.setPosition(rx, ry);
+  bot.spr.setActive(true).setVisible(true).setAlpha(1);
+  bot.barBg.setVisible(true);
+  bot.barFg.setVisible(true);
+  bot.nameTag.setVisible(true);
+  bot.spr.play('anim_idle', true);
+
+  addKillFeed(`↑ ${BOT_NAMES[bot.idx]} returned`, '#7a9a5a');
+  document.getElementById('bots-val').textContent = bots.filter(b => b.alive).length;
+}
+
+function playerDie() {
+  deaths++;
+  playerHP = 0;
+  addKillFeed('✝ YOU were defeated', '#8b1a1a');
+
+  // 죽음 연출
+  scene.cameras.main.flash(300, 180, 0, 0, false);
+  scene.tweens.add({
+    targets: player,
+    alpha: 0,
+    angle: 90,
+    duration: 600,
+    onComplete: () => {
+      // 리스폰
+      scene.time.delayedCall(RESPAWN_T, () => {
+        let rx, ry;
+        do {
+          rx = Phaser.Math.Between(80, MAP_W - 80);
+          ry = Phaser.Math.Between(80, MAP_H - 80);
+        } while (bots.some(b => b.alive && Phaser.Math.Distance.Between(rx, ry, b.spr.x, b.spr.y) < 400));
+
+        player.setPosition(rx, ry).setAlpha(1).setAngle(0);
+        playerHP = MAX_HP; playerGuard = MAX_GUARD;
+        playerState = 'idle'; isGuardBroken = false;
+        player.play('anim_idle', true);
+        scene.cameras.main.flash(200, 201, 168, 76, false);
+        addKillFeed('↑ YOU returned', '#c9a84c');
+        updateStatUI();
+      });
+    }
+  });
+
+  updateStatUI();
+}
+
+// ═══════════════════════════════════════════════
+//  SLASH EFFECT
+// ═══════════════════════════════════════════════
+function drawSlash(x, y, facing) {
+  slashGfx.clear();
+  const dir = facing > 0 ? 1 : -1;
+  const cx = scene.cameras.main;
+
+  // 월드→스크린 변환
+  slashGfx.lineStyle(3, 0xffe080, 0.85);
+  slashGfx.beginPath();
+  slashGfx.moveTo(x + dir * 20, y - 20);
+  slashGfx.lineTo(x + dir * ATK_RANGE * 0.8, y + 10);
+  slashGfx.lineTo(x + dir * 30, y + 30);
+  slashGfx.strokePath();
+
+  slashGfx.fillStyle(0xffe080, 0.18);
+  slashGfx.beginPath();
+  slashGfx.moveTo(x + dir * 20, y - 20);
+  slashGfx.lineTo(x + dir * ATK_RANGE * 0.8, y + 10);
+  slashGfx.lineTo(x + dir * 30, y + 30);
+  slashGfx.closePath();
+  slashGfx.fillPath();
+
+  slashTimer = 0.12;
+  scene.time.delayedCall(120, () => slashGfx.clear());
+}
+
+// ═══════════════════════════════════════════════
+//  MAP BUILDER
+// ═══════════════════════════════════════════════
+function buildMap(scene) {
+  const g = scene.add.graphics().setDepth(0);
+
+  // 기본 바닥
+  g.fillStyle(0x0e0b06);
+  g.fillRect(0, 0, MAP_W, MAP_H);
+
+  // 타일 패턴
+  for (let y = 0; y < MAP_H; y += TILE) {
+    for (let x = 0; x < MAP_W; x += TILE) {
+      const dark = ((x / TILE + y / TILE) % 2 === 0);
+      g.fillStyle(dark ? 0x131009 : 0x181408, 0.9);
+      g.fillRect(x+1, y+1, TILE-2, TILE-2);
+    }
+  }
+
+  // 지형 구역 (어두운 영역)
+  const zones = [
+    {x:200,  y:200,  w:300, h:200},
+    {x:1800, y:400,  w:250, h:300},
+    {x:400,  y:1600, w:350, h:250},
+    {x:1600, y:1700, w:300, h:300},
+    {x:1000, y:900,  w:400, h:300},
+  ];
+  zones.forEach(z => {
+    g.fillStyle(0x0a0805, 0.5);
+    g.fillRect(z.x, z.y, z.w, z.h);
+    g.lineStyle(1, 0x2a2010, 0.3);
+    g.strokeRect(z.x, z.y, z.w, z.h);
+  });
+
+  // 화톳불 / 기둥 장식
+  const fires = [];
+  for (let i = 0; i < 30; i++) {
+    const fx = Phaser.Math.Between(100, MAP_W - 100);
+    const fy = Phaser.Math.Between(100, MAP_H - 100);
+    fires.push({x: fx, y: fy});
+    // 기둥
+    g.fillStyle(0x2a1e0c);
+    g.fillRect(fx-4, fy-16, 8, 18);
+    // 글로우
+    g.fillStyle(0xc9641c, 0.08);
+    g.fillCircle(fx, fy-18, 30);
+    g.fillStyle(0xe8a030, 0.15);
+    g.fillCircle(fx, fy-18, 16);
+    g.fillStyle(0xffd060, 0.4);
+    g.fillCircle(fx, fy-18, 6);
+  }
+
+  // 경계
+  g.lineStyle(4, 0x4a3a22, 1);
+  g.strokeRect(2, 2, MAP_W-4, MAP_H-4);
+  g.lineStyle(2, 0x2a2010, 0.5);
+  g.strokeRect(8, 8, MAP_W-16, MAP_H-16);
+}
+
+// ═══════════════════════════════════════════════
+//  MINIMAP
+// ═══════════════════════════════════════════════
+function drawMinimap() {
+  if (!miniCtx) return;
+  const mW = 120, mH = 120;
+  const scaleX = mW / MAP_W, scaleY = mH / MAP_H;
+
+  miniCtx.clearRect(0, 0, mW, mH);
+  miniCtx.fillStyle = '#07060a';
+  miniCtx.fillRect(0, 0, mW, mH);
+
+  // 봇
+  bots.forEach((bot, i) => {
+    if (!bot.alive) return;
+    miniCtx.fillStyle = ['#ff6666','#6699ff','#88ff66'][i];
+    miniCtx.fillRect(bot.spr.x * scaleX - 2, bot.spr.y * scaleY - 2, 4, 4);
+  });
+
+  // 플레이어
+  miniCtx.fillStyle = '#c9a84c';
+  const px = player.x * scaleX, py = player.y * scaleY;
+  miniCtx.beginPath();
+  miniCtx.arc(px, py, 3.5, 0, Math.PI * 2);
+  miniCtx.fill();
+
+  // 테두리
+  miniCtx.strokeStyle = '#2a2018';
+  miniCtx.lineWidth = 1;
+  miniCtx.strokeRect(0, 0, mW, mH);
+}
+
+// ═══════════════════════════════════════════════
+//  HUD HELPERS
+// ═══════════════════════════════════════════════
+function updateHUD() {
+  // HP 바
+  const hpPct = Math.max(0, playerHP / MAX_HP) * 100;
+  document.getElementById('hp-bar').style.width = hpPct + '%';
+  document.getElementById('hp-text').textContent = `${Math.ceil(playerHP)} / ${MAX_HP}`;
+
+  // HP 색상
+  const hpEl = document.getElementById('hp-bar');
+  if (hpPct > 60) hpEl.style.background = 'linear-gradient(90deg, #8b1a1a, #c93030)';
+  else if (hpPct > 30) hpEl.style.background = 'linear-gradient(90deg, #8b4a1a, #c97030)';
+  else hpEl.style.background = 'linear-gradient(90deg, #6b1a1a, #ff2020)';
+
+  // 가드 바
+  const gPct = Math.max(0, playerGuard / MAX_GUARD) * 100;
+  document.getElementById('guard-bar').style.width = gPct + '%';
+  document.getElementById('guard-bar').style.background = isGuardBroken
+    ? 'linear-gradient(90deg, #3a2a1a, #6a4a2a)'
+    : 'linear-gradient(90deg, #1a4a6a, #3a8ab0)';
+}
+
+function updateStatUI() {
+  document.getElementById('kills-val').textContent = kills;
+  document.getElementById('deaths-val').textContent = deaths;
+}
+
+function setStateUI(text) {
+  document.getElementById('state-value').textContent = text;
+}
+
+function addKillFeed(msg, color = '#c9a84c') {
+  const feed = document.getElementById('kill-feed');
+  const el = document.createElement('div');
+  el.className = 'kill-entry';
+  el.textContent = msg;
+  el.style.color = color;
+  feed.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+
+function showDmgFloat(text, wx, wy, color, fontSize = '18px') {
+  // 월드 → 화면 좌표 변환
+  const cam = scene.cameras.main;
+  const sx = (wx - cam.worldView.x) * cam.zoom + VIEW_W / 2 - (cam.worldView.width / 2) * cam.zoom;
+  const sy = (wy - cam.worldView.y) * cam.zoom + VIEW_H / 2 - (cam.worldView.height / 2) * cam.zoom;
+
+  const el = document.createElement('div');
+  el.className = 'dmg-float';
+  el.textContent = text;
+  el.style.cssText = `
+    left: ${sx + document.getElementById('game-container').getBoundingClientRect().left}px;
+    top:  ${sy + document.getElementById('game-container').getBoundingClientRect().top}px;
+    color: ${color};
+    font-size: ${fontSize};
+    text-shadow: 0 0 10px ${color};
+  `;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 900);
+}
+</script>
+</body>
+</html>

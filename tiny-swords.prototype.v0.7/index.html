@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WARRIOR.IO — v0.7</title>
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <div id="title-screen">
+    <h1>WARRIOR.IO</h1>
+    <div class="subtitle">— battle prototype v0.7 —</div>
+    <div class="divider"></div>
+    <div class="character-select">
+      <button id="start-warrior-btn" class="start-btn">WARRIOR</button>
+      <button id="start-archer-btn" class="start-btn alt">ARCHER</button>
+    </div>
+    <div class="controls-hint">
+      <div class="key-group">
+        <div><span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span></div>
+        <div class="key-label">이동</div>
+      </div>
+      <div class="key-group">
+        <span class="key">SHIFT</span>
+        <div class="key-label">달리기</div>
+      </div>
+      <div class="key-group">
+        <span class="key">Z / CLICK</span>
+        <div class="key-label">공격</div>
+      </div>
+      <div class="key-group">
+        <span class="key">X</span>
+        <div class="key-label">가드</div>
+      </div>
+      <div class="key-group">
+        <span class="key">MOUSE</span>
+        <div class="key-label">방향만</div>
+      </div>
+      <div class="key-group">
+        <span class="key">SPACE</span>
+        <div class="key-label">정지</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div id="stats-panel">
+      <h3>RECORD</h3>
+      <div class="stat-row"><span>KILLS</span><span id="kills-val">0</span></div>
+      <div class="stat-row"><span>DEATHS</span><span id="deaths-val">0</span></div>
+      <div class="stat-row"><span>BOTS</span><span id="bots-val">3</span></div>
+    </div>
+
+    <div id="state-panel">
+      <div id="state-label">STATE</div>
+      <div id="state-value">IDLE</div>
+    </div>
+
+    <div id="kill-feed"></div>
+
+    <div id="player-hud">
+      <div id="guard-icon">🛡 GUARDING</div>
+      <div id="player-name-label">YOU</div>
+      <div id="hp-bar-wrap">
+        <div id="hp-bar"></div>
+        <div id="hp-text">100 / 100</div>
+      </div>
+      <div id="guard-bar-wrap"><div id="guard-bar"></div></div>
+    </div>
+
+    <div id="minimap"><canvas id="minimap-canvas" width="120" height="120"></canvas></div>
+  </div>
+
+  <div id="gameover-screen">
+    <h2>DEFEATED</h2>
+    <div class="result-stats" id="result-stats"></div>
+    <div class="divider"></div>
+    <button id="restart-btn">RISE AGAIN</button>
+  </div>
+
+  <div id="game-wrap"><div id="game-container"></div></div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+  <script type="module" src="./js/core/main.js"></script>
+</body>
+</html>

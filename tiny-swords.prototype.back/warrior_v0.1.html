@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Warrior Demo</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a12;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: #e8d5a3;
+    overflow: hidden;
+  }
+  h1 {
+    font-size: 22px;
+    letter-spacing: 6px;
+    color: #c9a84c;
+    text-shadow: 0 0 20px rgba(201,168,76,0.5);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  #game-container {
+    border: 2px solid #3a2e1e;
+    box-shadow: 0 0 40px rgba(201,168,76,0.15), inset 0 0 20px rgba(0,0,0,0.5);
+    border-radius: 4px;
+    position: relative;
+  }
+  #controls {
+    margin-top: 14px;
+    display: flex;
+    gap: 20px;
+    align-items: center;
+    font-size: 12px;
+    letter-spacing: 2px;
+    color: #7a6a4a;
+  }
+  .key {
+    display: inline-block;
+    background: #1a1510;
+    border: 1px solid #4a3a22;
+    border-bottom: 3px solid #2a1e0e;
+    padding: 3px 8px;
+    border-radius: 3px;
+    color: #c9a84c;
+    font-size: 11px;
+  }
+  #state-display {
+    margin-top: 10px;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: #4a3a22;
+    text-transform: uppercase;
+  }
+  #state-display span {
+    color: #c9a84c;
+  }
+</style>
+</head>
+<body>
+
+<h1>⚔ Warrior</h1>
+<div id="game-container"></div>
+<div id="controls">
+  <span><span class="key">WASD</span> / <span class="key">↑↓←→</span> 이동</span>
+  <span><span class="key">Z</span> 공격</span>
+  <span><span class="key">X</span> 가드</span>
+</div>
+<div id="state-display">STATE: <span id="state-text">IDLE</span></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js"></script>
+<script>
+// ──────────────────────────────────────────────
+//  Sprite sheet 정보
+//  모든 시트: 192×192px 프레임
+//  Attack1: 4프레임  Guard: 6프레임
+//  Idle: 8프레임     Run: 6프레임
+// ──────────────────────────────────────────────
+const FRAME = 192;
+
+class MapScene extends Phaser.Scene {
+  constructor() { super({ key: 'MapScene' }); }
+
+  preload() {
+    // 스프라이트 시트를 base64로 로드
+    this.load.spritesheet('attack', 'Warrior_Attack1.png', { frameWidth: FRAME, frameHeight: FRAME });
+    this.load.spritesheet('guard',  'Warrior_Guard.png',   { frameWidth: FRAME, frameHeight: FRAME });
+    this.load.spritesheet('idle',   'Warrior_Idle.png',    { frameWidth: FRAME, frameHeight: FRAME });
+    this.load.spritesheet('run',    'Warrior_Run.png',     { frameWidth: FRAME, frameHeight: FRAME });
+  }
+
+  create() {
+    const W = this.scale.width;
+    const H = this.scale.height;
+
+    // ── 타일맵 그리기 (그래픽스로 직접) ──────────────
+    this.createMap(W, H);
+
+    // ── 애니메이션 등록 ───────────────────────────
+    this.anims.create({ key: 'anim_idle',   frames: this.anims.generateFrameNumbers('idle',   { start: 0, end: 7 }), frameRate: 8,  repeat: -1 });
+    this.anims.create({ key: 'anim_run',    frames: this.anims.generateFrameNumbers('run',    { start: 0, end: 5 }), frameRate: 10, repeat: -1 });
+    this.anims.create({ key: 'anim_attack', frames: this.anims.generateFrameNumbers('attack', { start: 0, end: 3 }), frameRate: 10, repeat: 0  });
+    this.anims.create({ key: 'anim_guard',  frames: this.anims.generateFrameNumbers('guard',  { start: 0, end: 5 }), frameRate: 8,  repeat: -1 });
+
+    // ── 캐릭터 생성 ───────────────────────────────
+    this.warrior = this.physics.add.sprite(W / 2, H / 2, 'idle');
+    this.warrior.setScale(1.5);
+    this.warrior.setCollideWorldBounds(true);
+    this.warrior.play('anim_idle');
+
+    // ── 카메라 팔로우 ─────────────────────────────
+    this.cameras.main.startFollow(this.warrior, true, 0.1, 0.1);
+    this.cameras.main.setBounds(0, 0, W * 2, H * 2);
+    this.physics.world.setBounds(0, 0, W * 2, H * 2);
+
+    // ── 입력 ─────────────────────────────────────
+    this.cursors = this.input.keyboard.createCursorKeys();
+    this.wasd = this.input.keyboard.addKeys({
+      up: Phaser.Input.Keyboard.KeyCodes.W,
+      down: Phaser.Input.Keyboard.KeyCodes.S,
+      left: Phaser.Input.Keyboard.KeyCodes.A,
+      right: Phaser.Input.Keyboard.KeyCodes.D,
+    });
+    this.attackKey = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Z);
+    this.guardKey  = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.X);
+
+    this.state = 'idle';    // 현재 상태
+    this.facingRight = true;
+
+    // ── 공격 종료 콜백 ────────────────────────────
+    this.warrior.on('animationcomplete-anim_attack', () => {
+      this.state = 'idle';
+      this.warrior.play('anim_idle');
+      this.updateStateDisplay('IDLE');
+    });
+
+    // ── 파티클 (공격 이펙트용) ────────────────────
+    this.attackParticles = this.add.particles(0, 0, 'attack', {
+      frame: [2, 3],
+      scale: { start: 0.4, end: 0 },
+      alpha: { start: 0.8, end: 0 },
+      speed: { min: 20, max: 60 },
+      lifespan: 300,
+      quantity: 3,
+      emitting: false,
+    });
+
+    // ── UI 오버레이 ───────────────────────────────
+    this.createUI();
+  }
+
+  // 타일 기반 맵 생성
+  createMap(W, H) {
+    const gfx = this.add.graphics();
+    const mW = W * 2, mH = H * 2;
+    const tileSize = 48;
+
+    // 바닥 (어두운 흙색)
+    gfx.fillStyle(0x1a1208);
+    gfx.fillRect(0, 0, mW, mH);
+
+    // 타일 그리드
+    for (let y = 0; y < mH; y += tileSize) {
+      for (let x = 0; x < mW; x += tileSize) {
+        const isDark = ((x / tileSize + y / tileSize) % 2 === 0);
+        gfx.fillStyle(isDark ? 0x1e1610 : 0x231a12, 0.6);
+        gfx.fillRect(x + 1, y + 1, tileSize - 2, tileSize - 2);
+      }
+    }
+
+    // 장식용 돌 / 화톳불 등
+    const decorations = [
+      { x: 120, y: 120, type: 'rock' }, { x: 350, y: 80, type: 'rock' },
+      { x: 600, y: 250, type: 'rock' }, { x: 100, y: 400, type: 'rock' },
+      { x: 500, y: 450, type: 'fire' }, { x: 200, y: 300, type: 'fire' },
+      { x: 700, y: 120, type: 'fire' }, { x: 50, y: 550, type: 'rock' },
+      { x: 680, y: 550, type: 'rock' }, { x: 380, y: 500, type: 'fire' },
+    ];
+
+    decorations.forEach(d => {
+      if (d.type === 'rock') {
+        gfx.fillStyle(0x2a2018);
+        gfx.fillEllipse(d.x, d.y, 30, 20);
+        gfx.fillStyle(0x3a3028);
+        gfx.fillEllipse(d.x - 3, d.y - 2, 18, 12);
+      } else {
+        // 화톳불 기둥
+        gfx.fillStyle(0x3a2a18);
+        gfx.fillRect(d.x - 3, d.y - 10, 6, 14);
+        // 불빛 글로우
+        gfx.fillStyle(0xc9641c, 0.15);
+        gfx.fillCircle(d.x, d.y - 14, 22);
+        gfx.fillStyle(0xe8a030, 0.25);
+        gfx.fillCircle(d.x, d.y - 14, 12);
+        gfx.fillStyle(0xffd060, 0.5);
+        gfx.fillCircle(d.x, d.y - 14, 5);
+      }
+    });
+
+    // 경계 벽
+    gfx.lineStyle(3, 0x4a3a22, 1);
+    gfx.strokeRect(2, 2, mW - 4, mH - 4);
+  }
+
+  createUI() {
+    // 카메라 UI는 fixed 카메라에
+    this.uiCamera = this.cameras.add(0, 0, this.scale.width, this.scale.height);
+    this.uiCamera.setName('ui');
+    this.uiCamera.ignore([]); // 메인 장면은 다 보이게
+
+    // 조작법 힌트는 HTML로 처리됨
+  }
+
+  update() {
+    if (!this.warrior) return;
+
+    const speed = 120;
+    const { cursors, wasd, warrior } = this;
+    const left  = cursors.left.isDown  || wasd.left.isDown;
+    const right = cursors.right.isDown || wasd.right.isDown;
+    const up    = cursors.up.isDown    || wasd.up.isDown;
+    const down  = cursors.down.isDown  || wasd.down.isDown;
+    const attackPressed = Phaser.Input.Keyboard.JustDown(this.attackKey);
+    const guardDown = this.guardKey.isDown;
+
+    // 공격 중이면 이동 불가
+    if (this.state === 'attack') {
+      warrior.setVelocity(0, 0);
+      return;
+    }
+
+    // ── 공격 ─────────────────────────────────────
+    if (attackPressed) {
+      this.state = 'attack';
+      warrior.setVelocity(0, 0);
+      warrior.play('anim_attack', true);
+      // 파티클 이펙트
+      this.attackParticles.setPosition(
+        warrior.x + (this.facingRight ? 30 : -30),
+        warrior.y
+      );
+      this.attackParticles.explode(6);
+      this.updateStateDisplay('ATTACK');
+      return;
+    }
+
+    // ── 가드 ─────────────────────────────────────
+    if (guardDown) {
+      warrior.setVelocity(0, 0);
+      if (this.state !== 'guard') {
+        this.state = 'guard';
+        warrior.play('anim_guard', true);
+        this.updateStateDisplay('GUARD');
+      }
+      return;
+    }
+
+    // ── 이동 ─────────────────────────────────────
+    let vx = 0, vy = 0;
+    if (left)  vx = -speed;
+    if (right) vx =  speed;
+    if (up)    vy = -speed;
+    if (down)  vy =  speed;
+
+    // 대각선 정규화
+    if (vx !== 0 && vy !== 0) {
+      vx *= 0.707;
+      vy *= 0.707;
+    }
+
+    warrior.setVelocity(vx, vy);
+
+    // 방향 플립
+    if (vx < 0) { warrior.setFlipX(true);  this.facingRight = false; }
+    if (vx > 0) { warrior.setFlipX(false); this.facingRight = true;  }
+
+    const moving = vx !== 0 || vy !== 0;
+
+    if (moving) {
+      if (this.state !== 'run') {
+        this.state = 'run';
+        warrior.play('anim_run', true);
+        this.updateStateDisplay('RUN');
+      }
+    } else {
+      if (this.state !== 'idle') {
+        this.state = 'idle';
+        warrior.play('anim_idle', true);
+        this.updateStateDisplay('IDLE');
+      }
+    }
+  }
+
+  updateStateDisplay(text) {
+    const el = document.getElementById('state-text');
+    if (el) el.textContent = text;
+  }
+}
+
+const config = {
+  type: Phaser.AUTO,
+  width: 740,
+  height: 480,
+  parent: 'game-container',
+  backgroundColor: '#0e0c08',
+  physics: {
+    default: 'arcade',
+    arcade: { gravity: { y: 0 }, debug: false }
+  },
+  scene: [MapScene],
+  pixelArt: true,
+  antialias: false,
+  roundPixels: true,
+};
+
+const game = new Phaser.Game(config);
+</script>
+</body>
+</html>
