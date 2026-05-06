@@ -1,0 +1,538 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+#gw{position:relative;width:100%;background:#1a1a2e;font-family:'Courier New',monospace;overflow:hidden;border-radius:12px}
+#cv{display:block;width:100%;cursor:none}
+#hud{position:absolute;top:8px;left:8px;display:flex;flex-direction:column;gap:6px;pointer-events:none}
+#hud-score{background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:6px 10px;color:#fff;font-size:12px;line-height:1.6;min-width:110px}
+#hud-score .rank{font-size:10px;color:#aaa;margin-bottom:2px}
+#hud-score .val{font-size:15px;font-weight:bold;color:#60a5fa}
+#lb{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.15);border-radius:6px;padding:6px 10px;color:#fff;font-size:11px;min-width:130px;pointer-events:none}
+#lb .lb-row{display:flex;justify-content:space-between;gap:8px;padding:1px 0}
+#lb .lb-row:first-child{border-bottom:1px solid rgba(255,255,255,.15);margin-bottom:3px;padding-bottom:3px}
+#msg{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.85);border:1px solid rgba(255,255,255,.3);border-radius:10px;padding:16px 28px;color:#fff;font-size:14px;text-align:center;display:none}
+#msg button{margin-top:10px;display:block;width:100%;padding:6px;background:#3b82f6;border:none;border-radius:6px;color:#fff;cursor:pointer;font-size:13px;font-family:inherit}
+#speed-badge{position:absolute;top:50%;left:50%;transform:translate(-50%,-80px);background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:3px 12px;color:#fff;font-size:11px;pointer-events:none}
+#ctrl-hint{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);border-radius:20px;padding:3px 12px;color:rgba(255,255,255,.6);font-size:10px;pointer-events:none}
+</style>
+
+<div id="gw">
+  <canvas id="cv"></canvas>
+  <div id="hud">
+    <div id="hud-score">
+      <div class="rank" id="rank-txt">#1 of 6</div>
+      <div>Score <span class="val" id="score-val">0</span></div>
+      <div style="color:#aaa;font-size:11px">Map % <span id="map-val">0.0</span></div>
+      <div style="color:#aaa;font-size:11px">Blocks <span id="blk-val">0</span></div>
+      <div style="color:#aaa;font-size:11px">Kills <span id="kill-val">0</span></div>
+    </div>
+  </div>
+  <div id="lb">
+    <div class="lb-row" style="color:#aaa;font-size:10px"><span>Player</span><span>Score</span></div>
+  </div>
+  <div id="speed-badge">Speed 100%</div>
+  <div id="msg">
+    <div id="msg-txt">게임 오버</div>
+    <button onclick="startGame()">다시 시작</button>
+  </div>
+  <div id="ctrl-hint">WASD / 방향키 / 마우스 이동</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
+<script>
+const cv = document.getElementById('cv');
+const ctx = cv.getContext('2d');
+const gw = document.getElementById('gw');
+
+// --- Config ---
+const HEX_SIZE = 14;
+const MAP_COLS = 60, MAP_ROWS = 48;
+const PLAYER_SPEED = 1.8;
+const AI_COUNT = 5;
+const TRAIL_KILL = true;
+
+const COLORS = [
+  {fill:'#3b82f6',dark:'#1d4ed8',trail:'rgba(59,130,246,0.5)',name:'나'},
+  {fill:'#ef4444',dark:'#991b1b',trail:'rgba(239,68,68,0.5)',name:'Jonas'},
+  {fill:'#f97316',dark:'#c2410c',trail:'rgba(249,115,22,0.5)',name:'Markos'},
+  {fill:'#a855f7',dark:'#7e22ce',trail:'rgba(168,85,247,0.5)',name:'Dark_DG'},
+  {fill:'#22c55e',dark:'#15803d',trail:'rgba(34,197,94,0.5)',name:'Steve'},
+  {fill:'#eab308',dark:'#a16207',trail:'rgba(234,179,8,0.5)',name:'Lia'},
+];
+
+// --- Hex grid helpers ---
+function hexToPixel(col, row) {
+  const w = HEX_SIZE * 2;
+  const h = Math.sqrt(3) * HEX_SIZE;
+  const x = col * w * 0.75 + HEX_SIZE;
+  const y = row * h + (col % 2 === 1 ? h / 2 : 0) + HEX_SIZE;
+  return {x, y};
+}
+function pixelToHex(px, py) {
+  const w = HEX_SIZE * 2;
+  const h = Math.sqrt(3) * HEX_SIZE;
+  const col = Math.round((px - HEX_SIZE) / (w * 0.75));
+  const c = Math.max(0, Math.min(MAP_COLS-1, col));
+  const offsetY = (c % 2 === 1 ? h/2 : 0);
+  const row = Math.round((py - HEX_SIZE - offsetY) / h);
+  const r = Math.max(0, Math.min(MAP_ROWS-1, row));
+  return {col: c, row: r};
+}
+function hexNeighbors(col, row) {
+  const even = col % 2 === 0;
+  const dirs = even
+    ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]]
+    : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
+  return dirs.map(([dc,dr])=>({col:col+dc,row:row+dr}))
+    .filter(h=>h.col>=0&&h.col<MAP_COLS&&h.row>=0&&h.row<MAP_ROWS);
+}
+function drawHex(cx,cy,size,fill,stroke,lw=0.5){
+  ctx.beginPath();
+  for(let i=0;i<6;i++){
+    const a=Math.PI/180*(60*i-30);
+    const x=cx+size*Math.cos(a), y=cy+size*Math.sin(a);
+    i===0?ctx.moveTo(x,y):ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+  if(fill){ctx.fillStyle=fill;ctx.fill();}
+  if(stroke){ctx.strokeStyle=stroke;ctx.lineWidth=lw;ctx.stroke();}
+}
+
+// --- Game State ---
+let grid; // grid[col][row] = {owner: playerIdx or -1, trail: playerIdx or -1}
+let players, camera, keys, mouse, frame, gameActive, kills;
+
+function initGrid() {
+  grid = Array.from({length:MAP_COLS},()=>Array.from({length:MAP_ROWS},()=>({owner:-1,trail:-1})));
+}
+
+function claimHex(col,row,pid,isTrail=false){
+  if(col<0||col>=MAP_COLS||row<0||row>=MAP_ROWS) return;
+  if(isTrail){
+    grid[col][row].trail = pid;
+  } else {
+    grid[col][row].owner = pid;
+    grid[col][row].trail = -1;
+  }
+}
+
+function floodFill(pid){
+  // Find all hexes reachable from border WITHOUT passing through player's owned/trail
+  const owned = new Set();
+  const owned_check = (c,r)=> grid[c]?.[r]?.owner===pid || grid[c]?.[r]?.trail===pid;
+  
+  // BFS from all border hexes
+  const visited = new Set();
+  const queue = [];
+  for(let c=0;c<MAP_COLS;c++) for(let r=0;r<MAP_ROWS;r++){
+    if((c===0||c===MAP_COLS-1||r===0||r===MAP_ROWS-1) && !owned_check(c,r)){
+      const k=c*1000+r;
+      if(!visited.has(k)){visited.add(k);queue.push({col:c,row:r});}
+    }
+  }
+  let i=0;
+  while(i<queue.length){
+    const {col,row}=queue[i++];
+    for(const nb of hexNeighbors(col,row)){
+      const k=nb.col*1000+nb.row;
+      if(!visited.has(k)&&!owned_check(nb.col,nb.row)){
+        visited.add(k);queue.push(nb);
+      }
+    }
+  }
+  // Everything NOT visited and NOT owned is interior → claim
+  let count=0;
+  for(let c=0;c<MAP_COLS;c++) for(let r=0;r<MAP_ROWS;r++){
+    const k=c*1000+r;
+    if(!visited.has(k)){
+      const prev=grid[c][r].owner;
+      grid[c][r].owner=pid;
+      grid[c][r].trail=-1;
+      if(prev!==pid) count++;
+    }
+  }
+  return count;
+}
+
+function initPlayer(idx){
+  const startCols = [5,MAP_COLS-8,5,MAP_COLS-8,MAP_COLS/2|0,(MAP_COLS/2|0)+5];
+  const startRows = [4,4,MAP_ROWS-7,MAP_ROWS-7,MAP_ROWS/2|0,MAP_ROWS/2|0];
+  const sc=startCols[idx], sr=startRows[idx];
+  const {x,y}=hexToPixel(sc,sr);
+  // Claim starting zone
+  for(let dc=-2;dc<=2;dc++) for(let dr=-2;dr<=2;dr++){
+    claimHex(sc+dc,sr+dr,idx);
+  }
+  return {
+    x, y, vx:0, vy:0,
+    col:sc, row:sr,
+    trail:[],
+    trailSet:new Set(),
+    alive:true,
+    kills:0,
+    score:0,
+    blocks:0,
+    speed: PLAYER_SPEED,
+    // AI state
+    angle: Math.random()*Math.PI*2,
+    aiTimer:0,
+    inBase:true,
+    pid:idx,
+    name:COLORS[idx].name,
+  };
+}
+
+function startGame(){
+  document.getElementById('msg').style.display='none';
+  initGrid();
+  kills=0;
+  frame=0;
+  gameActive=true;
+  keys={};
+  mouse={x:0,y:0,active:false};
+  players=Array.from({length:1+AI_COUNT},(_,i)=>initPlayer(i));
+  camera={x:0,y:0};
+  updateCamera();
+  requestAnimationFrame(loop);
+}
+
+function updateCamera(){
+  const p=players[0];
+  const cw=cv.width, ch=cv.height;
+  camera.x=p.x-cw/2;
+  camera.y=p.y-ch/2;
+}
+
+function worldToScreen(wx,wy){
+  return {sx:wx-camera.x, sy:wy-camera.y};
+}
+
+// --- Input ---
+window.addEventListener('keydown',e=>{keys[e.key]=true;});
+window.addEventListener('keyup',e=>{keys[e.key]=false;});
+cv.addEventListener('mousemove',e=>{
+  const r=cv.getBoundingClientRect();
+  mouse.x=(e.clientX-r.left)*(cv.width/r.width);
+  mouse.y=(e.clientY-r.top)*(cv.height/r.height);
+  mouse.active=true;
+});
+cv.addEventListener('mouseleave',()=>{mouse.active=false;});
+
+function getPlayerInput(p){
+  let dx=0,dy=0;
+  if(keys['ArrowLeft']||keys['a']||keys['A']) dx=-1;
+  if(keys['ArrowRight']||keys['d']||keys['D']) dx=1;
+  if(keys['ArrowUp']||keys['w']||keys['W']) dy=-1;
+  if(keys['ArrowDown']||keys['s']||keys['S']) dy=1;
+  if(mouse.active && (Math.abs(dx)+Math.abs(dy)===0)){
+    const cx=cv.width/2, cy=cv.height/2;
+    const mdx=mouse.x-cx, mdy=mouse.y-cy;
+    const d=Math.sqrt(mdx*mdx+mdy*mdy);
+    if(d>12){dx=mdx/d;dy=mdy/d;}
+  }
+  const len=Math.sqrt(dx*dx+dy*dy);
+  if(len>0){dx/=len;dy/=len;}
+  return{dx,dy};
+}
+
+// --- AI ---
+function aiStep(p, pid){
+  p.aiTimer--;
+  // Check if in own base
+  const {col,row}=pixelToHex(p.x,p.y);
+  p.inBase = grid[col]?.[row]?.owner===pid;
+
+  if(p.aiTimer<=0){
+    p.aiTimer = 20+Math.random()*40;
+    if(p.inBase){
+      // go out to expand
+      p.angle = Math.random()*Math.PI*2;
+    } else {
+      // try to return home
+      // find nearest owned hex
+      let best=null, bestD=Infinity;
+      for(let c=0;c<MAP_COLS;c+=4) for(let r=0;r<MAP_ROWS;r+=4){
+        if(grid[c][r].owner===pid){
+          const hp=hexToPixel(c,r);
+          const d=(hp.x-p.x)**2+(hp.y-p.y)**2;
+          if(d<bestD){bestD=d;best=hp;}
+        }
+      }
+      if(best){
+        p.angle=Math.atan2(best.y-p.y,best.x-p.x);
+      }
+    }
+  }
+  // Avoid own trail
+  const ahead={x:p.x+Math.cos(p.angle)*HEX_SIZE*2, y:p.y+Math.sin(p.angle)*HEX_SIZE*2};
+  const ah=pixelToHex(ahead.x,ahead.y);
+  if(p.trailSet.has(ah.col*1000+ah.row)){
+    p.angle+=Math.PI/2;
+  }
+  return{dx:Math.cos(p.angle),dy:Math.sin(p.angle)};
+}
+
+// --- Move & Trail ---
+function movePlayer(p, dx, dy){
+  if(!p.alive) return;
+  const spd=p.speed*(p.inBase?1.2:1.0);
+  p.x+=dx*spd;
+  p.y+=dy*spd;
+  // Clamp
+  const maxX=hexToPixel(MAP_COLS-1,MAP_ROWS-1).x+HEX_SIZE;
+  const maxY=hexToPixel(MAP_COLS-1,MAP_ROWS-1).y+HEX_SIZE;
+  p.x=Math.max(HEX_SIZE,Math.min(maxX,p.x));
+  p.y=Math.max(HEX_SIZE,Math.min(maxY,p.y));
+
+  const {col,row}=pixelToHex(p.x,p.y);
+  const cell=grid[col]?.[row];
+  if(!cell) return;
+  const pid=p.pid;
+
+  if(cell.owner===pid){
+    // Returned to base — fill enclosed area
+    if(p.trail.length>0){
+      p.trail.forEach(({c,r})=>{grid[c][r].trail=pid;});
+      floodFill(pid);
+      p.trail=[];
+      p.trailSet.clear();
+    }
+    p.inBase=true;
+  } else {
+    // Leave trail
+    const k=col*1000+row;
+    if(!p.trailSet.has(k)){
+      p.trail.push({c:col,r:row});
+      p.trailSet.add(k);
+      grid[col][row].trail=pid;
+    }
+    p.inBase=false;
+  }
+  p.col=col; p.row=row;
+}
+
+function checkCollisions(){
+  for(let i=0;i<players.length;i++){
+    const p=players[i];
+    if(!p.alive) continue;
+    const {col,row}=pixelToHex(p.x,p.y);
+    const cell=grid[col]?.[row];
+    if(!cell) continue;
+    // Hit someone else's trail?
+    const t=cell.trail;
+    if(t!==-1&&t!==p.pid){
+      // Kill the trail owner
+      killPlayer(t,p.pid);
+    }
+    // Hit own trail?
+    if(t===p.pid && p.trail.length>4 && p.trailSet.has(col*1000+row)){
+      const self_k=col*1000+row;
+      const idx_in_trail=p.trail.findIndex(h=>h.c===col&&h.r===row);
+      if(idx_in_trail>2){
+        // Self-kill
+        killPlayer(p.pid,-1);
+      }
+    }
+  }
+}
+
+function killPlayer(pid, byPid){
+  const p=players[pid];
+  if(!p||!p.alive) return;
+  p.alive=false;
+  // Clear trail
+  p.trail.forEach(({c,r})=>{if(grid[c][r].trail===pid)grid[c][r].trail=-1;});
+  p.trail=[];p.trailSet.clear();
+  // Give kill credit
+  if(byPid>=0&&players[byPid]){
+    players[byPid].kills++;
+    if(byPid===0) kills++;
+  }
+  if(pid===0){
+    gameActive=false;
+    showMsg(`💀 게임 오버!<br><small>점수: ${players[0].score} | 킬: ${kills}</small>`);
+  }
+}
+
+function showMsg(html){
+  const m=document.getElementById('msg');
+  document.getElementById('msg-txt').innerHTML=html;
+  m.style.display='block';
+}
+
+// --- HUD ---
+function updateHUD(){
+  const p=players[0];
+  const total=MAP_COLS*MAP_ROWS;
+  let myBlocks=0;
+  for(let c=0;c<MAP_COLS;c++) for(let r=0;r<MAP_ROWS;r++) if(grid[c][r].owner===0)myBlocks++;
+  p.blocks=myBlocks;
+  p.score=myBlocks*10+kills*50;
+  document.getElementById('score-val').textContent=p.score;
+  document.getElementById('map-val').textContent=(myBlocks/total*100).toFixed(1);
+  document.getElementById('blk-val').textContent=myBlocks;
+  document.getElementById('kill-val').textContent=kills;
+
+  // Leaderboard
+  const scores=players.map((pl,i)=>{
+    let b=0;
+    for(let c=0;c<MAP_COLS;c+=2) for(let r=0;r<MAP_ROWS;r+=2) if(grid[c][r].owner===i)b++;
+    return{name:COLORS[i].name,score:b*40,color:COLORS[i].fill,alive:pl.alive};
+  }).filter(x=>x.alive).sort((a,b)=>b.score-a.score);
+
+  const rank=scores.findIndex(s=>s.name===COLORS[0].name)+1;
+  document.getElementById('rank-txt').textContent=`#${rank} of ${scores.length}`;
+
+  const lb=document.getElementById('lb');
+  lb.innerHTML='<div class="lb-row" style="color:#aaa;font-size:10px;border-bottom:1px solid rgba(255,255,255,.15);margin-bottom:3px;padding-bottom:3px"><span>Player</span><span>Score</span></div>';
+  scores.slice(0,5).forEach((s,i)=>{
+    const row=document.createElement('div');
+    row.className='lb-row';
+    row.style.color=s.color;
+    row.innerHTML=`<span>${i+1}. ${s.name}</span><span>${s.score}</span>`;
+    lb.appendChild(row);
+  });
+}
+
+// --- Draw ---
+function draw(){
+  ctx.clearRect(0,0,cv.width,cv.height);
+  ctx.fillStyle='#0f172a';
+  ctx.fillRect(0,0,cv.width,cv.height);
+
+  // Determine visible range
+  const tl=pixelToHex(camera.x-HEX_SIZE*2, camera.y-HEX_SIZE*2);
+  const br=pixelToHex(camera.x+cv.width+HEX_SIZE*2, camera.y+cv.height+HEX_SIZE*2);
+  const c0=Math.max(0,tl.col-2), c1=Math.min(MAP_COLS-1,br.col+2);
+  const r0=Math.max(0,tl.row-2), r1=Math.min(MAP_ROWS-1,br.row+2);
+
+  for(let c=c0;c<=c1;c++){
+    for(let r=r0;r<=r1;r++){
+      const {x,y}=hexToPixel(c,r);
+      const {sx,sy}=worldToScreen(x,y);
+      const cell=grid[c][r];
+      let fill='#1e293b', stroke='#334155', lw=0.4;
+      if(cell.owner>=0){
+        fill=COLORS[cell.owner].fill;
+        stroke=COLORS[cell.owner].dark;
+        lw=0.8;
+      } else if(cell.trail>=0){
+        fill=COLORS[cell.trail].trail;
+        stroke=COLORS[cell.trail].fill;
+        lw=1;
+      }
+      drawHex(sx,sy,HEX_SIZE-0.5,fill,stroke,lw);
+    }
+  }
+
+  // Draw players
+  players.forEach((p,i)=>{
+    if(!p.alive) return;
+    const {sx,sy}=worldToScreen(p.x,p.y);
+    if(sx<-30||sx>cv.width+30||sy<-30||sy>cv.height+30) return;
+    // Body circle
+    ctx.beginPath();
+    ctx.arc(sx,sy,HEX_SIZE*0.75,0,Math.PI*2);
+    ctx.fillStyle=COLORS[i].fill;
+    ctx.fill();
+    ctx.strokeStyle='#fff';
+    ctx.lineWidth=1.5;
+    ctx.stroke();
+    // Direction indicator
+    const dir=i===0?Math.atan2(p.vy,p.vx):p.angle;
+    ctx.beginPath();
+    ctx.moveTo(sx+Math.cos(dir)*HEX_SIZE*0.75,sy+Math.sin(dir)*HEX_SIZE*0.75);
+    ctx.lineTo(sx+Math.cos(dir)*HEX_SIZE*1.3,sy+Math.sin(dir)*HEX_SIZE*1.3);
+    ctx.strokeStyle='#fff';
+    ctx.lineWidth=2;
+    ctx.stroke();
+    // Name label
+    if(i===0||Math.hypot(p.x-players[0].x,p.y-players[0].y)<cv.width/2){
+      ctx.fillStyle='#fff';
+      ctx.font='bold 10px Courier New';
+      ctx.textAlign='center';
+      ctx.fillText(COLORS[i].name,sx,sy-HEX_SIZE-3);
+    }
+  });
+
+  // Minimap
+  drawMinimap();
+}
+
+function drawMinimap(){
+  const mw=80,mh=64,mx=cv.width-90,my=cv.height-74;
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.strokeStyle='rgba(255,255,255,0.2)';
+  ctx.lineWidth=0.5;
+  ctx.fillRect(mx,my,mw,mh);
+  ctx.strokeRect(mx,my,mw,mh);
+  const sw=mw/MAP_COLS, sh=mh/MAP_ROWS;
+  for(let c=0;c<MAP_COLS;c+=2) for(let r=0;r<MAP_ROWS;r+=2){
+    const cell=grid[c][r];
+    if(cell.owner>=0){
+      ctx.fillStyle=COLORS[cell.owner].fill;
+      ctx.fillRect(mx+c*sw,my+r*sh,sw*2+0.5,sh*2+0.5);
+    }
+  }
+  // Player dot
+  const p=players[0];
+  const {col,row}=pixelToHex(p.x,p.y);
+  ctx.fillStyle='#fff';
+  ctx.fillRect(mx+col*sw-1,my+row*sh-1,3,3);
+}
+
+// --- Main Loop ---
+let lastTime=0;
+function loop(ts){
+  if(!gameActive) return;
+  frame++;
+  const dt=Math.min(ts-lastTime,50);lastTime=ts;
+
+  // Human input
+  const p0=players[0];
+  if(p0.alive){
+    const {dx,dy}=getPlayerInput(p0);
+    if(Math.abs(dx)+Math.abs(dy)>0){
+      p0.vx=dx;p0.vy=dy;
+      movePlayer(p0,dx,dy);
+    }
+    updateCamera();
+  }
+
+  // AI
+  players.slice(1).forEach((p,i)=>{
+    if(!p.alive) return;
+    const pid=i+1;
+    const {dx,dy}=aiStep(p,pid);
+    p.vx=dx;p.vy=dy;
+    movePlayer(p,dx,dy);
+  });
+
+  checkCollisions();
+
+  // Respawn dead AIs
+  players.slice(1).forEach((p,i)=>{
+    if(!p.alive && frame%300===0){
+      const pid=i+1;
+      const np=initPlayer(pid);
+      players[pid]={...np};
+    }
+  });
+
+  if(frame%10===0) updateHUD();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// --- Resize ---
+function resize(){
+  const w=gw.clientWidth;
+  const h=Math.round(w*0.75);
+  cv.width=w; cv.height=h;
+  gw.style.height=h+'px';
+}
+resize();
+new ResizeObserver(resize).observe(gw);
+
+startGame();
+</script>

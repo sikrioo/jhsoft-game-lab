@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Hex Land IO Prototype</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; background:#080b14; overflow:hidden; font-family: Arial, sans-serif; }
+  #gameWrap { position:relative; width:100vw; height:100vh; background:radial-gradient(circle at center,#172033,#070a12); overflow:hidden; }
+  canvas { display:block; width:100%; height:100%; cursor:none; }
+  .panel { position:absolute; color:#fff; background:rgba(10,14,24,.72); border:1px solid rgba(255,255,255,.18); backdrop-filter: blur(6px); box-shadow:0 10px 30px rgba(0,0,0,.25); }
+  #hud { left:14px; top:14px; min-width:142px; padding:10px 12px; border-radius:10px; font-size:12px; line-height:1.65; }
+  #hud .rank { color:#b8c2d8; font-size:11px; margin-bottom:2px; }
+  #hud .score { color:#6ee7b7; font-size:18px; font-weight:800; }
+  #leaderboard { right:14px; top:14px; width:168px; padding:10px 12px; border-radius:10px; font-size:12px; }
+  #leaderboard .head { display:flex; justify-content:space-between; color:#b8c2d8; border-bottom:1px solid rgba(255,255,255,.16); padding-bottom:5px; margin-bottom:5px; }
+  #leaderboard .row { display:flex; justify-content:space-between; gap:10px; padding:2px 0; }
+  #centerBadge { position:absolute; left:50%; top:18px; transform:translateX(-50%); padding:6px 18px; border-radius:999px; font-size:12px; }
+  #hint { position:absolute; left:50%; bottom:16px; transform:translateX(-50%); padding:7px 16px; border-radius:999px; color:rgba(255,255,255,.72); font-size:12px; }
+  #message { display:none; left:50%; top:50%; transform:translate(-50%,-50%); width:280px; padding:22px; border-radius:16px; text-align:center; z-index:10; }
+  #message h2 { font-size:22px; margin-bottom:8px; }
+  #message p { font-size:13px; color:#cbd5e1; line-height:1.5; }
+  #message button { margin-top:15px; width:100%; padding:10px; border:0; border-radius:10px; background:#22c55e; color:#06120a; font-weight:800; cursor:pointer; }
+</style>
+</head>
+<body>
+<div id="gameWrap">
+  <canvas id="game"></canvas>
+  <div id="hud" class="panel">
+    <div class="rank" id="rankText">#1 of 8</div>
+    <div>Score <span class="score" id="scoreText">0</span></div>
+    <div>Map <span id="mapText">0.0%</span></div>
+    <div>Blocks <span id="blockText">0</span></div>
+    <div>Kills <span id="killText">0</span></div>
+  </div>
+  <div id="leaderboard" class="panel">
+    <div class="head"><span>Player</span><span>Score</span></div>
+    <div id="leaderRows"></div>
+  </div>
+  <div id="centerBadge" class="panel">Speed 100%</div>
+  <div id="hint" class="panel">WASD / 방향키 / 마우스 이동 · Space 누르면 가속</div>
+  <div id="message" class="panel">
+    <h2 id="messageTitle">Game Over</h2>
+    <p id="messageBody"></p>
+    <button onclick="restartGame()">다시 시작</button>
+  </div>
+</div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const wrap = document.getElementById('gameWrap');
+
+const HEX = 13;
+const MAP_COLS = 86;
+const MAP_ROWS = 66;
+const AI_COUNT = 7;
+const EMPTY = -1;
+const BASE_SPEED = 2.05;
+const BOOST_SPEED = 2.75;
+const CAMERA_LERP = 0.10;
+
+const PALETTE = [
+  { name:'You', fill:'#f97316', dark:'#9a3412', trail:'rgba(249,115,22,.50)' },
+  { name:'Jonas', fill:'#ef4444', dark:'#991b1b', trail:'rgba(239,68,68,.45)' },
+  { name:'Markos', fill:'#8b5cf6', dark:'#5b21b6', trail:'rgba(139,92,246,.45)' },
+  { name:'Dark_DG', fill:'#22c55e', dark:'#166534', trail:'rgba(34,197,94,.45)' },
+  { name:'Steve', fill:'#38bdf8', dark:'#0369a1', trail:'rgba(56,189,248,.45)' },
+  { name:'Lia', fill:'#eab308', dark:'#854d0e', trail:'rgba(234,179,8,.45)' },
+  { name:'Nero', fill:'#ec4899', dark:'#9d174d', trail:'rgba(236,72,153,.45)' },
+  { name:'Mika', fill:'#84cc16', dark:'#3f6212', trail:'rgba(132,204,22,.45)' }
+];
+
+let grid, players, keys, mouse, camera, running, frame;
+
+function resize() {
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function hexToPixel(col, row) {
+  const h = Math.sqrt(3) * HEX;
+  return {
+    x: col * HEX * 1.5 + HEX,
+    y: row * h + (col % 2 ? h / 2 : 0) + HEX
+  };
+}
+
+function pixelToHex(px, py) {
+  // flat-top hex 좌표계에 맞는 cube-rounding 변환
+  // 기존 방식은 col/row를 각각 Math.round 해서 대각선 이동 때 옆 칸까지 같이 찍히는 현상이 있었다.
+  const x = px - HEX;
+  const y = py - HEX;
+
+  const qFloat = (2 / 3 * x) / HEX;
+  const rFloat = (-1 / 3 * x + Math.sqrt(3) / 3 * y) / HEX;
+
+  const rounded = axialRound(qFloat, rFloat);
+  const col = clamp(rounded.q, 0, MAP_COLS - 1);
+  const row = clamp(rounded.r + Math.floor((col + 1) / 2), 0, MAP_ROWS - 1);
+
+  return { col, row };
+}
+
+function axialRound(q, r) {
+  let x = q;
+  let z = r;
+  let y = -x - z;
+
+  let rx = Math.round(x);
+  let ry = Math.round(y);
+  let rz = Math.round(z);
+
+  const xDiff = Math.abs(rx - x);
+  const yDiff = Math.abs(ry - y);
+  const zDiff = Math.abs(rz - z);
+
+  if (xDiff > yDiff && xDiff > zDiff) {
+    rx = -ry - rz;
+  } else if (yDiff > zDiff) {
+    ry = -rx - rz;
+  } else {
+    rz = -rx - ry;
+  }
+
+  return { q: rx, r: rz };
+}
+
+function neighbors(col, row) {
+  const even = col % 2 === 0;
+  const dirs = even
+    ? [[-1,-1],[-1,0],[0,-1],[0,1],[1,-1],[1,0]]
+    : [[-1,0],[-1,1],[0,-1],[0,1],[1,0],[1,1]];
+  const out = [];
+  for (const [dc, dr] of dirs) {
+    const c = col + dc, r = row + dr;
+    if (c >= 0 && c < MAP_COLS && r >= 0 && r < MAP_ROWS) out.push({ col:c, row:r });
+  }
+  return out;
+}
+
+function drawHex(x, y, size, fill, stroke, lw = 0.6) {
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    // hexToPixel 좌표계는 flat-top 배치라서 polygon도 flat-top 각도로 그린다.
+    const a = Math.PI / 180 * (60 * i);
+    const px = x + size * Math.cos(a);
+    const py = y + size * Math.sin(a);
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = lw;
+  ctx.stroke();
+}
+
+function createGrid() {
+  grid = Array.from({ length: MAP_COLS }, () =>
+    Array.from({ length: MAP_ROWS }, () => ({ owner: EMPTY, trail: EMPTY }))
+  );
+}
+
+function claimDisk(col, row, pid, radius = 4) {
+  for (let c = col - radius; c <= col + radius; c++) {
+    for (let r = row - radius; r <= row + radius; r++) {
+      if (c < 0 || c >= MAP_COLS || r < 0 || r >= MAP_ROWS) continue;
+      const dx = c - col, dy = r - row;
+      if (dx * dx + dy * dy <= radius * radius) {
+        grid[c][r].owner = pid;
+        grid[c][r].trail = EMPTY;
+      }
+    }
+  }
+}
+
+function createPlayer(pid, col, row) {
+  const p = hexToPixel(col, row);
+  claimDisk(col, row, pid, pid === 0 ? 5 : 4);
+  return {
+    pid, name: PALETTE[pid].name,
+    x: p.x, y: p.y, vx: 1, vy: 0,
+    col, row, alive: true,
+    trail: [], trailSet: new Set(),
+    inBase: true, kills: 0, blocks: 0, score: 0,
+    aiAngle: Math.random() * Math.PI * 2,
+    aiTimer: 0, respawnAt: 0
+  };
+}
+
+function restartGame() {
+  document.getElementById('message').style.display = 'none';
+  createGrid();
+  keys = {};
+  mouse = { x: 0, y: 0, active: false };
+  frame = 0;
+  running = true;
+  const starts = [
+    [12, 10], [72, 10], [12, 54], [72, 54],
+    [42, 12], [42, 55], [24, 32], [62, 32]
+  ];
+  players = starts.map((s, i) => createPlayer(i, s[0], s[1]));
+  camera = { x: players[0].x - canvas.width / 2, y: players[0].y - canvas.height / 2 };
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener('keydown', e => keys[e.key] = true);
+window.addEventListener('keyup', e => keys[e.key] = false);
+canvas.addEventListener('mousemove', e => {
+  const r = canvas.getBoundingClientRect();
+  mouse.x = (e.clientX - r.left) * (canvas.width / r.width);
+  mouse.y = (e.clientY - r.top) * (canvas.height / r.height);
+  mouse.active = true;
+});
+canvas.addEventListener('mouseleave', () => mouse.active = false);
+
+function humanInput() {
+  let dx = 0, dy = 0;
+  if (keys.ArrowLeft || keys.a || keys.A) dx -= 1;
+  if (keys.ArrowRight || keys.d || keys.D) dx += 1;
+  if (keys.ArrowUp || keys.w || keys.W) dy -= 1;
+  if (keys.ArrowDown || keys.s || keys.S) dy += 1;
+
+  if (dx === 0 && dy === 0 && mouse.active) {
+    const mx = mouse.x - canvas.width / 2;
+    const my = mouse.y - canvas.height / 2;
+    if (Math.hypot(mx, my) > 14) { dx = mx; dy = my; }
+  }
+  const len = Math.hypot(dx, dy);
+  return len ? { dx: dx / len, dy: dy / len } : { dx: players[0].vx, dy: players[0].vy };
+}
+
+function aiInput(p) {
+  p.aiTimer--;
+  const cur = pixelToHex(p.x, p.y);
+  const home = grid[cur.col][cur.row].owner === p.pid;
+  if (p.aiTimer <= 0) {
+    p.aiTimer = 24 + Math.random() * 46;
+    if (home && Math.random() < .78) {
+      p.aiAngle = Math.random() * Math.PI * 2;
+    } else {
+      const target = findNearestOwnedPixel(p);
+      if (target) p.aiAngle = Math.atan2(target.y - p.y, target.x - p.x);
+      p.aiAngle += (Math.random() - .5) * .45;
+    }
+  }
+  const next = pixelToHex(p.x + Math.cos(p.aiAngle) * HEX * 2.5, p.y + Math.sin(p.aiAngle) * HEX * 2.5);
+  const wall = next.col <= 1 || next.row <= 1 || next.col >= MAP_COLS - 2 || next.row >= MAP_ROWS - 2;
+  const ownTrail = p.trailSet.has(next.col * 1000 + next.row);
+  if (wall || ownTrail) p.aiAngle += Math.PI * (.65 + Math.random() * .4);
+  return { dx: Math.cos(p.aiAngle), dy: Math.sin(p.aiAngle) };
+}
+
+function findNearestOwnedPixel(p) {
+  let best = null, bestD = Infinity;
+  for (let c = 0; c < MAP_COLS; c += 4) {
+    for (let r = 0; r < MAP_ROWS; r += 4) {
+      if (grid[c][r].owner !== p.pid) continue;
+      const hp = hexToPixel(c, r);
+      const d = (hp.x - p.x) ** 2 + (hp.y - p.y) ** 2;
+      if (d < bestD) { bestD = d; best = hp; }
+    }
+  }
+  return best;
+}
+
+
+function areNeighborHex(aCol, aRow, bCol, bRow) {
+  return neighbors(aCol, aRow).some(n => n.col === bCol && n.row === bRow);
+}
+
+function getSafeNextHex(prevCol, prevRow, targetCol, targetRow, px, py) {
+  if (prevCol === targetCol && prevRow === targetRow) return { col: targetCol, row: targetRow };
+  if (areNeighborHex(prevCol, prevRow, targetCol, targetRow)) return { col: targetCol, row: targetRow };
+
+  // 드물게 pixelToHex 반올림 때문에 한 프레임에 2칸 건너뛰는 경우가 있다.
+  // 이때는 현재 위치와 가장 가까운 '인접 1칸'만 허용한다.
+  let best = { col: prevCol, row: prevRow };
+  let bestDist = Infinity;
+  for (const n of neighbors(prevCol, prevRow)) {
+    const c = hexToPixel(n.col, n.row);
+    const d = (c.x - px) ** 2 + (c.y - py) ** 2;
+    if (d < bestDist) {
+      bestDist = d;
+      best = n;
+    }
+  }
+  return best;
+}
+
+function move(p, dx, dy, boost = false) {
+  if (!p.alive) return;
+
+  const prevCol = p.col;
+  const prevRow = p.row;
+  const prevKey = prevCol * 1000 + prevRow;
+
+  // 너무 빠르면 hex 경계에서 두 칸이 한 번에 찍혀 보인다.
+  // 그래서 가속 중에도 한 프레임에 처리 가능한 hex는 최대 1칸으로 제한한다.
+  const speed = boost ? BOOST_SPEED : BASE_SPEED;
+  p.vx = dx; p.vy = dy;
+  p.x += dx * speed;
+  p.y += dy * speed;
+
+  const max = hexToPixel(MAP_COLS - 1, MAP_ROWS - 1);
+  p.x = clamp(p.x, HEX, max.x);
+  p.y = clamp(p.y, HEX, max.y);
+
+  let h = pixelToHex(p.x, p.y);
+  h = getSafeNextHex(prevCol, prevRow, h.col, h.row, p.x, p.y);
+
+  const key = h.col * 1000 + h.row;
+  const movedToNewHex = key !== prevKey;
+  const cell = grid[h.col][h.row];
+
+  if (!movedToNewHex) return;
+
+  // 자기 선을 다시 밟은 경우만 사망 처리한다.
+  if (cell.owner !== p.pid && cell.trail === p.pid && p.trailSet.has(key)) {
+    kill(p.pid, EMPTY);
+    return;
+  }
+
+  p.col = h.col;
+  p.row = h.row;
+
+  if (cell.owner === p.pid) {
+    if (p.trail.length > 0) closeTerritory(p);
+    p.inBase = true;
+  } else {
+    if (!p.trailSet.has(key)) {
+      p.trail.push({ col: h.col, row: h.row });
+      p.trailSet.add(key);
+      cell.trail = p.pid;
+    }
+    p.inBase = false;
+  }
+}
+
+function closeTerritory(p) {
+  for (const t of p.trail) {
+    grid[t.col][t.row].owner = p.pid;
+    grid[t.col][t.row].trail = EMPTY;
+  }
+  floodFill(p.pid);
+  p.trail.length = 0;
+  p.trailSet.clear();
+}
+
+function floodFill(pid) {
+  const visited = Array.from({ length: MAP_COLS }, () => Array(MAP_ROWS).fill(false));
+  const q = [];
+  const blocked = (c, r) => grid[c][r].owner === pid || grid[c][r].trail === pid;
+  const push = (c, r) => {
+    if (c < 0 || c >= MAP_COLS || r < 0 || r >= MAP_ROWS) return;
+    if (visited[c][r] || blocked(c, r)) return;
+    visited[c][r] = true;
+    q.push({ col:c, row:r });
+  };
+  for (let c = 0; c < MAP_COLS; c++) { push(c, 0); push(c, MAP_ROWS - 1); }
+  for (let r = 0; r < MAP_ROWS; r++) { push(0, r); push(MAP_COLS - 1, r); }
+  for (let i = 0; i < q.length; i++) {
+    for (const n of neighbors(q[i].col, q[i].row)) push(n.col, n.row);
+  }
+  for (let c = 0; c < MAP_COLS; c++) {
+    for (let r = 0; r < MAP_ROWS; r++) {
+      if (!visited[c][r]) {
+        grid[c][r].owner = pid;
+        grid[c][r].trail = EMPTY;
+      }
+    }
+  }
+}
+
+function collisions() {
+  for (const p of players) {
+    if (!p.alive) continue;
+    const cell = grid[p.col][p.row];
+
+    // 다른 플레이어의 선을 밟으면, 선의 주인이 죽는다.
+    // 자기 trail 충돌은 move()에서만 처리한다.
+    // 기존 방식은 새로 생성한 내 trail 위에 내가 서 있는 상태를 즉시 자살로 오판했다.
+    if (cell.trail !== EMPTY && cell.trail !== p.pid) {
+      kill(cell.trail, p.pid);
+    }
+  }
+}
+
+function kill(deadPid, killerPid) {
+  const dead = players[deadPid];
+  if (!dead || !dead.alive) return;
+  dead.alive = false;
+  dead.respawnAt = frame + 240;
+  for (const t of dead.trail) if (grid[t.col][t.row].trail === deadPid) grid[t.col][t.row].trail = EMPTY;
+  dead.trail.length = 0;
+  dead.trailSet.clear();
+  if (killerPid !== EMPTY && players[killerPid]) players[killerPid].kills++;
+  if (deadPid === 0) gameOver();
+}
+
+function respawnAi() {
+  for (let i = 1; i < players.length; i++) {
+    if (players[i].alive || frame < players[i].respawnAt) continue;
+    const col = 6 + Math.floor(Math.random() * (MAP_COLS - 12));
+    const row = 6 + Math.floor(Math.random() * (MAP_ROWS - 12));
+    players[i] = createPlayer(i, col, row);
+  }
+}
+
+function updateScores() {
+  const counts = Array(players.length).fill(0);
+  for (let c = 0; c < MAP_COLS; c++) for (let r = 0; r < MAP_ROWS; r++) {
+    const o = grid[c][r].owner;
+    if (o >= 0) counts[o]++;
+  }
+  for (const p of players) {
+    p.blocks = counts[p.pid];
+    p.score = p.blocks * 10 + p.kills * 150;
+  }
+  const sorted = [...players].filter(p => p.alive).sort((a,b) => b.score - a.score);
+  const me = players[0];
+  const rank = Math.max(1, sorted.findIndex(p => p.pid === 0) + 1);
+  document.getElementById('rankText').textContent = `#${rank} of ${sorted.length}`;
+  document.getElementById('scoreText').textContent = me.score;
+  document.getElementById('mapText').textContent = `${(me.blocks / (MAP_COLS * MAP_ROWS) * 100).toFixed(1)}%`;
+  document.getElementById('blockText').textContent = me.blocks;
+  document.getElementById('killText').textContent = me.kills;
+  document.getElementById('leaderRows').innerHTML = sorted.slice(0, 6).map((p, idx) =>
+    `<div class="row" style="color:${PALETTE[p.pid].fill}"><span>${idx + 1}. ${p.name}</span><span>${p.score}</span></div>`
+  ).join('');
+}
+
+function updateCamera() {
+  const p = players[0];
+  const tx = p.x - canvas.width / 2;
+  const ty = p.y - canvas.height / 2;
+  camera.x += (tx - camera.x) * CAMERA_LERP;
+  camera.y += (ty - camera.y) * CAMERA_LERP;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = '#0b1020';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const tl = pixelToHex(camera.x - HEX * 3, camera.y - HEX * 3);
+  const br = pixelToHex(camera.x + canvas.width + HEX * 3, camera.y + canvas.height + HEX * 3);
+
+  for (let c = Math.max(0, tl.col - 2); c <= Math.min(MAP_COLS - 1, br.col + 2); c++) {
+    for (let r = Math.max(0, tl.row - 2); r <= Math.min(MAP_ROWS - 1, br.row + 2); r++) {
+      const p = hexToPixel(c, r);
+      const cell = grid[c][r];
+      let fill = '#f8fafc', stroke = 'rgba(15,23,42,.16)', lw = .7;
+      if (cell.owner >= 0) { fill = PALETTE[cell.owner].fill; stroke = PALETTE[cell.owner].dark; lw = .9; }
+      if (cell.trail >= 0) { fill = PALETTE[cell.trail].trail; stroke = PALETTE[cell.trail].fill; lw = 1.2; }
+      drawHex(p.x - camera.x, p.y - camera.y, HEX - .8, fill, stroke, lw);
+    }
+  }
+
+  for (const p of players) {
+    if (!p.alive) continue;
+    const sx = p.x - camera.x, sy = p.y - camera.y;
+    if (sx < -40 || sy < -40 || sx > canvas.width + 40 || sy > canvas.height + 40) continue;
+    ctx.beginPath();
+    ctx.arc(sx, sy, HEX * .82, 0, Math.PI * 2);
+    ctx.fillStyle = PALETTE[p.pid].dark;
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(sx, sy, HEX * .60, 0, Math.PI * 2);
+    ctx.fillStyle = PALETTE[p.pid].fill;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(sx + p.vx * HEX * 1.35, sy + p.vy * HEX * 1.35);
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 11px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.name, sx, sy - HEX - 5);
+  }
+  drawMinimap();
+}
+
+function drawMinimap() {
+  const w = 120, h = 88, x = canvas.width - w - 16, y = canvas.height - h - 16;
+  ctx.fillStyle = 'rgba(0,0,0,.56)';
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = 'rgba(255,255,255,.22)';
+  ctx.strokeRect(x, y, w, h);
+  const sx = w / MAP_COLS, sy = h / MAP_ROWS;
+  for (let c = 0; c < MAP_COLS; c += 2) for (let r = 0; r < MAP_ROWS; r += 2) {
+    const o = grid[c][r].owner;
+    if (o >= 0) {
+      ctx.fillStyle = PALETTE[o].fill;
+      ctx.fillRect(x + c * sx, y + r * sy, sx * 2 + .4, sy * 2 + .4);
+    }
+  }
+  const me = players[0];
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(x + me.col * sx - 2, y + me.row * sy - 2, 4, 4);
+}
+
+function gameOver() {
+  running = false;
+  updateScores();
+  document.getElementById('messageTitle').textContent = 'Game Over';
+  document.getElementById('messageBody').innerHTML = `Score ${players[0].score}<br>Map ${(players[0].blocks / (MAP_COLS * MAP_ROWS) * 100).toFixed(1)}% · Kills ${players[0].kills}`;
+  document.getElementById('message').style.display = 'block';
+}
+
+function loop() {
+  if (!running) return;
+  frame++;
+  const input = humanInput();
+  const boost = !!keys[' '] && !players[0].inBase;
+  document.getElementById('centerBadge').textContent = `Speed ${boost ? '135' : '100'}%`;
+  move(players[0], input.dx, input.dy, boost);
+  for (let i = 1; i < players.length; i++) if (players[i].alive) {
+    const a = aiInput(players[i]);
+    move(players[i], a.dx, a.dy, false);
+  }
+  collisions();
+  respawnAi();
+  updateCamera();
+  if (frame % 12 === 0) updateScores();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+restartGame();
+</script>
+</body>
+</html>

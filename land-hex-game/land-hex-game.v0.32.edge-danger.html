@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Land IO Paint Edge Prototype v0.32</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #0f172a;
+    font-family: Arial, sans-serif;
+  }
+  #gameWrap {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: #0f172a;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #111827;
+  }
+  #hud {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    color: white;
+    background: rgba(0,0,0,0.55);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    pointer-events: none;
+    min-width: 150px;
+  }
+  #leaderboard {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    color: white;
+    background: rgba(0,0,0,0.55);
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    pointer-events: none;
+    min-width: 150px;
+  }
+  #msg {
+    display: none;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    background: rgba(0,0,0,0.8);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 14px;
+    padding: 22px 30px;
+    text-align: center;
+  }
+  #msg button {
+    margin-top: 14px;
+    padding: 9px 18px;
+    border: 0;
+    border-radius: 8px;
+    background: #38bdf8;
+    color: #00111f;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  #hint {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.7);
+    background: rgba(0,0,0,0.45);
+    padding: 7px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    pointer-events: none;
+  }
+</style>
+</head>
+<body>
+<div id="gameWrap">
+  <canvas id="game"></canvas>
+  <div id="hud"></div>
+  <div id="leaderboard"></div>
+  <div id="msg">
+    <div id="msgText"></div>
+    <button onclick="restartGame()">다시 시작</button>
+  </div>
+  <div id="hint">WASD / 방향키 이동 · Shift 부스트 · 충돌/점령 파티클 개선</div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const hud = document.getElementById("hud");
+const leaderboard = document.getElementById("leaderboard");
+const msg = document.getElementById("msg");
+const msgText = document.getElementById("msgText");
+
+const TILE = 12;
+const COLS = 120;
+const ROWS = 90;
+
+const EMPTY = -1;
+
+const COLORS = [
+  { name: "You",   fill: "#38bdf8", base: "#0284c7", trail: "#7dd3fc" },
+  { name: "Red",   fill: "#fb7185", base: "#be123c", trail: "#fecdd3" },
+  { name: "Green", fill: "#4ade80", base: "#16a34a", trail: "#bbf7d0" },
+  { name: "Gold",  fill: "#facc15", base: "#ca8a04", trail: "#fef08a" },
+  { name: "Violet",fill: "#a78bfa", base: "#7c3aed", trail: "#ddd6fe" },
+  { name: "Orange",fill: "#fb923c", base: "#ea580c", trail: "#fed7aa" },
+];
+
+let grid;
+let trailGrid;
+let players;
+let keys = {};
+let camera = { x: 0, y: 0, targetX: 0, targetY: 0, shake: 0 };
+let gameActive = true;
+let lastStep = 0;
+let stepMs = 72;
+let baseStepMs = 72;
+let renderAlpha = 0;
+let animationFrameId = null;
+let particles = [];
+let floatingTexts = [];
+let invadeRipples = [];
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
+
+window.addEventListener("keydown", e => {
+  keys[e.key] = true;
+});
+window.addEventListener("keyup", e => {
+  keys[e.key] = false;
+});
+
+function createGrid() {
+  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
+  trailGrid = Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
+}
+
+function createPlayer(id, x, y, isHuman = false) {
+  const p = {
+    id,
+    name: COLORS[id].name,
+    x,
+    y,
+    prevX: x,
+    prevY: y,
+    visualX: x,
+    visualY: y,
+    radiusPulse: Math.random() * Math.PI * 2,
+    dirX: 1,
+    dirY: 0,
+    nextDirX: 1,
+    nextDirY: 0,
+    trail: [],
+    trailSet: new Set(),
+    alive: true,
+    kills: 0,
+    score: 0,
+    blocks: 0,
+    isHuman,
+    aiTimer: 0,
+    aiMode: "expand",
+    homeTarget: null
+  };
+
+  claimStartArea(p, 4);
+  return p;
+}
+
+function claimStartArea(p, radius) {
+  for (let y = p.y - radius; y <= p.y + radius; y++) {
+    for (let x = p.x - radius; x <= p.x + radius; x++) {
+      if (inside(x, y)) {
+        grid[y][x] = p.id;
+        trailGrid[y][x] = EMPTY;
+      }
+    }
+  }
+}
+
+function startGame() {
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+  createGrid();
+  gameActive = true;
+  msg.style.display = "none";
+
+  particles = [];
+  floatingTexts = [];
+  invadeRipples = [];
+
+  players = [
+    createPlayer(0, 18, 18, true),
+    createPlayer(1, COLS - 20, 18),
+    createPlayer(2, 18, ROWS - 20),
+    createPlayer(3, COLS - 20, ROWS - 20),
+    createPlayer(4, Math.floor(COLS / 2), 18),
+    createPlayer(5, Math.floor(COLS / 2), ROWS - 20),
+  ];
+
+  updateScores();
+  updateCameraTarget();
+  camera.x = camera.targetX;
+  camera.y = camera.targetY;
+  lastStep = 0;
+  loop(0);
+}
+
+function restartGame() {
+  startGame();
+}
+
+function loop(time) {
+  handleHumanInput();
+
+  if (gameActive) {
+    if (!lastStep) lastStep = time;
+
+    // 고정 셀 로직은 유지하되 렌더링만 보간해서 움직임을 부드럽게 만든다.
+    while (time - lastStep > stepMs) {
+      lastStep += stepMs;
+      updatePlayers();
+      checkCollisions();
+      updateScores();
+      updateCameraTarget();
+    }
+
+    renderAlpha = Math.max(0, Math.min(1, (time - lastStep) / stepMs));
+  } else {
+    renderAlpha = 1;
+  }
+
+  updateVisuals(renderAlpha);
+  updateParticles();
+  updateFloatingTexts();
+  updateInvadeRipples();
+  updateSmoothCamera();
+  draw();
+  animationFrameId = requestAnimationFrame(loop);
+}
+
+function handleHumanInput() {
+  const p = players[0];
+  if (!p || !p.alive) return;
+
+  let dx = p.dirX;
+  let dy = p.dirY;
+
+  if ((keys["ArrowLeft"] || keys["a"] || keys["A"]) && p.dirX !== 1) {
+    dx = -1; dy = 0;
+  } else if ((keys["ArrowRight"] || keys["d"] || keys["D"]) && p.dirX !== -1) {
+    dx = 1; dy = 0;
+  } else if ((keys["ArrowUp"] || keys["w"] || keys["W"]) && p.dirY !== 1) {
+    dx = 0; dy = -1;
+  } else if ((keys["ArrowDown"] || keys["s"] || keys["S"]) && p.dirY !== -1) {
+    dx = 0; dy = 1;
+  }
+
+  p.nextDirX = dx;
+  p.nextDirY = dy;
+
+  stepMs = keys["Shift"] ? 46 : baseStepMs;
+}
+
+function updatePlayers() {
+  for (const p of players) {
+    if (!p.alive) continue;
+
+    if (!p.isHuman) updateAI(p);
+
+    p.dirX = p.nextDirX;
+    p.dirY = p.nextDirY;
+
+    moveOneCell(p);
+  }
+}
+
+function moveOneCell(p) {
+  p.prevX = p.x;
+  p.prevY = p.y;
+
+  const nx = p.x + p.dirX;
+  const ny = p.y + p.dirY;
+
+  if (!inside(nx, ny)) {
+    killPlayer(p.id, EMPTY);
+    return;
+  }
+
+  const nextTrailOwner = trailGrid[ny][nx];
+
+  if (nextTrailOwner === p.id && p.trailSet.has(key(nx, ny))) {
+    killPlayer(p.id, EMPTY);
+    return;
+  }
+
+  const prevOwner = grid[p.y][p.x];
+
+  p.x = nx;
+  p.y = ny;
+
+  const owner = grid[ny][nx];
+
+  // 내 땅 밖으로 나가는 순간: 위험 모드 진입을 짧게 강조한다.
+  if (prevOwner === p.id && owner !== p.id) {
+    spawnRiskStartEffect(p, nx, ny);
+  }
+
+  // 남의 땅에 들어가는 순간: 파고드는 듯한 링/먼지/물감 튐 연출
+  if (owner !== EMPTY && owner !== p.id) {
+    spawnInvadeEffect(p, nx, ny, owner);
+  }
+
+  if (owner === p.id) {
+    if (p.trail.length > 0) {
+      closeArea(p);
+    }
+    return;
+  }
+
+  if (trailGrid[ny][nx] === EMPTY) {
+    trailGrid[ny][nx] = p.id;
+    p.trail.push({ x: nx, y: ny });
+    p.trailSet.add(key(nx, ny));
+    if (Math.random() < 0.45) spawnTrailSpark(p, nx, ny);
+  }
+}
+
+function closeArea(p) {
+  const trailCount = p.trail.length;
+
+  for (const t of p.trail) {
+    grid[t.y][t.x] = p.id;
+    trailGrid[t.y][t.x] = EMPTY;
+  }
+
+  const capturedCount = floodFillCapture(p.id);
+  spawnClaimBurst(p, trailCount + capturedCount);
+  addFloatingText(`+${(trailCount + capturedCount) * 10}`, p.x, p.y, COLORS[p.id].trail);
+  camera.shake = Math.min(10, camera.shake + 3 + Math.min(5, capturedCount / 80));
+
+  p.trail = [];
+  p.trailSet.clear();
+}
+
+function floodFillCapture(pid) {
+  const visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+  const queue = [];
+
+  const blocked = (x, y) => grid[y][x] === pid || trailGrid[y][x] === pid;
+
+  function add(x, y) {
+    if (!inside(x, y)) return;
+    if (visited[y][x]) return;
+    if (blocked(x, y)) return;
+
+    visited[y][x] = true;
+    queue.push({ x, y });
+  }
+
+  for (let x = 0; x < COLS; x++) {
+    add(x, 0);
+    add(x, ROWS - 1);
+  }
+
+  for (let y = 0; y < ROWS; y++) {
+    add(0, y);
+    add(COLS - 1, y);
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const c = queue[head++];
+
+    add(c.x + 1, c.y);
+    add(c.x - 1, c.y);
+    add(c.x, c.y + 1);
+    add(c.x, c.y - 1);
+  }
+
+  let captured = 0;
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (!visited[y][x]) {
+        if (grid[y][x] !== pid) captured++;
+        grid[y][x] = pid;
+        trailGrid[y][x] = EMPTY;
+      }
+    }
+  }
+  return captured;
+}
+
+function checkCollisions() {
+  for (const p of players) {
+    if (!p.alive) continue;
+
+    const trailOwner = trailGrid[p.y][p.x];
+
+    if (trailOwner !== EMPTY && trailOwner !== p.id) {
+      killPlayer(trailOwner, p.id);
+    }
+  }
+}
+
+function killPlayer(pid, killerId) {
+  const target = players[pid];
+  if (!target || !target.alive) return;
+
+  target.alive = false;
+  spawnDeathBurst(target);
+  addFloatingText(killerId !== EMPTY ? "CUT!" : "CRASH", target.x, target.y, COLORS[target.id].fill);
+  camera.shake = Math.min(14, camera.shake + 8);
+
+  for (const t of target.trail) {
+    if (trailGrid[t.y][t.x] === pid) {
+      trailGrid[t.y][t.x] = EMPTY;
+    }
+  }
+
+  target.trail = [];
+  target.trailSet.clear();
+
+  if (killerId !== EMPTY && players[killerId]) {
+    players[killerId].kills++;
+  }
+
+  if (pid === 0) {
+    gameActive = false;
+    msgText.innerHTML = `
+      <b>GAME OVER</b><br>
+      Score: ${players[0].score}<br>
+      Kills: ${players[0].kills}
+    `;
+    msg.style.display = "block";
+  } else {
+    setTimeout(() => respawnAI(pid), 700);
+  }
+}
+
+function respawnAI(pid) {
+  if (!gameActive) return;
+
+  const spots = [
+    [COLS - 20, 18],
+    [18, ROWS - 20],
+    [COLS - 20, ROWS - 20],
+    [Math.floor(COLS / 2), 18],
+    [Math.floor(COLS / 2), ROWS - 20],
+  ];
+
+  const s = spots[(pid - 1) % spots.length];
+  players[pid] = createPlayer(pid, s[0], s[1]);
+}
+
+function updateAI(p) {
+  p.aiTimer--;
+
+  const inBase = grid[p.y][p.x] === p.id;
+
+  if (p.aiTimer <= 0) {
+    p.aiTimer = 8 + Math.floor(Math.random() * 12);
+
+    if (inBase && Math.random() < 0.75) {
+      const dirs = [
+        [1,0], [-1,0], [0,1], [0,-1]
+      ];
+      const d = dirs[Math.floor(Math.random() * dirs.length)];
+      p.nextDirX = d[0];
+      p.nextDirY = d[1];
+      p.aiMode = "expand";
+    }
+
+    if (!inBase && (p.trail.length > 8 || Math.random() < 0.25)) {
+      const home = findNearestOwnedCell(p);
+      if (home) {
+        const dx = home.x - p.x;
+        const dy = home.y - p.y;
+
+        if (Math.abs(dx) > Math.abs(dy)) {
+          p.nextDirX = Math.sign(dx);
+          p.nextDirY = 0;
+        } else {
+          p.nextDirX = 0;
+          p.nextDirY = Math.sign(dy);
+        }
+      }
+    }
+  }
+
+  const nx = p.x + p.nextDirX;
+  const ny = p.y + p.nextDirY;
+
+  if (!inside(nx, ny) || trailGrid[ny][nx] === p.id) {
+    const dirs = [
+      [1,0], [-1,0], [0,1], [0,-1]
+    ].filter(d => inside(p.x + d[0], p.y + d[1]));
+
+    const d = dirs[Math.floor(Math.random() * dirs.length)];
+    p.nextDirX = d[0];
+    p.nextDirY = d[1];
+  }
+}
+
+function findNearestOwnedCell(p) {
+  let best = null;
+  let bestD = Infinity;
+
+  for (let y = 0; y < ROWS; y += 3) {
+    for (let x = 0; x < COLS; x += 3) {
+      if (grid[y][x] === p.id) {
+        const d = Math.abs(p.x - x) + Math.abs(p.y - y);
+        if (d < bestD) {
+          bestD = d;
+          best = { x, y };
+        }
+      }
+    }
+  }
+
+  return best;
+}
+
+function updateScores() {
+  for (const p of players) {
+    let blocks = 0;
+
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (grid[y][x] === p.id) blocks++;
+      }
+    }
+
+    p.blocks = blocks;
+    p.score = blocks * 10 + p.kills * 100;
+  }
+}
+
+function updateCameraTarget() {
+  const p = players[0];
+  if (!p) return;
+
+  camera.targetX = p.x * TILE - canvas.width / 2;
+  camera.targetY = p.y * TILE - canvas.height / 2;
+
+  const worldW = COLS * TILE;
+  const worldH = ROWS * TILE;
+
+  camera.targetX = Math.max(0, Math.min(Math.max(0, worldW - canvas.width), camera.targetX));
+  camera.targetY = Math.max(0, Math.min(Math.max(0, worldH - canvas.height), camera.targetY));
+}
+
+
+function updateVisuals(alpha) {
+  for (const p of players) {
+    if (!p) continue;
+    p.visualX = lerp(p.prevX, p.x, alpha);
+    p.visualY = lerp(p.prevY, p.y, alpha);
+    p.radiusPulse += 0.12;
+  }
+}
+
+function updateSmoothCamera() {
+  if (!camera.targetX && !camera.targetY) updateCameraTarget();
+  camera.x += (camera.targetX - camera.x) * 0.16;
+  camera.y += (camera.targetY - camera.y) * 0.16;
+
+  if (camera.shake > 0.05) {
+    camera.x += (Math.random() - 0.5) * camera.shake;
+    camera.y += (Math.random() - 0.5) * camera.shake;
+    camera.shake *= 0.86;
+  } else {
+    camera.shake = 0;
+  }
+}
+
+function spawnParticle(x, y, color, amount, speed = 1.8, life = 32, size = 3) {
+  for (let i = 0; i < amount; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const v = speed * (0.35 + Math.random());
+    particles.push({
+      x: x * TILE + TILE / 2,
+      y: y * TILE + TILE / 2,
+      vx: Math.cos(a) * v,
+      vy: Math.sin(a) * v,
+      life,
+      maxLife: life,
+      size: size * (0.5 + Math.random()),
+      color
+    });
+  }
+}
+
+function spawnTrailSpark(p, x, y) {
+  spawnParticle(x, y, COLORS[p.id].trail, 1, 0.45, 18, 1.8);
+}
+
+function spawnRiskStartEffect(p, x, y) {
+  spawnParticle(x, y, COLORS[p.id].trail, 9, 1.25, 24, 2.4);
+  invadeRipples.push({
+    x: x * TILE + TILE / 2,
+    y: y * TILE + TILE / 2,
+    life: 16,
+    maxLife: 16,
+    color: COLORS[p.id].fill,
+    underColor: COLORS[p.id].base
+  });
+}
+
+function spawnInvadeEffect(p, x, y, ownerId) {
+  const cx = x * TILE + TILE / 2;
+  const cy = y * TILE + TILE / 2;
+
+  invadeRipples.push({
+    x: cx,
+    y: cy,
+    life: 18,
+    maxLife: 18,
+    color: COLORS[p.id].trail,
+    underColor: COLORS[ownerId].base
+  });
+
+  // 들어가는 방향의 반대쪽으로 잔가루가 밀려나게 해서 '파고드는' 느낌을 만든다.
+  for (let i = 0; i < 7; i++) {
+    const spread = (Math.random() - 0.5) * 1.35;
+    const baseAngle = Math.atan2(-p.dirY, -p.dirX) + spread;
+    const v = 0.5 + Math.random() * 1.4;
+    particles.push({
+      x: cx + (Math.random() - 0.5) * TILE * 0.6,
+      y: cy + (Math.random() - 0.5) * TILE * 0.6,
+      vx: Math.cos(baseAngle) * v,
+      vy: Math.sin(baseAngle) * v,
+      life: 16 + Math.floor(Math.random() * 10),
+      maxLife: 24,
+      size: 1.2 + Math.random() * 2.5,
+      color: Math.random() < 0.45 ? COLORS[ownerId].base : COLORS[p.id].trail
+    });
+  }
+}
+
+function spawnDeathBurst(p) {
+  spawnParticle(p.x, p.y, COLORS[p.id].fill, 34, 3.2, 42, 4.5);
+  spawnParticle(p.x, p.y, "#ffffff", 10, 2.4, 28, 2.5);
+}
+
+function spawnClaimBurst(p, capturedCount) {
+  const amount = Math.min(52, 10 + Math.floor(capturedCount / 8));
+  spawnParticle(p.x, p.y, COLORS[p.id].trail, amount, 2.2, 36, 3.2);
+}
+
+function updateParticles() {
+  for (const pt of particles) {
+    pt.x += pt.vx;
+    pt.y += pt.vy;
+    pt.vx *= 0.96;
+    pt.vy *= 0.96;
+    pt.life--;
+  }
+  particles = particles.filter(pt => pt.life > 0);
+}
+
+function addFloatingText(text, x, y, color) {
+  floatingTexts.push({
+    text,
+    x: x * TILE + TILE / 2,
+    y: y * TILE - 4,
+    vy: -0.55,
+    life: 48,
+    maxLife: 48,
+    color
+  });
+}
+
+function updateFloatingTexts() {
+  for (const f of floatingTexts) {
+    f.y += f.vy;
+    f.life--;
+  }
+  floatingTexts = floatingTexts.filter(f => f.life > 0);
+}
+
+function updateInvadeRipples() {
+  for (const r of invadeRipples) r.life--;
+  invadeRipples = invadeRipples.filter(r => r.life > 0);
+}
+
+function drawParticles() {
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  for (const pt of particles) {
+    const a = pt.life / pt.maxLife;
+    ctx.globalAlpha = a;
+    ctx.fillStyle = pt.color;
+    ctx.beginPath();
+    ctx.arc(pt.x - camera.x, pt.y - camera.y, pt.size * a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function drawFloatingTexts() {
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.font = "bold 14px Arial";
+  for (const f of floatingTexts) {
+    ctx.globalAlpha = Math.max(0, f.life / f.maxLife);
+    ctx.fillStyle = f.color;
+    ctx.fillText(f.text, f.x - camera.x, f.y - camera.y);
+  }
+  ctx.restore();
+}
+
+function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "#111827";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  drawGrid();
+  drawInvadeRipples();
+  drawTrails();
+  drawParticles();
+  drawPlayers();
+  drawFloatingTexts();
+  drawMiniMap();
+  drawHUD();
+}
+
+function drawGrid() {
+  const startX = Math.max(0, Math.floor(camera.x / TILE) - 1);
+  const endX = Math.min(COLS, Math.ceil((camera.x + canvas.width) / TILE) + 1);
+  const startY = Math.max(0, Math.floor(camera.y / TILE) - 1);
+  const endY = Math.min(ROWS, Math.ceil((camera.y + canvas.height) / TILE) + 1);
+
+  ctx.save();
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const owner = grid[y][x];
+
+      if (owner !== EMPTY) {
+        drawPaintTile(x, y, owner);
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawPaintTile(x, y, owner) {
+  const sx = Math.floor(x * TILE - camera.x);
+  const sy = Math.floor(y * TILE - camera.y);
+  const h = hash2(x, y);
+
+  // 내부는 깨끗하게 꽉 채운다.
+  // 물감 질감은 바깥 경계에만 얹어서 내부가 지저분하거나 구멍난 것처럼 보이지 않게 한다.
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = COLORS[owner].base;
+  ctx.fillRect(sx, sy, TILE, TILE);
+
+  // 아주 약한 내부 농담만 추가한다.
+  ctx.globalAlpha = 0.07;
+  ctx.fillStyle = COLORS[owner].fill;
+  ctx.fillRect(sx + 1, sy + 1, TILE - 2, TILE - 2);
+
+  drawPaintEdges(x, y, owner, sx, sy, h);
+
+  ctx.globalAlpha = 1;
+}
+
+function drawPaintEdges(x, y, owner, sx, sy, h) {
+  const edgeColor = COLORS[owner].fill;
+  const softColor = COLORS[owner].trail;
+  const dirs = [
+    { dx: 0, dy: -1, side: 'top' },
+    { dx: 1, dy: 0, side: 'right' },
+    { dx: 0, dy: 1, side: 'bottom' },
+    { dx: -1, dy: 0, side: 'left' },
+  ];
+
+  for (let i = 0; i < dirs.length; i++) {
+    const d = dirs[i];
+    const nx = x + d.dx;
+    const ny = y + d.dy;
+    const boundary = !inside(nx, ny) || grid[ny][nx] !== owner;
+    if (!boundary) continue;
+
+    const jitter = ((hash2(x + i * 13, y + i * 7) % 100) / 100 - 0.5) * 1.8;
+
+    // 경계선의 붓터치.
+    ctx.globalAlpha = 0.34;
+    ctx.strokeStyle = edgeColor;
+    ctx.lineWidth = 2.2 + (h % 3) * 0.35;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+
+    if (d.side === 'top') {
+      ctx.moveTo(sx + 1, sy + jitter);
+      ctx.lineTo(sx + TILE - 1, sy - jitter * 0.4);
+    } else if (d.side === 'right') {
+      ctx.moveTo(sx + TILE + jitter, sy + 1);
+      ctx.lineTo(sx + TILE - jitter * 0.4, sy + TILE - 1);
+    } else if (d.side === 'bottom') {
+      ctx.moveTo(sx + 1, sy + TILE + jitter);
+      ctx.lineTo(sx + TILE - 1, sy + TILE - jitter * 0.4);
+    } else {
+      ctx.moveTo(sx + jitter, sy + 1);
+      ctx.lineTo(sx - jitter * 0.4, sy + TILE - 1);
+    }
+    ctx.stroke();
+
+    // 경계 밖으로 살짝 번지는 물감 방울.
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = softColor;
+    const count = 1 + (h + i) % 2;
+    for (let k = 0; k < count; k++) {
+      const hh = hash2(x + k * 19 + i * 5, y + k * 23 + i * 11);
+      let bx = sx + ((hh % 100) / 100) * TILE;
+      let by = sy + (((hh >> 8) % 100) / 100) * TILE;
+      const out = 1.3 + (((hh >> 16) % 100) / 100) * 1.7;
+      if (d.side === 'top') by = sy - out;
+      if (d.side === 'right') bx = sx + TILE + out;
+      if (d.side === 'bottom') by = sy + TILE + out;
+      if (d.side === 'left') bx = sx - out;
+      ctx.beginPath();
+      ctx.arc(bx, by, TILE * (0.12 + ((hh >> 24) % 4) * 0.025), 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+}
+
+function drawInvadeRipples() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const r of invadeRipples) {
+    const t = 1 - r.life / r.maxLife;
+    const sx = r.x - camera.x;
+    const sy = r.y - camera.y;
+
+    ctx.globalAlpha = (1 - t) * 0.45;
+    ctx.strokeStyle = r.color;
+    ctx.lineWidth = 2.5 * (1 - t);
+    ctx.beginPath();
+    ctx.arc(sx, sy, TILE * (0.25 + t * 1.15), 0, Math.PI * 2);
+    ctx.stroke();
+
+    ctx.globalAlpha = (1 - t) * 0.22;
+    ctx.fillStyle = r.underColor;
+    ctx.beginPath();
+    ctx.arc(sx, sy, TILE * (0.55 - t * 0.25), 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+function roundRectPath(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+}
+
+function hash2(x, y) {
+  let n = x * 374761393 + y * 668265263;
+  n = (n ^ (n >> 13)) * 1274126177;
+  return (n ^ (n >> 16)) >>> 0;
+}
+
+function isPlayerInDanger(p) {
+  if (!p || !p.alive) return false;
+  return p.trail.length > 0 || grid[p.y]?.[p.x] !== p.id;
+}
+
+function dangerPulse(p) {
+  return isPlayerInDanger(p) ? 0.5 + Math.sin(p.radiusPulse * 1.7) * 0.5 : 0;
+}
+
+function drawTrails() {
+  for (const p of players) {
+    if (!p.alive) continue;
+    if (p.trail.length === 0) continue;
+
+    const danger = dangerPulse(p);
+    ctx.strokeStyle = danger > 0 ? COLORS[p.id].fill : COLORS[p.id].trail;
+    ctx.lineWidth = TILE * (0.75 + danger * 0.18);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.beginPath();
+
+    for (let i = 0; i < p.trail.length; i++) {
+      const t = p.trail[i];
+      const sx = t.x * TILE + TILE / 2 - camera.x;
+      const sy = t.y * TILE + TILE / 2 - camera.y;
+
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+
+    // 현재 머리 위치까지 부드럽게 이어서 격자 이동 느낌을 줄인다.
+    ctx.lineTo(p.visualX * TILE + TILE / 2 - camera.x, p.visualY * TILE + TILE / 2 - camera.y);
+    ctx.shadowColor = danger > 0 ? COLORS[p.id].fill : COLORS[p.id].trail;
+    ctx.shadowBlur = 8 + danger * 14;
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+}
+
+function drawPlayers() {
+  for (const p of players) {
+    if (!p.alive) continue;
+
+    const sx = p.visualX * TILE + TILE / 2 - camera.x;
+    const sy = p.visualY * TILE + TILE / 2 - camera.y;
+    const pulse = Math.sin(p.radiusPulse) * 0.08;
+    const danger = dangerPulse(p);
+
+    if (danger > 0) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = 0.18 + danger * 0.20;
+      ctx.fillStyle = COLORS[p.id].trail;
+      ctx.beginPath();
+      ctx.arc(sx, sy, TILE * (1.25 + danger * 0.45), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.beginPath();
+    ctx.arc(sx, sy, TILE * (0.78 + pulse + danger * 0.08), 0, Math.PI * 2);
+    ctx.shadowColor = danger > 0 ? COLORS[p.id].trail : COLORS[p.id].fill;
+    ctx.shadowBlur = (p.isHuman ? 10 : 5) + danger * 16;
+    ctx.fillStyle = COLORS[p.id].fill;
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(
+      sx + p.dirX * TILE * 1.2,
+      sy + p.dirY * TILE * 1.2
+    );
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "11px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(p.name, sx, sy - 13);
+  }
+}
+
+function drawMiniMap() {
+  const w = 150;
+  const h = 112;
+  const x0 = canvas.width - w - 12;
+  const y0 = canvas.height - h - 12;
+
+  ctx.fillStyle = "rgba(0,0,0,0.5)";
+  ctx.fillRect(x0, y0, w, h);
+
+  const sx = w / COLS;
+  const sy = h / ROWS;
+
+  for (let y = 0; y < ROWS; y += 2) {
+    for (let x = 0; x < COLS; x += 2) {
+      const owner = grid[y][x];
+      if (owner !== EMPTY) {
+        ctx.fillStyle = COLORS[owner].base;
+        ctx.fillRect(x0 + x * sx, y0 + y * sy, sx * 2, sy * 2);
+      }
+    }
+  }
+
+  const p = players[0];
+  if (p && p.alive) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(x0 + p.x * sx - 2, y0 + p.y * sy - 2, 4, 4);
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.strokeRect(x0, y0, w, h);
+}
+
+function drawHUD() {
+  const p = players[0];
+  const total = COLS * ROWS;
+  const percent = p ? (p.blocks / total * 100).toFixed(1) : "0.0";
+
+  hud.innerHTML = `
+    <b>Land IO</b><br>
+    Score: ${p ? p.score : 0}<br>
+    Area: ${percent}%<br>
+    Blocks: ${p ? p.blocks : 0}<br>
+    Kills: ${p ? p.kills : 0}<br>
+    Speed: ${keys["Shift"] ? "Boost" : "Normal"}
+  `;
+
+  const ranked = [...players]
+    .filter(p => p.alive)
+    .sort((a, b) => b.score - a.score);
+
+  leaderboard.innerHTML = `<b>Leaderboard</b><br>` + ranked.map((p, i) => {
+    return `<span style="color:${COLORS[p.id].fill}">${i + 1}. ${p.name} ${p.score}</span>`;
+  }).join("<br>");
+}
+
+function inside(x, y) {
+  return x >= 0 && y >= 0 && x < COLS && y < ROWS;
+}
+
+function key(x, y) {
+  return `${x},${y}`;
+}
+
+startGame();
+</script>
+</body>
+</html>

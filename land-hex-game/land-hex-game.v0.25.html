@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Land IO Smooth Physics Prototype</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #0f172a;
+    font-family: Arial, sans-serif;
+  }
+  #gameWrap {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    background: radial-gradient(circle at center, #1e293b 0%, #0f172a 65%);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: #111827;
+  }
+  #hud, #leaderboard {
+    position: absolute;
+    top: 12px;
+    color: white;
+    background: rgba(0,0,0,0.55);
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    pointer-events: none;
+    min-width: 155px;
+    backdrop-filter: blur(6px);
+  }
+  #hud { left: 12px; }
+  #leaderboard { right: 12px; }
+  #msg {
+    display: none;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    color: white;
+    background: rgba(0,0,0,0.82);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 16px;
+    padding: 24px 34px;
+    text-align: center;
+  }
+  #msg button {
+    margin-top: 14px;
+    padding: 9px 18px;
+    border: 0;
+    border-radius: 9px;
+    background: #38bdf8;
+    color: #00111f;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  #hint {
+    position: absolute;
+    bottom: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255,255,255,0.72);
+    background: rgba(0,0,0,0.45);
+    padding: 8px 16px;
+    border-radius: 999px;
+    font-size: 12px;
+    pointer-events: none;
+    backdrop-filter: blur(6px);
+  }
+</style>
+</head>
+<body>
+<div id="gameWrap">
+  <canvas id="game"></canvas>
+  <div id="hud"></div>
+  <div id="leaderboard"></div>
+  <div id="msg">
+    <div id="msgText"></div>
+    <button onclick="restartGame()">다시 시작</button>
+  </div>
+  <div id="hint">WASD / 방향키 이동 · Shift 부스트 · 판정은 격자, 움직임은 부드럽게</div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const hud = document.getElementById("hud");
+const leaderboard = document.getElementById("leaderboard");
+const msg = document.getElementById("msg");
+const msgText = document.getElementById("msgText");
+
+const TILE = 14;
+const COLS = 120;
+const ROWS = 90;
+const EMPTY = -1;
+
+const NORMAL_STEP_MS = 86;
+const BOOST_STEP_MS = 58;
+
+// 화면 보간 강도
+const POSITION_EASE = 0.24;
+const CAMERA_EASE = 0.10;
+const SQUASH_EASE = 0.16;
+
+const COLORS = [
+  { name: "You",    fill: "#38bdf8", base: "#0284c7", trail: "#7dd3fc", glow: "rgba(56,189,248,0.45)" },
+  { name: "Red",    fill: "#fb7185", base: "#be123c", trail: "#fecdd3", glow: "rgba(251,113,133,0.4)" },
+  { name: "Green",  fill: "#4ade80", base: "#16a34a", trail: "#bbf7d0", glow: "rgba(74,222,128,0.4)" },
+  { name: "Gold",   fill: "#facc15", base: "#ca8a04", trail: "#fef08a", glow: "rgba(250,204,21,0.4)" },
+  { name: "Violet", fill: "#a78bfa", base: "#7c3aed", trail: "#ddd6fe", glow: "rgba(167,139,250,0.4)" },
+  { name: "Orange", fill: "#fb923c", base: "#ea580c", trail: "#fed7aa", glow: "rgba(251,146,60,0.4)" },
+];
+
+let grid;
+let trailGrid;
+let players;
+let keys = {};
+let camera = { x: 0, y: 0, tx: 0, ty: 0 };
+let gameActive = true;
+let lastStep = 0;
+let animationFrameId = null;
+let shake = 0;
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
+
+window.addEventListener("keydown", e => { keys[e.key] = true; });
+window.addEventListener("keyup", e => { keys[e.key] = false; });
+
+function createGrid() {
+  grid = Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
+  trailGrid = Array.from({ length: ROWS }, () => Array(COLS).fill(EMPTY));
+}
+
+function createPlayer(id, x, y, isHuman = false) {
+  const px = cellToWorldX(x);
+  const py = cellToWorldY(y);
+
+  const p = {
+    id,
+    name: COLORS[id].name,
+    x,
+    y,
+
+    // 논리 방향
+    dirX: 1,
+    dirY: 0,
+    nextDirX: 1,
+    nextDirY: 0,
+
+    // 화면 위치
+    renderX: px,
+    renderY: py,
+    prevRenderX: px,
+    prevRenderY: py,
+    targetX: px,
+    targetY: py,
+
+    // 물리적 느낌용 값
+    squash: 1,
+    squashTarget: 1,
+    leanX: 0,
+    leanY: 0,
+    pulse: Math.random() * Math.PI * 2,
+
+    trail: [],
+    trailSet: new Set(),
+    visualTrail: [{ x: px, y: py }],
+    alive: true,
+    kills: 0,
+    score: 0,
+    blocks: 0,
+    isHuman,
+    aiTimer: 0,
+  };
+
+  claimStartArea(p, 4);
+  return p;
+}
+
+function claimStartArea(p, radius) {
+  for (let y = p.y - radius; y <= p.y + radius; y++) {
+    for (let x = p.x - radius; x <= p.x + radius; x++) {
+      if (inside(x, y)) {
+        grid[y][x] = p.id;
+        trailGrid[y][x] = EMPTY;
+      }
+    }
+  }
+}
+
+function startGame() {
+  if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+  createGrid();
+  gameActive = true;
+  msg.style.display = "none";
+  shake = 0;
+
+  players = [
+    createPlayer(0, 18, 18, true),
+    createPlayer(1, COLS - 20, 18),
+    createPlayer(2, 18, ROWS - 20),
+    createPlayer(3, COLS - 20, ROWS - 20),
+    createPlayer(4, Math.floor(COLS / 2), 18),
+    createPlayer(5, Math.floor(COLS / 2), ROWS - 20),
+  ];
+
+  updateScores();
+  hardUpdateCamera();
+  lastStep = 0;
+  loop(0);
+}
+
+function restartGame() {
+  startGame();
+}
+
+function loop(time) {
+  if (!gameActive) {
+    smoothRenderMotion();
+    smoothCamera();
+    draw(time);
+    return;
+  }
+
+  handleHumanInput();
+
+  const stepMs = keys["Shift"] ? BOOST_STEP_MS : NORMAL_STEP_MS;
+  if (time - lastStep > stepMs) {
+    lastStep = time;
+    updatePlayers();
+    checkCollisions();
+    updateScores();
+    updateCameraTarget();
+  }
+
+  smoothRenderMotion();
+  smoothCamera();
+  draw(time);
+  animationFrameId = requestAnimationFrame(loop);
+}
+
+function handleHumanInput() {
+  const p = players[0];
+  if (!p || !p.alive) return;
+
+  let dx = p.dirX;
+  let dy = p.dirY;
+
+  if ((keys["ArrowLeft"] || keys["a"] || keys["A"]) && p.dirX !== 1) {
+    dx = -1; dy = 0;
+  } else if ((keys["ArrowRight"] || keys["d"] || keys["D"]) && p.dirX !== -1) {
+    dx = 1; dy = 0;
+  } else if ((keys["ArrowUp"] || keys["w"] || keys["W"]) && p.dirY !== 1) {
+    dx = 0; dy = -1;
+  } else if ((keys["ArrowDown"] || keys["s"] || keys["S"]) && p.dirY !== -1) {
+    dx = 0; dy = 1;
+  }
+
+  p.nextDirX = dx;
+  p.nextDirY = dy;
+}
+
+function updatePlayers() {
+  for (const p of players) {
+    if (!p.alive) continue;
+
+    if (!p.isHuman) updateAI(p);
+
+    p.dirX = p.nextDirX;
+    p.dirY = p.nextDirY;
+
+    moveOneCell(p);
+  }
+}
+
+function moveOneCell(p) {
+  const nx = p.x + p.dirX;
+  const ny = p.y + p.dirY;
+
+  if (!inside(nx, ny)) {
+    killPlayer(p.id, EMPTY);
+    return;
+  }
+
+  const nextTrailOwner = trailGrid[ny][nx];
+
+  if (nextTrailOwner === p.id && p.trailSet.has(key(nx, ny))) {
+    killPlayer(p.id, EMPTY);
+    return;
+  }
+
+  p.x = nx;
+  p.y = ny;
+
+  p.targetX = cellToWorldX(nx);
+  p.targetY = cellToWorldY(ny);
+
+  p.leanX = p.dirX;
+  p.leanY = p.dirY;
+  p.squashTarget = keys["Shift"] && p.isHuman ? 1.22 : 1.12;
+
+  const owner = grid[ny][nx];
+
+  if (owner === p.id) {
+    if (p.trail.length > 0) closeArea(p);
+    resetVisualTrailIfNeeded(p);
+    return;
+  }
+
+  if (trailGrid[ny][nx] === EMPTY) {
+    trailGrid[ny][nx] = p.id;
+    p.trail.push({ x: nx, y: ny });
+    p.trailSet.add(key(nx, ny));
+    p.visualTrail.push({ x: p.targetX, y: p.targetY });
+  }
+}
+
+function closeArea(p) {
+  for (const t of p.trail) {
+    grid[t.y][t.x] = p.id;
+    trailGrid[t.y][t.x] = EMPTY;
+  }
+
+  const gained = floodFillCapture(p.id);
+
+  p.trail = [];
+  p.trailSet.clear();
+  p.visualTrail = [{ x: cellToWorldX(p.x), y: cellToWorldY(p.y) }];
+
+  if (p.id === 0 && gained > 8) {
+    shake = Math.min(8, 2 + gained / 90);
+  }
+}
+
+function resetVisualTrailIfNeeded(p) {
+  if (p.visualTrail.length > 1) {
+    p.visualTrail = [{ x: cellToWorldX(p.x), y: cellToWorldY(p.y) }];
+  }
+}
+
+function floodFillCapture(pid) {
+  const visited = Array.from({ length: ROWS }, () => Array(COLS).fill(false));
+  const queue = [];
+
+  const blocked = (x, y) => grid[y][x] === pid || trailGrid[y][x] === pid;
+
+  function add(x, y) {
+    if (!inside(x, y)) return;
+    if (visited[y][x]) return;
+    if (blocked(x, y)) return;
+    visited[y][x] = true;
+    queue.push({ x, y });
+  }
+
+  for (let x = 0; x < COLS; x++) {
+    add(x, 0);
+    add(x, ROWS - 1);
+  }
+
+  for (let y = 0; y < ROWS; y++) {
+    add(0, y);
+    add(COLS - 1, y);
+  }
+
+  let head = 0;
+  while (head < queue.length) {
+    const c = queue[head++];
+    add(c.x + 1, c.y);
+    add(c.x - 1, c.y);
+    add(c.x, c.y + 1);
+    add(c.x, c.y - 1);
+  }
+
+  let gained = 0;
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      if (!visited[y][x]) {
+        if (grid[y][x] !== pid) gained++;
+        grid[y][x] = pid;
+        trailGrid[y][x] = EMPTY;
+      }
+    }
+  }
+  return gained;
+}
+
+function checkCollisions() {
+  for (const p of players) {
+    if (!p.alive) continue;
+
+    const trailOwner = trailGrid[p.y][p.x];
+
+    if (trailOwner !== EMPTY && trailOwner !== p.id) {
+      killPlayer(trailOwner, p.id);
+    }
+  }
+}
+
+function killPlayer(pid, killerId) {
+  const target = players[pid];
+  if (!target || !target.alive) return;
+
+  target.alive = false;
+
+  for (const t of target.trail) {
+    if (trailGrid[t.y][t.x] === pid) trailGrid[t.y][t.x] = EMPTY;
+  }
+
+  target.trail = [];
+  target.trailSet.clear();
+  target.visualTrail = [];
+
+  if (killerId !== EMPTY && players[killerId]) {
+    players[killerId].kills++;
+    if (killerId === 0) shake = 6;
+  }
+
+  if (pid === 0) {
+    gameActive = false;
+    shake = 8;
+    msgText.innerHTML = `
+      <b>GAME OVER</b><br>
+      Score: ${players[0].score}<br>
+      Kills: ${players[0].kills}
+    `;
+    msg.style.display = "block";
+  } else {
+    setTimeout(() => respawnAI(pid), 800);
+  }
+}
+
+function respawnAI(pid) {
+  if (!gameActive) return;
+
+  const spots = [
+    [COLS - 20, 18],
+    [18, ROWS - 20],
+    [COLS - 20, ROWS - 20],
+    [Math.floor(COLS / 2), 18],
+    [Math.floor(COLS / 2), ROWS - 20],
+  ];
+
+  const s = spots[(pid - 1) % spots.length];
+  players[pid] = createPlayer(pid, s[0], s[1]);
+}
+
+function updateAI(p) {
+  p.aiTimer--;
+
+  const inBase = grid[p.y][p.x] === p.id;
+
+  if (p.aiTimer <= 0) {
+    p.aiTimer = 7 + Math.floor(Math.random() * 13);
+
+    if (inBase && Math.random() < 0.72) {
+      chooseRandomDirection(p);
+    }
+
+    if (!inBase && (p.trail.length > 8 || Math.random() < 0.32)) {
+      const home = findNearestOwnedCell(p);
+      if (home) {
+        const dx = home.x - p.x;
+        const dy = home.y - p.y;
+
+        if (Math.abs(dx) > Math.abs(dy)) {
+          p.nextDirX = Math.sign(dx);
+          p.nextDirY = 0;
+        } else {
+          p.nextDirX = 0;
+          p.nextDirY = Math.sign(dy);
+        }
+      }
+    }
+  }
+
+  const nx = p.x + p.nextDirX;
+  const ny = p.y + p.nextDirY;
+
+  if (!inside(nx, ny) || trailGrid[ny][nx] === p.id) {
+    chooseRandomDirection(p);
+  }
+}
+
+function chooseRandomDirection(p) {
+  const dirs = [[1,0], [-1,0], [0,1], [0,-1]]
+    .filter(d => !(d[0] === -p.dirX && d[1] === -p.dirY))
+    .filter(d => inside(p.x + d[0], p.y + d[1]));
+
+  const d = dirs[Math.floor(Math.random() * dirs.length)] || [1,0];
+  p.nextDirX = d[0];
+  p.nextDirY = d[1];
+}
+
+function findNearestOwnedCell(p) {
+  let best = null;
+  let bestD = Infinity;
+
+  for (let y = 0; y < ROWS; y += 3) {
+    for (let x = 0; x < COLS; x += 3) {
+      if (grid[y][x] === p.id) {
+        const d = Math.abs(p.x - x) + Math.abs(p.y - y);
+        if (d < bestD) {
+          bestD = d;
+          best = { x, y };
+        }
+      }
+    }
+  }
+  return best;
+}
+
+function updateScores() {
+  for (const p of players) {
+    let blocks = 0;
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (grid[y][x] === p.id) blocks++;
+      }
+    }
+
+    p.blocks = blocks;
+    p.score = blocks * 10 + p.kills * 120;
+  }
+}
+
+function hardUpdateCamera() {
+  const p = players[0];
+  camera.x = p.renderX - canvas.width / 2;
+  camera.y = p.renderY - canvas.height / 2;
+  updateCameraTarget();
+  camera.x = camera.tx;
+  camera.y = camera.ty;
+}
+
+function updateCameraTarget() {
+  const p = players[0];
+  if (!p) return;
+
+  camera.tx = p.targetX - canvas.width / 2;
+  camera.ty = p.targetY - canvas.height / 2;
+
+  const worldW = COLS * TILE;
+  const worldH = ROWS * TILE;
+
+  camera.tx = Math.max(0, Math.min(worldW - canvas.width, camera.tx));
+  camera.ty = Math.max(0, Math.min(worldH - canvas.height, camera.ty));
+}
+
+function smoothRenderMotion() {
+  for (const p of players) {
+    if (!p.alive) continue;
+
+    p.prevRenderX = p.renderX;
+    p.prevRenderY = p.renderY;
+
+    p.renderX += (p.targetX - p.renderX) * POSITION_EASE;
+    p.renderY += (p.targetY - p.renderY) * POSITION_EASE;
+
+    p.squash += (p.squashTarget - p.squash) * SQUASH_EASE;
+    p.squashTarget += (1 - p.squashTarget) * 0.20;
+
+    p.pulse += 0.08;
+  }
+}
+
+function smoothCamera() {
+  camera.x += (camera.tx - camera.x) * CAMERA_EASE;
+  camera.y += (camera.ty - camera.y) * CAMERA_EASE;
+  shake *= 0.86;
+}
+
+function draw(time) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const shakeX = (Math.random() - 0.5) * shake;
+  const shakeY = (Math.random() - 0.5) * shake;
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
+  drawBackground();
+  drawTerritory();
+  drawTrails();
+  drawPlayers();
+  drawMiniMap();
+  ctx.restore();
+
+  drawHUD();
+}
+
+function drawBackground() {
+  ctx.fillStyle = "#111827";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.globalAlpha = 0.10;
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 1;
+
+  const gridGap = TILE * 4;
+  const startX = -((camera.x % gridGap + gridGap) % gridGap);
+  const startY = -((camera.y % gridGap + gridGap) % gridGap);
+
+  for (let x = startX; x < canvas.width; x += gridGap) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+
+  for (let y = startY; y < canvas.height; y += gridGap) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  ctx.globalAlpha = 1;
+}
+
+function drawTerritory() {
+  const startX = Math.max(0, Math.floor(camera.x / TILE) - 1);
+  const endX = Math.min(COLS, Math.ceil((camera.x + canvas.width) / TILE) + 1);
+  const startY = Math.max(0, Math.floor(camera.y / TILE) - 1);
+  const endY = Math.min(ROWS, Math.ceil((camera.y + canvas.height) / TILE) + 1);
+
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      const owner = grid[y][x];
+
+      if (owner !== EMPTY) {
+        ctx.fillStyle = COLORS[owner].base;
+        ctx.fillRect(
+          Math.floor(x * TILE - camera.x),
+          Math.floor(y * TILE - camera.y),
+          TILE + 0.5,
+          TILE + 0.5
+        );
+      }
+    }
+  }
+}
+
+function drawTrails() {
+  for (const p of players) {
+    if (!p.alive || p.visualTrail.length === 0) continue;
+
+    const points = [...p.visualTrail];
+    if (p.trail.length > 0) {
+      points.push({ x: p.renderX, y: p.renderY });
+    }
+
+    if (points.length < 2) continue;
+
+    ctx.save();
+    ctx.shadowColor = COLORS[p.id].glow;
+    ctx.shadowBlur = 14;
+
+    ctx.strokeStyle = COLORS[p.id].trail;
+    ctx.lineWidth = TILE * 0.82;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    ctx.beginPath();
+    for (let i = 0; i < points.length; i++) {
+      const sx = points[i].x - camera.x;
+      const sy = points[i].y - camera.y;
+      if (i === 0) ctx.moveTo(sx, sy);
+      else ctx.lineTo(sx, sy);
+    }
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}
+
+function drawPlayers() {
+  for (const p of players) {
+    if (!p.alive) continue;
+
+    const sx = p.renderX - camera.x;
+    const sy = p.renderY - camera.y;
+
+    const speedStretch = p.squash;
+    const angle = Math.atan2(p.dirY, p.dirX);
+
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(angle);
+
+    ctx.shadowColor = COLORS[p.id].glow;
+    ctx.shadowBlur = 14;
+
+    ctx.beginPath();
+    ctx.ellipse(
+      0,
+      0,
+      TILE * 0.82 * speedStretch,
+      TILE * 0.72 / speedStretch,
+      0,
+      0,
+      Math.PI * 2
+    );
+    ctx.fillStyle = COLORS[p.id].fill;
+    ctx.fill();
+
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#ffffff";
+    ctx.stroke();
+
+    // 앞쪽 작은 하이라이트
+    ctx.beginPath();
+    ctx.arc(TILE * 0.35, -TILE * 0.18, TILE * 0.15, 0, Math.PI * 2);
+    ctx.fillStyle = "rgba(255,255,255,0.85)";
+    ctx.fill();
+
+    ctx.restore();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "11px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(p.name, sx, sy - 15);
+  }
+}
+
+function drawMiniMap() {
+  const w = 150;
+  const h = 112;
+  const x0 = canvas.width - w - 12;
+  const y0 = canvas.height - h - 12;
+
+  ctx.fillStyle = "rgba(0,0,0,0.55)";
+  ctx.fillRect(x0, y0, w, h);
+
+  const sx = w / COLS;
+  const sy = h / ROWS;
+
+  for (let y = 0; y < ROWS; y += 2) {
+    for (let x = 0; x < COLS; x += 2) {
+      const owner = grid[y][x];
+      if (owner !== EMPTY) {
+        ctx.fillStyle = COLORS[owner].base;
+        ctx.fillRect(x0 + x * sx, y0 + y * sy, sx * 2, sy * 2);
+      }
+    }
+  }
+
+  const p = players[0];
+  if (p && p.alive) {
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(x0 + p.x * sx - 2, y0 + p.y * sy - 2, 4, 4);
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.25)";
+  ctx.strokeRect(x0, y0, w, h);
+}
+
+function drawHUD() {
+  const p = players[0];
+  const total = COLS * ROWS;
+  const percent = p ? (p.blocks / total * 100).toFixed(1) : "0.0";
+
+  hud.innerHTML = `
+    <b>Land IO Smooth</b><br>
+    Score: ${p ? p.score : 0}<br>
+    Area: ${percent}%<br>
+    Blocks: ${p ? p.blocks : 0}<br>
+    Kills: ${p ? p.kills : 0}<br>
+    Speed: ${keys["Shift"] ? "Boost" : "Normal"}
+  `;
+
+  const ranked = [...players]
+    .filter(p => p.alive)
+    .sort((a, b) => b.score - a.score);
+
+  leaderboard.innerHTML = `<b>Leaderboard</b><br>` + ranked.map((p, i) => {
+    return `<span style="color:${COLORS[p.id].fill}">${i + 1}. ${p.name} ${p.score}</span>`;
+  }).join("<br>");
+}
+
+function cellToWorldX(x) {
+  return x * TILE + TILE / 2;
+}
+
+function cellToWorldY(y) {
+  return y * TILE + TILE / 2;
+}
+
+function inside(x, y) {
+  return x >= 0 && y >= 0 && x < COLS && y < ROWS;
+}
+
+function key(x, y) {
+  return `${x},${y}`;
+}
+
+startGame();
+</script>
+</body>
+</html>

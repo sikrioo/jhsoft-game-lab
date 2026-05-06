@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Land IO Smooth Square Prototype</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#111827;font-family:Arial,Helvetica,sans-serif;overflow:hidden}
+#gameWrap{position:relative;width:100vw;height:100vh;background:#0f172a;overflow:hidden}
+canvas{display:block;width:100%;height:100%;cursor:none}
+.panel{position:absolute;background:rgba(0,0,0,.52);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.15);border-radius:14px;color:#fff;pointer-events:none;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+#hud{left:14px;top:14px;padding:12px 14px;min-width:150px;font-size:13px;line-height:1.55}
+#hud b{font-size:22px;color:#5eead4}
+#leader{right:14px;top:14px;padding:10px 12px;min-width:160px;font-size:12px}
+.lb-row{display:flex;justify-content:space-between;gap:16px;padding:2px 0}
+.lb-head{color:#aaa;border-bottom:1px solid rgba(255,255,255,.16);margin-bottom:5px;padding-bottom:5px}
+#hint{left:50%;bottom:16px;transform:translateX(-50%);padding:8px 14px;color:rgba(255,255,255,.7);font-size:12px}
+#msg{display:none;position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.82);border:1px solid rgba(255,255,255,.25);border-radius:18px;color:white;text-align:center;padding:24px 30px;min-width:260px;box-shadow:0 25px 60px rgba(0,0,0,.45)}
+#msg h2{margin-bottom:8px;font-size:24px}
+#msg button{margin-top:16px;width:100%;border:0;border-radius:12px;padding:10px 14px;background:#14b8a6;color:#fff;font-size:14px;cursor:pointer}
+#msg button:hover{background:#0d9488}
+</style>
+</head>
+<body>
+<div id="gameWrap">
+  <canvas id="canvas"></canvas>
+  <div id="hud" class="panel">
+    <div id="rank">#1 of 6</div>
+    <div>Score</div>
+    <b id="score">0</b>
+    <div>Map <span id="mapPct">0.0</span>%</div>
+    <div>Blocks <span id="blocks">0</span></div>
+    <div>Kills <span id="kills">0</span></div>
+  </div>
+  <div id="leader" class="panel"></div>
+  <div id="hint" class="panel">WASD / 방향키 / 마우스 이동 · 격자는 숨기고 부드러운 면으로 렌더링</div>
+  <div id="msg">
+    <h2>GAME OVER</h2>
+    <div id="msgText"></div>
+    <button onclick="restart()">다시 시작</button>
+  </div>
+</div>
+<script>
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+
+const TILE=8;
+const MAP_W=180;
+const MAP_H=140;
+const EMPTY=-1;
+const PLAYER_COUNT=6;
+const AI_COUNT=5;
+const COLORS=[
+  {name:'You',fill:'#14b8a6',dark:'#0f766e',trail:'rgba(20,184,166,.48)'},
+  {name:'Jonas',fill:'#f97316',dark:'#c2410c',trail:'rgba(249,115,22,.45)'},
+  {name:'Markos',fill:'#8b5cf6',dark:'#6d28d9',trail:'rgba(139,92,246,.45)'},
+  {name:'Dark_DG',fill:'#22c55e',dark:'#15803d',trail:'rgba(34,197,94,.45)'},
+  {name:'Steve',fill:'#ef4444',dark:'#991b1b',trail:'rgba(239,68,68,.45)'},
+  {name:'Lia',fill:'#eab308',dark:'#a16207',trail:'rgba(234,179,8,.45)'}
+];
+
+let owner, trail, players, keys={}, mouse={x:0,y:0,active:false}, camera={x:0,y:0};
+let running=false, frame=0, killCount=0, last=0;
+
+function resize(){canvas.width=innerWidth;canvas.height=innerHeight;}
+addEventListener('resize',resize); resize();
+
+function makeGrid(){
+  owner=Array.from({length:MAP_H},()=>Array(MAP_W).fill(EMPTY));
+  trail=Array.from({length:MAP_H},()=>Array(MAP_W).fill(EMPTY));
+}
+function inMap(x,y){return x>=0&&y>=0&&x<MAP_W&&y<MAP_H;}
+function cellOf(px,py){return {x:Math.max(0,Math.min(MAP_W-1,Math.floor(px/TILE))),y:Math.max(0,Math.min(MAP_H-1,Math.floor(py/TILE)))};}
+function centerOf(cx,cy){return {x:cx*TILE+TILE/2,y:cy*TILE+TILE/2};}
+
+function claimCircle(pid,cx,cy,r){
+  for(let y=cy-r;y<=cy+r;y++)for(let x=cx-r;x<=cx+r;x++){
+    if(!inMap(x,y))continue;
+    const d=Math.hypot(x-cx,y-cy);
+    if(d<=r){owner[y][x]=pid;trail[y][x]=EMPTY;}
+  }
+}
+function createPlayer(pid){
+  const starts=[ [25,25],[MAP_W-28,25],[25,MAP_H-28],[MAP_W-28,MAP_H-28],[MAP_W/2|0,MAP_H/2|0],[MAP_W/2+22|0,MAP_H/2|0] ];
+  const [cx,cy]=starts[pid];
+  claimCircle(pid,cx,cy,8);
+  const p=centerOf(cx,cy);
+  return {pid,x:p.x,y:p.y,vx:1,vy:0,alive:true,trailCells:[],trailSet:new Set(),kills:0,score:0,blocks:0,aiAngle:Math.random()*Math.PI*2,aiTimer:0,inBase:true};
+}
+function restart(){
+  document.getElementById('msg').style.display='none';
+  makeGrid(); frame=0; killCount=0; running=true; keys={};
+  players=Array.from({length:PLAYER_COUNT},(_,i)=>createPlayer(i));
+  updateCamera(); requestAnimationFrame(loop);
+}
+
+addEventListener('keydown',e=>keys[e.key]=true);
+addEventListener('keyup',e=>keys[e.key]=false);
+canvas.addEventListener('mousemove',e=>{const r=canvas.getBoundingClientRect();mouse.x=(e.clientX-r.left)*(canvas.width/r.width);mouse.y=(e.clientY-r.top)*(canvas.height/r.height);mouse.active=true;});
+canvas.addEventListener('mouseleave',()=>mouse.active=false);
+
+function inputDir(){
+  let dx=0,dy=0;
+  if(keys.ArrowLeft||keys.a||keys.A)dx--;
+  if(keys.ArrowRight||keys.d||keys.D)dx++;
+  if(keys.ArrowUp||keys.w||keys.W)dy--;
+  if(keys.ArrowDown||keys.s||keys.S)dy++;
+  if(dx===0&&dy===0&&mouse.active){
+    const mx=mouse.x-canvas.width/2,my=mouse.y-canvas.height/2,d=Math.hypot(mx,my);
+    if(d>18){dx=mx/d;dy=my/d;}
+  }
+  const l=Math.hypot(dx,dy); return l?{dx:dx/l,dy:dy/l}:{dx:0,dy:0};
+}
+function aiDir(p){
+  p.aiTimer--;
+  const c=cellOf(p.x,p.y); p.inBase=owner[c.y][c.x]===p.pid;
+  if(p.aiTimer<=0){
+    p.aiTimer=25+Math.random()*55;
+    if(p.inBase){ p.aiAngle=Math.random()*Math.PI*2; }
+    else{
+      let best=null,bd=Infinity;
+      for(let y=0;y<MAP_H;y+=6)for(let x=0;x<MAP_W;x+=6)if(owner[y][x]===p.pid){const q=centerOf(x,y),d=(q.x-p.x)**2+(q.y-p.y)**2;if(d<bd){bd=d;best=q;}}
+      if(best)p.aiAngle=Math.atan2(best.y-p.y,best.x-p.x)+(Math.random()-.5)*.35;
+    }
+  }
+  return {dx:Math.cos(p.aiAngle),dy:Math.sin(p.aiAngle)};
+}
+
+function move(p,dx,dy){
+  if(!p.alive||(!dx&&!dy))return;
+  p.vx=dx;p.vy=dy;
+  const speed=(p.inBase?2.15:1.85);
+  const old=cellOf(p.x,p.y);
+  p.x=Math.max(TILE,Math.min(MAP_W*TILE-TILE,p.x+dx*speed));
+  p.y=Math.max(TILE,Math.min(MAP_H*TILE-TILE,p.y+dy*speed));
+  const c=cellOf(p.x,p.y);
+  if(c.x===old.x&&c.y===old.y)return;
+
+  const tid=trail[c.y][c.x];
+  if(tid!==EMPTY && tid!==p.pid){ kill(tid,p.pid); }
+
+  const k=c.y*MAP_W+c.x;
+  if(owner[c.y][c.x]===p.pid){
+    if(p.trailCells.length){
+      for(const q of p.trailCells){ owner[q.y][q.x]=p.pid; trail[q.y][q.x]=EMPTY; }
+      floodFill(p.pid);
+      p.trailCells=[]; p.trailSet.clear();
+    }
+    p.inBase=true;
+  }else{
+    if(p.trailSet.has(k) && p.trailCells.length>8){ kill(p.pid,EMPTY); return; }
+    if(!p.trailSet.has(k)){
+      p.trailSet.add(k); p.trailCells.push({x:c.x,y:c.y}); trail[c.y][c.x]=p.pid;
+    }
+    p.inBase=false;
+  }
+}
+function floodFill(pid){
+  const visited=Array.from({length:MAP_H},()=>Array(MAP_W).fill(false));
+  const q=[];
+  const blocked=(x,y)=>owner[y][x]===pid||trail[y][x]===pid;
+  const add=(x,y)=>{if(!inMap(x,y)||visited[y][x]||blocked(x,y))return; visited[y][x]=true; q.push({x,y});};
+  for(let x=0;x<MAP_W;x++){add(x,0);add(x,MAP_H-1);} for(let y=0;y<MAP_H;y++){add(0,y);add(MAP_W-1,y);}
+  for(let i=0;i<q.length;i++){const p=q[i];add(p.x+1,p.y);add(p.x-1,p.y);add(p.x,p.y+1);add(p.x,p.y-1);}
+  for(let y=0;y<MAP_H;y++)for(let x=0;x<MAP_W;x++)if(!visited[y][x]){owner[y][x]=pid;trail[y][x]=EMPTY;}
+}
+function kill(pid,by){
+  const p=players[pid]; if(!p||!p.alive)return;
+  p.alive=false;
+  for(const q of p.trailCells) if(trail[q.y][q.x]===pid)trail[q.y][q.x]=EMPTY;
+  p.trailCells=[];p.trailSet.clear();
+  if(by>=0&&players[by]){players[by].kills++; if(by===0)killCount++;}
+  if(pid===0){running=false;document.getElementById('msgText').innerHTML=`점수 ${p.score} · 킬 ${killCount}`;document.getElementById('msg').style.display='block';}
+}
+function updateCamera(){const p=players[0];camera.x=p.x-canvas.width/2;camera.y=p.y-canvas.height/2;}
+
+function drawSmoothOwned(){
+  const sx=Math.max(0,Math.floor(camera.x/TILE)-2), ex=Math.min(MAP_W-1,Math.ceil((camera.x+canvas.width)/TILE)+2);
+  const sy=Math.max(0,Math.floor(camera.y/TILE)-2), ey=Math.min(MAP_H-1,Math.ceil((camera.y+canvas.height)/TILE)+2);
+  for(let y=sy;y<=ey;y++){
+    let x=sx;
+    while(x<=ex){
+      const pid=owner[y][x];
+      if(pid===EMPTY){x++;continue;}
+      let x2=x+1; while(x2<=ex&&owner[y][x2]===pid)x2++;
+      ctx.fillStyle=COLORS[pid].fill;
+      ctx.fillRect(x*TILE-camera.x,y*TILE-camera.y,(x2-x)*TILE+1,TILE+1);
+      x=x2;
+    }
+  }
+  // subtle border only between different owners / empty
+  ctx.globalAlpha=.22;
+  ctx.strokeStyle='#ffffff'; ctx.lineWidth=1;
+  for(let y=sy;y<=ey;y++)for(let x=sx;x<=ex;x++){
+    const pid=owner[y][x]; if(pid===EMPTY)continue;
+    const px=x*TILE-camera.x, py=y*TILE-camera.y;
+    if(!inMap(x+1,y)||owner[y][x+1]!==pid){ctx.beginPath();ctx.moveTo(px+TILE,py);ctx.lineTo(px+TILE,py+TILE);ctx.stroke();}
+    if(!inMap(x,y+1)||owner[y+1]?.[x]!==pid){ctx.beginPath();ctx.moveTo(px,py+TILE);ctx.lineTo(px+TILE,py+TILE);ctx.stroke();}
+  }
+  ctx.globalAlpha=1;
+}
+function drawTrails(){
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  for(const p of players){
+    if(!p.alive||!p.trailCells.length)continue;
+    ctx.beginPath();
+    p.trailCells.forEach((q,i)=>{const c=centerOf(q.x,q.y),sx=c.x-camera.x,sy=c.y-camera.y; i?ctx.lineTo(sx,sy):ctx.moveTo(sx,sy);});
+    ctx.lineTo(p.x-camera.x,p.y-camera.y);
+    ctx.strokeStyle=COLORS[p.pid].trail; ctx.lineWidth=TILE*2.15; ctx.stroke();
+    ctx.strokeStyle=COLORS[p.pid].dark; ctx.globalAlpha=.55; ctx.lineWidth=2; ctx.stroke(); ctx.globalAlpha=1;
+  }
+}
+function drawPlayers(){
+  for(const p of players){
+    if(!p.alive)continue;
+    const sx=p.x-camera.x,sy=p.y-camera.y;
+    if(sx<-30||sx>canvas.width+30||sy<-30||sy>canvas.height+30)continue;
+    ctx.beginPath();ctx.arc(sx,sy,11,0,Math.PI*2);ctx.fillStyle=COLORS[p.pid].fill;ctx.fill();ctx.lineWidth=2;ctx.strokeStyle='#fff';ctx.stroke();
+    ctx.beginPath();ctx.moveTo(sx,sy);ctx.lineTo(sx+p.vx*18,sy+p.vy*18);ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.stroke();
+    ctx.font='bold 11px Arial';ctx.textAlign='center';ctx.fillStyle='#fff';ctx.fillText(COLORS[p.pid].name,sx,sy-16);
+  }
+}
+function drawMinimap(){
+  const w=110,h=82,x=canvas.width-w-16,y=canvas.height-h-16;
+  ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(x,y,w,h);ctx.strokeStyle='rgba(255,255,255,.25)';ctx.strokeRect(x,y,w,h);
+  const sx=w/MAP_W,sy=h/MAP_H;
+  for(let yy=0;yy<MAP_H;yy+=2)for(let xx=0;xx<MAP_W;xx+=2){const pid=owner[yy][xx];if(pid!==EMPTY){ctx.fillStyle=COLORS[pid].fill;ctx.fillRect(x+xx*sx,y+yy*sy,2*sx+1,2*sy+1);}}
+  const p=players[0],c=cellOf(p.x,p.y);ctx.fillStyle='#fff';ctx.fillRect(x+c.x*sx-2,y+c.y*sy-2,4,4);
+}
+function draw(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const grad=ctx.createLinearGradient(0,0,canvas.width,canvas.height);grad.addColorStop(0,'#0f172a');grad.addColorStop(1,'#111827');ctx.fillStyle=grad;ctx.fillRect(0,0,canvas.width,canvas.height);
+  drawSmoothOwned(); drawTrails(); drawPlayers(); drawMinimap();
+}
+function updateHud(){
+  const blocks=Array(PLAYER_COUNT).fill(0);
+  for(let y=0;y<MAP_H;y++)for(let x=0;x<MAP_W;x++){const pid=owner[y][x];if(pid!==EMPTY)blocks[pid]++;}
+  players.forEach((p,i)=>{p.blocks=blocks[i];p.score=blocks[i]*10+p.kills*80;});
+  const total=MAP_W*MAP_H,p=players[0];
+  document.getElementById('score').textContent=p.score;
+  document.getElementById('mapPct').textContent=(p.blocks/total*100).toFixed(1);
+  document.getElementById('blocks').textContent=p.blocks;
+  document.getElementById('kills').textContent=killCount;
+  const rows=players.filter(p=>p.alive).map(p=>({name:COLORS[p.pid].name,score:p.score,color:COLORS[p.pid].fill,pid:p.pid})).sort((a,b)=>b.score-a.score);
+  document.getElementById('rank').textContent=`#${rows.findIndex(r=>r.pid===0)+1} of ${rows.length}`;
+  document.getElementById('leader').innerHTML='<div class="lb-row lb-head"><span>Player</span><span>Score</span></div>'+rows.slice(0,6).map((r,i)=>`<div class="lb-row" style="color:${r.color}"><span>${i+1}. ${r.name}</span><span>${r.score}</span></div>`).join('');
+}
+function loop(t){
+  if(!running)return;
+  frame++; last=t;
+  const d=inputDir(); move(players[0],d.dx,d.dy); updateCamera();
+  for(let i=1;i<players.length;i++){
+    let p=players[i];
+    if(!p.alive && frame%360===0){players[i]=createPlayer(i);p=players[i];}
+    if(p.alive){const a=aiDir(p);move(p,a.dx,a.dy);}
+  }
+  if(frame%8===0)updateHud(); draw(); requestAnimationFrame(loop);
+}
+restart();
+</script>
+</body>
+</html>
