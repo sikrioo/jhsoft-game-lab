@@ -1,7 +1,7 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 html,body{width:100%;height:100%;overflow:hidden;background:#000;
   font-family:'Segoe UI',Arial,sans-serif;color:#d7ecff;}
-canvas{display:block;}
+canvas{display:block;cursor:crosshair;}
 
 /* ── HUD 좌상단 ── */
 #hud{

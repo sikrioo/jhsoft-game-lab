@@ -208,6 +208,12 @@ const canvas  = document.getElementById('gameCanvas');
 const ctx     = canvas.getContext('2d');
 const mmCanvas = document.getElementById('minimapCanvas');
 const mmCtx   = mmCanvas.getContext('2d');
+const pointer = {
+  x: 0,
+  y: 0,
+  thrust: false,
+  hasAim: false,
+};
 
 let viewWidth = window.innerWidth, viewHeight = window.innerHeight;
 let dpr = window.devicePixelRatio || 1;
@@ -237,6 +243,12 @@ Body.setInertia(astronaut, astronaut.inertia*3.2);
 Composite.add(world, astronaut);
 
 const keys = new Set();
+function updatePointerFromEvent(e){
+  const rect = canvas.getBoundingClientRect();
+  pointer.x = e.clientX - rect.left;
+  pointer.y = e.clientY - rect.top;
+  pointer.hasAim = true;
+}
 window.addEventListener('keydown', e=>{
   if(e.code==='Space'){
     if(!e.repeat) activateStabilizer();
@@ -253,6 +265,20 @@ window.addEventListener('keydown', e=>{
     e.preventDefault();
 });
 window.addEventListener('keyup', e=>keys.delete(e.key.toLowerCase()));
+window.addEventListener('blur', ()=>{
+  keys.clear();
+  pointer.thrust = false;
+});
+canvas.addEventListener('mousemove', updatePointerFromEvent);
+canvas.addEventListener('mousedown', e=>{
+  if(e.button!==0) return;
+  updatePointerFromEvent(e);
+  pointer.thrust = true;
+  e.preventDefault();
+});
+window.addEventListener('mouseup', e=>{
+  if(e.button===0) pointer.thrust = false;
+});
 
 const particles = [];
 
@@ -381,6 +407,12 @@ function updateDecelerator(){
 const fwd = b=>({x:Math.cos(b.angle-Math.PI/2), y:Math.sin(b.angle-Math.PI/2)});
 const rt  = b=>({x:Math.cos(b.angle),            y:Math.sin(b.angle)});
 const w2s = (x,y,cx,cy)=>({x:x-cx+viewWidth/2, y:y-cy+viewHeight/2});
+const clamp = (v,min,max)=>Math.max(min,Math.min(max,v));
+function wrapAngle(a){
+  while(a<=-Math.PI) a+=Math.PI*2;
+  while(a>Math.PI) a-=Math.PI*2;
+  return a;
+}
 
 // ════════════════════════════════════════════════════
 //  노이즈
@@ -435,6 +467,42 @@ function applyRot(body,sign,pw){
 //  조종
 // ════════════════════════════════════════════════════
 let thrusting = false;
+let mouseTurnExhaustCooldown = 0;
+const controlState = {
+  forward: false,
+  backward: false,
+  strafe: 0,
+  turn: 0,
+};
+function updateMouseAim(rotP){
+  if(!pointer.hasAim) return 0;
+  const dx = pointer.x-viewWidth/2;
+  const dy = pointer.y-viewHeight/2;
+  const dist = Math.hypot(dx,dy);
+  if(dist<18) return 0;
+
+  const desiredAngle = Math.atan2(dy,dx)+Math.PI/2;
+  const diff = wrapAngle(desiredAngle-astronaut.angle);
+  const absDiff = Math.abs(diff);
+  if(absDiff<0.018){
+    if(Math.abs(astronaut.angularVelocity)<0.0025) Body.setAngularVelocity(astronaut,0);
+    else Body.setAngularVelocity(astronaut,astronaut.angularVelocity*0.82);
+    return 0;
+  }
+  if(gs.fuel<=0) return 0;
+
+  const desiredSpin = clamp(diff*0.22,-rotP*125,rotP*125);
+  const nextSpin = astronaut.angularVelocity*0.72+desiredSpin;
+  Body.setAngularVelocity(astronaut,nextSpin);
+  if(mouseTurnExhaustCooldown>0) mouseTurnExhaustCooldown-=1;
+  const turnIntensity = Math.max(0.06,Math.min(0.2,Math.abs(diff)*0.12));
+  if(mouseTurnExhaustCooldown===0 && absDiff>0.05){
+    emitExhaust(astronaut,diff>0?'rl':'rr',turnIntensity);
+    mouseTurnExhaustCooldown = absDiff>0.45 ? 2 : 4;
+  }
+  gs.fuel=Math.max(0,gs.fuel-FUEL_DRAIN/60*.28);
+  return diff>0 ? 1 : -1;
+}
 function updateControls(){
   if(!gs.alive) return;
   const prec  = keys.has('shift')?.42:1;
@@ -443,11 +511,17 @@ function updateControls(){
   const f=fwd(astronaut), r=rt(astronaut);
   const stroke=.82+Math.max(0,Math.sin(performance.now()*.018))*.55;
   thrusting=false;
-  if(keys.has('arrowup')){
+  controlState.forward=false;
+  controlState.backward=false;
+  controlState.strafe=0;
+  controlState.turn=0;
+  const forwardInput = pointer.thrust || keys.has('arrowup');
+  if(forwardInput){
     if(gs.fuel>0){
       applyOffset(astronaut,{x:-f.x*22,y:-f.y*22},{x:f.x*mainP,y:f.y*mainP},'main',mainP);
       gs.fuel=Math.max(0,gs.fuel-FUEL_DRAIN/60);
       thrusting=true;
+      controlState.forward=true;
     }
   }
   if(keys.has('arrowdown')){
@@ -455,6 +529,7 @@ function updateControls(){
       applyOffset(astronaut,{x:f.x*18,y:f.y*18},{x:-f.x*retroP,y:-f.y*retroP},'retro',retroP);
       gs.fuel=Math.max(0,gs.fuel-FUEL_DRAIN/60*.7);
       thrusting=true;
+      controlState.backward=true;
     }
   }
   if(keys.has('arrowleft')){
@@ -462,6 +537,7 @@ function updateControls(){
       applyOffset(astronaut,{x:r.x*20-f.x*6,y:r.y*20-f.y*6},{x:-r.x*strP*stroke,y:-r.y*strP*stroke},'lstrafe',strP*stroke);
       gs.fuel=Math.max(0,gs.fuel-FUEL_DRAIN/60*.5);
       thrusting=true;
+      controlState.strafe=-1;
     }
   }
   if(keys.has('arrowright')){
@@ -469,15 +545,20 @@ function updateControls(){
       applyOffset(astronaut,{x:-r.x*20-f.x*6,y:-r.y*20-f.y*6},{x:r.x*strP*stroke,y:r.y*strP*stroke},'rstrafe',strP*stroke);
       gs.fuel=Math.max(0,gs.fuel-FUEL_DRAIN/60*.5);
       thrusting=true;
+      controlState.strafe=1;
     }
   }
-  if(keys.has('q')){
+  const mouseTurn = updateMouseAim(rotP);
+  if(mouseTurn){
+    controlState.turn=mouseTurn;
+  } else if(keys.has('q')){
     applyRot(astronaut,1,rotP);
     if(gs.fuel>0) gs.fuel=Math.max(0,gs.fuel-FUEL_DRAIN/60*.3);
-  }
-  if(keys.has('e')){
+    controlState.turn=1;
+  } else if(keys.has('e')){
     applyRot(astronaut,-1,rotP);
     if(gs.fuel>0) gs.fuel=Math.max(0,gs.fuel-FUEL_DRAIN/60*.3);
+    controlState.turn=-1;
   }
   updateStabilizer();
   updateDecelerator();
@@ -1097,19 +1178,19 @@ function drawAstronaut(cX,cY){
   const pos=w2s(astronaut.position.x,astronaut.position.y,cX,cY);
   const spd=Math.hypot(astronaut.velocity.x,astronaut.velocity.y);
   const spin=astronaut.angularVelocity, t=performance.now()*.01;
-  const strafing=keys.has('arrowleft')||keys.has('arrowright');
-  const strafeDir=keys.has('arrowleft') ? -1 : (keys.has('arrowright') ? 1 : 0);
-  const turning=keys.has('q')||keys.has('e');
-  const active=keys.has('arrowup')||keys.has('arrowdown')||strafing||turning;
+  const strafing=controlState.strafe!==0;
+  const strafeDir=controlState.strafe;
+  const turning=controlState.turn!==0;
+  const active=controlState.forward||controlState.backward||strafing||turning;
   const flailing=strafing||turning;
   const flap=thrusting ? 1 : (active ? .45 : 0);
   const flailAmp=flailing ? .34 : 0;
   const sAmp=Math.min(.78,.08+spd*.08+Math.abs(spin)*.7+flap*.32+flailAmp);
   const sPhase=t*(flailing?1.75:(flap?1.15:.12));
   const lLag=Math.max(-.22,Math.min(.22,spin*6));
-  const recoil=(keys.has('arrowup')?-2.5:0)+(keys.has('arrowdown')?1.5:0);
+  const recoil=(controlState.forward?-2.5:0)+(controlState.backward?1.5:0);
   const panic=Math.sin(t*4.6)*(flailing ? .18 : 0);
-  const headNod=keys.has('arrowdown') ? Math.sin(t*3.8)*.16+.08 : 0;
+  const headNod=controlState.backward ? Math.sin(t*3.8)*.16+.08 : 0;
   const swim=Math.sin(sPhase*1.28);
   const swimAmp=strafing ? .55 : 0;
   const sideProfile=strafing ? .72+.1*Math.abs(swim) : 0;

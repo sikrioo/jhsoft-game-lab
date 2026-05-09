@@ -1,44 +1,28 @@
-# jhsoft-game-lab
+# game.prototype
 
-A collection of small game prototypes, UI experiments, and refactoring playgrounds.
+A personal lab of small game prototypes, UI experiments, and versioned gameplay tests.
+This repo is a collection of playable ideas, not a single production app.
 
-## Included Projects
+## What is inside
 
-- `neon-survivor-refactor-v3`: PIXI-based neon survivor prototype with layered rendering, waves, skills, and combat systems.
-- `neon-survivor-refactor-v2`: previous iteration of the neon survivor refactor.
-- `neon-survivor-refactor`: earlier modular refactor version.
-- `jhcasino`: casino game hub and related subprojects.
-- `jhcasino-site`: site-style presentation for the casino prototypes.
-- `jhcasino-hi-low-mvp`: simple hi-low MVP.
-- `jhcasino-pachinko-slot-mvp`: pachinko / slot MVP.
-- `life_simulator`: life simulator prototype.
-- `life_simulator.20260322`: archived snapshot.
-- `life_simulator.20260322.refactoring`: refactoring snapshot.
-- `skill_combat_system_split`: combat system split prototype.
-- `skill_combat_system_split.20260412.01`: archived snapshot.
-- `skill_combat_system_split.20260412.02`: archived snapshot.
-- `minigame-prototype`: assorted minigame experiments.
-- `example-casino`: reference implementations and experiments.
-- `example-textmud`: text-based UI and interaction experiments.
-- `monthly-Jonghak`: monthly prototype workspace.
+- `spike-zero`: action / survivor-style experiments
+- `tiny-swords`: combat-focused prototype
+- `skill-combat`: skill and battle system sandbox
+- `life-simulator`: life sim prototype
+- `casino-game.prototype`, `casino-game-rooms`: casino and arcade-style games
+- `minigame-prototype`, `textmud-minigames`: small experimental minigames
+- `land-hex-game`, `snake-game.clone`, `astro-breath`, `turmoil-drill.prototype`: standalone genre tests
 
-## Quick Start
+## Run
 
-Most projects in this repository are static HTML/CSS/JavaScript prototypes.
+Most folders contain static `HTML/CSS/JavaScript` files.
 
 1. Open a project folder.
-2. Launch its `index.html` in a browser.
-3. If the project uses module loading or external assets, serve the folder with a simple local server.
-
-Example:
-
-```powershell
-cd neon-survivor-refactor-v3
-start index.html
-```
+2. Run `index.html` or a versioned `*.html` file.
+3. Use a simple local server if browser module or asset loading is needed.
 
 ## Notes
 
-- Several folders are archived snapshots kept for comparison during iteration.
-- Some projects contain Korean filenames and UI text, which is expected.
-- This repository is organized as a lab/workbench rather than a single production app.
+- Many folders keep old snapshots such as `v0.x`, `back`, or `backup`.
+- Korean file names and UI text may appear in some projects.
+- There is no single global build system for the whole repo.
