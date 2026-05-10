@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>SPIKE ZERO: Infinite Frontier</title>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700&family=Rajdhani:wght@600&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
+    <style>
+        :root { --c: #6ae5ff; --p: #ff3366; --bg: #05080a; }
+        body { margin: 0; background: var(--bg); overflow: hidden; font-family: "Rajdhani"; }
+        #hud { position: fixed; inset: 0; pointer-events: none; z-index: 10; padding: 30px; display: flex; justify-content: space-between; }
+        .pnl { background: rgba(10,20,30,0.85); border: 1px solid rgba(106,229,255,0.2); border-radius: 4px; padding: 20px; box-shadow: inset 0 0 20px rgba(106,229,255,0.1); }
+        .pnl::after { content: ''; display: block; width: 40px; height: 2px; background: var(--c); margin-top: 10px; }
+        h1 { font-family: "Orbitron"; font-size: 20px; color: var(--c); margin: 0; letter-spacing: 4px; }
+        .mode { color: var(--p); font-weight: 800; font-size: 24px; }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div class="pnl">
+            <h1>STRATEGIC LINK</h1>
+            <div id="ui-mode" class="mode">RAZOR UNIT</div>
+            <div style="color:rgba(255,255,255,0.5)">SYSTEM STATUS: <span style="color:#0f0">OPTIMAL</span></div>
+        </div>
+        <div class="pnl" style="text-align:right">
+            <div style="color:var(--c)">HULL INTEGRITY</div>
+            <div id="ui-hp" style="font-family:Orbitron; font-size:32px; color:#fff">100%</div>
+        </div>
+    </div>
+
+<script>
+const SPECS = {
+    RAZOR: { name: 'RAZOR', accel: 1500, speed: 550, drag: 0.94, rate: 120, recoil: 35, bSpeed: 1100, bColor: 0xff3366 },
+    BULWARK: { name: 'BULWARK', accel: 600, speed: 280, drag: 0.85, rate: 600, recoil: 200, bSpeed: 1500, bColor: 0x6ae5ff }
+};
+
+const config = {
+    type: Phaser.AUTO,
+    width: window.innerWidth, height: window.innerHeight,
+    backgroundColor: '#05080a',
+    physics: { default: 'arcade' },
+    scene: { create, update }
+};
+
+const game = new Phaser.Game(config);
+let player, bullets, enemies, keys, current = SPECS.RAZOR, nextFire = 0;
+
+function create() {
+    // 1. 배경 연출 (그리드 + 먼지 파티클)
+    const g = this.add.graphics();
+    g.lineStyle(1, 0x1e2d3d, 0.3);
+    for(let i=-2000; i<4000; i+=80) { g.moveTo(i, -2000); g.lineTo(i, 4000); g.moveTo(-2000, i); g.lineTo(4000, i); }
+    g.strokePath();
+
+    // 2. 절차적 기체 드로잉 (삼각형/별 대신 실제 기계적 디테일)
+    drawTextures(this);
+
+    // 3. 플레이어 설정
+    player = this.add.container(window.innerWidth/2, window.innerHeight/2);
+    this.physics.world.enable(player);
+    player.body.setDamping(true).setCollideWorldBounds(true);
+    
+    // 기체 레이어링 (그림자 -> 몸체 -> 발광부 -> 포탑)
+    const shadow = this.add.image(5, 5, 'shd').setAlpha(0.5);
+    const body = this.add.image(0, 0, 'ship_razor');
+    const turret = this.add.image(0, -10, 'trt').setOrigin(0.5, 0.8);
+    player.add([shadow, body, turret]);
+    player.vBody = body; player.vTrt = turret;
+
+    this.cameras.main.startFollow(player, true, 0.1, 0.1);
+    bullets = this.physics.add.group();
+    enemies = this.physics.add.group();
+    keys = this.input.keyboard.addKeys('W,A,S,D,SHIFT,ONE,TWO');
+
+    // 적 소환 및 충돌
+    this.time.addEvent({ delay: 1000, callback: () => spawnEnemy(this), loop: true });
+    this.physics.add.overlap(bullets, enemies, (b, e) => { b.destroy(); e.destroy(); this.cameras.main.shake(100, 0.005); });
+}
+
+function drawTextures(scene) {
+    const draw = (key, w, h, fn) => {
+        const gr = scene.make.graphics({x:0, y:0, add:false});
+        fn(gr); gr.generateTexture(key, w, h); gr.destroy();
+    };
+
+    draw('shd', 60, 60, g => { g.fillStyle(0x000000, 1); g.fillEllipse(30, 30, 50, 40); });
+    
+    // Razor 기체 (날카로운 인터셉터 느낌)
+    draw('ship_razor', 60, 60, g => {
+        g.fillStyle(0x2c3e50); g.fillTriangle(30, 5, 55, 50, 5, 50); // 메인 바디
+        g.fillStyle(0xff3366); g.fillTriangle(30, 10, 50, 45, 10, 45); // 발광부
+        g.lineStyle(2, 0x6ae5ff); g.strokeTriangle(30, 5, 55, 50, 5, 50); // 테두리
+    });
+
+    // Bulwark 기체 (육중한 거북이 장갑차 느낌)
+    draw('ship_bulwark', 80, 80, g => {
+        g.fillStyle(0x34495e); g.fillRoundedRect(10, 10, 60, 60, 15); // 메인 장갑
+        g.lineStyle(4, 0x6ae5ff); g.strokeRoundedRect(10, 10, 60, 60, 15);
+        g.fillStyle(0x6ae5ff, 0.3); g.fillCircle(40, 40, 20); // 중앙 코어
+    });
+
+    draw('trt', 20, 40, g => { g.fillStyle(0xffffff); g.fillRoundedRect(5, 0, 10, 35, 4); });
+    draw('enm', 40, 40, g => { g.fillStyle(0xff8d47); g.beginPath(); g.moveTo(20,0); g.lineTo(40,20); g.lineTo(20,40); g.lineTo(0,20); g.closePath(); g.fill(); });
+}
+
+function update(time) {
+    if(Phaser.Input.Keyboard.JustDown(keys.ONE)) switchMode('RAZOR');
+    if(Phaser.Input.Keyboard.JustDown(keys.TWO)) switchMode('BULWARK');
+
+    const accel = keys.SHIFT.isDown ? current.accel * 1.6 : current.accel;
+    let x = (keys.D.isDown?1:0)-(keys.A.isDown?1:0), y = (keys.S.isDown?1:0)-(keys.W.isDown?1:0);
+    
+    if(x!==0 || y!==0) {
+        const v = new Phaser.Math.Vector2(x, y).normalize().scale(accel);
+        player.body.setAcceleration(v.x, v.y);
+    } else player.body.setAcceleration(0, 0);
+
+    player.body.setDrag(current.drag).setMaxVelocity(current.speed);
+
+    // 마우스 조준
+    const ptr = this.input.activePointer;
+    const worldPtr = this.cameras.main.getWorldPoint(ptr.x, ptr.y);
+    const ang = Phaser.Math.Angle.Between(player.x, player.y, worldPtr.x, worldPtr.y);
+    player.rotation = Phaser.Math.Angle.RotateTo(player.rotation, ang + Math.PI/2, 0.1);
+
+    if(ptr.isDown) fire(this, time);
+}
+
+function switchMode(m) {
+    current = SPECS[m];
+    document.getElementById('ui-mode').innerText = m + " UNIT";
+    document.getElementById('ui-mode').style.color = current.bColor === 0xff3366 ? '#ff3366' : '#6ae5ff';
+    player.vBody.setTexture(m === 'RAZOR' ? 'ship_razor' : 'ship_bulwark');
+}
+
+function fire(scene, time) {
+    if(time < nextFire) return;
+    nextFire = time + current.rate;
+
+    const ang = player.rotation - Math.PI/2;
+    const b = scene.add.circle(player.x, player.y, current.name==='RAZOR'?4:10, current.bColor);
+    scene.physics.world.enable(b);
+    bullets.add(b);
+    scene.physics.velocityFromRotation(ang, current.bSpeed, b.body.velocity);
+
+    // 반동 물리 효과
+    const rcl = new Phaser.Math.Vector2();
+    scene.physics.velocityFromRotation(ang, -current.recoil, rcl);
+    player.body.velocity.add(rcl);
+
+    scene.cameras.main.shake(100, current.recoil/30000);
+    scene.time.delayedCall(800, () => b.destroy());
+}
+
+function spawnEnemy(scene) {
+    const x = player.x + Phaser.Math.Between(-800, 800), y = player.y + Phaser.Math.Between(-800, 800);
+    if(Phaser.Math.Distance.Between(x,y,player.x,player.y) < 300) return;
+    const e = scene.add.image(x, y, 'enm');
+    scene.physics.world.enable(e);
+    enemies.add(e);
+    scene.physics.moveToObject(e, player, 120);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steel Warden Prototype</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser-arcade-physics.min.js"></script>
+    <style>
+        :root {
+            --sand: #f0c777;
+            --rust: #ff8d47;
+            --steel: #c9d1d9;
+            --cyan: #6ae5ff;
+            --panel: rgba(7, 18, 25, 0.7);
+            --panel-border: rgba(118, 180, 199, 0.28);
+            --panel-shadow: rgba(0, 0, 0, 0.38);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html,
+        body {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            overflow: hidden;
+            background:
+                radial-gradient(circle at top, #243641 0%, #111b22 30%, #080d11 100%),
+                linear-gradient(145deg, #131d24 0%, #090d10 100%);
+            color: var(--steel);
+            font-family: "Rajdhani", sans-serif;
+        }
+
+        body {
+            position: relative;
+        }
+
+        #game-shell,
+        #screen-fx,
+        #hud,
+        #mode-alert,
+        #game-over {
+            position: fixed;
+            inset: 0;
+        }
+
+        #game-shell {
+            z-index: 1;
+        }
+
+        #game-shell canvas {
+            display: block;
+        }
+
+        #screen-fx {
+            z-index: 2;
+            pointer-events: none;
+            background:
+                radial-gradient(circle at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.35) 100%),
+                linear-gradient(180deg, rgba(255, 187, 78, 0.06), rgba(0, 0, 0, 0.06));
+        }
+
+        #screen-fx::before,
+        #screen-fx::after {
+            content: "";
+            position: absolute;
+            inset: 0;
+        }
+
+        #screen-fx::before {
+            background:
+                repeating-linear-gradient(
+                    180deg,
+                    rgba(255, 255, 255, 0.045) 0,
+                    rgba(255, 255, 255, 0.045) 1px,
+                    transparent 1px,
+                    transparent 4px
+                );
+            mix-blend-mode: soft-light;
+            opacity: 0.25;
+        }
+
+        #screen-fx::after {
+            background:
+                radial-gradient(circle at 20% 18%, rgba(255, 204, 102, 0.12), transparent 24%),
+                radial-gradient(circle at 76% 24%, rgba(106, 229, 255, 0.08), transparent 20%),
+                radial-gradient(circle at 50% 120%, rgba(0, 0, 0, 0.45), transparent 34%);
+        }
+
+        #hud {
+            z-index: 3;
+            pointer-events: none;
+            display: grid;
+            grid-template-columns: minmax(250px, 360px) minmax(250px, 320px);
+            justify-content: space-between;
+            align-content: space-between;
+            gap: 18px;
+            padding: 18px;
+        }
+
+        .panel {
+            background:
+                linear-gradient(180deg, rgba(18, 35, 45, 0.82), rgba(7, 15, 20, 0.78));
+            border: 1px solid var(--panel-border);
+            box-shadow:
+                0 20px 50px var(--panel-shadow),
+                inset 0 1px 0 rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .panel::before {
+            content: "";
+            display: block;
+            height: 4px;
+            background: linear-gradient(90deg, rgba(255, 181, 93, 0.9), rgba(106, 229, 255, 0.7));
+        }
+
+        .title-panel {
+            padding: 18px 22px 20px;
+            max-width: 420px;
+            align-self: start;
+        }
+
+        .eyebrow {
+            display: inline-block;
+            margin-bottom: 10px;
+            color: rgba(255, 214, 142, 0.86);
+            letter-spacing: 0.24em;
+            text-transform: uppercase;
+            font-size: 12px;
+        }
+
+        .title-panel h1 {
+            margin: 0;
+            font-family: "Orbitron", sans-serif;
+            font-size: clamp(28px, 3vw, 42px);
+            line-height: 1;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .title-panel p {
+            margin: 12px 0 0;
+            max-width: 320px;
+            color: rgba(214, 224, 231, 0.86);
+            font-size: 18px;
+            line-height: 1.25;
+        }
+
+        .stats-panel {
+            align-self: start;
+            justify-self: end;
+            min-width: min(100%, 320px);
+            padding: 14px 18px 16px;
+        }
+
+        .panel-label {
+            display: block;
+            margin-bottom: 12px;
+            color: rgba(120, 200, 223, 0.82);
+            font-size: 12px;
+            letter-spacing: 0.28em;
+            text-transform: uppercase;
+        }
+
+        .stats-grid {
+            display: grid;
+            gap: 10px;
+        }
+
+        .stat {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            padding-bottom: 8px;
+        }
+
+        .stat:last-child {
+            border-bottom: 0;
+            padding-bottom: 0;
+        }
+
+        .stat span {
+            color: rgba(196, 208, 214, 0.75);
+            font-size: 14px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+        }
+
+        .stat strong {
+            font-family: "Orbitron", sans-serif;
+            font-size: 20px;
+            letter-spacing: 0.08em;
+        }
+
+        .mission-panel {
+            align-self: end;
+            max-width: 420px;
+            padding: 16px 22px 18px;
+        }
+
+        .weapon-panel {
+            align-self: end;
+            justify-self: end;
+            min-width: min(100%, 320px);
+            padding: 16px 18px 18px;
+            pointer-events: auto;
+        }
+
+        .mission-panel p {
+            margin: 0 0 12px;
+            color: rgba(210, 221, 228, 0.88);
+            font-size: 17px;
+        }
+
+        .controls {
+            display: grid;
+            gap: 6px;
+            color: rgba(160, 188, 200, 0.86);
+            font-size: 15px;
+            letter-spacing: 0.04em;
+        }
+
+        .controls strong {
+            color: rgba(255, 210, 133, 0.95);
+            font-family: "Orbitron", sans-serif;
+            font-size: 13px;
+            letter-spacing: 0.08em;
+        }
+
+        .weapon-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            pointer-events: auto;
+        }
+
+        .weapon-button {
+            border: 1px solid rgba(122, 190, 212, 0.24);
+            border-radius: 14px;
+            padding: 12px 10px;
+            background: linear-gradient(180deg, rgba(16, 29, 37, 0.92), rgba(10, 17, 23, 0.92));
+            color: rgba(218, 229, 235, 0.92);
+            font-family: "Orbitron", sans-serif;
+            font-size: 12px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: transform 140ms ease, border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+        }
+
+        .weapon-button:hover {
+            transform: translateY(-1px);
+            border-color: rgba(255, 203, 113, 0.42);
+        }
+
+        .weapon-button.active {
+            border-color: rgba(255, 204, 114, 0.72);
+            background: linear-gradient(180deg, rgba(54, 43, 16, 0.95), rgba(27, 21, 10, 0.95));
+            box-shadow: 0 0 0 1px rgba(255, 210, 133, 0.15), inset 0 0 22px rgba(255, 176, 79, 0.18);
+            color: #fff3d7;
+        }
+
+        .weapon-note {
+            margin: 12px 2px 0;
+            color: rgba(187, 204, 213, 0.8);
+            font-size: 14px;
+            line-height: 1.35;
+        }
+
+        #game-over {
+            z-index: 4;
+            pointer-events: none;
+            display: grid;
+            place-items: center;
+            opacity: 0;
+            transition: opacity 220ms ease;
+        }
+
+        #mode-alert {
+            z-index: 4;
+            pointer-events: none;
+            display: grid;
+            place-items: center;
+            opacity: 0;
+            transition: opacity 160ms ease;
+        }
+
+        #mode-alert.visible {
+            opacity: 1;
+        }
+
+        .mode-alert-card {
+            padding: 14px 22px;
+            border-radius: 18px;
+            border: 1px solid rgba(255, 210, 131, 0.42);
+            background: linear-gradient(180deg, rgba(31, 23, 11, 0.92), rgba(14, 12, 8, 0.92));
+            color: #fff0cf;
+            font-family: "Orbitron", sans-serif;
+            font-size: 18px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            box-shadow: 0 18px 40px rgba(0, 0, 0, 0.34);
+        }
+
+        #game-over.visible {
+            opacity: 1;
+        }
+
+        .game-over-card {
+            width: min(92vw, 440px);
+            padding: 26px 28px;
+            text-align: center;
+            border-radius: 24px;
+            border: 1px solid rgba(255, 154, 111, 0.35);
+            background:
+                linear-gradient(180deg, rgba(32, 15, 13, 0.88), rgba(10, 10, 12, 0.88));
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 0.46);
+        }
+
+        .game-over-card span {
+            display: block;
+            margin-bottom: 10px;
+            color: rgba(255, 169, 118, 0.88);
+            letter-spacing: 0.26em;
+            text-transform: uppercase;
+            font-size: 12px;
+        }
+
+        .game-over-card h2 {
+            margin: 0 0 10px;
+            font-family: "Orbitron", sans-serif;
+            font-size: clamp(30px, 4vw, 40px);
+            text-transform: uppercase;
+        }
+
+        .game-over-card p {
+            margin: 0;
+            color: rgba(219, 224, 228, 0.82);
+            font-size: 18px;
+        }
+
+        @media (max-width: 860px) {
+            #hud {
+                grid-template-columns: 1fr;
+                justify-content: stretch;
+                align-content: start;
+            }
+
+            .stats-panel {
+                justify-self: stretch;
+            }
+
+            .mission-panel {
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="game-shell"></div>
+    <div id="screen-fx"></div>
+    <div id="hud">
+        <section class="panel title-panel">
+            <span class="eyebrow">Armored Frontier</span>
+            <h1>Steel Warden</h1>
+            <p>Dust, steel, and hostile armor. Hold the field and keep your cannon singing.</p>
+        </section>
+        <section class="panel stats-panel">
+            <span class="panel-label">Combat Feed</span>
+            <div class="stats-grid">
+                <div class="stat"><span>Hull Integrity</span><strong id="hud-health">100%</strong></div>
+                <div class="stat"><span>Targets Cleared</span><strong id="hud-score">0</strong></div>
+                <div class="stat"><span>Threat Level</span><strong id="hud-threat">Low</strong></div>
+                <div class="stat"><span>Weapon System</span><strong id="hud-weapon">Octa</strong></div>
+                <div class="stat"><span>Drive Mode</span><strong id="hud-mode">Mobile</strong></div>
+                <div class="stat"><span>Engagement Wave</span><strong id="hud-wave">01</strong></div>
+            </div>
+        </section>
+        <section class="panel mission-panel">
+            <span class="panel-label">Field Orders</span>
+            <p>Cut through incoming raiders, kite the heavy armor, and survive the escalating push.</p>
+            <div class="controls">
+                <div><strong>WASD</strong> move across the battlefield</div>
+                <div><strong>Mouse</strong> aim turret, hold click to fire</div>
+                <div><strong>Shift</strong> boost the engine and throw dust</div>
+                <div><strong>Space</strong> brake hard and scrub speed</div>
+                <div><strong>1 / 2 / 3</strong> switch single, twin, or 8-cannon loadout</div>
+                <div><strong>F</strong> deploy or release siege mode while stationary</div>
+            </div>
+        </section>
+        <section class="panel weapon-panel">
+            <span class="panel-label">Prototype Loadout</span>
+            <div class="weapon-buttons">
+                <button id="weapon-single" class="weapon-button" type="button">Single Cannon</button>
+                <button id="weapon-twin" class="weapon-button" type="button">Twin Cannon</button>
+                <button id="weapon-octa" class="weapon-button active" type="button">8 Cannon</button>
+            </div>
+            <p id="hud-status" class="weapon-note">8-cannon test loadout mounts 4 front barrels and 4 rear barrels for immediate testing.</p>
+        </section>
+    </div>
+    <div id="mode-alert">
+        <div id="mode-alert-text" class="mode-alert-card">Siege Mode Online</div>
+    </div>
+    <div id="game-over">
+        <div class="game-over-card">
+            <span>Signal Lost</span>
+            <h2>Hull Breached</h2>
+            <p>Restarting combat link...</p>
+        </div>
+    </div>
+
+    <script>
+        const WORLD_SIZE = 5200;
+        const PLAYER_MAX_HEALTH = 100;
+        const SIEGE_CONFIG = {
+            deployDuration: 520,
+            undeployDuration: 420,
+            stationarySpeedThreshold: 12,
+            shellCooldown: 820,
+            shellSpeed: 560,
+            shellDamage: 5,
+            splashRadius: 450,
+            shellLifetime: 5700
+        };
+        function buildWeaponBarrels(frontCount, rearCount, frontForwardOffset = 52, rearForwardOffset = 38, spacing = 8) {
+            const barrels = [];
+
+            for (const sideOffset of buildBarrelOffsets(frontCount, spacing)) {
+                barrels.push({ sideOffset, forwardOffset: frontForwardOffset, angleOffset: 0 });
+            }
+
+            for (const sideOffset of buildBarrelOffsets(rearCount, spacing)) {
+                barrels.push({ sideOffset, forwardOffset: rearForwardOffset, angleOffset: Math.PI });
+            }
+
+            return barrels;
+        }
+
+        function buildBarrelOffsets(count, spacing) {
+            const offsets = [];
+            const start = -((count - 1) * spacing) * 0.5;
+
+            for (let i = 0; i < count; i += 1) {
+                offsets.push(start + i * spacing);
+            }
+
+            return offsets;
+        }
+
+        const PLAYER_WEAPONS = {
+            single: {
+                label: "Single",
+                turretTexture: "player-turret",
+                turretScale: 0.84,
+                cooldown: 145,
+                recoil: 8,
+                shake: 65,
+                barrels: buildWeaponBarrels(1, 0, 52, 38, 8)
+            },
+            twin: {
+                label: "Twin",
+                turretTexture: "player-turret-twin",
+                turretScale: 0.86,
+                cooldown: 175,
+                recoil: 10,
+                shake: 82,
+                barrels: buildWeaponBarrels(2, 0, 52, 38, 10)
+            },
+            octa: {
+                label: "Octa",
+                turretTexture: "player-turret-octa",
+                turretScale: 0.88,
+                cooldown: 230,
+                recoil: 12,
+                shake: 100,
+                barrels: buildWeaponBarrels(4, 4, 52, 38, 8)
+            }
+        };
+        const state = {
+            player: null,
+            cursors: null,
+            keys: null,
+            bullets: null,
+            enemyBullets: null,
+            enemies: null,
+            nextPlayerShotAt: 0,
+            score: 0,
+            wave: 1,
+            health: PLAYER_MAX_HEALTH,
+            threat: "Low",
+            weaponMode: "octa",
+            siegeState: "mobile",
+            statusText: "8-cannon test loadout mounts 4 front barrels and 4 rear barrels for immediate testing.",
+            isGameOver: false,
+            hud: {
+                health: document.getElementById("hud-health"),
+                score: document.getElementById("hud-score"),
+                threat: document.getElementById("hud-threat"),
+                weapon: document.getElementById("hud-weapon"),
+                mode: document.getElementById("hud-mode"),
+                wave: document.getElementById("hud-wave"),
+                status: document.getElementById("hud-status"),
+                modeAlert: document.getElementById("mode-alert"),
+                modeAlertText: document.getElementById("mode-alert-text"),
+                gameOver: document.getElementById("game-over"),
+                weaponSingleButton: document.getElementById("weapon-single"),
+                weaponTwinButton: document.getElementById("weapon-twin"),
+                weaponOctaButton: document.getElementById("weapon-octa")
+            }
+        };
+
+        const config = {
+            type: Phaser.AUTO,
+            parent: "game-shell",
+            width: window.innerWidth,
+            height: window.innerHeight,
+            backgroundColor: "#0a1014",
+            scale: {
+                mode: Phaser.Scale.RESIZE,
+                autoCenter: Phaser.Scale.CENTER_BOTH
+            },
+            physics: {
+                default: "arcade",
+                arcade: {
+                    gravity: { y: 0 },
+                    debug: false
+                }
+            },
+            scene: {
+                key: "battlefield",
+                preload,
+                create,
+                update
+            }
+        };
+
+        const game = new Phaser.Game(config);
+
+        function preload() {}
+
+        function create() {
+            resetState();
+            createTextures.call(this);
+            createBattlefield.call(this);
+            createAtmosphere.call(this);
+            createPlayer.call(this);
+            createSystems.call(this);
+            wireInput.call(this);
+            bindHudInteractions();
+            setWeaponMode(state.weaponMode);
+            refreshHud();
+
+            this.cameras.main.startFollow(state.player, true, 0.08, 0.08);
+            this.cameras.main.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
+            this.physics.world.setBounds(0, 0, WORLD_SIZE, WORLD_SIZE);
+            resizeCamera.call(this, this.scale.gameSize);
+            this.scale.off("resize", resizeCamera, this);
+            this.scale.on("resize", resizeCamera, this);
+
+            for (let i = 0; i < 6; i += 1) {
+                spawnEnemy.call(this, true);
+            }
+
+            this.time.addEvent({
+                delay: 1200,
+                loop: true,
+                callback: () => {
+                    if (!state.isGameOver) {
+                        spawnEnemy.call(this, false);
+                    }
+                }
+            });
+
+        }
+
+        function update(time, delta) {
+            if (state.isGameOver) {
+                return;
+            }
+
+            updatePlayerMovement.call(this, time, delta);
+            updatePlayerVisuals.call(this, time);
+            updateBullets.call(this, time);
+            updateEnemies.call(this, time, delta);
+            refreshHud();
+        }
+
+        function resetState() {
+            state.player = null;
+            state.cursors = null;
+            state.keys = null;
+            state.bullets = null;
+            state.enemyBullets = null;
+            state.enemies = null;
+            state.nextPlayerShotAt = 0;
+            state.score = 0;
+            state.wave = 1;
+            state.health = PLAYER_MAX_HEALTH;
+            state.threat = "Low";
+            state.weaponMode = "octa";
+            state.siegeState = "mobile";
+            state.statusText = "8-cannon test loadout mounts 4 front barrels and 4 rear barrels for immediate testing.";
+            state.isGameOver = false;
+            state.hud.gameOver.classList.remove("visible");
+        }
+
+        function createTextures() {
+            const graphics = this.make.graphics({ x: 0, y: 0, add: false });
+
+            const makeTexture = (key, width, height, drawFn) => {
+                if (this.textures.exists(key)) {
+                    return;
+                }
+
+                graphics.clear();
+                drawFn(graphics, width, height);
+                graphics.generateTexture(key, width, height);
+            };
+
+            makeTexture("shadow-soft", 128, 128, (g) => {
+                for (let i = 56; i > 10; i -= 4) {
+                    g.fillStyle(0x000000, Phaser.Math.Linear(0.025, 0.11, i / 56));
+                    g.fillEllipse(64, 64, i * 1.45, i * 0.8);
+                }
+            });
+
+            makeTexture("soft-glow", 128, 128, (g) => {
+                for (let i = 58; i > 0; i -= 4) {
+                    g.fillStyle(0xffffff, Phaser.Math.Linear(0.01, 0.12, 1 - i / 58));
+                    g.fillCircle(64, 64, i);
+                }
+            });
+
+            makeTexture("dust-puff", 48, 48, (g) => {
+                for (let i = 20; i > 0; i -= 2) {
+                    g.fillStyle(0xffffff, Phaser.Math.Linear(0.02, 0.12, 1 - i / 20));
+                    g.fillCircle(24, 24, i);
+                }
+            });
+
+            makeTexture("player-shell", 32, 20, (g) => {
+                g.fillStyle(0x74f1ff, 0.25);
+                g.fillEllipse(10, 10, 16, 12);
+                g.fillStyle(0xffd36a, 1);
+                g.fillRoundedRect(6, 5, 18, 10, 5);
+                g.fillStyle(0xffffff, 0.95);
+                g.fillRoundedRect(15, 7, 8, 6, 3);
+            });
+
+            makeTexture("enemy-shell", 32, 20, (g) => {
+                g.fillStyle(0xff7a4a, 0.25);
+                g.fillEllipse(10, 10, 16, 12);
+                g.fillStyle(0xff8d47, 1);
+                g.fillRoundedRect(6, 5, 18, 10, 5);
+                g.fillStyle(0xfff0d3, 0.95);
+                g.fillRoundedRect(15, 7, 8, 6, 3);
+            });
+
+            makeTexture("player-hull", 140, 140, (g) => {
+                g.fillStyle(0x141b21, 0.92);
+                g.fillRoundedRect(20, 30, 22, 78, 8);
+                g.fillRoundedRect(98, 30, 22, 78, 8);
+
+                g.fillStyle(0x33404a, 0.94);
+                for (let i = 0; i < 4; i += 1) {
+                    g.fillRoundedRect(23, 37 + i * 16, 16, 10, 3);
+                    g.fillRoundedRect(101, 37 + i * 16, 16, 10, 3);
+                }
+
+                g.lineStyle(3, 0x0b1014, 0.96);
+                g.fillStyle(0x6a7683, 1);
+                g.beginPath();
+                g.moveTo(34, 56);
+                g.lineTo(56, 34);
+                g.lineTo(92, 34);
+                g.lineTo(109, 55);
+                g.lineTo(104, 86);
+                g.lineTo(82, 104);
+                g.lineTo(53, 104);
+                g.lineTo(31, 84);
+                g.closePath();
+                g.fillPath();
+                g.strokePath();
+
+                g.fillStyle(0x91a0ad, 1);
+                g.beginPath();
+                g.moveTo(43, 58);
+                g.lineTo(60, 42);
+                g.lineTo(87, 42);
+                g.lineTo(98, 56);
+                g.lineTo(94, 77);
+                g.lineTo(77, 91);
+                g.lineTo(58, 91);
+                g.lineTo(42, 76);
+                g.closePath();
+                g.fillPath();
+
+                g.fillStyle(0xf1ca72, 1);
+                g.fillRoundedRect(62, 46, 16, 42, 8);
+            });
+
+            makeTexture("player-turret", 124, 124, (g) => {
+                g.fillStyle(0x1a242c, 0.95);
+                g.fillCircle(50, 62, 24);
+                g.fillStyle(0xa0adba, 1);
+                g.fillCircle(50, 62, 19);
+                g.fillStyle(0x5f6b77, 1);
+                g.fillCircle(50, 62, 11);
+                g.fillStyle(0x33414e, 1);
+                g.fillRoundedRect(44, 55, 25, 14, 7);
+                g.fillStyle(0xd8dee3, 1);
+                g.fillRoundedRect(66, 57, 36, 10, 5);
+                g.fillStyle(0xf1ca72, 1);
+                g.fillRoundedRect(93, 56, 10, 12, 3);
+            });
+
+            makeTexture("player-turret-twin", 124, 124, (g) => {
+                g.fillStyle(0x1a242c, 0.95);
+                g.fillCircle(50, 62, 24);
+                g.fillStyle(0xa0adba, 1);
+                g.fillCircle(50, 62, 19);
+                g.fillStyle(0x5f6b77, 1);
+                g.fillCircle(50, 62, 11);
+                g.fillStyle(0x33414e, 1);
+                g.fillRoundedRect(42, 53, 24, 16, 8);
+                g.fillStyle(0xd8dee3, 1);
+                g.fillRoundedRect(64, 54, 33, 6, 3);
+                g.fillRoundedRect(64, 64, 33, 6, 3);
+                g.fillStyle(0xf1ca72, 1);
+                g.fillRoundedRect(89, 53, 10, 8, 3);
+                g.fillRoundedRect(89, 63, 10, 8, 3);
+            });
+
+            makeTexture("player-turret-octa", 132, 132, (g) => {
+                g.fillStyle(0x1a242c, 0.96);
+                g.fillCircle(58, 66, 24);
+                g.fillStyle(0xa0adba, 1);
+                g.fillCircle(58, 66, 19);
+                g.fillStyle(0x5f6b77, 1);
+                g.fillCircle(58, 66, 11);
+                g.fillStyle(0x33414e, 1);
+                g.fillRoundedRect(49, 58, 24, 16, 8);
+                g.fillStyle(0xd8dee3, 1);
+                g.fillRoundedRect(72, 48, 28, 5, 3);
+                g.fillRoundedRect(72, 56, 30, 5, 3);
+                g.fillRoundedRect(72, 71, 30, 5, 3);
+                g.fillRoundedRect(72, 79, 28, 5, 3);
+                g.fillRoundedRect(20, 48, 28, 5, 3);
+                g.fillRoundedRect(18, 56, 30, 5, 3);
+                g.fillRoundedRect(18, 71, 30, 5, 3);
+                g.fillRoundedRect(20, 79, 28, 5, 3);
+                g.fillStyle(0xf1ca72, 1);
+                g.fillRoundedRect(94, 47, 8, 7, 2);
+                g.fillRoundedRect(96, 55, 8, 7, 2);
+                g.fillRoundedRect(96, 70, 8, 7, 2);
+                g.fillRoundedRect(94, 78, 8, 7, 2);
+                g.fillRoundedRect(20, 47, 8, 7, 2);
+                g.fillRoundedRect(18, 55, 8, 7, 2);
+                g.fillRoundedRect(18, 70, 8, 7, 2);
+                g.fillRoundedRect(20, 78, 8, 7, 2);
+            });
+
+            makeTexture("player-turret-siege", 164, 164, (g) => {
+                g.fillStyle(0x1c242b, 0.98);
+                g.fillRoundedRect(42, 60, 48, 28, 12);
+                g.fillStyle(0x94a2af, 1);
+                g.fillRoundedRect(48, 64, 36, 20, 10);
+                g.fillStyle(0x5b6875, 1);
+                g.fillRoundedRect(58, 69, 16, 10, 5);
+                g.fillStyle(0xdbe1e6, 1);
+                g.fillRoundedRect(88, 69, 58, 8, 4);
+                g.fillStyle(0xf1ca72, 1);
+                g.fillRoundedRect(138, 68, 12, 10, 3);
+                g.fillStyle(0x2d3942, 1);
+                g.fillRoundedRect(34, 66, 10, 16, 4);
+            });
+
+            makeTexture("enemy-raider-hull", 126, 126, (g) => {
+                g.fillStyle(0x160f11, 0.95);
+                g.fillRoundedRect(22, 33, 18, 64, 8);
+                g.fillRoundedRect(86, 33, 18, 64, 8);
+
+                g.fillStyle(0x4a2429, 0.98);
+                for (let i = 0; i < 4; i += 1) {
+                    g.fillRoundedRect(24, 39 + i * 14, 14, 9, 3);
+                    g.fillRoundedRect(88, 39 + i * 14, 14, 9, 3);
+                }
+
+                g.lineStyle(3, 0x0c0809, 0.98);
+                g.fillStyle(0x6d3238, 1);
+                g.beginPath();
+                g.moveTo(36, 56);
+                g.lineTo(54, 36);
+                g.lineTo(82, 36);
+                g.lineTo(98, 54);
+                g.lineTo(94, 82);
+                g.lineTo(76, 97);
+                g.lineTo(51, 97);
+                g.lineTo(31, 79);
+                g.closePath();
+                g.fillPath();
+                g.strokePath();
+
+                g.fillStyle(0xc15057, 1);
+                g.beginPath();
+                g.moveTo(44, 58);
+                g.lineTo(58, 45);
+                g.lineTo(78, 45);
+                g.lineTo(88, 57);
+                g.lineTo(86, 75);
+                g.lineTo(74, 86);
+                g.lineTo(56, 86);
+                g.lineTo(43, 74);
+                g.closePath();
+                g.fillPath();
+
+                g.fillStyle(0xf1c48f, 0.96);
+                g.fillRoundedRect(72, 54, 12, 18, 5);
+            });
+
+            makeTexture("enemy-raider-turret", 120, 120, (g) => {
+                g.fillStyle(0x240f13, 0.96);
+                g.fillCircle(48, 60, 20);
+                g.fillStyle(0x8d3941, 1);
+                g.fillCircle(48, 60, 16);
+                g.fillStyle(0xe38b64, 1);
+                g.fillCircle(48, 60, 6);
+                g.fillStyle(0x44191e, 1);
+                g.fillRoundedRect(42, 54, 22, 12, 6);
+                g.fillStyle(0xf0aa74, 1);
+                g.fillRoundedRect(61, 56, 27, 8, 4);
+                g.fillStyle(0xffdfb3, 1);
+                g.fillRoundedRect(83, 55, 9, 10, 3);
+            });
+
+            makeTexture("enemy-brute-hull", 132, 132, (g) => {
+                g.fillStyle(0x151011, 0.94);
+                g.fillRoundedRect(18, 26, 24, 82, 10);
+                g.fillRoundedRect(90, 26, 24, 82, 10);
+
+                g.fillStyle(0x512428, 0.96);
+                for (let i = 0; i < 5; i += 1) {
+                    g.fillRoundedRect(22, 31 + i * 15, 16, 10, 3);
+                    g.fillRoundedRect(94, 31 + i * 15, 16, 10, 3);
+                }
+
+                g.lineStyle(3, 0x0d0809, 0.98);
+                g.fillStyle(0x76353c, 1);
+                g.fillRoundedRect(32, 36, 68, 58, 16);
+                g.strokeRoundedRect(32, 36, 68, 58, 16);
+                g.fillStyle(0xce5957, 1);
+                g.fillRoundedRect(46, 48, 40, 34, 12);
+                g.fillStyle(0xf0c777, 0.96);
+                g.fillRoundedRect(57, 57, 18, 16, 6);
+            });
+
+            makeTexture("enemy-brute-turret", 118, 118, (g) => {
+                g.fillStyle(0x240f11, 0.96);
+                g.fillCircle(51, 59, 23);
+                g.fillStyle(0x9f3d44, 1);
+                g.fillCircle(51, 59, 18);
+                g.fillStyle(0xffc185, 0.98);
+                g.fillCircle(51, 59, 7);
+                g.fillStyle(0x5f2328, 1);
+                g.fillRoundedRect(44, 52, 26, 14, 7);
+                g.fillStyle(0xe07858, 1);
+                g.fillRoundedRect(66, 54, 34, 10, 5);
+                g.fillStyle(0xffddb3, 1);
+                g.fillRoundedRect(93, 53, 9, 12, 3);
+            });
+
+            graphics.destroy();
+        }
+
+        function createBattlefield() {
+            const terrain = this.add.graphics().setDepth(0);
+            terrain.fillGradientStyle(0x0a1116, 0x111d24, 0x1a2d36, 0x192831, 1);
+            terrain.fillRect(0, 0, WORLD_SIZE, WORLD_SIZE);
+
+            terrain.fillStyle(0x3f5c68, 0.08);
+            terrain.fillEllipse(WORLD_SIZE * 0.22, WORLD_SIZE * 0.28, 1200, 860);
+            terrain.fillStyle(0x6d4a2c, 0.07);
+            terrain.fillEllipse(WORLD_SIZE * 0.72, WORLD_SIZE * 0.66, 1500, 980);
+
+            terrain.lineStyle(150, 0x231d18, 0.26);
+            terrain.beginPath();
+            terrain.moveTo(300, 4500);
+            terrain.lineTo(5100, 900);
+            terrain.strokePath();
+
+            terrain.lineStyle(120, 0x1c1815, 0.24);
+            terrain.beginPath();
+            terrain.moveTo(500, 900);
+            terrain.lineTo(4500, 4200);
+            terrain.strokePath();
+
+            terrain.lineStyle(90, 0x12181d, 0.28);
+            terrain.beginPath();
+            terrain.moveTo(2600, 300);
+            terrain.lineTo(2600, 4900);
+            terrain.strokePath();
+
+            terrain.lineStyle(2, 0x35505f, 0.18);
+            for (let i = 0; i <= WORLD_SIZE; i += 180) {
+                terrain.lineBetween(i, 0, i, WORLD_SIZE);
+                terrain.lineBetween(0, i, WORLD_SIZE, i);
+            }
+
+            for (let i = 0; i < 95; i += 1) {
+                const x = Phaser.Math.Between(120, WORLD_SIZE - 120);
+                const y = Phaser.Math.Between(120, WORLD_SIZE - 120);
+                const radius = Phaser.Math.Between(20, 72);
+
+                terrain.fillStyle(0x0a0f12, Phaser.Math.FloatBetween(0.18, 0.3));
+                terrain.fillCircle(x, y, radius);
+                terrain.lineStyle(2, 0x47606d, 0.14);
+                terrain.strokeCircle(x, y, radius + Phaser.Math.Between(4, 12));
+            }
+
+            for (let i = 0; i < 220; i += 1) {
+                const x = Phaser.Math.Between(0, WORLD_SIZE);
+                const y = Phaser.Math.Between(0, WORLD_SIZE);
+                const size = Phaser.Math.Between(3, 10);
+                terrain.fillStyle(Phaser.Math.RND.pick([0x4a5d68, 0x7b5736, 0x33414a]), Phaser.Math.FloatBetween(0.16, 0.28));
+                terrain.fillRect(x, y, size * 2, size);
+            }
+
+            for (let i = 0; i < 28; i += 1) {
+                const x = Phaser.Math.Between(180, WORLD_SIZE - 180);
+                const y = Phaser.Math.Between(180, WORLD_SIZE - 180);
+                const w = Phaser.Math.Between(50, 120);
+                const h = Phaser.Math.Between(10, 22);
+                terrain.fillStyle(0x11161a, 0.3);
+                terrain.fillRoundedRect(x - w * 0.5, y - h * 0.5, w, h, 6);
+                terrain.lineStyle(2, 0x4d6270, 0.14);
+                terrain.strokeRoundedRect(x - w * 0.5, y - h * 0.5, w, h, 6);
+            }
+        }
+
+        function createAtmosphere() {
+            this.add.image(WORLD_SIZE * 0.5, WORLD_SIZE * 0.52, "soft-glow")
+                .setTint(0xffb24a)
+                .setScale(10.5)
+                .setAlpha(0.07)
+                .setDepth(1);
+
+            this.add.image(WORLD_SIZE * 0.35, WORLD_SIZE * 0.3, "soft-glow")
+                .setTint(0x61dfff)
+                .setScale(6)
+                .setAlpha(0.04)
+                .setDepth(1);
+
+            this.add.particles(0, 0, "dust-puff", {
+                x: { min: 0, max: WORLD_SIZE },
+                y: { min: 0, max: WORLD_SIZE },
+                lifespan: { min: 5000, max: 9500 },
+                frequency: 180,
+                quantity: 1,
+                scale: { start: 0.22, end: 0.65 },
+                alpha: { start: 0.12, end: 0 },
+                speedX: { min: -10, max: 10 },
+                speedY: { min: -6, max: 6 },
+                tint: [0xf0c777, 0xd07a44, 0x607884],
+                blendMode: Phaser.BlendModes.SCREEN
+            }).setDepth(2);
+        }
+
+        function createPlayer() {
+            state.player = this.physics.add.image(WORLD_SIZE * 0.5, WORLD_SIZE * 0.5, "player-hull");
+            state.player.setDepth(22);
+            state.player.setDamping(true);
+            state.player.setDrag(0.93);
+            state.player.setMaxVelocity(170);
+            state.player.setScale(0.82);
+            state.player.setSize(64, 64);
+            state.player.setCollideWorldBounds(true);
+            state.player.hullAngle = 0;
+            state.player.nextDustAt = 0;
+            state.player.siege = { progress: 0, target: 0 };
+
+            state.player.shadow = this.add.image(state.player.x, state.player.y + 18, "shadow-soft")
+                .setScale(0.56, 0.25)
+                .setAlpha(0.4)
+                .setDepth(19);
+
+            state.player.glow = this.add.image(state.player.x, state.player.y, "soft-glow")
+                .setTint(0xf5be57)
+                .setScale(0.4)
+                .setAlpha(0.08)
+                .setDepth(20)
+                .setBlendMode(Phaser.BlendModes.SCREEN);
+
+            state.player.engineGlow = this.add.image(state.player.x, state.player.y, "soft-glow")
+                .setTint(0xff9348)
+                .setScale(0.18)
+                .setAlpha(0.14)
+                .setDepth(21)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            state.player.turret = this.add.image(state.player.x, state.player.y, "player-turret")
+                .setScale(0.84)
+                .setDepth(24);
+            state.player.turret.recoil = 0;
+
+            state.player.siegeLegs = [
+                createSiegeLeg.call(this, 1),
+                createSiegeLeg.call(this, -1)
+            ];
+            state.player.siegePad = this.add.rectangle(state.player.x, state.player.y, 34, 16, 0xe3bc73, 0.94)
+                .setDepth(21)
+                .setAlpha(0)
+                .setRotation(0);
+        }
+
+        function createSiegeLeg(side) {
+            return {
+                side,
+                sprite: this.add.rectangle(state.player.x, state.player.y, 30, 6, 0xd1af74, 0.94)
+                    .setDepth(21)
+                    .setOrigin(0.2, 0.5)
+                    .setAlpha(0)
+            };
+        }
+
+        function createSystems() {
+            state.bullets = this.physics.add.group();
+            state.enemyBullets = this.physics.add.group();
+            state.enemies = this.physics.add.group();
+
+            this.physics.add.overlap(state.bullets, state.enemies, handlePlayerBulletHitEnemy, null, this);
+            this.physics.add.overlap(state.enemyBullets, state.player, handleEnemyBulletHitPlayer, null, this);
+            this.physics.add.overlap(state.player, state.enemies, handleEnemyRam, null, this);
+        }
+
+        function wireInput() {
+            state.cursors = this.input.keyboard.createCursorKeys();
+            state.keys = this.input.keyboard.addKeys({
+                up: "W",
+                left: "A",
+                down: "S",
+                right: "D",
+                boost: "SHIFT",
+                brake: "SPACE",
+                weaponSingle: "ONE",
+                weaponTwin: "TWO",
+                weaponOcta: "THREE",
+                siegeToggle: "F"
+            });
+        }
+
+        function bindHudInteractions() {
+            state.hud.weaponSingleButton.onclick = () => setWeaponMode("single");
+            state.hud.weaponTwinButton.onclick = () => setWeaponMode("twin");
+            state.hud.weaponOctaButton.onclick = () => setWeaponMode("octa");
+        }
+
+        function setWeaponMode(mode) {
+            const weapon = PLAYER_WEAPONS[mode] || PLAYER_WEAPONS.single;
+            state.weaponMode = mode in PLAYER_WEAPONS ? mode : "single";
+            applyPlayerTurretAppearance();
+
+            state.hud.weaponSingleButton.classList.toggle("active", state.weaponMode === "single");
+            state.hud.weaponTwinButton.classList.toggle("active", state.weaponMode === "twin");
+            state.hud.weaponOctaButton.classList.toggle("active", state.weaponMode === "octa");
+            refreshHud();
+        }
+
+        function applyPlayerTurretAppearance() {
+            if (!state.player || !state.player.turret) {
+                return;
+            }
+
+            if (state.siegeState === "siege" || state.siegeState === "deploying" || state.siegeState === "undeploying") {
+                state.player.turret.setTexture("player-turret-siege");
+                state.player.turret.setScale(0.96 + state.player.siege.progress * 0.06);
+                return;
+            }
+
+            const weapon = PLAYER_WEAPONS[state.weaponMode] || PLAYER_WEAPONS.single;
+            state.player.turret.setTexture(weapon.turretTexture);
+            state.player.turret.setScale(weapon.turretScale);
+        }
+
+        function canEnterSiegeMode() {
+            if (!state.player || state.isGameOver || state.siegeState !== "mobile") {
+                return false;
+            }
+
+            return state.player.body.speed <= SIEGE_CONFIG.stationarySpeedThreshold;
+        }
+
+        function toggleSiegeMode(time) {
+            if (state.siegeState === "mobile") {
+                if (!canEnterSiegeMode()) {
+                    state.statusText = "Bring the tank to a full stop before deploying siege mode.";
+                    return;
+                }
+
+                state.statusText = "Deploying siege braces...";
+                announceMode("Siege Mode Deploying");
+                beginSiegeTransition.call(this, "deploying", 1, SIEGE_CONFIG.deployDuration, "Siege");
+                state.nextPlayerShotAt = Math.max(state.nextPlayerShotAt, time + SIEGE_CONFIG.deployDuration);
+                return;
+            }
+
+            if (state.siegeState === "siege") {
+                state.statusText = "Retracting siege braces...";
+                announceMode("Retracting Siege");
+                beginSiegeTransition.call(this, "undeploying", 0, SIEGE_CONFIG.undeployDuration, "Mobile");
+                state.nextPlayerShotAt = Math.max(state.nextPlayerShotAt, time + SIEGE_CONFIG.undeployDuration);
+            }
+        }
+
+        function beginSiegeTransition(transitionState, targetProgress, duration, settleModeLabel) {
+            state.siegeState = transitionState;
+            state.player.body.setAcceleration(0, 0);
+            state.player.body.setVelocity(0, 0);
+            applyPlayerTurretAppearance();
+
+            if (state.player.siegeTween) {
+                state.player.siegeTween.stop();
+            }
+
+            spawnImpactBurst.call(this, state.player.x, state.player.y, 0xf0c777, 0x607884, 0.7);
+            state.player.siegeTween = this.tweens.add({
+                targets: state.player.siege,
+                progress: targetProgress,
+                duration,
+                ease: "Sine.easeInOut",
+                onUpdate: () => applyPlayerTurretAppearance(),
+                onComplete: () => {
+                    state.siegeState = targetProgress >= 1 ? "siege" : "mobile";
+                    state.statusText = targetProgress >= 1
+                        ? "Siege mode online. Click to fire heavy artillery."
+                        : "Returned to mobile drive mode.";
+                    announceMode(targetProgress >= 1 ? "Siege Mode Online" : "Mobile Mode Restored");
+                    applyPlayerTurretAppearance();
+                }
+            });
+        }
+
+        function announceMode(message) {
+            state.hud.modeAlertText.textContent = message;
+            state.hud.modeAlert.classList.add("visible");
+
+            clearTimeout(state.hud.modeAlertTimer);
+            state.hud.modeAlertTimer = setTimeout(() => {
+                state.hud.modeAlert.classList.remove("visible");
+            }, 1400);
+        }
+
+        function updatePlayerMovement(time, delta) {
+            if (Phaser.Input.Keyboard.JustDown(state.keys.weaponSingle)) {
+                setWeaponMode("single");
+            }
+
+            if (Phaser.Input.Keyboard.JustDown(state.keys.weaponTwin)) {
+                setWeaponMode("twin");
+            }
+
+            if (Phaser.Input.Keyboard.JustDown(state.keys.weaponOcta)) {
+                setWeaponMode("octa");
+            }
+
+            if (Phaser.Input.Keyboard.JustDown(state.keys.siegeToggle)) {
+                toggleSiegeMode.call(this, time);
+            }
+
+            const moveX = (state.cursors.right.isDown || state.keys.right.isDown ? 1 : 0) - (state.cursors.left.isDown || state.keys.left.isDown ? 1 : 0);
+            const moveY = (state.cursors.down.isDown || state.keys.down.isDown ? 1 : 0) - (state.cursors.up.isDown || state.keys.up.isDown ? 1 : 0);
+            const moveVector = new Phaser.Math.Vector2(moveX, moveY);
+            const inSiegeLock = state.siegeState === "deploying" || state.siegeState === "undeploying" || state.siegeState === "siege";
+            const braking = state.keys.brake.isDown;
+            const boost = !braking && !inSiegeLock && state.keys.boost.isDown ? 1.32 : 1;
+            const acceleration = 760 * boost;
+
+            if (inSiegeLock) {
+                state.player.body.setAcceleration(0, 0);
+                state.player.body.setVelocity(0, 0);
+                state.player.body.setDrag(0.995);
+            } else if (moveVector.lengthSq() > 0) {
+                moveVector.normalize().scale(acceleration);
+                state.player.body.setAcceleration(moveVector.x, moveVector.y);
+
+                const movementAngle = Math.atan2(state.player.body.velocity.y, state.player.body.velocity.x);
+                if (!Number.isNaN(movementAngle)) {
+                    state.player.hullAngle = Phaser.Math.Angle.RotateTo(state.player.hullAngle, movementAngle, 0.06);
+                }
+            } else {
+                state.player.body.setAcceleration(0, 0);
+            }
+
+            if (!inSiegeLock) {
+                state.player.body.setDrag(braking ? 0.986 : 0.93);
+            }
+
+            if (braking && !inSiegeLock) {
+                state.player.body.velocity.scale(0.9);
+            }
+
+            if (state.player.body.speed > 26) {
+                const velocityAngle = Math.atan2(state.player.body.velocity.y, state.player.body.velocity.x);
+                state.player.hullAngle = Phaser.Math.Angle.RotateTo(state.player.hullAngle, velocityAngle, 0.06 + delta * 0.00005);
+            }
+
+            state.player.rotation = state.player.hullAngle;
+
+            const pointer = this.input.activePointer;
+            const aimAngle = Phaser.Math.Angle.Between(state.player.x, state.player.y, pointer.worldX, pointer.worldY);
+            const turretTurnSpeed = state.siegeState === "siege" ? 0.035 : 1;
+            state.player.turret.rotation = turretTurnSpeed === 1
+                ? aimAngle
+                : Phaser.Math.Angle.RotateTo(state.player.turret.rotation, aimAngle, turretTurnSpeed);
+
+            if (pointer.isDown) {
+                if (state.siegeState === "siege") {
+                    shootPlayerSiegeShell.call(this, time, pointer.worldX, pointer.worldY);
+                } else if (state.siegeState === "mobile") {
+                    shootPlayerShell.call(this, time);
+                }
+            }
+
+            if (state.player.body.speed > 170 && time > state.player.nextDustAt && state.siegeState === "mobile") {
+                state.player.nextDustAt = time + 90;
+                spawnTrackDust.call(this);
+            }
+        }
+
+        function updatePlayerVisuals(time) {
+            const hullAngle = state.player.rotation;
+            const rearX = state.player.x - Math.cos(hullAngle) * 28;
+            const rearY = state.player.y - Math.sin(hullAngle) * 28;
+            const siegeProgress = state.player.siege.progress || 0;
+            state.player.turret.recoil = Phaser.Math.Linear(state.player.turret.recoil || 0, 0, 0.18);
+            const turretAngle = state.player.turret.rotation;
+            const turretKickX = Math.cos(turretAngle) * (state.player.turret.recoil || 0);
+            const turretKickY = Math.sin(turretAngle) * (state.player.turret.recoil || 0);
+
+            state.player.shadow.setPosition(state.player.x + 4, state.player.y + 20);
+            state.player.shadow.rotation = hullAngle;
+            state.player.shadow.setScale(0.56 + siegeProgress * 0.12, 0.25 + siegeProgress * 0.04);
+
+            state.player.glow.setPosition(state.player.x, state.player.y);
+            state.player.glow.setScale(0.4 + siegeProgress * 0.16 + Math.sin(time * 0.004) * 0.02);
+            state.player.glow.setAlpha(0.08 + siegeProgress * 0.04 + Math.min(state.player.body.speed / 4600, 0.04));
+
+            state.player.engineGlow.setPosition(rearX, rearY);
+            state.player.engineGlow.setAlpha((0.13 + Math.min(state.player.body.speed / 1600, 0.14)) * (1 - siegeProgress * 0.6));
+            state.player.engineGlow.setScale(0.18 + Math.min(state.player.body.speed / 1400, 0.06));
+
+            state.player.turret.setPosition(state.player.x + 3 - turretKickX, state.player.y - turretKickY);
+
+            state.player.siegePad.setPosition(state.player.x, state.player.y + 4);
+            state.player.siegePad.setAlpha(siegeProgress * 0.9);
+            state.player.siegePad.setScale(0.9 + siegeProgress * 0.95, 0.75 + siegeProgress * 0.15);
+            state.player.siegePad.setRotation(hullAngle);
+
+            for (const leg of state.player.siegeLegs) {
+                const forwardBase = 8;
+                const sideBase = leg.side * (10 + siegeProgress * 16);
+                const anchorX =
+                    state.player.x +
+                    Math.cos(hullAngle) * forwardBase +
+                    Math.cos(hullAngle + Math.PI * 0.5) * sideBase;
+                const anchorY =
+                    state.player.y +
+                    Math.sin(hullAngle) * forwardBase +
+                    Math.sin(hullAngle + Math.PI * 0.5) * sideBase;
+                leg.sprite.setPosition(anchorX, anchorY);
+                leg.sprite.setRotation(hullAngle + leg.side * 0.18);
+                leg.sprite.setAlpha(siegeProgress * 0.92);
+                leg.sprite.setScale(0.3 + siegeProgress * 0.9, 1);
+            }
+        }
+
+        function shootPlayerShell(time) {
+            const weapon = PLAYER_WEAPONS[state.weaponMode] || PLAYER_WEAPONS.single;
+
+            if (time < state.nextPlayerShotAt) {
+                return;
+            }
+
+            state.nextPlayerShotAt = time + weapon.cooldown;
+
+            const angle = state.player.turret.rotation;
+
+            for (const barrel of weapon.barrels) {
+                const barrelAngle = angle + (barrel.angleOffset || 0);
+                const perpendicularAngle = barrelAngle + Math.PI * 0.5;
+                const muzzleX =
+                    state.player.x +
+                    Math.cos(barrelAngle) * barrel.forwardOffset +
+                    Math.cos(perpendicularAngle) * barrel.sideOffset;
+                const muzzleY =
+                    state.player.y +
+                    Math.sin(barrelAngle) * barrel.forwardOffset +
+                    Math.sin(perpendicularAngle) * barrel.sideOffset;
+                const bullet = this.physics.add.image(muzzleX, muzzleY, "player-shell");
+
+                bullet.setDepth(23);
+                bullet.setRotation(barrelAngle);
+                bullet.setCircle(5, 11, 5);
+                bullet.setBlendMode(Phaser.BlendModes.ADD);
+                bullet.spawnTime = time;
+                bullet.nextTrailAt = time;
+                state.bullets.add(bullet);
+
+                this.physics.velocityFromRotation(barrelAngle, 820, bullet.body.velocity);
+                spawnMuzzleFlash.call(this, muzzleX, muzzleY, barrelAngle, 0xffd36a, 0x74f1ff);
+            }
+
+            state.player.turret.recoil = weapon.recoil;
+            this.cameras.main.shake(weapon.shake, 0.0008);
+        }
+
+        function shootPlayerSiegeShell(time, targetX, targetY) {
+            if (time < state.nextPlayerShotAt) {
+                return;
+            }
+
+            const angle = state.player.turret.rotation;
+            const muzzleX = state.player.x + Math.cos(angle) * 68;
+            const muzzleY = state.player.y + Math.sin(angle) * 68;
+            const shell = this.physics.add.image(muzzleX, muzzleY, "player-shell");
+
+            shell.setDepth(23);
+            shell.setRotation(angle);
+            shell.setScale(1.35);
+            shell.setCircle(5, 11, 5);
+            shell.setTint(0xffdba0);
+            shell.setBlendMode(Phaser.BlendModes.ADD);
+            shell.spawnTime = time;
+            shell.nextTrailAt = time;
+            shell.kind = "siegeShell";
+            shell.damage = SIEGE_CONFIG.shellDamage;
+            shell.splashRadius = SIEGE_CONFIG.splashRadius;
+            shell.targetX = Phaser.Math.Clamp(targetX, 0, WORLD_SIZE);
+            shell.targetY = Phaser.Math.Clamp(targetY, 0, WORLD_SIZE);
+            state.bullets.add(shell);
+
+            this.physics.velocityFromRotation(angle, SIEGE_CONFIG.shellSpeed, shell.body.velocity);
+            state.nextPlayerShotAt = time + SIEGE_CONFIG.shellCooldown;
+            state.player.turret.recoil = 18;
+            spawnMuzzleFlash.call(this, muzzleX, muzzleY, angle, 0xffb56d, 0xfff0bf);
+            spawnSiegeTargetMarker.call(this, shell.targetX, shell.targetY);
+            this.cameras.main.shake(160, 0.0022);
+        }
+
+        function spawnEnemy(isInitial) {
+            const angle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            const distance = isInitial ? Phaser.Math.Between(620, 980) : Phaser.Math.Between(780, 1320);
+            const x = Phaser.Math.Clamp(state.player.x + Math.cos(angle) * distance, 120, WORLD_SIZE - 120);
+            const y = Phaser.Math.Clamp(state.player.y + Math.sin(angle) * distance, 120, WORLD_SIZE - 120);
+
+            if (Phaser.Math.Distance.Between(x, y, state.player.x, state.player.y) < 420) {
+                return;
+            }
+
+            const spawnHeavy = !isInitial && (Math.random() < Math.min(0.22 + state.wave * 0.04, 0.5));
+            const enemy = this.physics.add.image(x, y, spawnHeavy ? "enemy-brute-hull" : "enemy-raider-hull");
+
+            enemy.kind = spawnHeavy ? "brute" : "raider";
+            enemy.hp = spawnHeavy ? 4 : Phaser.Math.Between(2, 3);
+            enemy.maxHp = enemy.hp;
+            enemy.speed = spawnHeavy ? Phaser.Math.Between(74, 92) : Phaser.Math.Between(120, 148);
+            enemy.scoreValue = spawnHeavy ? 5 : 2;
+            enemy.nextShotAt = Phaser.Math.Between(spawnHeavy ? 700 : 1100, spawnHeavy ? 1500 : 2100);
+            enemy.lastContactAt = 0;
+            enemy.pulseSeed = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            enemy.weaveSeed = Phaser.Math.FloatBetween(0, Math.PI * 2);
+            enemy.orbitDirection = Phaser.Math.RND.pick([-1, 1]);
+            enemy.preferredRange = spawnHeavy ? 0 : Phaser.Math.Between(170, 290);
+            enemy.canShoot = spawnHeavy || Math.random() < 0.68;
+            enemy.engineTint = spawnHeavy ? 0xff8d47 : Phaser.Math.RND.pick([0xff6b52, 0xff9f62, 0xff5d73]);
+            enemy.setDepth(22);
+            enemy.setSize(spawnHeavy ? 78 : 64, spawnHeavy ? 78 : 64);
+            enemy.setScale(spawnHeavy ? 0.92 : 0.82);
+
+            enemy.shadow = this.add.image(enemy.x, enemy.y + 16, "shadow-soft")
+                .setScale(spawnHeavy ? 0.7 : 0.54, spawnHeavy ? 0.3 : 0.24)
+                .setAlpha(0.4)
+                .setDepth(19);
+
+            enemy.glow = this.add.image(enemy.x, enemy.y, "soft-glow")
+                .setTint(spawnHeavy ? 0xff8d47 : 0xff5764)
+                .setScale(spawnHeavy ? 0.5 : 0.38)
+                .setAlpha(0.1)
+                .setDepth(20)
+                .setBlendMode(Phaser.BlendModes.SCREEN);
+
+            enemy.engineGlow = this.add.image(enemy.x, enemy.y, "soft-glow")
+                .setTint(enemy.engineTint)
+                .setScale(spawnHeavy ? 0.22 : 0.16)
+                .setAlpha(spawnHeavy ? 0.13 : 0.11)
+                .setDepth(21)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            enemy.turret = this.add.image(enemy.x, enemy.y, spawnHeavy ? "enemy-brute-turret" : "enemy-raider-turret")
+                .setScale(spawnHeavy ? 0.92 : 0.84)
+                .setDepth(24);
+            enemy.turret.recoil = 0;
+
+            state.enemies.add(enemy);
+        }
+
+        function updateEnemies(time) {
+            const enemies = state.enemies.getChildren();
+            const activeCount = enemies.length;
+
+            state.wave = Math.max(1, Math.floor(state.score / 12) + 1);
+            state.threat = activeCount > 12 ? "Severe" : activeCount > 7 ? "High" : activeCount > 3 ? "Rising" : "Low";
+
+            for (const enemy of enemies) {
+                if (!enemy.active) {
+                    continue;
+                }
+
+                const angleToPlayer = Phaser.Math.Angle.Between(enemy.x, enemy.y, state.player.x, state.player.y);
+                const distanceToPlayer = Phaser.Math.Distance.Between(enemy.x, enemy.y, state.player.x, state.player.y);
+
+                if (enemy.kind === "raider") {
+                    const strafeOffset = Math.sin(time * 0.0025 + enemy.weaveSeed) * 0.42;
+                    const rangeBias = distanceToPlayer < enemy.preferredRange ? enemy.orbitDirection * 0.9 : enemy.orbitDirection * 0.22;
+                    const travelAngle = angleToPlayer + strafeOffset + rangeBias;
+                    const moveSpeed = distanceToPlayer < enemy.preferredRange ? enemy.speed * 0.88 : enemy.speed;
+
+                    enemy.body.setVelocity(Math.cos(travelAngle) * moveSpeed, Math.sin(travelAngle) * moveSpeed);
+
+                    const moveAngle = Math.atan2(enemy.body.velocity.y, enemy.body.velocity.x);
+                    enemy.rotation = Phaser.Math.Angle.RotateTo(enemy.rotation, moveAngle, 0.07);
+                    enemy.turret.setPosition(enemy.x + 2, enemy.y);
+                    enemy.turret.rotation = Phaser.Math.Angle.RotateTo(
+                        enemy.turret.rotation,
+                        angleToPlayer + Math.sin(time * 0.004 + enemy.pulseSeed) * 0.06,
+                        0.12
+                    );
+
+                    if (
+                        enemy.canShoot &&
+                        time > enemy.nextShotAt &&
+                        distanceToPlayer < 620 &&
+                        distanceToPlayer > 150
+                    ) {
+                        enemy.nextShotAt = time + Phaser.Math.Between(1350, 2200);
+                        shootEnemyShell.call(this, enemy, enemy.turret.rotation, time);
+                    }
+                } else {
+                    this.physics.moveToObject(enemy, state.player, enemy.speed);
+
+                    const moveAngle = Math.atan2(enemy.body.velocity.y, enemy.body.velocity.x);
+                    enemy.rotation = Phaser.Math.Angle.RotateTo(enemy.rotation, moveAngle, 0.035);
+                    enemy.turret.setPosition(enemy.x + 2, enemy.y);
+                    enemy.turret.rotation = angleToPlayer;
+
+                    if (time > enemy.nextShotAt && distanceToPlayer < 760) {
+                        enemy.nextShotAt = time + Phaser.Math.Between(1180, 1650);
+                        shootEnemyShell.call(this, enemy, angleToPlayer, time);
+                    }
+                }
+
+                enemy.shadow.setPosition(enemy.x + 4, enemy.y + 18);
+                enemy.shadow.rotation = enemy.rotation;
+                enemy.glow.setPosition(enemy.x, enemy.y);
+                enemy.glow.setScale((enemy.kind === "brute" ? 0.48 : 0.36) + Math.sin(time * 0.004 + enemy.pulseSeed) * 0.025);
+
+                const rearAngle = enemy.rotation + Math.PI;
+                enemy.engineGlow.setPosition(enemy.x + Math.cos(rearAngle) * 20, enemy.y + Math.sin(rearAngle) * 20);
+                enemy.engineGlow.setScale((enemy.kind === "brute" ? 0.2 : 0.14) + Math.min(enemy.body.speed / 2400, 0.06));
+                enemy.engineGlow.setAlpha((enemy.kind === "brute" ? 0.12 : 0.09) + Math.min(enemy.body.speed / 2400, 0.06));
+                enemy.turret.recoil = Phaser.Math.Linear(enemy.turret.recoil || 0, 0, 0.2);
+                enemy.turret.x = enemy.x + 2 - Math.cos(enemy.turret.rotation) * (enemy.turret.recoil || 0);
+                enemy.turret.y = enemy.y - Math.sin(enemy.turret.rotation) * (enemy.turret.recoil || 0);
+            }
+        }
+
+        function shootEnemyShell(enemy, angle, time) {
+            const muzzleDistance = enemy.kind === "brute" ? 48 : 42;
+            const muzzleX = enemy.x + Math.cos(angle) * muzzleDistance;
+            const muzzleY = enemy.y + Math.sin(angle) * muzzleDistance;
+            const bullet = this.physics.add.image(muzzleX, muzzleY, "enemy-shell");
+
+            bullet.setDepth(23);
+            bullet.setRotation(angle);
+            bullet.setCircle(5, 11, 5);
+            bullet.setBlendMode(Phaser.BlendModes.ADD);
+            bullet.spawnTime = time;
+            bullet.nextTrailAt = time;
+            bullet.damage = enemy.kind === "brute" ? 8 : 5;
+            state.enemyBullets.add(bullet);
+
+            this.physics.velocityFromRotation(angle, enemy.kind === "brute" ? 460 : 540, bullet.body.velocity);
+            enemy.turret.recoil = enemy.kind === "brute" ? 7 : 5;
+            spawnMuzzleFlash.call(this, muzzleX, muzzleY, angle, enemy.kind === "brute" ? 0xff8d47 : 0xffa45e, enemy.kind === "brute" ? 0xffd5a5 : 0xffe1b8);
+        }
+
+        function updateBullets(time) {
+            for (const bullet of state.bullets.getChildren()) {
+                updateBulletVisual.call(this, bullet, time, 0x74f1ff);
+            }
+
+            for (const bullet of state.enemyBullets.getChildren()) {
+                updateBulletVisual.call(this, bullet, time, 0xff8d47);
+            }
+        }
+
+        function updateBulletVisual(bullet, time, tint) {
+            if (!bullet.active) {
+                return;
+            }
+
+            if (bullet.kind === "siegeShell") {
+                const reachedTarget = Phaser.Math.Distance.Between(bullet.x, bullet.y, bullet.targetX, bullet.targetY) < 24;
+                if (reachedTarget || time - bullet.spawnTime > SIEGE_CONFIG.shellLifetime) {
+                    detonateSiegeShell.call(this, bullet, bullet.targetX, bullet.targetY);
+                    return;
+                }
+            }
+
+            const outsideWorld = bullet.x < -80 || bullet.y < -80 || bullet.x > WORLD_SIZE + 80 || bullet.y > WORLD_SIZE + 80;
+            const maxLifetime = bullet.kind === "siegeShell" ? SIEGE_CONFIG.shellLifetime : 1300;
+            if (outsideWorld || time - bullet.spawnTime > maxLifetime) {
+                bullet.destroy();
+                return;
+            }
+
+            if (time > bullet.nextTrailAt) {
+                bullet.nextTrailAt = time + (bullet.kind === "siegeShell" ? 48 : 36);
+                const trail = this.add.image(bullet.x, bullet.y, "soft-glow")
+                    .setTint(bullet.kind === "siegeShell" ? 0xffd59b : tint)
+                    .setScale(bullet.kind === "siegeShell" ? 0.24 : 0.14)
+                    .setAlpha(bullet.kind === "siegeShell" ? 0.24 : 0.18)
+                    .setDepth(21)
+                    .setBlendMode(Phaser.BlendModes.SCREEN);
+
+                this.tweens.add({
+                    targets: trail,
+                    alpha: 0,
+                    scale: bullet.kind === "siegeShell" ? 0.08 : 0.04,
+                    duration: bullet.kind === "siegeShell" ? 220 : 150,
+                    onComplete: () => trail.destroy()
+                });
+            }
+        }
+
+        function handlePlayerBulletHitEnemy(bullet, enemy) {
+            if (!bullet.active || !enemy.active) {
+                return;
+            }
+
+            if (bullet.kind === "siegeShell") {
+                detonateSiegeShell.call(this, bullet, bullet.x, bullet.y);
+                return;
+            }
+
+            bullet.destroy();
+            enemy.hp -= 1;
+
+            flashEnemy(this, enemy, 0xf9d27a);
+
+            if (enemy.hp <= 0) {
+                destroyEnemy.call(this, enemy);
+                state.score += enemy.scoreValue;
+                this.cameras.main.shake(enemy.kind === "brute" ? 140 : 80, enemy.kind === "brute" ? 0.002 : 0.001);
+            } else {
+                spawnImpactBurst.call(this, enemy.x, enemy.y, 0xffd78d, 0x74f1ff, 0.7);
+            }
+        }
+
+        function detonateSiegeShell(bullet, impactX, impactY) {
+            if (!bullet.active) {
+                return;
+            }
+
+            const radius = bullet.splashRadius || SIEGE_CONFIG.splashRadius;
+            bullet.destroy();
+            spawnImpactBurst.call(this, impactX, impactY, 0xffd9a1, 0xff8b57, 2.1);
+
+            const shockwave = this.add.image(impactX, impactY, "soft-glow")
+                .setTint(0xffd498)
+                .setDepth(26)
+                .setScale(0.2)
+                .setAlpha(0.46)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            this.tweens.add({
+                targets: shockwave,
+                scale: 1.6,
+                alpha: 0,
+                duration: 300,
+                ease: "Cubic.easeOut",
+                onComplete: () => shockwave.destroy()
+            });
+
+            for (const enemy of state.enemies.getChildren()) {
+                if (!enemy.active) {
+                    continue;
+                }
+
+                const distance = Phaser.Math.Distance.Between(impactX, impactY, enemy.x, enemy.y);
+                if (distance > radius) {
+                    continue;
+                }
+
+                const damage = distance < radius * 0.35 ? 5 : distance < radius * 0.7 ? 3 : 2;
+                enemy.hp -= damage;
+                flashEnemy(this, enemy, 0xffd38d);
+
+                if (enemy.hp <= 0) {
+                    destroyEnemy.call(this, enemy);
+                    state.score += enemy.scoreValue;
+                } else {
+                    spawnImpactBurst.call(this, enemy.x, enemy.y, 0xffd9a1, 0xff835f, 0.9);
+                }
+            }
+
+            this.cameras.main.shake(220, 0.0032);
+        }
+
+        function handleEnemyBulletHitPlayer(player, bullet) {
+            if (!bullet.active || state.isGameOver) {
+                return;
+            }
+
+            bullet.destroy();
+            applyPlayerDamage.call(this, bullet.damage || 8);
+            spawnImpactBurst.call(this, player.x, player.y, 0xffb48a, 0xff6d4b, 0.85);
+        }
+
+        function handleEnemyRam(player, enemy) {
+            if (!enemy.active || state.isGameOver) {
+                return;
+            }
+
+            const now = this.time.now;
+            if (now - enemy.lastContactAt < 450) {
+                return;
+            }
+
+            enemy.lastContactAt = now;
+            applyPlayerDamage.call(this, enemy.kind === "brute" ? 12 : 6);
+            spawnImpactBurst.call(this, enemy.x, enemy.y, 0xf0c777, 0xff6d4b, enemy.kind === "brute" ? 1 : 0.7);
+
+            const pushAngle = Phaser.Math.Angle.Between(enemy.x, enemy.y, player.x, player.y);
+            this.physics.velocityFromRotation(pushAngle, enemy.kind === "brute" ? 140 : 200, player.body.velocity);
+        }
+
+        function applyPlayerDamage(amount) {
+            state.health = Math.max(0, state.health - amount);
+            flashSprite(this, state.player, 0xff7c64);
+            this.cameras.main.shake(120, 0.0018);
+
+            if (state.health <= 0) {
+                triggerGameOver.call(this);
+            }
+        }
+
+        function triggerGameOver() {
+            if (state.isGameOver) {
+                return;
+            }
+
+            state.isGameOver = true;
+            state.player.body.setAcceleration(0, 0);
+            state.player.body.setVelocity(0, 0);
+            state.hud.gameOver.classList.add("visible");
+            spawnImpactBurst.call(this, state.player.x, state.player.y, 0xffd49a, 0xff6d4b, 1.45);
+
+            this.time.delayedCall(2200, () => {
+                this.scene.restart();
+            });
+        }
+
+        function destroyEnemy(enemy) {
+            spawnImpactBurst.call(this, enemy.x, enemy.y, 0xffc878, enemy.kind === "brute" ? 0xff5a5a : 0xff7f66, enemy.kind === "brute" ? 1.35 : 0.9);
+
+            enemy.shadow.destroy();
+            enemy.glow.destroy();
+            enemy.engineGlow.destroy();
+
+            if (enemy.turret) {
+                enemy.turret.destroy();
+            }
+
+            enemy.destroy();
+        }
+
+        function spawnMuzzleFlash(x, y, angle, coreTint, glowTint) {
+            const flash = this.add.image(x, y, "soft-glow")
+                .setTint(glowTint)
+                .setScale(0.36)
+                .setAlpha(0.24)
+                .setDepth(26)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            const streak = this.add.rectangle(x + Math.cos(angle) * 8, y + Math.sin(angle) * 8, 32, 7, coreTint, 0.9)
+                .setRotation(angle)
+                .setDepth(26);
+
+            this.tweens.add({
+                targets: [flash, streak],
+                alpha: 0,
+                scale: 0.08,
+                width: 10,
+                duration: 110,
+                onComplete: () => {
+                    flash.destroy();
+                    streak.destroy();
+                }
+            });
+        }
+
+        function spawnSiegeTargetMarker(x, y) {
+            const marker = this.add.circle(x, y, 22, 0xffd49a, 0.14)
+                .setDepth(26)
+                .setStrokeStyle(2, 0xffd49a, 0.8);
+
+            const core = this.add.circle(x, y, 6, 0xfff2cc, 0.86)
+                .setDepth(26);
+
+            this.tweens.add({
+                targets: marker,
+                scale: 2.6,
+                alpha: 0,
+                duration: 520,
+                ease: "Quad.easeOut",
+                onComplete: () => marker.destroy()
+            });
+
+            this.tweens.add({
+                targets: core,
+                alpha: 0,
+                scale: 0.2,
+                duration: 480,
+                onComplete: () => core.destroy()
+            });
+        }
+
+        function spawnTrackDust() {
+            const angle = state.player.rotation + Math.PI;
+            const leftAngle = angle + Math.PI * 0.17;
+            const rightAngle = angle - Math.PI * 0.17;
+
+            spawnDustCloud.call(this, state.player.x + Math.cos(leftAngle) * 26, state.player.y + Math.sin(leftAngle) * 26);
+            spawnDustCloud.call(this, state.player.x + Math.cos(rightAngle) * 26, state.player.y + Math.sin(rightAngle) * 26);
+        }
+
+        function spawnDustCloud(x, y) {
+            const puff = this.add.image(x, y, "dust-puff")
+                .setTint(Phaser.Math.RND.pick([0xf0c777, 0xd0824d, 0x6c7d85]))
+                .setScale(0.22)
+                .setAlpha(0.16)
+                .setDepth(18)
+                .setBlendMode(Phaser.BlendModes.SCREEN);
+
+            this.tweens.add({
+                targets: puff,
+                alpha: 0,
+                scale: Phaser.Math.FloatBetween(0.46, 0.7),
+                x: x + Phaser.Math.Between(-10, 10),
+                y: y + Phaser.Math.Between(-10, 10),
+                duration: Phaser.Math.Between(240, 420),
+                ease: "Quad.easeOut",
+                onComplete: () => puff.destroy()
+            });
+        }
+
+        function spawnImpactBurst(x, y, coreTint, smokeTint, scaleMultiplier) {
+            const ring = this.add.image(x, y, "soft-glow")
+                .setTint(coreTint)
+                .setScale(0.16 * scaleMultiplier)
+                .setAlpha(0.35)
+                .setDepth(25)
+                .setBlendMode(Phaser.BlendModes.ADD);
+
+            const smoke = this.add.image(x, y, "soft-glow")
+                .setTint(smokeTint)
+                .setScale(0.22 * scaleMultiplier)
+                .setAlpha(0.18)
+                .setDepth(24);
+
+            this.tweens.add({
+                targets: ring,
+                scale: 0.7 * scaleMultiplier,
+                alpha: 0,
+                duration: 220,
+                ease: "Cubic.easeOut",
+                onComplete: () => ring.destroy()
+            });
+
+            this.tweens.add({
+                targets: smoke,
+                scale: 0.9 * scaleMultiplier,
+                alpha: 0,
+                duration: 400,
+                ease: "Quad.easeOut",
+                onComplete: () => smoke.destroy()
+            });
+
+            for (let i = 0; i < 7; i += 1) {
+                const sparkAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+                const sparkDistance = Phaser.Math.Between(14, 42) * scaleMultiplier;
+                const spark = this.add.rectangle(x, y, Phaser.Math.Between(5, 12), 3, coreTint, 0.95)
+                    .setDepth(25)
+                    .setRotation(sparkAngle);
+
+                this.tweens.add({
+                    targets: spark,
+                    x: x + Math.cos(sparkAngle) * sparkDistance,
+                    y: y + Math.sin(sparkAngle) * sparkDistance,
+                    alpha: 0,
+                    duration: Phaser.Math.Between(140, 240),
+                    ease: "Quad.easeOut",
+                    onComplete: () => spark.destroy()
+                });
+            }
+        }
+
+        function flashSprite(scene, sprite, tint) {
+            sprite.setTint(tint);
+            scene.time.delayedCall(70, () => {
+                if (sprite.active) {
+                    sprite.clearTint();
+                }
+            });
+        }
+
+        function flashEnemy(scene, enemy, tint) {
+            flashSprite(scene, enemy, tint);
+            if (enemy.turret) {
+                flashSprite(scene, enemy.turret, tint);
+            }
+        }
+
+        function refreshHud() {
+            state.hud.health.textContent = `${Math.max(0, state.health)}%`;
+            state.hud.score.textContent = String(state.score).padStart(2, "0");
+            state.hud.threat.textContent = state.threat;
+            state.hud.weapon.textContent = (PLAYER_WEAPONS[state.weaponMode] || PLAYER_WEAPONS.single).label;
+            state.hud.mode.textContent =
+                state.siegeState === "siege" ? "Siege" :
+                state.siegeState === "deploying" ? "Deploying" :
+                state.siegeState === "undeploying" ? "Retracting" :
+                "Mobile";
+            state.hud.wave.textContent = String(state.wave).padStart(2, "0");
+            state.hud.status.textContent = state.statusText;
+        }
+
+        function resizeCamera(gameSize) {
+            const width = gameSize.width;
+            const height = gameSize.height;
+            const zoomBase = Math.min(width / 1600, height / 940);
+            const zoom = Phaser.Math.Clamp(0.7 + zoomBase * 0.14, 0.68, 0.88);
+
+            this.cameras.main.setSize(width, height);
+            this.cameras.main.setZoom(zoom);
+        }
+    </script>
+</body>
+</html>
