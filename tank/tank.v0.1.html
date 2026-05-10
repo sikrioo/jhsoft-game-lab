@@ -425,11 +425,15 @@
             deployDuration: 520,
             undeployDuration: 420,
             stationarySpeedThreshold: 12,
-            shellCooldown: 820,
+            shellCooldown: 1080,
             shellSpeed: 560,
             shellDamage: 5,
-            splashRadius: 450,
-            shellLifetime: 5700
+            splashRadius: 180,
+            shellLifetime: 2200,
+            maxRange: 860,
+            burstCount: 5,
+            burstInterval: 90,
+            burstSpread: 110
         };
         function buildWeaponBarrels(frontCount, rearCount, frontForwardOffset = 52, rearForwardOffset = 38, spacing = 8) {
             const barrels = [];
@@ -498,8 +502,8 @@
             health: PLAYER_MAX_HEALTH,
             threat: "Low",
             weaponMode: "octa",
-            siegeState: "mobile",
-            statusText: "8-cannon test loadout mounts 4 front barrels and 4 rear barrels for immediate testing.",
+            siegeState: "siege",
+            statusText: "Siege barrage online. Click a nearby zone to saturate it.",
             isGameOver: false,
             hud: {
                 health: document.getElementById("hud-health"),
@@ -607,8 +611,8 @@
             state.health = PLAYER_MAX_HEALTH;
             state.threat = "Low";
             state.weaponMode = "octa";
-            state.siegeState = "mobile";
-            state.statusText = "8-cannon test loadout mounts 4 front barrels and 4 rear barrels for immediate testing.";
+            state.siegeState = "siege";
+            state.statusText = "Siege barrage online. Click a nearby zone to saturate it.";
             state.isGameOver = false;
             state.hud.gameOver.classList.remove("visible");
         }
@@ -985,7 +989,7 @@
             state.player.setCollideWorldBounds(true);
             state.player.hullAngle = 0;
             state.player.nextDustAt = 0;
-            state.player.siege = { progress: 0, target: 0 };
+            state.player.siege = { progress: state.siegeState === "siege" ? 1 : 0, target: state.siegeState === "siege" ? 1 : 0 };
 
             state.player.shadow = this.add.image(state.player.x, state.player.y + 18, "shadow-soft")
                 .setScale(0.56, 0.25)
@@ -1140,7 +1144,7 @@
                 onComplete: () => {
                     state.siegeState = targetProgress >= 1 ? "siege" : "mobile";
                     state.statusText = targetProgress >= 1
-                        ? "Siege mode online. Click to fire heavy artillery."
+                        ? "Siege barrage online. Click a nearby zone to saturate it."
                         : "Returned to mobile drive mode.";
                     announceMode(targetProgress >= 1 ? "Siege Mode Online" : "Mobile Mode Restored");
                     applyPlayerTurretAppearance();
@@ -1327,32 +1331,87 @@
                 return;
             }
 
-            const angle = state.player.turret.rotation;
+            state.nextPlayerShotAt = time + SIEGE_CONFIG.shellCooldown;
+            state.player.turret.recoil = 18;
+            const clampedTarget = clampSiegeTargetToRange(targetX, targetY);
+            spawnSiegeTargetMarker.call(this, clampedTarget.x, clampedTarget.y);
+            this.cameras.main.shake(160, 0.0022);
+
+            for (let i = 0; i < SIEGE_CONFIG.burstCount; i += 1) {
+                const isFinalBurst = i === SIEGE_CONFIG.burstCount - 1;
+                const burstTime = time + i * SIEGE_CONFIG.burstInterval;
+                this.time.delayedCall(i * SIEGE_CONFIG.burstInterval, () => {
+                    if (state.isGameOver || state.siegeState !== "siege") {
+                        return;
+                    }
+
+                    const scatter = isFinalBurst ? 16 : SIEGE_CONFIG.burstSpread;
+                    const impactX = Phaser.Math.Clamp(
+                        clampedTarget.x + Phaser.Math.Between(-scatter, scatter),
+                        0,
+                        WORLD_SIZE
+                    );
+                    const impactY = Phaser.Math.Clamp(
+                        clampedTarget.y + Phaser.Math.Between(-scatter, scatter),
+                        0,
+                        WORLD_SIZE
+                    );
+                    launchSiegeBurstShell.call(this, burstTime, impactX, impactY, isFinalBurst);
+                });
+            }
+        }
+
+        function clampSiegeTargetToRange(targetX, targetY) {
+            const distance = Phaser.Math.Distance.Between(state.player.x, state.player.y, targetX, targetY);
+
+            if (distance <= SIEGE_CONFIG.maxRange) {
+                return {
+                    x: Phaser.Math.Clamp(targetX, 0, WORLD_SIZE),
+                    y: Phaser.Math.Clamp(targetY, 0, WORLD_SIZE)
+                };
+            }
+
+            const angle = Phaser.Math.Angle.Between(state.player.x, state.player.y, targetX, targetY);
+            return {
+                x: Phaser.Math.Clamp(state.player.x + Math.cos(angle) * SIEGE_CONFIG.maxRange, 0, WORLD_SIZE),
+                y: Phaser.Math.Clamp(state.player.y + Math.sin(angle) * SIEGE_CONFIG.maxRange, 0, WORLD_SIZE)
+            };
+        }
+
+        function launchSiegeBurstShell(time, targetX, targetY, isFinalBurst) {
+            const angle = Phaser.Math.Angle.Between(state.player.x, state.player.y, targetX, targetY);
             const muzzleX = state.player.x + Math.cos(angle) * 68;
             const muzzleY = state.player.y + Math.sin(angle) * 68;
             const shell = this.physics.add.image(muzzleX, muzzleY, "player-shell");
+            const travelDistance = Phaser.Math.Distance.Between(muzzleX, muzzleY, targetX, targetY);
+            const travelLifetime = Math.max(500, Math.round((travelDistance / SIEGE_CONFIG.shellSpeed) * 1000) + 180);
 
             shell.setDepth(23);
             shell.setRotation(angle);
-            shell.setScale(1.35);
+            shell.setScale(isFinalBurst ? 1.45 : 1.18);
             shell.setCircle(5, 11, 5);
-            shell.setTint(0xffdba0);
+            shell.setTint(isFinalBurst ? 0xffedb8 : 0xffdba0);
             shell.setBlendMode(Phaser.BlendModes.ADD);
             shell.spawnTime = time;
             shell.nextTrailAt = time;
             shell.kind = "siegeShell";
-            shell.damage = SIEGE_CONFIG.shellDamage;
-            shell.splashRadius = SIEGE_CONFIG.splashRadius;
-            shell.targetX = Phaser.Math.Clamp(targetX, 0, WORLD_SIZE);
-            shell.targetY = Phaser.Math.Clamp(targetY, 0, WORLD_SIZE);
+            shell.damage = isFinalBurst ? SIEGE_CONFIG.shellDamage + 2 : SIEGE_CONFIG.shellDamage;
+            shell.splashRadius = isFinalBurst ? Math.round(SIEGE_CONFIG.splashRadius * 1.35) : SIEGE_CONFIG.splashRadius;
+            shell.targetX = targetX;
+            shell.targetY = targetY;
+            shell.maxLifetime = travelLifetime;
             state.bullets.add(shell);
 
             this.physics.velocityFromRotation(angle, SIEGE_CONFIG.shellSpeed, shell.body.velocity);
-            state.nextPlayerShotAt = time + SIEGE_CONFIG.shellCooldown;
-            state.player.turret.recoil = 18;
-            spawnMuzzleFlash.call(this, muzzleX, muzzleY, angle, 0xffb56d, 0xfff0bf);
-            spawnSiegeTargetMarker.call(this, shell.targetX, shell.targetY);
-            this.cameras.main.shake(160, 0.0022);
+            state.player.turret.recoil = isFinalBurst ? 20 : 10;
+            spawnMuzzleFlash.call(
+                this,
+                muzzleX,
+                muzzleY,
+                angle,
+                isFinalBurst ? 0xffc77a : 0xffb56d,
+                isFinalBurst ? 0xffffd0 : 0xfff0bf
+            );
         }
 
         function spawnEnemy(isInitial) {
@@ -1519,14 +1578,15 @@
 
             if (bullet.kind === "siegeShell") {
                 const reachedTarget = Phaser.Math.Distance.Between(bullet.x, bullet.y, bullet.targetX, bullet.targetY) < 24;
-                if (reachedTarget || time - bullet.spawnTime > SIEGE_CONFIG.shellLifetime) {
+                const siegeLifetime = bullet.maxLifetime || SIEGE_CONFIG.shellLifetime;
+                if (reachedTarget || time - bullet.spawnTime > siegeLifetime) {
                     detonateSiegeShell.call(this, bullet, bullet.targetX, bullet.targetY);
                     return;
                 }
             }
 
             const outsideWorld = bullet.x < -80 || bullet.y < -80 || bullet.x > WORLD_SIZE + 80 || bullet.y > WORLD_SIZE + 80;
-            const maxLifetime = bullet.kind === "siegeShell" ? SIEGE_CONFIG.shellLifetime : 1300;
+            const maxLifetime = bullet.kind === "siegeShell" ? (bullet.maxLifetime || SIEGE_CONFIG.shellLifetime) : 1300;
             if (outsideWorld || time - bullet.spawnTime > maxLifetime) {
                 bullet.destroy();
                 return;
@@ -1610,7 +1670,8 @@
                     continue;
                 }
 
-                const damage = distance < radius * 0.35 ? 5 : distance < radius * 0.7 ? 3 : 2;
+                const baseDamage = bullet.damage || SIEGE_CONFIG.shellDamage;
+                const damage = distance < radius * 0.35 ? baseDamage : distance < radius * 0.7 ? Math.max(2, baseDamage - 2) : Math.max(1, baseDamage - 3);
                 enemy.hp -= damage;
                 flashEnemy(this, enemy, 0xffd38d);
 
