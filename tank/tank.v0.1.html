@@ -428,12 +428,9 @@
             shellCooldown: 1080,
             shellSpeed: 560,
             shellDamage: 5,
-            splashRadius: 180,
-            shellLifetime: 2200,
-            maxRange: 860,
-            burstCount: 5,
-            burstInterval: 90,
-            burstSpread: 110
+            splashRadius: 281,
+            shellLifetime: 4400,
+            maxRange: 860
         };
         function buildWeaponBarrels(frontCount, rearCount, frontForwardOffset = 52, rearForwardOffset = 38, spacing = 8) {
             const barrels = [];
@@ -1220,7 +1217,7 @@
 
             const pointer = this.input.activePointer;
             const aimAngle = Phaser.Math.Angle.Between(state.player.x, state.player.y, pointer.worldX, pointer.worldY);
-            const turretTurnSpeed = state.siegeState === "siege" ? 0.035 : 1;
+            const turretTurnSpeed = state.siegeState === "siege" ? 0.055 : 1;
             state.player.turret.rotation = turretTurnSpeed === 1
                 ? aimAngle
                 : Phaser.Math.Angle.RotateTo(state.player.turret.rotation, aimAngle, turretTurnSpeed);
@@ -1336,29 +1333,7 @@
             const clampedTarget = clampSiegeTargetToRange(targetX, targetY);
             spawnSiegeTargetMarker.call(this, clampedTarget.x, clampedTarget.y);
             this.cameras.main.shake(160, 0.0022);
-
-            for (let i = 0; i < SIEGE_CONFIG.burstCount; i += 1) {
-                const isFinalBurst = i === SIEGE_CONFIG.burstCount - 1;
-                const burstTime = time + i * SIEGE_CONFIG.burstInterval;
-                this.time.delayedCall(i * SIEGE_CONFIG.burstInterval, () => {
-                    if (state.isGameOver || state.siegeState !== "siege") {
-                        return;
-                    }
-
-                    const scatter = isFinalBurst ? 16 : SIEGE_CONFIG.burstSpread;
-                    const impactX = Phaser.Math.Clamp(
-                        clampedTarget.x + Phaser.Math.Between(-scatter, scatter),
-                        0,
-                        WORLD_SIZE
-                    );
-                    const impactY = Phaser.Math.Clamp(
-                        clampedTarget.y + Phaser.Math.Between(-scatter, scatter),
-                        0,
-                        WORLD_SIZE
-                    );
-                    launchSiegeBurstShell.call(this, burstTime, impactX, impactY, isFinalBurst);
-                });
-            }
+            launchSiegeShell.call(this, time, clampedTarget.x, clampedTarget.y);
         }
 
         function clampSiegeTargetToRange(targetX, targetY) {
@@ -1378,7 +1353,7 @@
             };
         }
 
-        function launchSiegeBurstShell(time, targetX, targetY, isFinalBurst) {
+        function launchSiegeShell(time, targetX, targetY) {
             const angle = Phaser.Math.Angle.Between(state.player.x, state.player.y, targetX, targetY);
             const muzzleX = state.player.x + Math.cos(angle) * 68;
             const muzzleY = state.player.y + Math.sin(angle) * 68;
@@ -1388,29 +1363,29 @@
 
             shell.setDepth(23);
             shell.setRotation(angle);
-            shell.setScale(isFinalBurst ? 1.45 : 1.18);
+            shell.setScale(1.36);
             shell.setCircle(5, 11, 5);
-            shell.setTint(isFinalBurst ? 0xffedb8 : 0xffdba0);
+            shell.setTint(0xffe0ab);
             shell.setBlendMode(Phaser.BlendModes.ADD);
             shell.spawnTime = time;
             shell.nextTrailAt = time;
             shell.kind = "siegeShell";
-            shell.damage = isFinalBurst ? SIEGE_CONFIG.shellDamage + 2 : SIEGE_CONFIG.shellDamage;
-            shell.splashRadius = isFinalBurst ? Math.round(SIEGE_CONFIG.splashRadius * 1.35) : SIEGE_CONFIG.splashRadius;
+            shell.damage = SIEGE_CONFIG.shellDamage;
+            shell.splashRadius = SIEGE_CONFIG.splashRadius;
             shell.targetX = targetX;
             shell.targetY = targetY;
-            shell.maxLifetime = travelLifetime;
+            shell.maxLifetime = Math.max(SIEGE_CONFIG.shellLifetime, travelLifetime);
             state.bullets.add(shell);
 
             this.physics.velocityFromRotation(angle, SIEGE_CONFIG.shellSpeed, shell.body.velocity);
-            state.player.turret.recoil = isFinalBurst ? 20 : 10;
+            state.player.turret.recoil = 20;
             spawnMuzzleFlash.call(
                 this,
                 muzzleX,
                 muzzleY,
                 angle,
-                isFinalBurst ? 0xffc77a : 0xffb56d,
-                isFinalBurst ? 0xffffd0 : 0xfff0bf
+                0xffc77a,
+                0xffffd0
             );
         }
 
@@ -1641,6 +1616,7 @@
             }
 
             const radius = bullet.splashRadius || SIEGE_CONFIG.splashRadius;
+            const baseDamage = bullet.damage || SIEGE_CONFIG.shellDamage;
             bullet.destroy();
             spawnImpactBurst.call(this, impactX, impactY, 0xffd9a1, 0xff8b57, 2.1);
 
@@ -1651,27 +1627,72 @@
                 .setAlpha(0.46)
                 .setBlendMode(Phaser.BlendModes.ADD);
 
+            const lingeringField = this.add.image(impactX, impactY, "soft-glow")
+                .setTint(0xffbb74)
+                .setDepth(25)
+                .setScale(0.42)
+                .setAlpha(0.22);
+
             this.tweens.add({
                 targets: shockwave,
-                scale: 1.6,
+                scale: 1.92,
                 alpha: 0,
-                duration: 300,
+                duration: 600,
                 ease: "Cubic.easeOut",
                 onComplete: () => shockwave.destroy()
             });
 
+            this.tweens.add({
+                targets: lingeringField,
+                scale: 1.8,
+                alpha: 0,
+                duration: 1100,
+                ease: "Quad.easeOut",
+                onComplete: () => lingeringField.destroy()
+            });
+
+            applySiegeBlastDamage.call(this, impactX, impactY, radius, baseDamage, 1);
+
+            for (let i = 0; i < 4; i += 1) {
+                this.time.delayedCall(110 + i * 90, () => {
+                    if (state.isGameOver) {
+                        return;
+                    }
+
+                    const burstAngle = Phaser.Math.FloatBetween(0, Math.PI * 2);
+                    const burstDistance = Phaser.Math.Between(
+                        Math.round(radius * 0.18),
+                        Math.round(radius * 0.72)
+                    );
+                    const burstX = Phaser.Math.Clamp(impactX + Math.cos(burstAngle) * burstDistance, 0, WORLD_SIZE);
+                    const burstY = Phaser.Math.Clamp(impactY + Math.sin(burstAngle) * burstDistance, 0, WORLD_SIZE);
+                    const burstScale = 1.05 + i * 0.16;
+
+                    spawnImpactBurst.call(this, burstX, burstY, 0xffcf92, 0xff7c52, burstScale);
+                    applySiegeBlastDamage.call(this, burstX, burstY, radius * 0.42, Math.max(2, baseDamage - 2), 0.75);
+                    this.cameras.main.shake(90, 0.0014);
+                });
+            }
+
+            this.cameras.main.shake(220, 0.0032);
+        }
+
+        function applySiegeBlastDamage(centerX, centerY, radius, baseDamage, scaleMultiplier) {
             for (const enemy of state.enemies.getChildren()) {
                 if (!enemy.active) {
                     continue;
                 }
 
-                const distance = Phaser.Math.Distance.Between(impactX, impactY, enemy.x, enemy.y);
+                const distance = Phaser.Math.Distance.Between(centerX, centerY, enemy.x, enemy.y);
                 if (distance > radius) {
                     continue;
                 }
 
-                const baseDamage = bullet.damage || SIEGE_CONFIG.shellDamage;
-                const damage = distance < radius * 0.35 ? baseDamage : distance < radius * 0.7 ? Math.max(2, baseDamage - 2) : Math.max(1, baseDamage - 3);
+                const innerDamage = Math.ceil(baseDamage * scaleMultiplier);
+                const midDamage = Math.max(2, Math.ceil((baseDamage - 2) * scaleMultiplier));
+                const outerDamage = Math.max(1, Math.ceil((baseDamage - 3) * scaleMultiplier));
+                const damage = distance < radius * 0.35 ? innerDamage : distance < radius * 0.7 ? midDamage : outerDamage;
+
                 enemy.hp -= damage;
                 flashEnemy(this, enemy, 0xffd38d);
 
@@ -1682,8 +1703,6 @@
                     spawnImpactBurst.call(this, enemy.x, enemy.y, 0xffd9a1, 0xff835f, 0.9);
                 }
             }
-
-            this.cameras.main.shake(220, 0.0032);
         }
 
         function handleEnemyBulletHitPlayer(player, bullet) {

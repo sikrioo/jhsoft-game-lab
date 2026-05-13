@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPIKE ZERO Tactical Radar</title>
+  <style>
+    :root {
+      --bg: #03070b;
+      --panel: rgba(8, 20, 28, 0.74);
+      --text: #b9ffe6;
+      --muted: rgba(185, 255, 230, 0.62);
+      --danger: #ff5d73;
+      --warn: #ffd166;
+      --safe: #5fffd2;
+      --blue: #72c7ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 20% 20%, rgba(30, 180, 130, 0.08), transparent 30%),
+        radial-gradient(circle at 80% 80%, rgba(55, 120, 255, 0.06), transparent 36%),
+        linear-gradient(135deg, #020407, #071018 55%, #020608);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background-image: linear-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 100% 4px;
+      mix-blend-mode: screen;
+      opacity: 0.28;
+      z-index: 10;
+    }
+
+    .app {
+      width: 100vw;
+      height: 100vh;
+      display: grid;
+      grid-template-columns: minmax(270px, 340px) 1fr minmax(300px, 380px);
+      gap: 18px;
+      padding: 18px;
+    }
+
+    .panel {
+      position: relative;
+      border: 1px solid rgba(110, 255, 210, 0.18);
+      background: linear-gradient(180deg, var(--panel), rgba(2, 10, 16, 0.88));
+      box-shadow: 0 18px 60px rgba(0,0,0,.45), inset 0 0 28px rgba(100,255,200,.04);
+      backdrop-filter: blur(14px);
+      border-radius: 22px;
+      overflow: hidden;
+    }
+
+    .panel::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      border-radius: inherit;
+      background: linear-gradient(135deg, rgba(255,255,255,.08), transparent 28%, transparent 72%, rgba(96,255,215,.06));
+      opacity: .45;
+    }
+
+    .left, .right { display: flex; flex-direction: column; min-height: 0; }
+
+    .header {
+      padding: 18px 18px 12px;
+      border-bottom: 1px solid rgba(110,255,210,.12);
+    }
+
+    .eyebrow {
+      font-size: 11px;
+      letter-spacing: .22em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 750;
+      letter-spacing: -.04em;
+      line-height: 1.05;
+    }
+
+    .sub {
+      margin-top: 10px;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 14px;
+    }
+
+    .metric {
+      border: 1px solid rgba(110,255,210,.12);
+      border-radius: 16px;
+      padding: 12px;
+      background: rgba(255,255,255,.025);
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .metric .value {
+      margin-top: 8px;
+      font-size: 21px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.03em;
+    }
+
+    .metric .unit { font-size: 10px; color: var(--muted); margin-left: 3px; }
+
+    .control-section { padding: 14px 16px; border-top: 1px solid rgba(110,255,210,.10); }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: rgba(185,255,230,.88);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .chip {
+      font-size: 10px;
+      padding: 4px 7px;
+      border-radius: 999px;
+      background: rgba(95,255,210,.08);
+      border: 1px solid rgba(95,255,210,.20);
+      color: var(--safe);
+    }
+
+    .slider-row { margin-bottom: 14px; }
+    .slider-row label { display: flex; justify-content: space-between; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+    input[type="range"] { width: 100%; accent-color: #5fffd2; }
+
+    .button-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    button {
+      border: 1px solid rgba(110,255,210,.18);
+      border-radius: 14px;
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(95,255,210,.11), rgba(95,255,210,.035));
+      padding: 11px 10px;
+      font-weight: 700;
+      letter-spacing: .02em;
+      cursor: pointer;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease;
+    }
+
+    button:hover { transform: translateY(-1px); border-color: rgba(110,255,210,.38); background: linear-gradient(180deg, rgba(95,255,210,.16), rgba(95,255,210,.055)); }
+    button.danger { border-color: rgba(255,93,115,.24); background: linear-gradient(180deg, rgba(255,93,115,.14), rgba(255,93,115,.04)); }
+
+    .radar-shell {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .radar-frame {
+      width: min(78vh, 72vw);
+      aspect-ratio: 1 / 1;
+      position: relative;
+      border-radius: 50%;
+      background: radial-gradient(circle, rgba(95,255,210,.055), rgba(95,255,210,.015) 52%, transparent 70%), #02070b;
+      box-shadow: 0 0 0 1px rgba(115,255,210,.18), 0 0 40px rgba(95,255,210,.12), 0 0 110px rgba(60,170,255,.08), inset 0 0 40px rgba(95,255,210,.07);
+      overflow: hidden;
+      cursor: crosshair;
+    }
+
+    canvas { display: block; width: 100%; height: 100%; }
+
+    .center-label {
+      position: absolute;
+      left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: 120px; height: 120px; border-radius: 50%;
+      display: grid; place-items: center; pointer-events: none;
+      border: 1px solid rgba(95,255,210,.22);
+      background: radial-gradient(circle, rgba(95,255,210,.10), transparent 70%);
+      box-shadow: inset 0 0 22px rgba(95,255,210,.10);
+      text-align: center;
+    }
+
+    .center-label strong { display: block; font-size: 15px; letter-spacing: .18em; }
+    .center-label span { display: block; margin-top: 5px; color: var(--muted); font-size: 10px; letter-spacing: .16em; }
+
+    .radar-topbar {
+      position: absolute;
+      top: 20px; left: 24px; right: 24px;
+      display: flex; justify-content: space-between; align-items: center;
+      pointer-events: none; z-index: 3;
+      font-size: 11px; letter-spacing: .16em; color: var(--muted);
+    }
+
+    .pulse-dot {
+      width: 8px; height: 8px; display: inline-block; margin-right: 8px;
+      border-radius: 50%; background: var(--safe); box-shadow: 0 0 14px var(--safe);
+      animation: pulse 1.3s infinite;
+    }
+
+    @keyframes pulse { 0%,100% { opacity:.45; transform:scale(.82); } 50% { opacity:1; transform:scale(1.2); } }
+
+    .coordinate-hud {
+      position: relative;
+      z-index: 4;
+      width: auto;
+      margin: 14px;
+      padding: 18px 18px 16px;
+      border: 1px solid rgba(95,255,210,.34);
+      background: linear-gradient(180deg, rgba(3,14,20,.88), rgba(2,8,12,.94));
+      box-shadow: 0 0 30px rgba(95,255,210,.09), inset 0 0 22px rgba(95,255,210,.055);
+      clip-path: polygon(0 0, calc(100% - 16px) 0, 100% 16px, 100% 100%, 16px 100%, 0 calc(100% - 16px));
+      pointer-events: none;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      flex: 0 0 auto;
+    }
+
+    .coordinate-hud::before, .coordinate-hud::after {
+      content: "";
+      position: absolute;
+      width: 32px;
+      height: 1px;
+      background: rgba(255,93,115,.72);
+      top: 10px;
+      right: 14px;
+      box-shadow: 0 0 12px rgba(255,93,115,.4);
+    }
+
+    .coordinate-hud::after { top: auto; right: auto; left: 14px; bottom: 10px; background: rgba(95,255,210,.72); }
+
+    .hud-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+      font-size: 11px;
+      letter-spacing: .16em;
+      color: rgba(185,255,230,.72);
+    }
+
+    .lock-badge {
+      color: var(--danger);
+      animation: blink 1s infinite;
+    }
+
+    @keyframes blink { 0%, 48% { opacity: 1; } 49%, 100% { opacity: .32; } }
+
+    .coord-line {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      gap: 8px;
+      font-size: 12px;
+      line-height: 1.75;
+      letter-spacing: .04em;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .coord-line .k { color: rgba(185,255,230,.52); }
+    .coord-line .v { color: rgba(205,255,236,.95); text-align: right; }
+    .coord-line .dangerText { color: var(--danger); }
+    .coord-line .warnText { color: var(--warn); }
+
+    .target-list { min-height: 0; max-height: 44%; overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+
+    .target-card {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 11px;
+      align-items: center;
+      border: 1px solid rgba(110,255,210,.12);
+      background: rgba(255,255,255,.025);
+      border-radius: 16px;
+      padding: 11px;
+      cursor: pointer;
+      transition: background .16s ease, border-color .16s ease, transform .16s ease;
+    }
+
+    .target-card:hover { transform: translateY(-1px); border-color: rgba(110,255,210,.32); background: rgba(95,255,210,.045); }
+    .target-card.locked { border-color: rgba(255,93,115,.42); box-shadow: 0 0 26px rgba(255,93,115,.08); background: rgba(255,93,115,.05); }
+
+    .target-type { width: 11px; height: 34px; border-radius: 999px; background: var(--safe); box-shadow: 0 0 14px currentColor; }
+    .target-card.hostile .target-type { background: var(--danger); color: var(--danger); }
+    .target-card.resource .target-type { background: var(--warn); color: var(--warn); }
+    .target-card.anomaly .target-type { background: var(--blue); color: var(--blue); }
+
+    .target-name { font-size: 13px; font-weight: 800; letter-spacing: .02em; }
+    .target-meta { margin-top: 4px; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .target-distance { font-size: 12px; color: rgba(185,255,230,.88); font-variant-numeric: tabular-nums; }
+
+    .log {
+      padding: 14px;
+      border-top: 1px solid rgba(110,255,210,.10);
+      height: 146px;
+      overflow: hidden;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
+      color: rgba(185,255,230,.7);
+      line-height: 1.55;
+    }
+
+    .log-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .log-line.warn { color: var(--warn); }
+    .log-line.danger { color: var(--danger); }
+
+    .footer-note {
+      margin-top: auto;
+      padding: 13px 16px 16px;
+      border-top: 1px solid rgba(110,255,210,.10);
+      color: rgba(185,255,230,.50);
+      font-size: 11px;
+      line-height: 1.55;
+    }
+
+    @media (max-width: 1060px) {
+      .app { grid-template-columns: 1fr; overflow: auto; height: auto; min-height: 100vh; }
+      body { overflow: auto; }
+      .radar-frame { width: min(92vw, 680px); }
+      .left, .right { min-height: 420px; }
+      .target-list { max-height: 320px; }
+      .coordinate-hud { margin: 14px; width: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel left">
+      <div class="header">
+        <div class="eyebrow">SPIKE ZERO / Tactical HUD</div>
+        <h1>ORBITAL SCAN ARRAY</h1>
+        <div class="sub">선택된 목표물의 상대 좌표, 거리, 방향, 추적 상태를 표시하는 전투 레이더입니다. 레이더 안의 점을 클릭하거나 근접 락온을 사용할 수 있습니다.</div>
+      </div>
+
+      <div class="status-grid">
+        <div class="metric"><div class="label">Contacts</div><div class="value" id="contactCount">00</div></div>
+        <div class="metric"><div class="label">Threat</div><div class="value"><span id="threatLevel">LOW</span></div></div>
+        <div class="metric"><div class="label">Range</div><div class="value"><span id="rangeValue">720</span><span class="unit">km</span></div></div>
+        <div class="metric"><div class="label">Noise</div><div class="value"><span id="noiseValue">16</span><span class="unit">%</span></div></div>
+      </div>
+
+      <div class="control-section">
+        <div class="section-title">Scan Controls <span class="chip">LIVE</span></div>
+        <div class="slider-row"><label><span>스캔 속도</span><span id="speedText">1.25x</span></label><input id="speed" type="range" min="0.4" max="3" step="0.05" value="1.25" /></div>
+        <div class="slider-row"><label><span>탐지 거리</span><span id="rangeText">720 km</span></label><input id="range" type="range" min="360" max="1200" step="20" value="720" /></div>
+        <div class="slider-row"><label><span>신호 노이즈</span><span id="noiseText">16%</span></label><input id="noise" type="range" min="0" max="55" step="1" value="16" /></div>
+      </div>
+
+      <div class="control-section">
+        <div class="section-title">Actions</div>
+        <div class="button-grid">
+          <button id="addHostile">적 추가</button>
+          <button id="addResource">자원 추가</button>
+          <button id="lockNearest">근접 락온</button>
+          <button class="danger" id="scramble">교란 발생</button>
+        </div>
+      </div>
+
+      <div class="footer-note">좌표 계산은 player.x/y 기준 enemy.x/y 상대좌표로 처리합니다. 실제 게임에서는 enemy 객체의 월드 좌표를 그대로 연결하면 됩니다.</div>
+    </aside>
+
+    <main class="panel radar-shell">
+      <div class="radar-topbar"><div><span class="pulse-dot"></span>SCAN ACTIVE</div><div id="clock">00:00:00</div></div>
+      <div class="radar-frame" id="radarFrame">
+        <canvas id="radar"></canvas>
+        <div class="center-label"><div><strong>ZERO</strong><span>PLAYER</span></div></div>
+        </div>
+    </main>
+
+    <aside class="panel right">
+      <div class="header">
+        <div class="eyebrow">Detected Objects</div>
+        <h1>CONTACT FEED</h1>
+        <div class="sub">목록에서 타깃을 클릭해도 락온됩니다. 선택된 타깃은 레이더에서 박스, 링, LOCK 텍스트로 강조됩니다.</div>
+      </div>
+      <div class="target-list" id="targetList"></div>
+      <div class="coordinate-hud">
+        <div class="hud-title"><span>TARGET DATA</span><span class="lock-badge" id="lockBadge">LOCK</span></div>
+        <div class="coord-line"><span class="k">TARGET</span><span class="v" id="hudTarget">UNKNOWN</span></div>
+        <div class="coord-line"><span class="k">RANGE</span><span class="v" id="hudRange">----</span></div>
+        <div class="coord-line"><span class="k">DIR</span><span class="v" id="hudDir">---</span></div>
+        <div class="coord-line"><span class="k">COORD</span><span class="v" id="hudCoord">X ---- / Y ----</span></div>
+        <div class="coord-line"><span class="k">STATUS</span><span class="v dangerText" id="hudStatus">NO TARGET</span></div>
+        <div class="coord-line"><span class="k">CLASS</span><span class="v warnText" id="hudClass">-</span></div>
+        <div class="coord-line"><span class="k">VECTOR</span><span class="v" id="hudVector">----</span></div>
+        <div class="coord-line"><span class="k">SIGNAL</span><span class="v" id="hudSignal">----</span></div>
+      </div>
+      <div class="log" id="log"></div>
+    </aside>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('radar');
+    const ctx = canvas.getContext('2d');
+
+    const els = {
+      frame: document.getElementById('radarFrame'), contactCount: document.getElementById('contactCount'), threatLevel: document.getElementById('threatLevel'),
+      rangeValue: document.getElementById('rangeValue'), noiseValue: document.getElementById('noiseValue'), speed: document.getElementById('speed'), range: document.getElementById('range'), noise: document.getElementById('noise'),
+      speedText: document.getElementById('speedText'), rangeText: document.getElementById('rangeText'), noiseText: document.getElementById('noiseText'), targetList: document.getElementById('targetList'), log: document.getElementById('log'), clock: document.getElementById('clock'),
+      addHostile: document.getElementById('addHostile'), addResource: document.getElementById('addResource'), lockNearest: document.getElementById('lockNearest'), scramble: document.getElementById('scramble'),
+      hudTarget: document.getElementById('hudTarget'), hudRange: document.getElementById('hudRange'), hudDir: document.getElementById('hudDir'), hudCoord: document.getElementById('hudCoord'), hudStatus: document.getElementById('hudStatus'), hudClass: document.getElementById('hudClass'), hudVector: document.getElementById('hudVector'), hudSignal: document.getElementById('hudSignal'), lockBadge: document.getElementById('lockBadge')
+    };
+
+    const player = { x: 0, y: 0 };
+
+    const state = {
+      width: 0, height: 0, cx: 0, cy: 0, radius: 0, sweep: 0, lastTime: performance.now(),
+      targets: [], shockwaves: [], lockedId: null, scrambleUntil: 0, logLines: [], smoothedHud: null
+    };
+
+    const typeConfig = {
+      hostile: { label: 'ENEMY', color: '#ff5d73', short: 'ENM', className: 'D' },
+      resource: { label: 'RESOURCE', color: '#ffd166', short: 'RES', className: 'MINE' },
+      anomaly: { label: 'ANOMALY', color: '#72c7ff', short: 'ANM', className: 'UNKNOWN' },
+      neutral: { label: 'NEUTRAL', color: '#5fffd2', short: 'NEU', className: 'CIV' }
+    };
+
+    function rand(min, max) { return min + Math.random() * (max - min); }
+    function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+    function lerp(a, b, t) { return a + (b - a) * t; }
+    function angleDiff(a, b) { return Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))); }
+    function padDeg(v) { return String(Math.round(v)).padStart(3, '0') + '°'; }
+
+    function resize() {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      canvas.width = Math.floor(rect.width * dpr); canvas.height = Math.floor(rect.height * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      state.width = rect.width; state.height = rect.height; state.cx = rect.width / 2; state.cy = rect.height / 2; state.radius = Math.min(rect.width, rect.height) * 0.45;
+    }
+
+    function createTarget(type = 'hostile') {
+      const distance = rand(160, 900);
+      const angle = rand(0, Math.PI * 2);
+      const vx = Math.cos(angle + rand(-0.9, 0.9)) * rand(8, 42);
+      const vy = Math.sin(angle + rand(-0.9, 0.9)) * rand(8, 42);
+      return {
+        id: crypto.randomUUID ? crypto.randomUUID() : String(Math.random()), type,
+        code: `${typeConfig[type].short}-${Math.floor(rand(100,999))}`,
+        x: Math.cos(angle) * distance,
+        y: Math.sin(angle) * distance,
+        vx, vy,
+        signal: rand(0.45, 1), lastPing: 0, jitter: rand(0, 1000), lastRange: distance
+      };
+    }
+
+    function seedTargets() {
+      const types = ['hostile','resource','anomaly','neutral'];
+      for (let i = 0; i < 18; i++) state.targets.push(createTarget(types[Math.floor(rand(0, types.length))]));
+      state.lockedId = getNearestTarget()?.id || null;
+      addLog('System boot complete. Coordinate tracker online.');
+    }
+
+    function getTargetInfo(t) {
+      const dx = t.x - player.x;
+      const dy = t.y - player.y;
+      const range = Math.sqrt(dx * dx + dy * dy);
+      const angleRad = Math.atan2(dy, dx);
+      const dir = (angleRad * 180 / Math.PI + 360) % 360;
+      const deltaRange = range - (t.lastRange ?? range);
+      const vector = deltaRange < -0.25 ? 'APPROACHING' : deltaRange > 0.25 ? 'LEAVING' : 'STABLE';
+      return { dx, dy, range, dir, vector };
+    }
+
+    function getNearestTarget() {
+      return [...state.targets].sort((a, b) => getTargetInfo(a).range - getTargetInfo(b).range)[0];
+    }
+
+    function getLockedTarget() {
+      return state.targets.find(t => t.id === state.lockedId) || null;
+    }
+
+    function addLog(text, level = '') {
+      const t = new Date().toLocaleTimeString('en-GB', { hour12: false });
+      state.logLines.unshift({ text: `[${t}] ${text}`, level });
+      state.logLines = state.logLines.slice(0, 9);
+      els.log.innerHTML = state.logLines.map(l => `<div class="log-line ${l.level}">${l.text}</div>`).join('');
+    }
+
+    function drawGrid() {
+      const { cx, cy, radius } = state;
+      ctx.save(); ctx.translate(cx, cy); ctx.strokeStyle = 'rgba(105,255,210,.16)'; ctx.lineWidth = 1;
+      for (let i = 1; i <= 5; i++) { ctx.beginPath(); ctx.arc(0, 0, radius * i / 5, 0, Math.PI * 2); ctx.stroke(); }
+      for (let i = 0; i < 24; i++) {
+        const a = i * Math.PI * 2 / 24; const inner = i % 3 === 0 ? 0 : radius * .16;
+        ctx.beginPath(); ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner); ctx.lineTo(Math.cos(a) * radius, Math.sin(a) * radius);
+        ctx.strokeStyle = i % 3 === 0 ? 'rgba(105,255,210,.18)' : 'rgba(105,255,210,.07)'; ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(105,255,210,.42)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(0, 0, radius, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = 'rgba(185,255,230,.42)'; ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'center';
+      ctx.fillText('N', 0, -radius - 12); ctx.fillText('S', 0, radius + 19); ctx.fillText('E', radius + 15, 3); ctx.fillText('W', -radius - 15, 3);
+      ctx.restore();
+    }
+
+    function drawSweep() {
+      const { cx, cy, radius, sweep } = state;
+      ctx.save(); ctx.translate(cx, cy);
+      for (let i = 0; i < 42; i++) {
+        const a1 = sweep - i * .015; const alpha = Math.pow(1 - i / 42, 2) * .16;
+        ctx.beginPath(); ctx.moveTo(0,0); ctx.arc(0, 0, radius, a1 - .007, a1 + .007); ctx.closePath(); ctx.fillStyle = `rgba(95,255,210,${alpha})`; ctx.fill();
+      }
+      const grad = ctx.createLinearGradient(0, 0, Math.cos(sweep) * radius, Math.sin(sweep) * radius);
+      grad.addColorStop(0, 'rgba(95,255,210,.2)'); grad.addColorStop(1, 'rgba(95,255,210,.92)');
+      ctx.strokeStyle = grad; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(Math.cos(sweep) * radius, Math.sin(sweep) * radius); ctx.stroke();
+      ctx.restore();
+    }
+
+    function radarPos(t) {
+      const info = getTargetInfo(t);
+      const maxRange = Number(els.range.value);
+      const d = clamp(info.range / maxRange, 0, 1) * state.radius;
+      const a = Math.atan2(info.dy, info.dx);
+      return { x: state.cx + Math.cos(a) * d, y: state.cy + Math.sin(a) * d, info };
+    }
+
+    function drawTargets(now) {
+      for (const t of state.targets) {
+        const cfg = typeConfig[t.type];
+        const { x, y, info } = radarPos(t);
+        const a = Math.atan2(info.dy, info.dx);
+        if (angleDiff(a, state.sweep) < .035) {
+          t.lastPing = now;
+          if (t.type === 'hostile' && info.range < Number(els.range.value) * .38 && Math.random() < .015) {
+            state.shockwaves.push({ life: 0, max: 1.2, color: 'rgba(255,93,115,' });
+            addLog(`Close hostile contact detected: ${t.code}`, 'danger');
+          }
+        }
+        const pingAge = (now - t.lastPing) / 1000;
+        const visible = clamp(1 - pingAge / 3.2, .08, 1);
+        const size = t.type === 'hostile' ? 4.5 : 3.5;
+        const locked = state.lockedId === t.id;
+        ctx.save(); ctx.globalAlpha = visible * t.signal; ctx.shadowColor = cfg.color; ctx.shadowBlur = locked ? 28 : 12; ctx.fillStyle = cfg.color;
+        ctx.beginPath();
+        if (t.type === 'resource') ctx.rect(x - size, y - size, size * 2, size * 2);
+        else if (t.type === 'anomaly') { ctx.moveTo(x, y - size * 1.4); ctx.lineTo(x + size * 1.4, y); ctx.lineTo(x, y + size * 1.4); ctx.lineTo(x - size * 1.4, y); ctx.closePath(); }
+        else ctx.arc(x, y, size, 0, Math.PI * 2);
+        ctx.fill();
+        if (locked) drawLockMarker(now, x, y, cfg.color, t.code);
+        ctx.restore();
+      }
+    }
+
+    function drawLockMarker(now, x, y, color, code) {
+      const blink = Math.sin(now * .012) > -0.25 ? 1 : .35;
+      ctx.globalAlpha = blink;
+      ctx.shadowBlur = 18;
+      ctx.strokeStyle = 'rgba(255,93,115,.88)';
+      ctx.lineWidth = 1.5;
+      const r = 18 + Math.sin(now * .008) * 3;
+      ctx.strokeRect(x - r, y - r, r * 2, r * 2);
+      ctx.beginPath(); ctx.arc(x, y, r * 1.45, 0, Math.PI * 2); ctx.stroke();
+      ctx.font = '10px ui-monospace, monospace'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,93,115,.95)';
+      ctx.fillText('LOCK ON', x, y - r - 10);
+      ctx.fillStyle = 'rgba(185,255,230,.8)'; ctx.fillText(code, x, y + r + 18);
+    }
+
+    function drawNoise(now) {
+      const noise = Number(els.noise.value) / 100; const boosted = now < state.scrambleUntil ? .36 : 0; const amount = Math.floor((noise + boosted) * 170);
+      const { cx, cy, radius } = state; ctx.save();
+      for (let i = 0; i < amount; i++) {
+        const a = rand(0, Math.PI * 2); const d = Math.sqrt(Math.random()) * radius; const x = cx + Math.cos(a) * d; const y = cy + Math.sin(a) * d;
+        ctx.globalAlpha = rand(.04, .18); ctx.fillStyle = Math.random() < .85 ? '#5fffd2' : '#ffffff'; ctx.fillRect(x, y, rand(.8, 2.2), rand(.8, 2.2));
+      }
+      ctx.restore();
+    }
+
+    function drawShockwaves(dt) {
+      const { cx, cy, radius } = state;
+      for (let i = state.shockwaves.length - 1; i >= 0; i--) {
+        const s = state.shockwaves[i]; s.life += dt; const p = s.life / s.max;
+        ctx.save(); ctx.strokeStyle = `${s.color}${.38 * (1 - p)})`; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, radius * p, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+        if (p >= 1) state.shockwaves.splice(i, 1);
+      }
+    }
+
+    function drawVignette() {
+      const { cx, cy, radius } = state;
+      const g = ctx.createRadialGradient(cx, cy, radius * .35, cx, cy, radius * 1.08);
+      g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(.72, 'rgba(0,0,0,.12)'); g.addColorStop(1, 'rgba(0,0,0,.78)');
+      ctx.fillStyle = g; ctx.fillRect(0, 0, state.width, state.height);
+    }
+
+    function updateTargets(dt) {
+      const maxRange = Number(els.range.value);
+      for (const t of state.targets) {
+        const infoBefore = getTargetInfo(t); t.lastRange = infoBefore.range;
+        t.x += t.vx * dt; t.y += t.vy * dt;
+        const info = getTargetInfo(t);
+        if (info.range > maxRange * 1.12 || info.range < 60) {
+          const bounce = Math.atan2(info.dy, info.dx) + Math.PI;
+          const speed = Math.sqrt(t.vx * t.vx + t.vy * t.vy);
+          t.vx = Math.cos(bounce + rand(-.35, .35)) * speed;
+          t.vy = Math.sin(bounce + rand(-.35, .35)) * speed;
+        }
+      }
+    }
+
+    function renderList() {
+      const ordered = [...state.targets].sort((a,b) => getTargetInfo(a).range - getTargetInfo(b).range).slice(0, 12);
+      els.targetList.innerHTML = ordered.map(t => {
+        const info = getTargetInfo(t); const locked = state.lockedId === t.id;
+        return `<div class="target-card ${t.type} ${locked ? 'locked' : ''}" data-id="${t.id}">
+          <div class="target-type"></div><div><div class="target-name">${t.code} · ${typeConfig[t.type].label}</div><div class="target-meta">DIR ${padDeg(info.dir)} · X ${Math.round(info.dx)} / Y ${Math.round(info.dy)}</div></div><div class="target-distance">${Math.round(info.range)}m</div>
+        </div>`;
+      }).join('');
+    }
+
+    function updateCoordinateHud() {
+      const t = getLockedTarget();
+      if (!t) {
+        els.hudTarget.textContent = 'UNKNOWN'; els.hudRange.textContent = '----'; els.hudDir.textContent = '---'; els.hudCoord.textContent = 'X ---- / Y ----'; els.hudStatus.textContent = 'NO TARGET'; els.hudClass.textContent = '-'; els.hudVector.textContent = '----'; els.hudSignal.textContent = '----'; els.lockBadge.textContent = 'IDLE'; return;
+      }
+      const info = getTargetInfo(t);
+      if (!state.smoothedHud || state.smoothedHud.id !== t.id) state.smoothedHud = { id: t.id, dx: info.dx, dy: info.dy, range: info.range, dir: info.dir };
+      state.smoothedHud.dx = lerp(state.smoothedHud.dx, info.dx, .18);
+      state.smoothedHud.dy = lerp(state.smoothedHud.dy, info.dy, .18);
+      state.smoothedHud.range = lerp(state.smoothedHud.range, info.range, .18);
+      state.smoothedHud.dir = lerp(state.smoothedHud.dir, info.dir, .18);
+      const cfg = typeConfig[t.type];
+      els.hudTarget.textContent = `${cfg.label} / ${t.code}`;
+      els.hudRange.textContent = `${Math.round(state.smoothedHud.range)}m`;
+      els.hudDir.textContent = padDeg(state.smoothedHud.dir);
+      els.hudCoord.textContent = `X ${Math.round(state.smoothedHud.dx)} / Y ${Math.round(state.smoothedHud.dy)}`;
+      els.hudStatus.textContent = t.signal > .45 ? 'TRACKING' : 'SIGNAL WEAK';
+      els.hudClass.textContent = cfg.className;
+      els.hudVector.textContent = info.vector;
+      els.hudSignal.textContent = t.signal > .7 ? 'STRONG' : t.signal > .45 ? 'NORMAL' : 'WEAK';
+      els.lockBadge.textContent = 'LOCK';
+    }
+
+    function updateStats() {
+      const hostiles = state.targets.filter(t => t.type === 'hostile').length;
+      const closeHostiles = state.targets.filter(t => t.type === 'hostile' && getTargetInfo(t).range < Number(els.range.value) * .42).length;
+      els.contactCount.textContent = String(state.targets.length).padStart(2, '0');
+      els.threatLevel.textContent = closeHostiles > 2 ? 'HIGH' : hostiles > 4 ? 'MED' : 'LOW';
+      els.threatLevel.style.color = closeHostiles > 2 ? '#ff5d73' : hostiles > 4 ? '#ffd166' : '#5fffd2';
+      els.rangeValue.textContent = els.range.value; els.noiseValue.textContent = els.noise.value;
+      els.speedText.textContent = `${Number(els.speed.value).toFixed(2)}x`; els.rangeText.textContent = `${els.range.value} km`; els.noiseText.textContent = `${els.noise.value}%`;
+      els.clock.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
+      updateCoordinateHud();
+    }
+
+    let listTimer = 0;
+    function animate(now) {
+      const dt = Math.min((now - state.lastTime) / 1000, .04); state.lastTime = now;
+      state.sweep = (state.sweep + dt * Number(els.speed.value) * 1.65) % (Math.PI * 2);
+      updateTargets(dt);
+      ctx.clearRect(0, 0, state.width, state.height); ctx.fillStyle = 'rgba(2,7,11,.92)'; ctx.fillRect(0, 0, state.width, state.height);
+      drawGrid(); drawNoise(now); drawTargets(now); drawSweep(); drawShockwaves(dt); drawVignette();
+      listTimer += dt;
+      if (listTimer > .25) { renderList(); updateStats(); listTimer = 0; }
+      requestAnimationFrame(animate);
+    }
+
+    function selectTarget(id, reason = 'Manual lock') {
+      const t = state.targets.find(x => x.id === id);
+      if (!t) return;
+      state.lockedId = id; state.smoothedHud = null;
+      addLog(`${reason}: ${t.code}`, t.type === 'hostile' ? 'danger' : 'warn');
+    }
+
+    els.targetList.addEventListener('click', (e) => {
+      const card = e.target.closest('.target-card');
+      if (card?.dataset.id) selectTarget(card.dataset.id, 'Contact feed lock');
+    });
+
+    els.frame.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const mx = e.clientX - rect.left; const my = e.clientY - rect.top;
+      let picked = null; let best = 16;
+      for (const t of state.targets) {
+        const p = radarPos(t); const d = Math.hypot(p.x - mx, p.y - my);
+        if (d < best) { best = d; picked = t; }
+      }
+      if (picked) selectTarget(picked.id, 'Radar click lock');
+    });
+
+    els.addHostile.addEventListener('click', () => { const t = createTarget('hostile'); state.targets.push(t); selectTarget(t.id, 'New hostile signature'); state.shockwaves.push({ life: 0, max: .85, color: 'rgba(255,93,115,' }); });
+    els.addResource.addEventListener('click', () => { const t = createTarget('resource'); state.targets.push(t); addLog('Resource beacon registered.', 'warn'); });
+    els.lockNearest.addEventListener('click', () => { const nearest = getNearestTarget(); if (nearest) selectTarget(nearest.id, 'Nearest target lock'); });
+    els.scramble.addEventListener('click', () => { state.scrambleUntil = performance.now() + 4200; state.shockwaves.push({ life: 0, max: 1.5, color: 'rgba(255,209,102,' }); addLog('Electromagnetic interference detected. Signal unstable.', 'warn'); });
+
+    window.addEventListener('resize', resize);
+    resize(); seedTargets(); renderList(); updateStats(); requestAnimationFrame(animate);
+  </script>
+</body>
+</html>

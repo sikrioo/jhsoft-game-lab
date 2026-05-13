@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SPIKE ZERO PixiJS Tactical Radar</title>
+  <link rel="stylesheet" href="./css/radar.v0.4.css" />
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js"></script>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel left">
+      <div class="header">
+        <div class="eyebrow">SPIKE ZERO / PixiJS HUD</div>
+        <h1>ORBITAL SCAN ARRAY</h1>
+        <div class="sub">PixiJS 기반으로 정적 레이어와 동적 레이어를 분리한 전술 레이더 프로토타입입니다. 스캔 파라미터를 조절하면서 실제 레이더에 가까운 표시 특성을 확인할 수 있습니다.</div>
+      </div>
+
+      <div class="status-grid">
+        <div class="metric"><div class="label">Contacts</div><div class="value" id="contactCount">00</div></div>
+        <div class="metric"><div class="label">Threat</div><div class="value"><span id="threatLevel">LOW</span></div></div>
+        <div class="metric"><div class="label">Range</div><div class="value"><span id="rangeValue">720</span><span class="unit">m</span></div></div>
+        <div class="metric"><div class="label">Noise</div><div class="value"><span id="noiseValue">16</span><span class="unit">%</span></div></div>
+      </div>
+
+      <section class="control-section">
+        <div class="section-title">Scan Controls <span class="chip">LIVE</span></div>
+        <div class="slider-row"><label><span>Scan Speed</span><span id="speedText">1.25x</span></label><input id="speed" type="range" min="0.4" max="3" step="0.05" value="1.25" /></div>
+        <div class="slider-row"><label><span>Detection Range</span><span id="rangeText">720 m</span></label><input id="range" type="range" min="360" max="1200" step="20" value="720" /></div>
+        <div class="slider-row"><label><span>Signal Noise</span><span id="noiseText">16%</span></label><input id="noise" type="range" min="0" max="55" step="1" value="16" /></div>
+        <div class="slider-row"><label><span>Angular Resolution</span><span id="angularResolutionText">6.0 deg</span></label><input id="angularResolution" type="range" min="1" max="18" step="0.5" value="6" /></div>
+        <div class="slider-row"><label><span>Detection Probability</span><span id="detectionProbabilityText">78%</span></label><input id="detectionProbability" type="range" min="45" max="100" step="1" value="78" /></div>
+        <div class="slider-row"><label><span>False Alarm Rate</span><span id="falseAlarmRateText">8%</span></label><input id="falseAlarmRate" type="range" min="0" max="30" step="1" value="8" /></div>
+      </section>
+
+      <section class="control-section">
+        <div class="section-title">Actions</div>
+        <div class="button-grid">
+          <button id="addHostile">Add Hostile</button>
+          <button id="addResource">Add Resource</button>
+          <button id="lockNearest">Lock Nearest</button>
+          <button class="danger" id="scramble">Trigger Scramble</button>
+        </div>
+      </section>
+
+      <div class="footer-note">방위각 해상도는 표시 각도 양자화에, 탐지 확률은 핑 획득 실패에, 오경보율은 임시 FALSE TRACK 생성에 연결되어 있습니다.</div>
+    </aside>
+
+    <main class="panel radar-shell">
+      <div class="radar-topbar"><div><span class="pulse-dot"></span>SCAN ACTIVE</div><div id="clock">00:00:00</div></div>
+      <div class="radar-frame" id="radarFrame">
+        <div id="radarMount"></div>
+        <div class="center-label"><div><strong>ZERO</strong><span>PLAYER</span></div></div>
+      </div>
+    </main>
+
+    <aside class="panel right">
+      <div class="header">
+        <div class="eyebrow">Detected Objects</div>
+        <h1>CONTACT FEED</h1>
+        <div class="sub">화면에 보이는 접촉만 목록에 유지됩니다. 오경보는 `FALSE TRACK`으로 잠깐 나타났다가 사라질 수 있습니다.</div>
+      </div>
+      <div class="target-list" id="targetList"></div>
+      <div class="coordinate-hud">
+        <div class="hud-title"><span>TARGET DATA</span><span class="lock-badge" id="lockBadge">LOCK</span></div>
+        <div class="coord-line"><span class="k">TARGET</span><span class="v" id="hudTarget">UNKNOWN</span></div>
+        <div class="coord-line"><span class="k">RANGE</span><span class="v" id="hudRange">----</span></div>
+        <div class="coord-line"><span class="k">DIR</span><span class="v" id="hudDir">---</span></div>
+        <div class="coord-line"><span class="k">COORD</span><span class="v" id="hudCoord">X ---- / Y ----</span></div>
+        <div class="coord-line"><span class="k">STATUS</span><span class="v dangerText" id="hudStatus">NO TARGET</span></div>
+        <div class="coord-line"><span class="k">CLASS</span><span class="v warnText" id="hudClass">-</span></div>
+        <div class="coord-line"><span class="k">VECTOR</span><span class="v" id="hudVector">----</span></div>
+        <div class="coord-line"><span class="k">SIGNAL</span><span class="v" id="hudSignal">----</span></div>
+      </div>
+      <div class="log" id="log"></div>
+    </aside>
+  </div>
+
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
