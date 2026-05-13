@@ -107,21 +107,65 @@ export function createRadarApp(els) {
     }
   }
 
-  function getAllContacts() {
-    return state.targets.concat(state.falseContacts);
+  function findContact(id) {
+    for (const target of state.targets) {
+      if (target.id === id) {
+        return target;
+      }
+    }
+
+    for (const target of state.falseContacts) {
+      if (target.id === id) {
+        return target;
+      }
+    }
+
+    return null;
   }
 
-  function getTrackedContacts(now = performance.now()) {
-    return getAllContacts().filter((target) => (
-      target.id === state.lockedId || now - target.lastPing < CONTACT_VISIBLE_WINDOW
-    ));
+  function isTrackedContact(target, now) {
+    return target.id === state.lockedId || now - target.lastPing < CONTACT_VISIBLE_WINDOW;
+  }
+
+  function collectTrackedContacts(out, now) {
+    out.length = 0;
+
+    for (const target of state.targets) {
+      if (isTrackedContact(target, now)) {
+        out.push(target);
+      }
+    }
+
+    for (const target of state.falseContacts) {
+      if (isTrackedContact(target, now)) {
+        out.push(target);
+      }
+    }
+
+    return out;
   }
 
   function getNearestTarget(now = performance.now()) {
     let nearest = null;
     let nearestRange = Infinity;
 
-    for (const target of getTrackedContacts(now)) {
+    for (const target of state.targets) {
+      if (!isTrackedContact(target, now)) {
+        continue;
+      }
+
+      const { range } = getTargetInfo(target);
+      if (range < nearestRange) {
+        nearest = target;
+        nearestRange = range;
+      }
+    }
+
+    for (const target of state.falseContacts) {
+      if (!isTrackedContact(target, now)) {
+        continue;
+      }
+
       const { range } = getTargetInfo(target);
       if (range < nearestRange) {
         nearest = target;
@@ -133,7 +177,7 @@ export function createRadarApp(els) {
   }
 
   function getLockedTarget() {
-    return getAllContacts().find((target) => target.id === state.lockedId) || null;
+    return findContact(state.lockedId);
   }
 
   function getAngularResolutionRad() {
@@ -269,6 +313,19 @@ export function createRadarApp(els) {
     state.lockText.anchor.set(0.5);
     state.lockText.visible = false;
 
+    for (const layer of [
+      state.layers.bg,
+      state.layers.grid,
+      state.layers.noise,
+      state.layers.sweep,
+      state.layers.lock,
+      state.layers.fx,
+      state.layers.vignette
+    ]) {
+      layer.eventMode = "none";
+    }
+    state.layers.targets.eventMode = "passive";
+
     app.stage.addChild(
       state.layers.bg,
       state.layers.grid,
@@ -304,6 +361,7 @@ export function createRadarApp(els) {
     state.radius = size * 0.45;
     state.app.renderer.resize(size, size);
     drawStaticRadar();
+    drawSweepBeam();
     drawVignette();
   }
 
@@ -381,6 +439,30 @@ export function createRadarApp(els) {
     layer.addChild(vignette);
   }
 
+  function drawSweepBeam() {
+    const sweep = state.sweepGraphic;
+    if (!sweep) {
+      return;
+    }
+
+    sweep.clear();
+    sweep.position.set(state.cx, state.cy);
+
+    for (let index = 0; index < 44; index += 1) {
+      const angle = -index * 0.015;
+      const alpha = Math.pow(1 - index / 44, 2) * 0.16;
+      sweep.moveTo(0, 0);
+      sweep.arc(0, 0, state.radius, angle - 0.008, angle + 0.008);
+      sweep.closePath();
+      sweep.fill({ color: COLORS.safe, alpha });
+    }
+
+    sweep.moveTo(0, 0);
+    sweep.lineTo(state.radius, 0);
+    sweep.stroke({ color: COLORS.safe, alpha: 0.85, width: 2 });
+    sweep.rotation = state.sweep;
+  }
+
   function makeBlip(type) {
     const PIXI = getPixi();
     const cfg = typeConfig[type];
@@ -413,7 +495,18 @@ export function createRadarApp(els) {
   }
 
   function syncTargetSprites() {
-    for (const target of getAllContacts()) {
+    for (const target of state.targets) {
+      if (state.targetSprites.has(target.id)) {
+        continue;
+      }
+
+      const blip = makeBlip(target.type);
+      blip.on("pointerdown", () => selectTarget(target.id, "Radar blip lock"));
+      state.layers.targets.addChild(blip);
+      state.targetSprites.set(target.id, blip);
+    }
+
+    for (const target of state.falseContacts) {
       if (state.targetSprites.has(target.id)) {
         continue;
       }
@@ -430,6 +523,8 @@ export function createRadarApp(els) {
     const layer = state.layers.noise;
     destroyChildren(layer);
     state.noisePool = [];
+    state.noiseActiveCount = 0;
+    state.noiseTimer = 0;
 
     for (let index = 0; index < 140; index += 1) {
       const dot = new PIXI.Sprite(PIXI.Texture.WHITE);
@@ -506,56 +601,50 @@ export function createRadarApp(els) {
     }
   }
 
+  function updateTargetSprite(target, now) {
+    const sprite = state.targetSprites.get(target.id);
+    if (!sprite) {
+      return;
+    }
+
+    const position = radarPos(target);
+    const rawInfo = getTargetInfo(target);
+    sprite.position.set(position.x, position.y);
+    sprite.rotation = position.info.angleRad + Math.PI / 2;
+
+    if (angleDiff(rawInfo.angleRad, state.sweep) < 0.035) {
+      const detected = target.isFalseAlarm || Math.random() < getDetectionChance(target, now);
+      if (detected) {
+        target.lastPing = now;
+      }
+      if (detected && target.type === "hostile" && rawInfo.range < state.controlValues.range * 0.38 && Math.random() < 0.01) {
+        addShockwave(COLORS.danger);
+        addLog(`Close hostile contact detected: ${target.code}`, "danger");
+      }
+    }
+
+    const pingAge = (now - target.lastPing) / 1000;
+    if (pingAge > 3.2 && state.lockedId !== target.id) {
+      sprite.alpha = 0;
+    } else {
+      const minAlpha = state.lockedId === target.id ? 0.16 : 0;
+      sprite.alpha = clamp(1 - pingAge / 3.2, minAlpha, 1) * target.signal;
+    }
+    sprite.scale.set(state.lockedId === target.id ? 1.35 : 1);
+  }
+
   function updateTargetSprites(now) {
-    for (const target of getAllContacts()) {
-      const sprite = state.targetSprites.get(target.id);
-      if (!sprite) {
-        continue;
-      }
+    for (const target of state.targets) {
+      updateTargetSprite(target, now);
+    }
 
-      const position = radarPos(target);
-      const rawInfo = getTargetInfo(target);
-      sprite.position.set(position.x, position.y);
-      sprite.rotation = position.info.angleRad + Math.PI / 2;
-
-      if (angleDiff(rawInfo.angleRad, state.sweep) < 0.035) {
-        const detected = target.isFalseAlarm || Math.random() < getDetectionChance(target, now);
-        if (detected) {
-          target.lastPing = now;
-        }
-        if (detected && target.type === "hostile" && rawInfo.range < state.controlValues.range * 0.38 && Math.random() < 0.01) {
-          addShockwave(COLORS.danger);
-          addLog(`Close hostile contact detected: ${target.code}`, "danger");
-        }
-      }
-
-      const pingAge = (now - target.lastPing) / 1000;
-      if (pingAge > 3.2 && state.lockedId !== target.id) {
-        sprite.alpha = 0;
-      } else {
-        const minAlpha = state.lockedId === target.id ? 0.16 : 0;
-        sprite.alpha = clamp(1 - pingAge / 3.2, minAlpha, 1) * target.signal;
-      }
-      sprite.scale.set(state.lockedId === target.id ? 1.35 : 1);
+    for (const target of state.falseContacts) {
+      updateTargetSprite(target, now);
     }
   }
 
   function updateSweep() {
-    const sweep = state.sweepGraphic;
-    sweep.clear();
-
-    for (let index = 0; index < 44; index += 1) {
-      const angle = state.sweep - index * 0.015;
-      const alpha = Math.pow(1 - index / 44, 2) * 0.16;
-      sweep.moveTo(state.cx, state.cy);
-      sweep.arc(state.cx, state.cy, state.radius, angle - 0.008, angle + 0.008);
-      sweep.closePath();
-      sweep.fill({ color: COLORS.safe, alpha });
-    }
-
-    sweep.moveTo(state.cx, state.cy);
-    sweep.lineTo(state.cx + Math.cos(state.sweep) * state.radius, state.cy + Math.sin(state.sweep) * state.radius);
-    sweep.stroke({ color: COLORS.safe, alpha: 0.85, width: 2 });
+    state.sweepGraphic.rotation = state.sweep;
   }
 
   function updateLockMarker(now) {
@@ -614,35 +703,41 @@ export function createRadarApp(els) {
     }
   }
 
-  function updateNoise(now) {
+  function updateNoise(dt, now) {
+    state.noiseTimer += dt;
+    if (state.noiseTimer < 1 / 24) {
+      return;
+    }
+
+    state.noiseTimer = 0;
     const noise = state.controlValues.noise / 100;
     const boosted = now < state.scrambleUntil ? 0.36 : 0;
     const activeCount = Math.floor((noise + boosted) * state.noisePool.length);
 
-    for (let index = 0; index < state.noisePool.length; index += 1) {
+    for (let index = 0; index < activeCount; index += 1) {
       const dot = state.noisePool[index];
-      if (index < activeCount) {
-        if (Math.random() < 0.25) {
-          const angle = rand(0, Math.PI * 2);
-          const distance = Math.sqrt(Math.random()) * state.radius;
-          dot.position.set(state.cx + Math.cos(angle) * distance, state.cy + Math.sin(angle) * distance);
-        }
-        dot.alpha = rand(0.04, 0.18);
-      } else {
-        dot.alpha = 0;
+      if (Math.random() < 0.25) {
+        const angle = rand(0, Math.PI * 2);
+        const distance = Math.sqrt(Math.random()) * state.radius;
+        dot.position.set(state.cx + Math.cos(angle) * distance, state.cy + Math.sin(angle) * distance);
       }
+      dot.alpha = rand(0.04, 0.18);
     }
+
+    for (let index = activeCount; index < state.noiseActiveCount; index += 1) {
+      state.noisePool[index].alpha = 0;
+    }
+
+    state.noiseActiveCount = activeCount;
   }
 
-  function renderList() {
-    const ordered = [...getTrackedContacts(performance.now())]
-      .sort((a, b) => getTargetInfo(a).range - getTargetInfo(b).range)
-      .slice(0, MAX_TARGET_LIST_ITEMS);
+  function renderList(visibleContacts = collectTrackedContacts(state.trackedContacts, performance.now())) {
+    visibleContacts.sort((a, b) => getTargetInfo(a).range - getTargetInfo(b).range);
     ensureTargetCardPool(MAX_TARGET_LIST_ITEMS);
 
     for (let index = 0; index < targetCardPool.length; index += 1) {
       const card = targetCardPool[index];
-      const target = ordered[index];
+      const target = visibleContacts[index];
 
       if (!target) {
         card.root.hidden = true;
@@ -699,8 +794,7 @@ export function createRadarApp(els) {
     els.lockBadge.textContent = "LOCK";
   }
 
-  function updateStats() {
-    const visibleContacts = getTrackedContacts(performance.now());
+  function updateStats(visibleContacts = collectTrackedContacts(state.trackedContacts, performance.now())) {
     let hostiles = 0;
     let closeHostiles = 0;
     const closeThreshold = state.controlValues.range * 0.42;
@@ -732,7 +826,7 @@ export function createRadarApp(els) {
   }
 
   function selectTarget(id, reason = "Manual lock") {
-    const target = getAllContacts().find((entry) => entry.id === id);
+    const target = findContact(id);
     if (!target) {
       return;
     }
@@ -753,13 +847,14 @@ export function createRadarApp(els) {
     updateTargetSprites(now);
     updateSweep();
     updateLockMarker(now);
-    updateNoise(now);
+    updateNoise(dt, now);
     updateShockwaves(dt);
 
     state.listTimer += dt;
     if (state.listTimer > 0.25) {
-      renderList();
-      updateStats();
+      const visibleContacts = collectTrackedContacts(state.trackedContacts, now);
+      renderList(visibleContacts);
+      updateStats(visibleContacts);
       state.listTimer = 0;
     }
   }

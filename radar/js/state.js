@@ -16,8 +16,11 @@ export function createState() {
     listTimer: 0,
     logLines: [],
     smoothedHud: null,
+    trackedContacts: [],
     falseContacts: [],
     falseAlarmCharge: 0,
+    noiseTimer: 0,
+    noiseActiveCount: 0,
     layers: {},
     controlValues: {
       speed: 1.25,
