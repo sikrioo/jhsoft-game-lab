@@ -356,6 +356,32 @@ button.danger {
   color: var(--blue);
 }
 
+.target-card.ally .target-type {
+  background: var(--safe);
+  color: var(--safe);
+}
+
+.target-card.civilian .target-type {
+  background: #ffffff;
+  color: #ffffff;
+}
+
+.target-card.wildlife .target-type {
+  background: #a4ff7a;
+  color: #a4ff7a;
+}
+
+.target-card.unknown .target-type {
+  background: #9fb6c2;
+  color: #9fb6c2;
+}
+
+.target-card.identifying .target-type {
+  background: #ffffff;
+  color: #ffffff;
+  animation: pulse 1s infinite;
+}
+
 .target-card.false-alarm .target-type {
   background: #f7f7ff;
   color: #f7f7ff;

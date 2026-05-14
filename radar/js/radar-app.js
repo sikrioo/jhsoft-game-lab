@@ -184,6 +184,77 @@ export function createRadarApp(els) {
     return state.controlValues.angularResolution * Math.PI / 180;
   }
 
+  function getDisplayType(target) {
+    if (target.identificationState === "identified") {
+      return target.type;
+    }
+
+    if (target.identificationState === "identifying") {
+      return "identifying";
+    }
+
+    return "unknown";
+  }
+
+  function getDisplayConfig(target) {
+    return typeConfig[getDisplayType(target)] || typeConfig.unknown;
+  }
+
+  function getIdentificationProgress(target, now = performance.now()) {
+    if (target.identificationState !== "identifying") {
+      return 0;
+    }
+
+    const startedAt = target.identifyingStartedAt || now;
+    const endsAt = target.identifyingUntil || now;
+    return clamp((now - startedAt) / Math.max(endsAt - startedAt, 1), 0, 1);
+  }
+
+  function getIdentificationDuration(target, now = performance.now()) {
+    const rangeFactor = clamp(getTargetInfo(target).range / state.controlValues.range, 0, 1);
+    const noiseFactor = state.controlValues.noise / 55;
+    const probabilityFactor = 1 - state.controlValues.detectionProbability / 100;
+    const scramblePenalty = now < state.scrambleUntil ? 0.35 : 0;
+
+    return 650
+      + rangeFactor * 900
+      + noiseFactor * 520
+      + probabilityFactor * 620
+      + scramblePenalty * 700;
+  }
+
+  function beginIdentification(target, reason = "IFF handshake") {
+    if (!target || target.identificationState === "identified" || target.identificationState === "identifying") {
+      return;
+    }
+
+    const now = performance.now();
+    target.identificationState = "identifying";
+    target.identifyingStartedAt = now;
+    target.identifyingUntil = now + getIdentificationDuration(target, now);
+    addLog(`${reason}: ${target.code}`, "warn");
+  }
+
+  function resolveIdentification(target, now) {
+    if (target.isFalseAlarm) {
+      if (state.lockedId === target.id) {
+        state.lockedId = null;
+        state.smoothedHud = null;
+      }
+      addLog(`IFF returned no match: ${target.code}`, "warn");
+      removeContactSprite(target.id);
+      const falseIndex = state.falseContacts.findIndex((entry) => entry.id === target.id);
+      if (falseIndex >= 0) {
+        state.falseContacts.splice(falseIndex, 1);
+      }
+      return;
+    }
+
+    target.identificationState = "identified";
+    target.identifiedAt = now;
+    addLog(`Identification resolved: ${target.code} / ${typeConfig[target.type].label}`, target.type === "hostile" ? "danger" : "warn");
+  }
+
   function getDisplayedInfo(target) {
     const info = getTargetInfo(target);
     const step = getAngularResolutionRad();
@@ -228,7 +299,10 @@ export function createRadarApp(els) {
       vy,
       signal: rand(0.45, 1),
       lastPing: performance.now(),
-      lastRange: distance
+      lastRange: distance,
+      identificationState: "unknown",
+      identifyingStartedAt: 0,
+      identifyingUntil: 0
     };
   }
 
@@ -248,7 +322,10 @@ export function createRadarApp(els) {
       lastPing: now,
       lastRange: range,
       expiresAt: now + rand(2200, 5200),
-      isFalseAlarm: true
+      isFalseAlarm: true,
+      identificationState: "unknown",
+      identifyingStartedAt: 0,
+      identifyingUntil: 0
     };
     refreshTargetInfo(target);
     return target;
@@ -263,7 +340,7 @@ export function createRadarApp(els) {
   }
 
   function seedTargets() {
-    const types = ["hostile", "resource", "anomaly", "neutral"];
+    const types = ["hostile", "ally", "civilian", "wildlife", "resource", "anomaly"];
     const now = performance.now();
 
     for (let index = 0; index < 18; index += 1) {
@@ -463,34 +540,55 @@ export function createRadarApp(els) {
     sweep.rotation = state.sweep;
   }
 
-  function makeBlip(type) {
-    const PIXI = getPixi();
-    const cfg = typeConfig[type];
-    const container = new PIXI.Container();
-    const glow = new PIXI.Graphics();
-    const body = new PIXI.Graphics();
-    glow.circle(0, 0, 9).fill({ color: cfg.color, alpha: 0.12 });
+  function applyBlipVisual(blip, visualType) {
+    const cfg = typeConfig[visualType];
+    blip.visualType = visualType;
+    blip.glow.clear();
+    blip.body.clear();
+    blip.glow.circle(0, 0, 9).fill({ color: cfg.color, alpha: visualType === "unknown" ? 0.08 : 0.12 });
 
-    if (type === "resource") {
-      body.rect(-4, -4, 8, 8).fill({ color: cfg.color, alpha: 1 });
-    } else if (type === "anomaly") {
-      body.poly([0, -7, 7, 0, 0, 7, -7, 0]).fill({ color: cfg.color, alpha: 1 });
-    } else if (type === "falseAlarm") {
-      body.circle(0, 0, 6).stroke({ color: cfg.color, alpha: 0.95, width: 1.4 });
-      body.moveTo(-6, 0);
-      body.lineTo(6, 0);
-      body.moveTo(0, -6);
-      body.lineTo(0, 6);
-      body.stroke({ color: cfg.color, alpha: 0.92, width: 1.2 });
-    } else if (type === "hostile") {
-      body.poly([0, -7, 6, 5, 0, 2, -6, 5]).fill({ color: cfg.color, alpha: 1 });
+    if (visualType === "resource") {
+      blip.body.rect(-4, -4, 8, 8).fill({ color: cfg.color, alpha: 1 });
+    } else if (visualType === "anomaly") {
+      blip.body.poly([0, -7, 7, 0, 0, 7, -7, 0]).fill({ color: cfg.color, alpha: 1 });
+    } else if (visualType === "falseAlarm") {
+      blip.body.circle(0, 0, 6).stroke({ color: cfg.color, alpha: 0.95, width: 1.4 });
+      blip.body.moveTo(-6, 0);
+      blip.body.lineTo(6, 0);
+      blip.body.moveTo(0, -6);
+      blip.body.lineTo(0, 6);
+      blip.body.stroke({ color: cfg.color, alpha: 0.92, width: 1.2 });
+    } else if (visualType === "hostile") {
+      blip.body.poly([0, -7, 6, 5, 0, 2, -6, 5]).fill({ color: cfg.color, alpha: 1 });
+    } else if (visualType === "ally") {
+      blip.body.circle(0, 0, 4).fill({ color: cfg.color, alpha: 1 });
+      blip.body.circle(0, 0, 7).stroke({ color: cfg.color, alpha: 0.75, width: 1.1 });
+    } else if (visualType === "civilian") {
+      blip.body.rect(-4, -4, 8, 8).stroke({ color: cfg.color, alpha: 0.95, width: 1.3 });
+    } else if (visualType === "wildlife") {
+      blip.body.poly([0, -7, 6, 5, -6, 5]).fill({ color: cfg.color, alpha: 1 });
+    } else if (visualType === "identifying") {
+      blip.body.circle(0, 0, 6).stroke({ color: cfg.color, alpha: 0.95, width: 1.2 });
+      blip.body.moveTo(-7, 0);
+      blip.body.lineTo(7, 0);
+      blip.body.moveTo(0, -7);
+      blip.body.lineTo(0, 7);
+      blip.body.stroke({ color: cfg.color, alpha: 0.92, width: 1.1 });
     } else {
-      body.circle(0, 0, 4).fill({ color: cfg.color, alpha: 1 });
+      blip.body.circle(0, 0, 4).stroke({ color: cfg.color, alpha: 0.95, width: 1.2 });
+      blip.body.circle(0, 0, 2).fill({ color: cfg.color, alpha: 1 });
     }
+  }
 
-    container.addChild(glow, body);
+  function makeBlip(target) {
+    const PIXI = getPixi();
+    const container = new PIXI.Container();
+    container.glow = new PIXI.Graphics();
+    container.body = new PIXI.Graphics();
+    container.addChild(container.glow, container.body);
     container.eventMode = "static";
     container.cursor = "crosshair";
+    applyBlipVisual(container, getDisplayType(target));
     return container;
   }
 
@@ -500,7 +598,7 @@ export function createRadarApp(els) {
         continue;
       }
 
-      const blip = makeBlip(target.type);
+      const blip = makeBlip(target);
       blip.on("pointerdown", () => selectTarget(target.id, "Radar blip lock"));
       state.layers.targets.addChild(blip);
       state.targetSprites.set(target.id, blip);
@@ -511,7 +609,7 @@ export function createRadarApp(els) {
         continue;
       }
 
-      const blip = makeBlip(target.type);
+      const blip = makeBlip(target);
       blip.on("pointerdown", () => selectTarget(target.id, "Radar blip lock"));
       state.layers.targets.addChild(blip);
       state.targetSprites.set(target.id, blip);
@@ -601,6 +699,21 @@ export function createRadarApp(els) {
     }
   }
 
+  function updateIdentification(now) {
+    for (const target of state.targets) {
+      if (target.identificationState === "identifying" && now >= target.identifyingUntil) {
+        resolveIdentification(target, now);
+      }
+    }
+
+    for (let index = state.falseContacts.length - 1; index >= 0; index -= 1) {
+      const target = state.falseContacts[index];
+      if (target.identificationState === "identifying" && now >= target.identifyingUntil) {
+        resolveIdentification(target, now);
+      }
+    }
+  }
+
   function updateTargetSprite(target, now) {
     const sprite = state.targetSprites.get(target.id);
     if (!sprite) {
@@ -609,6 +722,10 @@ export function createRadarApp(els) {
 
     const position = radarPos(target);
     const rawInfo = getTargetInfo(target);
+    const displayType = getDisplayType(target);
+    if (sprite.visualType !== displayType) {
+      applyBlipVisual(sprite, displayType);
+    }
     sprite.position.set(position.x, position.y);
     sprite.rotation = position.info.angleRad + Math.PI / 2;
 
@@ -734,6 +851,7 @@ export function createRadarApp(els) {
   function renderList(visibleContacts = collectTrackedContacts(state.trackedContacts, performance.now())) {
     visibleContacts.sort((a, b) => getTargetInfo(a).range - getTargetInfo(b).range);
     ensureTargetCardPool(MAX_TARGET_LIST_ITEMS);
+    const now = performance.now();
 
     for (let index = 0; index < targetCardPool.length; index += 1) {
       const card = targetCardPool[index];
@@ -747,12 +865,17 @@ export function createRadarApp(els) {
 
       const info = getDisplayedInfo(target);
       const locked = state.lockedId === target.id;
-      const cfg = typeConfig[target.type];
+      const cfg = getDisplayConfig(target);
+      const identifyProgress = Math.round(getIdentificationProgress(target, now) * 100);
       card.root.hidden = false;
       card.root.dataset.id = target.id;
       card.root.className = `target-card ${cfg.cssClass || target.type}${locked ? " locked" : ""}`;
       card.name.textContent = `${target.code} / ${cfg.label}`;
-      card.meta.textContent = `DIR ${padDeg(info.dir)} / X ${Math.round(info.dx)} / Y ${Math.round(info.dy)}`;
+      card.meta.textContent = target.identificationState === "identifying"
+        ? `IFF ${String(identifyProgress).padStart(2, "0")}% / DIR ${padDeg(info.dir)}`
+        : target.identificationState === "identified"
+          ? `DIR ${padDeg(info.dir)} / X ${Math.round(info.dx)} / Y ${Math.round(info.dy)}`
+          : `UNVERIFIED CONTACT / DIR ${padDeg(info.dir)}`;
       card.distance.textContent = `${Math.round(info.range)}m`;
     }
   }
@@ -782,15 +905,28 @@ export function createRadarApp(els) {
     state.smoothedHud.range = lerp(state.smoothedHud.range, info.range, 0.18);
     state.smoothedHud.dir = lerp(state.smoothedHud.dir, info.dir, 0.18);
 
-    const cfg = typeConfig[target.type];
+    const cfg = getDisplayConfig(target);
+    const identifyProgress = Math.round(getIdentificationProgress(target, performance.now()) * 100);
     els.hudTarget.textContent = `${cfg.label} / ${target.code}`;
     els.hudRange.textContent = `${Math.round(state.smoothedHud.range)}m`;
     els.hudDir.textContent = padDeg(state.smoothedHud.dir);
     els.hudCoord.textContent = `X ${Math.round(state.smoothedHud.dx)} / Y ${Math.round(state.smoothedHud.dy)}`;
-    els.hudStatus.textContent = target.isFalseAlarm ? "FALSE TRACK" : target.signal > 0.45 ? "TRACKING" : "SIGNAL WEAK";
-    els.hudClass.textContent = cfg.className;
-    els.hudVector.textContent = target.isFalseAlarm ? "UNVERIFIED" : info.vector;
-    els.hudSignal.textContent = target.isFalseAlarm ? "AMBIGUOUS" : target.signal > 0.7 ? "STRONG" : target.signal > 0.45 ? "NORMAL" : "WEAK";
+    if (target.identificationState === "identified") {
+      els.hudStatus.textContent = target.signal > 0.45 ? "TRACKING" : "SIGNAL WEAK";
+      els.hudClass.textContent = cfg.className;
+      els.hudVector.textContent = info.vector;
+      els.hudSignal.textContent = target.signal > 0.7 ? "STRONG" : target.signal > 0.45 ? "NORMAL" : "WEAK";
+    } else if (target.identificationState === "identifying") {
+      els.hudStatus.textContent = "IDENTIFYING";
+      els.hudClass.textContent = `${identifyProgress}%`;
+      els.hudVector.textContent = "IFF HANDSHAKE";
+      els.hudSignal.textContent = target.isFalseAlarm ? "AMBIGUOUS" : "PENDING";
+    } else {
+      els.hudStatus.textContent = "UNVERIFIED";
+      els.hudClass.textContent = "PENDING";
+      els.hudVector.textContent = "IFF REQUIRED";
+      els.hudSignal.textContent = target.isFalseAlarm ? "AMBIGUOUS" : target.signal > 0.7 ? "STRONG" : target.signal > 0.45 ? "NORMAL" : "WEAK";
+    }
     els.lockBadge.textContent = "LOCK";
   }
 
@@ -800,7 +936,7 @@ export function createRadarApp(els) {
     const closeThreshold = state.controlValues.range * 0.42;
 
     for (const target of visibleContacts) {
-      if (target.type !== "hostile") {
+      if (getDisplayType(target) !== "hostile") {
         continue;
       }
 
@@ -833,7 +969,11 @@ export function createRadarApp(els) {
 
     state.lockedId = id;
     state.smoothedHud = null;
-    addLog(`${reason}: ${target.code}`, target.type === "hostile" ? "danger" : "warn");
+    const wasUnknown = target.identificationState !== "identified";
+    beginIdentification(target, "IFF request");
+    if (!wasUnknown) {
+      addLog(`${reason}: ${target.code}`, target.type === "hostile" ? "danger" : "warn");
+    }
   }
 
   function tickerUpdate() {
@@ -844,6 +984,7 @@ export function createRadarApp(els) {
     state.sweep = (state.sweep + dt * state.controlValues.speed * 1.65) % (Math.PI * 2);
     updateTargets(dt);
     updateFalseContacts(dt, now);
+    updateIdentification(now);
     updateTargetSprites(now);
     updateSweep();
     updateLockMarker(now);
