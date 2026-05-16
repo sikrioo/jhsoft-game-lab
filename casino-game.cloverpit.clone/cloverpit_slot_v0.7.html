@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cloverpit Slot Prototype v0.7</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;800&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./cloverpit_slot_v0.7/styles/main.css">
+</head>
+<body>
+  <main id="wrap">
+    <canvas id="fx"></canvas>
+
+    <div class="hdr">
+      <div class="logo">☘ CLOVER<b>PIT</b></div>
+      <div class="sub">SPIN TO SURVIVE - DO NOT LOSE</div>
+      <div class="build">Prototype v0.7 - Chain Evaluation Build</div>
+    </div>
+
+    <div class="cbar" id="cbar">
+      <div class="cb-label">COMBO</div>
+      <div class="cb-val" id="cb-val">0</div>
+      <div class="cb-mult" id="cb-mult"></div>
+      <div class="cb-track"><div class="cb-fill" id="cb-fill" style="width:0%"></div></div>
+      <div class="cb-txt" id="cb-txt">NO BONUS</div>
+    </div>
+
+    <div class="game-layout">
+      <aside class="side-stack">
+        <div class="item-panel" id="itempanel"></div>
+
+        <div class="chain-panel collapsed" id="chainpanel">
+          <button class="chain-toggle" id="bchaintoggle" type="button" aria-expanded="false">
+            <span class="chain-title-wrap">
+              <span>CHAIN LOG</span>
+              <span class="chain-sub">open when you want the breakdown</span>
+            </span>
+            <span class="chain-toggle-state" id="chaintogglestate">OPEN</span>
+          </button>
+          <div class="chain-log" id="chainlog"></div>
+        </div>
+
+        <div class="symbol-panel">
+          <div class="chain-head">
+            <span>SYMBOL TABLE</span>
+            <span class="chain-sub">current multipliers</span>
+          </div>
+          <div class="symrow" id="symrow"></div>
+        </div>
+      </aside>
+
+      <section class="main-stack">
+        <div class="stats">
+          <div class="sc"><div class="scl">COIN</div><div class="scv" id="vc">120</div></div>
+          <div class="sc"><div class="scl">TICKET</div><div class="scv" id="vt">5</div></div>
+          <div class="sc"><div class="scl">DEADLINE</div><div class="scv r" id="vd">75</div></div>
+          <div class="sc"><div class="scl">PAID</div><div class="scv g" id="vp">0</div></div>
+        </div>
+
+        <div class="dlrow">
+          <span>PAYMENT</span>
+          <div class="dlbar"><div class="dlf" id="dlf" style="width:0%"></div></div>
+          <span id="dlpct">0%</span>
+        </div>
+
+        <div class="play-row">
+          <div class="play-core">
+            <div class="machine-wrap">
+              <div class="pl-labels">
+                <div class="pl-label lost" id="pl0">L1</div>
+                <div class="pl-label lost" id="pl1">L2</div>
+                <div class="pl-label lost" id="pl2">L3</div>
+              </div>
+              <div class="rm" id="rm">
+                <div class="pl-lines">
+                  <div class="pl-line row0 idle" id="pll0"></div>
+                  <div class="pl-line row1 idle" id="pll1"></div>
+                  <div class="pl-line row2 idle" id="pll2"></div>
+                </div>
+                <div class="reels" id="reels"></div>
+              </div>
+            </div>
+
+            <div class="res-panel">
+              <div class="res-row" id="rrow0"><span class="rr-tag">LINE 1</span><span id="rtxt0">--</span></div>
+              <div class="res-row" id="rrow1"><span class="rr-tag">LINE 2</span><span id="rtxt1">--</span></div>
+              <div class="res-row" id="rrow2"><span class="rr-tag">LINE 3</span><span id="rtxt2">--</span></div>
+            </div>
+
+            <div class="btns">
+              <button class="bspin" id="bspin">SPIN - 5 COINS</button>
+              <button class="bs" id="bdeposit">DEPOSIT</button>
+              <button class="bs" id="bnext">NEXT >></button>
+            </div>
+          </div>
+
+          <button class="lever" id="blever" aria-label="Pull slot lever">
+            <span class="lever-top"></span>
+            <span class="lever-arm">
+              <span class="lever-knob"></span>
+            </span>
+            <span class="lever-base"></span>
+            <span class="lever-text">PULL</span>
+          </button>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="./cloverpit_slot_v0.7/js/main.js"></script>
+</body>
+</html>

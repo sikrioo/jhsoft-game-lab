@@ -1,0 +1,664 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Oil Drill Branch System v8</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#120804;min-height:100vh;display:flex;justify-content:center;align-items:center;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#f5e6c8}
+.wrap{width:760px;background:#1a0b04;border:3px solid #3a1a08;box-shadow:0 20px 80px rgba(0,0,0,.5)}
+.hud{height:58px;display:flex;align-items:center;gap:8px;padding:8px 10px;background:#241006;border-bottom:3px solid #0d0502}
+.badge{background:#0d0502;border:1px solid #5a2a10;border-radius:4px;padding:6px 10px;min-width:80px}
+.badge small{display:block;font-size:9px;color:#9a6a3a;letter-spacing:1px}
+.badge b{font-size:14px;color:#ffd37a}
+button{background:#5a2608;color:#f5d49b;border:2px solid #0d0502;border-radius:5px;padding:8px 12px;font-weight:700;cursor:pointer}
+button:hover{background:#7a350d}
+.info{margin-left:auto;font-size:12px;color:#c49a62}
+.scene{position:relative;width:100%}
+canvas{display:block;width:100%;height:auto;cursor:crosshair}
+.log{min-height:34px;padding:8px 12px;background:#0d0502;border-top:2px solid #2a1005;color:#c9965a;font-size:13px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hud">
+    <div class="badge"><small>MONEY</small><b id="money">$1,500</b></div>
+    <div class="badge"><small>DEPTH</small><b id="depth">0m</b></div>
+    <div class="badge"><small>BIT</small><b id="bit">100%</b></div>
+    <div class="badge"><small>OIL</small><b id="finds">0</b></div>
+    <div class="badge"><small>PROD</small><b id="prod">0/t</b></div>
+    <button id="newBtn">NEW LAND</button>
+    <div class="info">원유 안에 노드 생성 시 추출 시작 · 틱당 생산량 업그레이드 가능</div>
+  </div>
+  <div class="scene"><canvas id="c" width="760" height="540"></canvas></div>
+  <div class="log" id="log">노드를 클릭해 선택한 뒤, 그 노드에서 드래그해 원하는 방향으로 분기 시추하세요.</div>
+</div>
+
+<script>
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height,GROUND_Y=115,MPP=5.5;
+const ui={
+  money:document.getElementById('money'),
+  depth:document.getElementById('depth'),
+  bit:document.getElementById('bit'),
+  finds:document.getElementById('finds'),
+  prod:document.getElementById('prod'),
+  log:document.getElementById('log'),
+  newBtn:document.getElementById('newBtn')
+};
+
+const LAYERS=[
+  {name:'Sand',y:GROUND_Y,h:85,color:'#7b5230',resist:.55,wear:.08},
+  {name:'Clay',y:GROUND_Y+85,h:95,color:'#6c482b',resist:.85,wear:.16},
+  {name:'Limestone',y:GROUND_Y+180,h:120,color:'#5c5546',resist:1.45,wear:.55},
+  {name:'Dense Clay',y:GROUND_Y+300,h:70,color:'#55331f',resist:1.1,wear:.25},
+  {name:'Granite',y:GROUND_Y+370,h:170,color:'#40394a',resist:2.25,wear:1.2}
+];
+
+let S;
+
+function rand(a,b){return a+Math.random()*(b-a)}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v))}
+function layerAt(y){for(const l of LAYERS){if(y>=l.y&&y<l.y+l.h)return l}return LAYERS[LAYERS.length-1]}
+function setLog(t,c='#c9965a'){ui.log.textContent=t;ui.log.style.color=c}
+
+function createBlobPoints(r,count){
+  const pts=[];
+  for(let i=0;i<count;i++){
+    const a=Math.PI*2*i/count;
+    pts.push({a,r:r*rand(.65,1.25)});
+  }
+  return pts;
+}
+
+function genOils(){
+  const arr=[];
+  for(let i=0;i<5;i++){
+    const r=rand(22,42);
+    const cap=Math.floor(rand(80,380));
+    arr.push({x:rand(90,W-90),y:rand(GROUND_Y+110,H-45),r,capacity:cap,remaining:cap,found:false,extracting:false,linkedNode:-1,points:createBlobPoints(r,18)});
+  }
+  return arr;
+}
+
+function genRocks(){
+  const arr=[];
+  LAYERS.forEach(l=>{
+    const n=l.name==='Granite'?24:l.name==='Limestone'?18:l.name==='Clay'?12:8;
+    for(let i=0;i<n;i++){
+      arr.push({x:rand(30,W-30),y:rand(l.y+10,Math.min(H-20,l.y+l.h-10)),rx:rand(8,l.name==='Granite'?24:15),ry:rand(5,l.name==='Granite'?18:11),hard:l.name==='Granite'||(l.name==='Limestone'&&Math.random()<.35),hit:false,rot:rand(0,Math.PI),layer:l.name});
+    }
+  });
+  return arr;
+}
+
+function newGame(){
+  S={money:1500,bit:100,finds:0,currentProd:0,extractionRate:1,extractTick:0,selectedNode:0,dragging:false,dragStart:null,dragEnd:null,drilling:false,jam:false,jamT:0,shake:0,pathProgress:0,currentPath:null,particles:[],sparks:[],oilDrops:[],flowPulses:[],oilFills:[],oilFilledSegments:new Set(),nodes:[{x:W/2,y:GROUND_Y,root:true}],edges:[],revealed:[],fogCanvas:document.createElement('canvas'),fogCtx:null,oils:genOils(),rocks:genRocks()};
+  S.fogCanvas.width=W;
+  S.fogCanvas.height=H;
+  S.fogCtx=S.fogCanvas.getContext('2d');
+  initFog();
+  reveal(W/2,GROUND_Y+20,58);
+  setLog('새 지역입니다. 원유는 지나가기만 하면 추출되지 않고, 원유 안에 노드를 만들어야 추출됩니다.');
+}
+
+function initFog(){
+  const f=S.fogCtx;
+  f.clearRect(0,0,W,H);
+  f.fillStyle='rgba(4,1,0,.94)';
+  f.fillRect(0,GROUND_Y,W,H-GROUND_Y);
+  S.revealed=[];
+}
+
+function reveal(x,y,r){
+  // Visibility data, used only for deciding whether hidden objects can be drawn.
+  S.revealed.push({x,y,r:r*1.15});
+  if(S.revealed.length>260) S.revealed.shift();
+
+  // Real fog removal. This avoids even-odd overlap bugs and ring artifacts.
+  const f=S.fogCtx;
+  f.save();
+  f.globalCompositeOperation='destination-out';
+
+  const g=f.createRadialGradient(x,y,0,x,y,r);
+  g.addColorStop(0,'rgba(0,0,0,1)');
+  g.addColorStop(.55,'rgba(0,0,0,.78)');
+  g.addColorStop(.86,'rgba(0,0,0,.24)');
+  g.addColorStop(1,'rgba(0,0,0,0)');
+
+  f.fillStyle=g;
+  f.beginPath();
+  f.arc(x,y,r,0,Math.PI*2);
+  f.fill();
+  f.restore();
+}
+
+function canSee(x,y){
+  return S.revealed.some(f=>Math.hypot(x-f.x,y-f.y)<f.r);
+}
+function getMouse(e){const rect=canvas.getBoundingClientRect();return{x:(e.clientX-rect.left)*W/rect.width,y:(e.clientY-rect.top)*H/rect.height}}
+function nearestNode(p){let best=-1,bd=9999;S.nodes.forEach((n,i)=>{const d=Math.hypot(p.x-n.x,p.y-n.y);if(d<bd){bd=d;best=i}});return bd<24?best:-1}
+
+canvas.addEventListener('mousedown',e=>{
+  if(S.drilling||S.jam)return;
+
+  const p=getMouse(e);
+  const ni=nearestNode(p);
+
+  if(ni<0){
+    setLog('노드를 먼저 선택해야 합니다. 파란/노란 노드 근처에서 클릭 또는 드래그하세요.','#d08040');
+    return;
+  }
+
+  // Any existing node can become the new branch origin.
+  S.selectedNode=ni;
+
+  const n=S.nodes[ni];
+  S.dragging=true;
+  S.dragStart={x:n.x,y:n.y};
+  S.dragEnd={x:p.x,y:p.y};
+
+  setLog('노드 선택됨. 그대로 드래그해서 새 방향으로 분기 시추하세요.','#d0b070');
+});
+
+canvas.addEventListener('mousemove',e=>{
+  if(!S.dragging)return;
+
+  const p=getMouse(e);
+  const s=S.dragStart;
+  const dx=p.x-s.x;
+  const dy=p.y-s.y;
+  const len=Math.hypot(dx,dy);
+  const maxLen=155;
+  const scale=len>maxLen?maxLen/len:1;
+
+  let ex=s.x+dx*scale;
+  let ey=s.y+dy*scale;
+
+  // Branch drilling can go left/right/diagonal.
+  // Only prevent going above the ground line too much.
+  ey=clamp(ey,GROUND_Y+12,H-18);
+  ex=clamp(ex,18,W-18);
+
+  S.dragEnd={x:ex,y:ey};
+});
+
+window.addEventListener('mouseup',()=>{
+  if(!S.dragging)return;
+
+  S.dragging=false;
+
+  const s=S.dragStart;
+  const e=S.dragEnd;
+  const len=Math.hypot(e.x-s.x,e.y-s.y);
+
+  // Short mouse action means node selection only.
+  if(len<25){
+    setLog('노드가 선택되었습니다. 이 노드에서 드래그하면 새 분기가 생성됩니다.','#d0b070');
+    return;
+  }
+
+  startPath(s,e);
+});
+
+function startPath(s,e){
+  const cost=Math.round(Math.hypot(e.x-s.x,e.y-s.y)*.65);
+  if(S.money<cost){setLog('자금 부족: 필요 비용 $'+cost,'#f06040');return}
+  S.money-=cost;
+  S.currentPath={sx:s.x,sy:s.y,ex:e.x,ey:e.y,len:Math.hypot(e.x-s.x,e.y-s.y)};
+  S.pathProgress=0;S.drilling=true;
+  setLog('시추 시작: 예상 비용 $'+cost+'. 암석 충돌에 주의하세요.','#9fd0ff');
+}
+
+function finishPath(x,y){
+  const newNodeIndex=S.nodes.length;
+  const oil=oilAtPoint(x,y);
+
+  S.nodes.push({x,y,root:false,oil:!!oil});
+  S.edges.push({a:S.selectedNode,b:newNodeIndex,blocked:false});
+  S.selectedNode=newNodeIndex;
+  S.currentPath=null;
+  S.drilling=false;
+
+  if(oil){
+    connectOilNode(oil,newNodeIndex);
+  }else{
+    setLog('시추 완료. 끝점 노드에서 다시 드래그해 다른 방향으로 분기할 수 있습니다.','#b6e27a');
+  }
+}
+
+function oilAtPoint(x,y){
+  for(const o of S.oils){
+    if(o.remaining<=0) continue;
+    if(Math.hypot(x-o.x,y-o.y)<o.r) return o;
+  }
+  return null;
+}
+
+function connectOilNode(oil,nodeIndex){
+  if(!oil.found){
+    oil.found=true;
+    S.finds++;
+  }
+
+  oil.extracting=true;
+  oil.linkedNode=nodeIndex;
+
+  reveal(oil.x,oil.y,oil.r*2.8);
+  spawnOilFlow(nodeIndex);
+
+  setLog('원유 노드 연결 완료. 매장량 '+Math.round(oil.remaining)+'bbl, 틱당 '+S.extractionRate+'bbl 추출 시작.','#ffd35a');
+}
+
+function jamAt(x,y,rock){
+  S.drilling=false;S.jam=true;S.jamT=70;S.shake=8;S.currentPath=null;
+  S.nodes.push({x,y,root:false,jammed:true});
+  S.edges.push({a:S.selectedNode,b:S.nodes.length-1,blocked:true});
+  S.selectedNode=S.nodes.length-1;
+  for(let i=0;i<36;i++)S.sparks.push({x,y,vx:rand(-4,4),vy:rand(-5,2),life:rand(.4,1)});
+  setLog('KIIIIING... 강한 '+rock.layer+' 암석에 걸렸습니다. 이 노드에서 다른 방향으로 우회하세요.','#ff7a40');
+}
+
+function spawnOilBurst(x,y){
+  for(let i=0;i<32;i++){
+    const a=-Math.PI/2+rand(-1.1,1.1),sp=rand(2,8);
+    S.oilDrops.push({x,y,vx:Math.cos(a)*sp,vy:Math.sin(a)*sp-2,r:rand(2,6),life:1});
+  }
+}
+
+function findPathToRoot(nodeIndex){
+  const parent = new Map();
+  const queue = [0];
+  parent.set(0, -1);
+
+  while(queue.length){
+    const cur = queue.shift();
+    if(cur === nodeIndex) break;
+
+    for(const e of S.edges){
+      const next = e.a === cur ? e.b : e.b === cur ? e.a : -1;
+      if(next < 0 || parent.has(next)) continue;
+      parent.set(next, cur);
+      queue.push(next);
+    }
+  }
+
+  if(!parent.has(nodeIndex)) return [nodeIndex, 0];
+
+  const path = [];
+  let cur = nodeIndex;
+  while(cur !== -1){
+    path.push(cur);
+    cur = parent.get(cur);
+  }
+  return path;
+}
+
+function edgeKey(a,b){
+  return a < b ? a + '-' + b : b + '-' + a;
+}
+
+function spawnOilFlow(fromNodeIndex){
+  const path = findPathToRoot(fromNodeIndex);
+
+  S.oilFills.push({
+    path,
+    t:0,
+    speed:.009,
+    done:false
+  });
+}
+
+function update(){
+  if(S.drilling&&S.currentPath){
+    const p=S.currentPath,cx=p.sx+(p.ex-p.sx)*S.pathProgress,cy=p.sy+(p.ey-p.sy)*S.pathProgress,lay=layerAt(cy);
+    S.pathProgress+=1/(p.len*lay.resist)*2.7;
+    S.bit=Math.max(0,S.bit-lay.wear*(1/(p.len*lay.resist)*2.7)*18);
+    if(Math.random()<0.72) reveal(cx,cy,34);
+    if(Math.random()<.55)S.particles.push({x:cx+rand(-5,5),y:cy+rand(-5,5),vx:rand(-.7,.7),vy:rand(-.8,.4),life:.7,c:lay.color});
+
+    for(const r of S.rocks){
+      if(r.hit)continue;
+      const d=Math.hypot(cx-r.x,cy-r.y);
+      if(d<Math.max(r.rx,r.ry)+5){
+        r.hit=true;S.bit=Math.max(0,S.bit-(r.hard?28:9));reveal(r.x,r.y,62);
+        if(r.hard||S.bit<12){jamAt(cx,cy,r);return}
+        for(let i=0;i<12;i++)S.sparks.push({x:cx,y:cy,vx:rand(-2,2),vy:rand(-3,1),life:.5});
+        setLog('작은 '+r.layer+' 암석을 뚫었습니다. 비트 손상 발생.','#e0b060');
+      }
+    }
+
+    for(const o of S.oils){
+      const d=Math.hypot(cx-o.x,cy-o.y);
+
+      // Passing through an oil pocket only reveals/detects it.
+      // Extraction starts only when a final node is placed inside the pocket.
+      if(!o.found && d<o.r){
+        o.found=true;
+        S.finds++;
+        reveal(o.x,o.y,o.r*2.8);
+        spawnOilBurst(cx,cy);
+        setLog('원유층 감지! 지나가기만 해서는 추출되지 않습니다. 원유 안에 노드를 만들어야 합니다.','#ffd35a');
+      }
+    }
+
+    if(S.bit<=0){jamAt(cx,cy,{layer:'damaged bit'});return}
+    if(S.pathProgress>=1)finishPath(p.ex,p.ey);
+  }
+
+  updateExtraction();
+
+  S.particles=S.particles.filter(p=>p.life>0);S.particles.forEach(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=.03;p.life-=.025});
+  S.sparks=S.sparks.filter(s=>s.life>0);S.sparks.forEach(s=>{s.x+=s.vx;s.y+=s.vy;s.vy+=.16;s.vx*=.92;s.life-=.04});
+  S.oilDrops=S.oilDrops.filter(d=>d.life>0);S.oilDrops.forEach(d=>{d.x+=d.vx;d.y+=d.vy;d.vy+=.22;d.vx*=.97;d.life-=.012});
+  S.oilFills=S.oilFills.filter(f=>!f.done);
+  S.oilFills.forEach(f=>{
+    f.t += f.speed;
+
+    const nodes = f.path.map(i=>S.nodes[i]).filter(Boolean);
+    if(nodes.length >= 2){
+      const segCount = nodes.length - 1;
+      const filledCount = Math.floor(f.t * segCount);
+
+      for(let i=0;i<filledCount;i++){
+        const a=f.path[i], b=f.path[i+1];
+        if(a!==undefined && b!==undefined){
+          S.oilFilledSegments.add(edgeKey(a,b));
+        }
+      }
+
+      if(f.t >= 1){
+        for(let i=0;i<segCount;i++){
+          S.oilFilledSegments.add(edgeKey(f.path[i],f.path[i+1]));
+        }
+        f.done=true;
+      }
+    }
+  });
+
+  if(S.jam){S.jamT--;S.shake=S.jamT>0?rand(-5,5):0;if(S.jamT<=0){S.jam=false;setLog('드릴이 멈췄습니다. 현재 노드에서 다른 방향으로 우회 시추하세요.','#c9965a')}}
+}
+
+function updateExtraction(){
+  S.extractTick++;
+  if(S.extractTick<60) return;
+  S.extractTick=0;
+
+  let totalRate=0;
+
+  for(const o of S.oils){
+    if(!o.extracting || o.remaining<=0) continue;
+
+    const amount=Math.min(S.extractionRate,o.remaining);
+    o.remaining-=amount;
+    totalRate+=amount;
+    S.money+=amount*4;
+
+    if(o.remaining<=0){
+      o.remaining=0;
+      o.extracting=false;
+      setLog('한 유전의 원유가 고갈되었습니다. 다른 원유 노드를 찾아야 합니다.','#c09060');
+    }
+  }
+
+  S.currentProd=totalRate;
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.save();ctx.translate(S.shake||0,0);
+  drawSky();drawLayers();drawSurfaceDecor();drawOils();drawRocks();drawEdges();drawOilFlow();drawCurrentDrill();drawNodes();drawParticles();drawFog();if(S.dragging)drawDragPreview();
+  ctx.restore();drawHUD();
+}
+
+function drawSky(){
+  const g=ctx.createLinearGradient(0,0,0,GROUND_Y);g.addColorStop(0,'#b9642c');g.addColorStop(1,'#d49554');ctx.fillStyle=g;ctx.fillRect(0,0,W,GROUND_Y);
+  ctx.fillStyle='#743714';[[-20,72,180,45],[160,78,130,35],[410,72,190,44],[620,80,110,32]].forEach(a=>{const[x,y,w,h]=a;ctx.beginPath();ctx.moveTo(x,GROUND_Y);ctx.lineTo(x,y+h*.4);ctx.quadraticCurveTo(x+w*.5,y,x+w,y+h*.45);ctx.lineTo(x+w,GROUND_Y);ctx.closePath();ctx.fill()});
+  ctx.fillStyle='#492008';ctx.fillRect(0,GROUND_Y-5,W,8);
+}
+
+function drawSurfaceDecor(){
+  // Foreground western props: cactus, cart, small tank/pump silhouettes.
+  const cactus = (x,y,s=1)=>{
+    ctx.fillStyle='#1c0b03';
+    ctx.fillRect(x-3*s,y-32*s,6*s,32*s);
+    ctx.fillRect(x-16*s,y-22*s,13*s,5*s);
+    ctx.fillRect(x-16*s,y-31*s,5*s,14*s);
+    ctx.fillRect(x+3*s,y-16*s,14*s,5*s);
+    ctx.fillRect(x+12*s,y-27*s,5*s,16*s);
+  };
+
+  const cart = (x,y,s=1)=>{
+    ctx.fillStyle='#1c0b03';
+    ctx.fillRect(x,y-14*s,52*s,13*s);
+    ctx.fillRect(x+6*s,y-24*s,38*s,12*s);
+    ctx.beginPath();ctx.arc(x+10*s,y,7*s,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(x+42*s,y,7*s,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#3a1708';
+    ctx.lineWidth=2*s;
+    ctx.beginPath();ctx.moveTo(x+52*s,y-10*s);ctx.lineTo(x+72*s,y-18*s);ctx.stroke();
+  };
+
+  const pump = (x,y,s=1)=>{
+    ctx.fillStyle='#1c0b03';
+    ctx.fillRect(x-18*s,y-8*s,36*s,8*s);
+    ctx.fillRect(x-4*s,y-46*s,8*s,38*s);
+    ctx.beginPath();ctx.arc(x,y-51*s,9*s,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle='#1c0b03';
+    ctx.lineWidth=5*s;
+    ctx.beginPath();
+    ctx.moveTo(x,y-42*s);
+    ctx.quadraticCurveTo(x+25*s,y-55*s,x+42*s,y-30*s);
+    ctx.stroke();
+  };
+
+  cactus(80,GROUND_Y-3,.8);
+  cactus(640,GROUND_Y-3,.7);
+  cart(185,GROUND_Y-3,.62);
+  pump(520,GROUND_Y-3,.65);
+
+  // Small surface pipe cap at root node.
+  ctx.fillStyle='#130602';
+  ctx.fillRect(W/2-22,GROUND_Y-9,44,8);
+  ctx.fillStyle='#2b1205';
+  ctx.fillRect(W/2-8,GROUND_Y-18,16,10);
+}
+
+function drawLayers(){
+  for(const l of LAYERS){
+    ctx.fillStyle=l.color;ctx.fillRect(0,l.y,W,l.h);
+    ctx.strokeStyle='rgba(0,0,0,.35)';ctx.beginPath();ctx.moveTo(0,l.y);for(let x=0;x<=W;x+=30)ctx.lineTo(x,l.y+Math.sin(x*.04+l.y*.02)*4);ctx.stroke();
+    ctx.fillStyle='rgba(255,220,150,.16)';ctx.font='10px monospace';ctx.fillText(l.name.toUpperCase(),8,l.y+18);
+  }
+}
+
+function drawOils(){
+  for(const o of S.oils){
+    const visible=o.found||canSee(o.x,o.y);if(!visible)continue;
+    ctx.save();ctx.globalAlpha=o.found?1:.28;ctx.translate(o.x,o.y);
+    const wet=ctx.createRadialGradient(0,0,0,0,0,o.r*2.3);wet.addColorStop(0,'rgba(5,2,0,.5)');wet.addColorStop(.5,'rgba(0,0,0,.18)');wet.addColorStop(1,'rgba(0,0,0,0)');
+    ctx.fillStyle=wet;ctx.beginPath();ctx.arc(0,0,o.r*2.1,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();o.points.forEach((p,i)=>{const rr=p.r*(1+Math.sin(Date.now()*0.002+i)*.03),x=Math.cos(p.a)*rr,y=Math.sin(p.a)*rr*.62;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)});ctx.closePath();
+    const g=ctx.createRadialGradient(-o.r*.3,-o.r*.22,0,0,0,o.r*1.3);g.addColorStop(0,'#1b0d05');g.addColorStop(.55,'#070301');g.addColorStop(1,'#010000');ctx.fillStyle=g;ctx.fill();ctx.strokeStyle='rgba(80,55,25,.75)';ctx.lineWidth=2;ctx.stroke();
+    ctx.strokeStyle='rgba(70,140,110,.35)';ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(-o.r*.18,-o.r*.1,o.r*.42,o.r*.12,-.3,0,Math.PI*2);ctx.stroke();
+    ctx.strokeStyle='rgba(140,95,190,.22)';ctx.beginPath();ctx.ellipse(o.r*.15,o.r*.03,o.r*.55,o.r*.16,.12,0,Math.PI*2);ctx.stroke();
+    ctx.fillStyle='rgba(255,230,170,.35)';ctx.beginPath();ctx.ellipse(-o.r*.33,-o.r*.22,o.r*.13,o.r*.05,-.4,0,Math.PI*2);ctx.fill();
+    if(o.found){
+      ctx.globalAlpha=1;
+      ctx.fillStyle='rgba(0,0,0,.62)';
+      ctx.fillRect(-38,o.r*.72,76,18);
+      ctx.fillStyle=o.extracting?'#ffd35a':'#cfa05a';
+      ctx.font='10px monospace';
+      ctx.textAlign='center';
+      ctx.fillText(Math.round(o.remaining)+'/'+o.capacity+'bbl',0,o.r*.72+13);
+      ctx.textAlign='left';
+    }
+
+    ctx.restore();
+  }
+}
+
+function drawRocks(){
+  for(const r of S.rocks){
+    if(!canSee(r.x,r.y)&&!r.hit)continue;
+    ctx.save();ctx.translate(r.x,r.y);ctx.rotate(r.rot);ctx.globalAlpha=r.hit?.95:.65;ctx.fillStyle=r.hard?'#706678':'#73624e';
+    ctx.beginPath();ctx.ellipse(0,0,r.rx,r.ry,0,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(0,0,0,.5)';ctx.stroke();
+    if(r.hit){ctx.strokeStyle='#1a0c06';ctx.beginPath();ctx.moveTo(-r.rx*.4,-1);ctx.lineTo(r.rx*.4,r.ry*.4);ctx.moveTo(r.rx*.1,-r.ry*.6);ctx.lineTo(-r.rx*.15,r.ry*.45);ctx.stroke()}
+    ctx.restore();
+  }
+}
+
+
+function getOilFillSegments(fill){
+  const nodes = fill.path.map(i=>S.nodes[i]).filter(Boolean);
+  if(nodes.length < 2) return [];
+
+  const segments=[];
+  let total=0;
+
+  for(let i=0;i<nodes.length-1;i++){
+    const a=nodes[i],b=nodes[i+1];
+    const len=Math.hypot(b.x-a.x,b.y-a.y);
+    segments.push({a,b,len,ai:fill.path[i],bi:fill.path[i+1]});
+    total+=len;
+  }
+
+  let fillDist = clamp(fill.t,0,1) * total;
+  const result=[];
+
+  for(const seg of segments){
+    if(fillDist <= 0) break;
+
+    const k = Math.min(1, fillDist / seg.len);
+    result.push({...seg,k});
+    fillDist -= seg.len;
+  }
+
+  return result;
+}
+
+function drawOilFilledPipe(a,b,progress=1){
+  const x1=a.x, y1=a.y;
+  const x2=a.x+(b.x-a.x)*progress;
+  const y2=a.y+(b.y-a.y)*progress;
+
+  ctx.lineCap='round';
+
+  ctx.strokeStyle='#050100';
+  ctx.lineWidth=5.2;
+  ctx.beginPath();
+  ctx.moveTo(x1,y1);
+  ctx.lineTo(x2,y2);
+  ctx.stroke();
+
+  ctx.strokeStyle='rgba(95,140,115,.32)';
+  ctx.lineWidth=1.2;
+  ctx.beginPath();
+  ctx.moveTo(x1,y1-1.2);
+  ctx.lineTo(x2,y2-1.2);
+  ctx.stroke();
+}
+
+function drawOilFlow(){
+  for(const e of S.edges){
+    if(!S.oilFilledSegments.has(edgeKey(e.a,e.b))) continue;
+    const a=S.nodes[e.a], b=S.nodes[e.b];
+    drawOilFilledPipe(a,b,1);
+  }
+
+  for(const f of S.oilFills){
+    const segs=getOilFillSegments(f);
+    for(const seg of segs){
+      drawOilFilledPipe(seg.a,seg.b,seg.k);
+
+      if(seg.k < 1){
+        const fx=seg.a.x+(seg.b.x-seg.a.x)*seg.k;
+        const fy=seg.a.y+(seg.b.y-seg.a.y)*seg.k;
+        const glow=ctx.createRadialGradient(fx,fy,0,fx,fy,14);
+        glow.addColorStop(0,'rgba(20,8,1,.95)');
+        glow.addColorStop(.5,'rgba(4,1,0,.65)');
+        glow.addColorStop(1,'rgba(0,0,0,0)');
+        ctx.fillStyle=glow;
+        ctx.beginPath();
+        ctx.arc(fx,fy,14,0,Math.PI*2);
+        ctx.fill();
+      }
+    }
+  }
+}
+
+function drawEdges(){
+  ctx.lineCap='round';
+  for(const e of S.edges){
+    const a=S.nodes[e.a],b=S.nodes[e.b];ctx.strokeStyle=e.blocked?'#7c3322':'#5f8f9d';ctx.lineWidth=e.blocked?5:6;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+    ctx.strokeStyle=e.blocked?'#f07040':'#b8dce8';ctx.lineWidth=e.blocked?1.4:1.4;ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.stroke();
+  }
+}
+
+function drawCurrentDrill(){
+  if(!S.currentPath)return;
+  const p=S.currentPath,cx=p.sx+(p.ex-p.sx)*S.pathProgress,cy=p.sy+(p.ey-p.sy)*S.pathProgress;
+  ctx.strokeStyle='#5f8f9d';ctx.lineWidth=6;ctx.lineCap='round';ctx.beginPath();ctx.moveTo(p.sx,p.sy);ctx.lineTo(cx,cy);ctx.stroke();
+  const ang=Math.atan2(p.ey-p.sy,p.ex-p.sx);ctx.save();ctx.translate(cx,cy);ctx.rotate(ang+Math.PI/2);ctx.fillStyle='#c98322';ctx.beginPath();ctx.moveTo(0,15);ctx.lineTo(-8,-5);ctx.lineTo(8,-5);ctx.closePath();ctx.fill();ctx.restore();
+}
+
+function drawNodes(){
+  S.nodes.forEach((n,i)=>{
+    const selected=i===S.selectedNode;
+
+    ctx.beginPath();
+    ctx.arc(n.x,n.y,selected?8:6,0,Math.PI*2);
+    ctx.fillStyle=n.oil?'#050100':n.jammed?'#e15a30':n.root?'#ffd36a':'#d6f3ff';
+    ctx.fill();
+    ctx.strokeStyle='#1a0802';
+    ctx.lineWidth=2;
+    ctx.stroke();
+
+    if(selected){
+      ctx.strokeStyle='rgba(255,230,120,.75)';
+      ctx.lineWidth=2;
+      ctx.beginPath();
+      ctx.arc(n.x,n.y,14+Math.sin(Date.now()*.006)*2,0,Math.PI*2);
+      ctx.stroke();
+
+      ctx.fillStyle='rgba(0,0,0,.58)';
+      ctx.fillRect(n.x+10,n.y+8,74,18);
+      ctx.fillStyle='#ffe090';
+      ctx.font='10px monospace';
+      ctx.fillText('BRANCH',n.x+16,n.y+21);
+    }
+  });
+}
+
+function drawDragPreview(){
+  const s=S.dragStart,e=S.dragEnd;ctx.strokeStyle='rgba(255,230,120,.75)';ctx.lineWidth=3;ctx.setLineDash([8,6]);ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(e.x,e.y);ctx.stroke();ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,230,120,.85)';ctx.beginPath();ctx.arc(e.x,e.y,6,0,Math.PI*2);ctx.fill();
+  const meters=Math.round(Math.hypot(e.x-s.x,e.y-s.y)*MPP);ctx.fillStyle='rgba(0,0,0,.65)';ctx.fillRect(e.x+10,e.y-24,90,22);ctx.fillStyle='#ffe090';ctx.font='12px monospace';ctx.fillText(meters+'m',e.x+18,e.y-9);
+}
+
+function drawParticles(){
+  for(const p of S.particles){ctx.globalAlpha=p.life;ctx.fillStyle=p.c;ctx.beginPath();ctx.arc(p.x,p.y,2,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;
+  for(const s of S.sparks){ctx.globalAlpha=s.life;ctx.strokeStyle='#ffcb45';ctx.beginPath();ctx.moveTo(s.x,s.y);ctx.lineTo(s.x-s.vx*3,s.y-s.vy*3);ctx.stroke()}ctx.globalAlpha=1;
+  for(const d of S.oilDrops){ctx.globalAlpha=d.life;ctx.fillStyle='#050100';ctx.beginPath();ctx.arc(d.x,d.y,d.r,0,Math.PI*2);ctx.fill()}ctx.globalAlpha=1;
+}
+
+function drawFog(){
+  // Draw the already-erased fog texture.
+  // No even-odd mask is used, so explored areas never turn black again.
+  ctx.drawImage(S.fogCanvas,0,0);
+}
+
+function drawHUD(){
+  ui.money.textContent='$'+S.money.toLocaleString();
+  const n=S.nodes[S.selectedNode];ui.depth.textContent=Math.max(0,Math.round((n.y-GROUND_Y)*MPP))+'m';
+  ui.bit.textContent=Math.round(S.bit)+'%';ui.finds.textContent=S.finds;ui.prod.textContent=(S.currentProd||0)+'/t';
+}
+
+function frame(){update();draw();requestAnimationFrame(frame)}
+ui.newBtn.addEventListener('click',newGame);
+newGame();frame();
+</script>
+</body>
+</html>

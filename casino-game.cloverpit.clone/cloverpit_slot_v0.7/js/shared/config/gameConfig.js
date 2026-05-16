@@ -1,0 +1,66 @@
+export const GAME_CONFIG = {
+  version: "0.7",
+  deadlines: [75, 220, 666, 2200, 12000],
+  costs: {
+    spin: 5,
+  },
+  rewards: {
+    advanceCoins: 60,
+    advanceTickets: 2,
+    multiplierGrowth: 1.7,
+    jackpotTickets: 5,
+  },
+  reels: {
+    columns: 5,
+    rows: 3,
+    rowHeight: 84,
+    extraRows: 1,
+    stopDurations: [900, 1100, 1300, 1500, 1700],
+    rowClasses: ["top", "mid", "bot"],
+  },
+  ui: {
+    lineColors: ["#d4a020", "#40c8ff", "#ff80a0"],
+    neutralBurst: "#6a5828",
+    jackpotFlash: "#ff4020",
+    jackpotBurst: "#d4a020",
+    jackpotStars: "#ffdd40",
+    devilFlash: "#cc00ff",
+    devilTint: "#600030",
+    depositBurst: "#30b060",
+    gainFloat: "#d4a020",
+    comboFloat: "#40c8ff",
+    depositFloat: "#30b060",
+    overdriveFlash: "#ff8a20",
+    feverFlash: "#40c8ff",
+    lossFlash: "#c03020",
+  },
+  items: {
+    active: [
+      {
+        id: "lucky-clover",
+        name: "Lucky Clover",
+        summary: "Winning rows with clover get +50%.",
+      },
+      {
+        id: "golden-bell",
+        name: "Golden Bell",
+        summary: "Bell line rewards echo one extra time.",
+      },
+      {
+        id: "crown-reserve",
+        name: "Crown Reserve",
+        summary: "2+ crowns release reserve coins.",
+      },
+    ],
+  },
+  symbols: [
+    { id: "cherry", icon: "🍒", baseMultiplier: 2, weight: 28, family: "fruit" },
+    { id: "lemon", icon: "🍋", baseMultiplier: 3, weight: 22, family: "fruit" },
+    { id: "diamond", icon: "💎", baseMultiplier: 5, weight: 16, family: "treasure" },
+    { id: "clover", icon: "🍀", baseMultiplier: 8, weight: 11, family: "nature" },
+    { id: "crown", icon: "👑", baseMultiplier: 14, weight: 7, family: "treasure" },
+    { id: "bell", icon: "🔔", baseMultiplier: 25, weight: 5, family: "treasure" },
+    { id: "devil", icon: "😈", baseMultiplier: 0, weight: 5, special: "devil", family: "infernal" },
+    { id: "jackpot", icon: "7️⃣", baseMultiplier: 60, weight: 3, special: "jackpot", family: "fate" },
+  ],
+};
