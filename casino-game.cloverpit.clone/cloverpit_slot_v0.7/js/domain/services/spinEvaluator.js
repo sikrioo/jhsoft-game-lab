@@ -33,11 +33,15 @@ function createEvaluationContext(grid, state, config) {
     state,
     config,
     stages: [],
-    rowResults: Array.from({ length: config.reels.rows }, (_, row) => ({
-      row,
+    rowResults: config.paylines.map((payline, paylineIndex) => ({
+      row: paylineIndex,
+      paylineId: payline.id,
+      paylineLabel: payline.label,
+      pathClass: payline.pathClass,
       status: "pending",
       message: "--",
       matchedSymbolIds: [],
+      matchedPositions: [],
       gain: 0,
       multiplier: 1,
     })),
@@ -60,8 +64,9 @@ function evaluateLines(context) {
   const entries = [];
   const comboMultiplier = getComboMultiplier(context.state.combo);
 
-  for (let row = 0; row < context.config.reels.rows; row += 1) {
-    const line = context.grid.map((column) => column[row]);
+  for (let paylineIndex = 0; paylineIndex < context.config.paylines.length; paylineIndex += 1) {
+    const payline = context.config.paylines[paylineIndex];
+    const line = payline.positions.map(([column, row]) => context.grid[column][row]);
     const counts = new Map();
 
     for (const symbol of line) {
@@ -72,41 +77,49 @@ function evaluateLines(context) {
     const leadSymbol = line[0];
 
     if (allSame && leadSymbol.special === "devil") {
-      context.specials.devilRows.push(row);
-      context.rowResults[row] = {
-        row,
+      context.specials.devilRows.push(paylineIndex);
+      context.rowResults[paylineIndex] = {
+        row: paylineIndex,
+        paylineId: payline.id,
+        paylineLabel: payline.label,
+        pathClass: payline.pathClass,
         status: "devil",
         message: "REVERSE JACKPOT ARMED",
         matchedSymbolIds: [leadSymbol.id],
+        matchedPositions: payline.positions,
         gain: 0,
         multiplier: 1,
       };
       entries.push({
-        label: `LINE ${row + 1}`,
+        label: payline.label,
         text: `${leadSymbol.icon} infernal alignment armed.`,
         tone: "loss",
         effect: "arm-devil",
-        row,
+        row: paylineIndex,
       });
       continue;
     }
 
     if (allSame && leadSymbol.special === "jackpot") {
-      context.specials.jackpotRows.push(row);
-      context.rowResults[row] = {
-        row,
+      context.specials.jackpotRows.push(paylineIndex);
+      context.rowResults[paylineIndex] = {
+        row: paylineIndex,
+        paylineId: payline.id,
+        paylineLabel: payline.label,
+        pathClass: payline.pathClass,
         status: "jp",
         message: "JACKPOT ARMED",
         matchedSymbolIds: [leadSymbol.id],
+        matchedPositions: payline.positions,
         gain: 0,
         multiplier: comboMultiplier,
       };
       entries.push({
-        label: `LINE ${row + 1}`,
+        label: payline.label,
         text: `${leadSymbol.icon} jackpot alignment armed.`,
         tone: "event",
         effect: "arm-jackpot",
-        row,
+        row: paylineIndex,
       });
       continue;
     }
@@ -124,39 +137,54 @@ function evaluateLines(context) {
     if (rowGain > 0) {
       const gained = Math.round(rowGain * comboMultiplier);
       const matchSymbol = line.find((symbol) => symbol.id === matchedSymbolIds[0]);
+      const matchedPositions = payline.positions.filter(
+        ([column, row]) => matchedSymbolIds.includes(context.grid[column][row].id),
+      );
 
       context.totalCoinDelta += gained;
       context.lineWins.push({
-        row,
+        row: paylineIndex,
+        paylineId: payline.id,
+        paylineLabel: payline.label,
+        pathClass: payline.pathClass,
         gain: gained,
         matchedSymbolIds,
+        matchedPositions,
         line,
       });
-      context.rowResults[row] = {
-        row,
-        status: `win${row}`,
+      context.rowResults[paylineIndex] = {
+        row: paylineIndex,
+        paylineId: payline.id,
+        paylineLabel: payline.label,
+        pathClass: payline.pathClass,
+        status: payline.resultClass,
         message: `${matchSymbol.icon} MATCH +${gained}`,
         matchedSymbolIds,
+        matchedPositions,
         gain: gained,
         multiplier: comboMultiplier,
       };
       entries.push({
-        label: `LINE ${row + 1}`,
+        label: payline.label,
         text: `${matchSymbol.icon} match pays +${gained}.`,
         tone: "gain",
         effect: "line-win",
         coinDelta: gained,
-        row,
-        color: context.config.ui.lineColors[row],
+        row: paylineIndex,
+        color: context.config.ui.lineColors[paylineIndex],
       });
       continue;
     }
 
-    context.rowResults[row] = {
-      row,
+    context.rowResults[paylineIndex] = {
+      row: paylineIndex,
+      paylineId: payline.id,
+      paylineLabel: payline.label,
+      pathClass: payline.pathClass,
       status: "lose",
       message: "NO MATCH",
       matchedSymbolIds: [],
+      matchedPositions: [],
       gain: 0,
       multiplier: 1,
     };
@@ -255,7 +283,7 @@ function evaluateMultiLines(context) {
     context.comboBuffer += 2;
     entries.push({
       label: "MULTI",
-      text: "2 scoring rows synchronize -> +18 and combo reserve +2.",
+      text: "2 scoring paylines synchronize -> +18 and combo reserve +2.",
       tone: "event",
       effect: "multi-bonus",
       coinDelta,
@@ -267,7 +295,7 @@ function evaluateMultiLines(context) {
     context.comboBuffer += 3;
     entries.push({
       label: "MULTI",
-      text: "3 scoring rows synchronize -> +36 and combo reserve +3.",
+      text: "3 scoring paylines synchronize -> +36 and combo reserve +3.",
       tone: "event",
       effect: "multi-bonus",
       coinDelta,
@@ -364,7 +392,7 @@ function evaluateItems(context) {
     context.totalCoinDelta += coinDelta;
     entries.push({
       label: getItemName(context, "lucky-clover"),
-      text: `Winning clover rows bloom -> +${coinDelta}.`,
+      text: `Winning clover paylines bloom -> +${coinDelta}.`,
       tone: "gain",
       effect: "item-bonus",
       coinDelta,
@@ -519,7 +547,7 @@ function evaluateEvents(context) {
     context.totalCoinDelta += coinDelta;
     entries.push({
       label: "OVERDRIVE",
-      text: "All three rows fired -> +40 overdrive bonus.",
+      text: "3+ paylines fired together -> +40 overdrive bonus.",
       tone: "event",
       effect: "event-overdrive",
       coinDelta,

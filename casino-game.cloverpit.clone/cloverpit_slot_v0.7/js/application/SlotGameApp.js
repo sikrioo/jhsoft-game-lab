@@ -2,6 +2,7 @@ import { createInitialGameState } from "../domain/entities/createInitialGameStat
 import { describeCombo, updateCombo } from "../domain/services/comboPolicy.js";
 import { advanceDeadline, depositCoins } from "../domain/services/progressionService.js";
 import { evaluateSpin } from "../domain/services/spinEvaluator.js";
+import { getWeightedSymbolPool, refreshSymbolWeights } from "../domain/services/symbolWeightService.js";
 import { buildSpinGrid, createSymbolPicker } from "../domain/services/spinFactory.js";
 import { sleep } from "../shared/utils/core.js";
 
@@ -11,14 +12,15 @@ export class SlotGameApp {
     this.view = view;
     this.fx = fx;
     this.state = createInitialGameState(config);
-    this.pickSymbol = createSymbolPicker(config.symbols);
+    refreshSymbolWeights(this.state, this.config);
+    this.pickSymbol = createSymbolPicker(() => getWeightedSymbolPool(this.config, this.state));
   }
 
   init() {
     this.state.grid = buildSpinGrid(this.config, this.pickSymbol);
     this.view.buildReels(this.state.grid, this.pickSymbol);
     this.view.renderItems(this.config);
-    this.view.renderLegend(this.config, this.state);
+    this.refreshWeightUi();
     this.view.renderCombo(describeCombo(this.state.combo));
     this.view.renderState(this.state, this.config);
     this.view.bindActions({
@@ -66,7 +68,7 @@ export class SlotGameApp {
     });
 
     this.state.grid = finalGrid;
-    this.view.renderOutcome(outcome, finalGrid);
+    this.view.renderOutcome(outcome);
     await this.resolveSpinOutcome(outcome);
 
     this.state.spinning = false;
@@ -98,11 +100,11 @@ export class SlotGameApp {
         isLoss: true,
       });
       this.view.renderState(this.state, this.config);
-      this.view.renderLegend(this.config, this.state);
+      this.refreshWeightUi();
       return;
     }
 
-    this.view.renderLegend(this.config, this.state);
+    this.refreshWeightUi();
     this.view.renderState(this.state, this.config);
   }
 
@@ -166,6 +168,7 @@ export class SlotGameApp {
         {
           const comboView = describeCombo(this.state.combo);
           this.view.renderCombo(comboView);
+          this.refreshWeightUi();
           await this.view.showComboBurst(comboView, entry.comboDelta);
         }
         this.view.showFloatingNumber(`COMBO +${entry.comboDelta}`, this.config.ui.comboFloat);
@@ -175,6 +178,7 @@ export class SlotGameApp {
       case "combo-reset":
         updateCombo(this.state, "reset");
         this.view.renderCombo(describeCombo(this.state.combo));
+        this.refreshWeightUi();
         this.fx.flash(this.config.ui.lossFlash, 0.24, 0.08);
         return;
 
@@ -215,15 +219,19 @@ export class SlotGameApp {
   }
 
   primeHudCue(entry) {
-    if (typeof entry.row === "number" && entry.color) {
+    if (typeof entry.row === "number") {
+      this.view.pulsePayline(entry.row);
+    }
+
+    if (typeof entry.row === "number" && entry.color && entry.row < this.config.reels.rows) {
       this.view.showRowSpotlight(entry.row, entry.color);
     }
 
-    if (entry.effect === "arm-jackpot") {
+    if (entry.effect === "arm-jackpot" && (entry.row ?? 99) < this.config.reels.rows) {
       this.view.showRowSpotlight(entry.row ?? 1, this.config.ui.jackpotFlash);
     }
 
-    if (entry.effect === "arm-devil") {
+    if (entry.effect === "arm-devil" && (entry.row ?? 99) < this.config.reels.rows) {
       this.view.showRowSpotlight(entry.row ?? 1, this.config.ui.devilFlash);
     }
 
@@ -233,23 +241,29 @@ export class SlotGameApp {
   }
 
   emitRowReward(machineMetrics, row, color, gain) {
-    this.fx.emitBurst(machineMetrics.centerX, machineMetrics.rowCenters[row], 18, color);
+    const paylineCenter = machineMetrics.paylineCenters?.[row];
+    const effectX = paylineCenter?.x ?? machineMetrics.centerX;
+    const effectY = paylineCenter?.y ?? machineMetrics.rowCenters[Math.min(row, this.config.reels.rows - 1)] ?? machineMetrics.rowCenters[1];
+
+    this.fx.emitBurst(effectX, effectY, 18, color);
     if (gain >= 50) {
-      this.fx.emitStarBurst(machineMetrics.centerX, machineMetrics.rowCenters[row], 8, color);
+      this.fx.emitStarBurst(effectX, effectY, 8, color);
     }
   }
 
   playJackpotFx(machineMetrics, row) {
-    const rowCenter = machineMetrics.rowCenters[row] ?? machineMetrics.rowCenters[1];
+    const paylineCenter = machineMetrics.paylineCenters?.[row];
+    const centerX = paylineCenter?.x ?? machineMetrics.centerX;
+    const rowCenter = paylineCenter?.y ?? machineMetrics.rowCenters[Math.min(row, this.config.reels.rows - 1)] ?? machineMetrics.rowCenters[1];
 
     for (let index = 0; index < 10; index += 1) {
       const angle = Math.random() * Math.PI * 2;
       const distance = 80 + Math.random() * 70;
       window.setTimeout(() => {
         this.fx.emitLightning(
-          machineMetrics.centerX,
+          centerX,
           rowCenter,
-          machineMetrics.centerX + Math.cos(angle) * distance,
+          centerX + Math.cos(angle) * distance,
           rowCenter + Math.sin(angle) * distance,
           "#ff8040",
         );
@@ -258,8 +272,8 @@ export class SlotGameApp {
 
     window.setTimeout(() => {
       this.fx.flash(this.config.ui.jackpotBurst, 0.5, 0.03);
-      this.fx.emitBurst(machineMetrics.centerX, rowCenter, 100, this.config.ui.jackpotBurst);
-      this.fx.emitStarBurst(machineMetrics.centerX, rowCenter, 50, this.config.ui.jackpotStars);
+      this.fx.emitBurst(centerX, rowCenter, 100, this.config.ui.jackpotBurst);
+      this.fx.emitStarBurst(centerX, rowCenter, 50, this.config.ui.jackpotStars);
     }, 200);
   }
 
@@ -346,5 +360,12 @@ export class SlotGameApp {
       headline: "NO PAYOUT",
       detail: "This spin produced no lasting reward chain.",
     };
+  }
+
+  refreshWeightUi() {
+    const weightState = refreshSymbolWeights(this.state, this.config);
+    this.view.renderLegend(this.config, this.state);
+    this.view.renderWeightNotes(weightState.notes);
+    return weightState;
   }
 }

@@ -7,15 +7,19 @@ export function sleep(ms) {
 }
 
 export function weightedPick(items, random = Math.random) {
-  const totalWeight = items.reduce((sum, item) => sum + item.weight, 0);
+  const totalWeight = items.reduce((sum, item) => sum + getItemWeight(item), 0);
   let cursor = random() * totalWeight;
 
   for (const item of items) {
-    cursor -= item.weight;
+    cursor -= getItemWeight(item);
     if (cursor <= 0) {
       return item;
     }
   }
 
   return items[items.length - 1];
+}
+
+function getItemWeight(item) {
+  return Math.max(1, item.currentWeight ?? item.weight ?? item.baseWeight ?? 1);
 }

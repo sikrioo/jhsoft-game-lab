@@ -10,6 +10,10 @@ export function createInitialGameState(config) {
     multipliers: Object.fromEntries(
       config.symbols.map((symbol) => [symbol.id, symbol.baseMultiplier]),
     ),
+    symbolWeights: Object.fromEntries(
+      config.symbols.map((symbol) => [symbol.id, symbol.baseWeight ?? symbol.weight ?? 1]),
+    ),
+    weightNotes: [],
     grid: Array.from({ length: config.reels.columns }, () =>
       Array(config.reels.rows).fill(config.symbols[0]),
     ),

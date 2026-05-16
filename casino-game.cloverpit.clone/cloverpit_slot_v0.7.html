@@ -19,14 +19,6 @@
       <div class="build">Prototype v0.7 - Chain Evaluation Build</div>
     </div>
 
-    <div class="cbar" id="cbar">
-      <div class="cb-label">COMBO</div>
-      <div class="cb-val" id="cb-val">0</div>
-      <div class="cb-mult" id="cb-mult"></div>
-      <div class="cb-track"><div class="cb-fill" id="cb-fill" style="width:0%"></div></div>
-      <div class="cb-txt" id="cb-txt">NO BONUS</div>
-    </div>
-
     <div class="game-layout">
       <aside class="side-stack">
         <div class="item-panel" id="itempanel"></div>
@@ -45,9 +37,10 @@
         <div class="symbol-panel">
           <div class="chain-head">
             <span>SYMBOL TABLE</span>
-            <span class="chain-sub">current multipliers</span>
+            <span class="chain-sub">live multipliers / weights</span>
           </div>
           <div class="symrow" id="symrow"></div>
+          <div class="weight-notes" id="weightnotes"></div>
         </div>
       </aside>
 
@@ -68,26 +61,27 @@
         <div class="play-row">
           <div class="play-core">
             <div class="machine-wrap">
-              <div class="pl-labels">
-                <div class="pl-label lost" id="pl0">L1</div>
-                <div class="pl-label lost" id="pl1">L2</div>
-                <div class="pl-label lost" id="pl2">L3</div>
-              </div>
+              <div class="pl-labels" id="paylinelabels"></div>
               <div class="rm" id="rm">
-                <div class="pl-lines">
-                  <div class="pl-line row0 idle" id="pll0"></div>
-                  <div class="pl-line row1 idle" id="pll1"></div>
-                  <div class="pl-line row2 idle" id="pll2"></div>
-                </div>
+                <div class="pl-lines" id="paylinelines"></div>
                 <div class="reels" id="reels"></div>
               </div>
+              <button class="lever" id="blever" aria-label="Pull slot lever">
+                <span class="lever-arm">
+                  <span class="lever-knob"></span>
+                </span>
+              </button>
             </div>
 
-            <div class="res-panel">
-              <div class="res-row" id="rrow0"><span class="rr-tag">LINE 1</span><span id="rtxt0">--</span></div>
-              <div class="res-row" id="rrow1"><span class="rr-tag">LINE 2</span><span id="rtxt1">--</span></div>
-              <div class="res-row" id="rrow2"><span class="rr-tag">LINE 3</span><span id="rtxt2">--</span></div>
+            <div class="cbar" id="cbar">
+              <div class="cb-label">COMBO</div>
+              <div class="cb-val" id="cb-val">0</div>
+              <div class="cb-mult" id="cb-mult"></div>
+              <div class="cb-track"><div class="cb-fill" id="cb-fill" style="width:0%"></div></div>
+              <div class="cb-txt" id="cb-txt">NO BONUS</div>
             </div>
+
+            <div class="res-panel" id="resultpanel"></div>
 
             <div class="btns">
               <button class="bspin" id="bspin">SPIN - 5 COINS</button>
@@ -95,15 +89,6 @@
               <button class="bs" id="bnext">NEXT >></button>
             </div>
           </div>
-
-          <button class="lever" id="blever" aria-label="Pull slot lever">
-            <span class="lever-top"></span>
-            <span class="lever-arm">
-              <span class="lever-knob"></span>
-            </span>
-            <span class="lever-base"></span>
-            <span class="lever-text">PULL</span>
-          </button>
         </div>
       </section>
     </div>

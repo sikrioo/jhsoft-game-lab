@@ -16,11 +16,15 @@ export class SlotMachineView {
       paymentText: document.getElementById("dlpct"),
       reels: document.getElementById("reels"),
       reelMachine: document.getElementById("rm"),
+      paylineLabels: document.getElementById("paylinelabels"),
+      paylineLines: document.getElementById("paylinelines"),
+      resultPanel: document.getElementById("resultpanel"),
       spinButton: document.getElementById("bspin"),
       leverButton: document.getElementById("blever"),
       depositButton: document.getElementById("bdeposit"),
       nextButton: document.getElementById("bnext"),
       legend: document.getElementById("symrow"),
+      weightNotes: document.getElementById("weightnotes"),
       itemPanel: document.getElementById("itempanel"),
       chainPanel: document.getElementById("chainpanel"),
       chainLog: document.getElementById("chainlog"),
@@ -30,6 +34,7 @@ export class SlotMachineView {
     this.reelTracks = [];
     this.reelWraps = [];
     this.createHudLayer();
+    this.createPaylineDisplay();
     this.resetChainLog();
   }
 
@@ -51,6 +56,40 @@ export class SlotMachineView {
       combos: this.hudLayer.querySelector(".hud-combo-zone"),
       summaries: this.hudLayer.querySelector(".hud-summary-zone"),
     };
+  }
+
+  createPaylineDisplay() {
+    this.refs.paylineLabels.innerHTML = "";
+    this.refs.resultPanel.innerHTML = "";
+
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "pl-svg");
+    svg.setAttribute("viewBox", "0 0 100 100");
+    svg.setAttribute("preserveAspectRatio", "none");
+    svg.setAttribute("aria-hidden", "true");
+
+    this.config.paylines.forEach((payline, paylineIndex) => {
+      const label = document.createElement("div");
+      label.className = "pl-label lost";
+      label.id = `pl${paylineIndex}`;
+      label.textContent = payline.shortLabel;
+      this.refs.paylineLabels.appendChild(label);
+
+      const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+      polyline.setAttribute("class", `pl-line ${payline.pathClass} idle`);
+      polyline.setAttribute("id", `pll${paylineIndex}`);
+      polyline.setAttribute("points", this.getPaylinePolylinePoints(payline));
+      svg.appendChild(polyline);
+
+      const row = document.createElement("div");
+      row.className = "res-row";
+      row.id = `rrow${paylineIndex}`;
+      row.innerHTML = `<span class="rr-tag">${payline.shortLabel}</span><span id="rtxt${paylineIndex}">--</span>`;
+      this.refs.resultPanel.appendChild(row);
+    });
+
+    this.refs.paylineLines.innerHTML = "";
+    this.refs.paylineLines.appendChild(svg);
   }
 
   bindActions(actions) {
@@ -110,6 +149,9 @@ export class SlotMachineView {
       card.className = "sc2";
 
       const multiplierValue = state.multipliers[symbol.id];
+      const currentWeight = state.symbolWeights?.[symbol.id] ?? symbol.baseWeight ?? symbol.weight ?? 1;
+      const baseWeight = symbol.baseWeight ?? symbol.weight ?? 1;
+      const weightDelta = currentWeight - baseWeight;
       const valueText =
         symbol.special === "devil"
           ? "CURSE"
@@ -118,10 +160,29 @@ export class SlotMachineView {
         symbol.special === "devil"
           ? "m curse"
           : `m ${this.getMultiplierTierClass(multiplierValue)}`;
+      const weightClass = weightDelta > 0 ? "sw boosted" : "sw";
+      const deltaText = weightDelta !== 0 ? ` <span>${weightDelta > 0 ? `+${weightDelta}` : weightDelta}</span>` : "";
 
-      card.innerHTML = `<div class="e">${symbol.icon}</div><div class="${multiplierClass}">${valueText}</div>`;
+      card.innerHTML = `<div class="e">${symbol.icon}</div><div class="${multiplierClass}">${valueText}</div><div class="${weightClass}">WT ${currentWeight}${deltaText}</div>`;
       this.refs.legend.appendChild(card);
     }
+  }
+
+  renderWeightNotes(notes) {
+    if (!this.refs.weightNotes) {
+      return;
+    }
+
+    if (!notes.length) {
+      this.refs.weightNotes.innerHTML = `<div class="weight-note idle">BASE ODDS STABLE</div>`;
+      return;
+    }
+
+    this.refs.weightNotes.innerHTML = notes
+      .map(
+        (note) => `<div class="weight-note"><span class="weight-source">${note.source}</span><span class="weight-text">${note.text}</span></div>`,
+      )
+      .join("");
   }
 
   renderItems(config) {
@@ -205,12 +266,12 @@ export class SlotMachineView {
   }
 
   renderGlobalResult(message, className) {
-    for (let row = 0; row < this.config.reels.rows; row += 1) {
+    for (let row = 0; row < this.getPaylineCount(); row += 1) {
       this.renderResultRow(row, message, className);
     }
   }
 
-  renderOutcome(outcome, grid) {
+  renderOutcome(outcome) {
     for (const rowResult of outcome.rowResults) {
       if (rowResult.status === "pending") {
         continue;
@@ -231,16 +292,18 @@ export class SlotMachineView {
       }
 
       if (rowResult.status === "jp") {
-        this.setPayline(rowResult.row, "win0");
-        this.setPaylineLabel(rowResult.row, "win0");
+        const winClass = this.getPaylineWinClass(rowResult.row);
+        this.setPayline(rowResult.row, winClass);
+        this.setPaylineLabel(rowResult.row, winClass);
         this.renderResultRow(rowResult.row, rowResult.message, "jp");
+        this.highlightMatchedPositions(rowResult.row, rowResult.matchedPositions);
         continue;
       }
 
       this.setPayline(rowResult.row, rowResult.status);
       this.setPaylineLabel(rowResult.row, rowResult.status);
       this.renderResultRow(rowResult.row, rowResult.message, rowResult.status);
-      this.highlightMatchingColumns(rowResult.row, rowResult.matchedSymbolIds, grid);
+      this.highlightMatchedPositions(rowResult.row, rowResult.matchedPositions);
     }
   }
 
@@ -350,14 +413,32 @@ export class SlotMachineView {
   }
 
   getMachineMetrics() {
-    const machineRect = this.refs.reelMachine.getBoundingClientRect();
     const rootRect = this.root.getBoundingClientRect();
+    const machineRect = this.refs.reelMachine.getBoundingClientRect();
+    const machineTop = machineRect.top - rootRect.top;
 
     return {
       centerX: machineRect.left - rootRect.left + machineRect.width / 2,
       rowCenters: [0, 1, 2].map(
-        (row) => machineRect.top - rootRect.top + this.config.reels.rowHeight * (row + 0.5) + 10,
+        (row) => machineTop + this.config.reels.rowHeight * (row + 0.5) + 10,
       ),
+      paylineCenters: this.config.paylines.map((payline) => {
+        const pointTotal = payline.positions.reduce(
+          (sum, [column, row]) => {
+            const reelRect = this.reelWraps[column].getBoundingClientRect();
+            return {
+              x: sum.x + (reelRect.left - rootRect.left + reelRect.width / 2),
+              y: sum.y + machineTop + this.config.reels.rowHeight * (row + 0.5) + 10,
+            };
+          },
+          { x: 0, y: 0 },
+        );
+
+        return {
+          x: pointTotal.x / payline.positions.length,
+          y: pointTotal.y / payline.positions.length,
+        };
+      }),
     };
   }
 
@@ -482,17 +563,26 @@ export class SlotMachineView {
     for (const wrap of this.reelWraps) {
       wrap.classList.remove("hit-r0", "hit-r1", "hit-r2", "jp", "devil");
     }
+
+    const toneClasses = Array.from({ length: this.getPaylineCount() }, (_, index) => `cell-tone-${index}`);
+    for (const cell of this.refs.reels.querySelectorAll(".rs")) {
+      cell.classList.remove("cell-hit", ...toneClasses);
+    }
+
+    for (let row = 0; row < this.getPaylineCount(); row += 1) {
+      document.getElementById(`pll${row}`)?.classList.remove("pulse");
+    }
   }
 
   resetPaylines() {
-    for (let row = 0; row < this.config.reels.rows; row += 1) {
+    for (let row = 0; row < this.getPaylineCount(); row += 1) {
       this.setPayline(row, "idle");
       this.setPaylineLabel(row, "lost");
     }
   }
 
   resetResultRows() {
-    for (let row = 0; row < this.config.reels.rows; row += 1) {
+    for (let row = 0; row < this.getPaylineCount(); row += 1) {
       this.renderResultRow(row, "--", "");
     }
   }
@@ -599,6 +689,18 @@ export class SlotMachineView {
     beam.style.setProperty("--beam-core", `${color}44`);
     this.hudRefs.beams.appendChild(beam);
     window.setTimeout(() => beam.remove(), 700);
+  }
+
+  pulsePayline(paylineIndex) {
+    const line = document.getElementById(`pll${paylineIndex}`);
+    if (!line) {
+      return;
+    }
+
+    line.classList.remove("pulse");
+    void line.getBoundingClientRect();
+    line.classList.add("pulse");
+    window.setTimeout(() => line.classList.remove("pulse"), 700);
   }
 
   showFinalSummary(summary) {
@@ -738,25 +840,39 @@ export class SlotMachineView {
   renderResultRow(row, message, className) {
     const rowElement = document.getElementById(`rrow${row}`);
     const textElement = document.getElementById(`rtxt${row}`);
+    if (!rowElement || !textElement) {
+      return;
+    }
     rowElement.className = `res-row${className ? ` ${className}` : ""}`;
     textElement.textContent = message;
   }
 
   setPayline(row, className) {
     const line = document.getElementById(`pll${row}`);
-    line.className = `pl-line row${row} ${className}`;
+    const payline = this.config.paylines[row];
+    if (!line || !payline) {
+      return;
+    }
+
+    line.setAttribute("class", `pl-line ${payline.pathClass} ${className}`);
   }
 
   setPaylineLabel(row, className) {
     const label = document.getElementById(`pl${row}`);
+    if (!label) {
+      return;
+    }
     label.className = `pl-label ${className}`;
   }
 
-  highlightMatchingColumns(row, matchedSymbolIds, grid) {
-    for (let column = 0; column < this.config.reels.columns; column += 1) {
-      if (matchedSymbolIds.includes(grid[column][row].id)) {
-        this.reelWraps[column].classList.add(`hit-r${row}`);
+  highlightMatchedPositions(paylineIndex, positions) {
+    for (const [column, row] of positions) {
+      const cell = this.getVisibleCell(column, row);
+      if (!cell) {
+        continue;
       }
+
+      cell.classList.add("cell-hit", `cell-tone-${paylineIndex}`);
     }
   }
 
@@ -764,5 +880,27 @@ export class SlotMachineView {
     for (const wrap of this.reelWraps) {
       wrap.classList.add(className);
     }
+  }
+
+  getPaylineCount() {
+    return this.config.paylines.length;
+  }
+
+  getVisibleCell(column, row) {
+    return this.reelTracks[column]?.querySelector(`.rs.${this.config.reels.rowClasses[row]}`);
+  }
+
+  getPaylineWinClass(paylineIndex) {
+    return this.config.paylines[paylineIndex]?.resultClass ?? "win0";
+  }
+
+  getPaylinePolylinePoints(payline) {
+    return payline.positions
+      .map(([column, row]) => {
+        const x = ((column + 0.5) / this.config.reels.columns) * 100;
+        const y = ((row + 0.5) / this.config.reels.rows) * 100;
+        return `${x},${y}`;
+      })
+      .join(" ");
   }
 }
