@@ -92,6 +92,11 @@ function evaluateLines(context) {
         tone: "loss",
         effect: "arm-devil",
         row: paylineIndex,
+        focus: createFocus({
+          rows: [paylineIndex],
+          positions: leadRun.positions,
+          color: context.config.ui.devilFlash,
+        }),
       });
       continue;
     }
@@ -116,6 +121,11 @@ function evaluateLines(context) {
         tone: "event",
         effect: "arm-jackpot",
         row: paylineIndex,
+        focus: createFocus({
+          rows: [paylineIndex],
+          positions: leadRun.positions,
+          color: context.config.ui.jackpotFlash,
+        }),
       });
       continue;
     }
@@ -158,6 +168,12 @@ function evaluateLines(context) {
         coinDelta: gained,
         row: paylineIndex,
         color: context.config.ui.lineColors[paylineIndex],
+        focus: createFocus({
+          rows: [paylineIndex],
+          positions: matchedPositions,
+          symbolIds: matchedSymbolIds,
+          color: context.config.ui.lineColors[paylineIndex],
+        }),
       });
       continue;
     }
@@ -205,6 +221,7 @@ function evaluateSymbolCounts(context) {
       effect: "count-bonus",
       coinDelta,
       color: "#88d840",
+      focus: createSymbolFocus(context, "clover", "#88d840"),
     });
   }
 
@@ -218,6 +235,7 @@ function evaluateSymbolCounts(context) {
       effect: "count-bonus",
       coinDelta,
       color: "#40c8ff",
+      focus: createSymbolFocus(context, "diamond", "#40c8ff"),
     });
   }
 
@@ -231,6 +249,7 @@ function evaluateSymbolCounts(context) {
       effect: "count-bonus",
       coinDelta,
       color: "#ffdd40",
+      focus: createSymbolFocus(context, "jackpot", "#ffdd40"),
     });
   }
 
@@ -244,6 +263,7 @@ function evaluateSymbolCounts(context) {
       effect: "count-penalty",
       coinDelta,
       color: "#cc00ff",
+      focus: createSymbolFocus(context, "devil", "#cc00ff"),
     });
   }
 
@@ -274,6 +294,7 @@ function evaluateMultiLines(context) {
       effect: "multi-bonus",
       coinDelta,
       color: "#40c8ff",
+      focus: createRowsFocus(context, getScoringRows(context), "#40c8ff"),
     });
   } else if (scoringRows >= 3) {
     const coinDelta = 36;
@@ -286,6 +307,7 @@ function evaluateMultiLines(context) {
       effect: "multi-bonus",
       coinDelta,
       color: "#ff8a20",
+      focus: createRowsFocus(context, getScoringRows(context), "#ff8a20"),
     });
   } else {
     entries.push({
@@ -302,6 +324,7 @@ function evaluateMultiLines(context) {
 function evaluatePatterns(context) {
   const entries = [];
   const stackedColumns = [];
+  const stackedPositions = [];
 
   for (let column = 0; column < context.config.reels.columns; column += 1) {
     const top = context.grid[column][0];
@@ -310,6 +333,7 @@ function evaluatePatterns(context) {
 
     if (top.id === middle.id && middle.id === bottom.id) {
       stackedColumns.push(top);
+      stackedPositions.push([column, 0], [column, 1], [column, 2]);
     }
   }
 
@@ -326,16 +350,23 @@ function evaluatePatterns(context) {
       effect: "pattern-bonus",
       coinDelta,
       color: "#d4a020",
+      focus: createFocus({
+        positions: stackedPositions,
+        color: "#d4a020",
+      }),
     });
   }
 
   let mirrorPairs = 0;
+  const mirrorPositions = [];
   for (let row = 0; row < context.config.reels.rows; row += 1) {
     if (context.grid[0][row].id === context.grid[4][row].id) {
       mirrorPairs += 1;
+      mirrorPositions.push([0, row], [4, row]);
     }
     if (context.grid[1][row].id === context.grid[3][row].id) {
       mirrorPairs += 1;
+      mirrorPositions.push([1, row], [3, row]);
     }
   }
 
@@ -349,6 +380,10 @@ function evaluatePatterns(context) {
       effect: "pattern-bonus",
       coinDelta,
       color: "#40c8ff",
+      focus: createFocus({
+        positions: mirrorPositions,
+        color: "#40c8ff",
+      }),
     });
   }
 
@@ -381,6 +416,13 @@ function evaluateItems(context) {
       effect: "item-bonus",
       coinDelta,
       color: "#88d840",
+      focus: mergeFocuses(cloverRows.map((lineWin) =>
+        createFocus({
+          rows: [lineWin.row],
+          positions: lineWin.matchedPositions,
+          symbolIds: ["clover"],
+          color: "#88d840",
+        }))),
     });
   }
 
@@ -394,6 +436,13 @@ function evaluateItems(context) {
       effect: "item-bonus",
       coinDelta,
       color: "#ffdd40",
+      focus: mergeFocuses(bellRows.map((lineWin) =>
+        createFocus({
+          rows: [lineWin.row],
+          positions: lineWin.matchedPositions,
+          symbolIds: ["bell"],
+          color: "#ffdd40",
+        }))),
     });
   }
 
@@ -407,6 +456,7 @@ function evaluateItems(context) {
       effect: "item-bonus",
       coinDelta,
       color: "#d4a020",
+      focus: createSymbolFocus(context, "crown", "#d4a020"),
     });
   }
 
@@ -435,6 +485,7 @@ function evaluateCombo(context) {
       text: "Reverse jackpot severs the combo chain.",
       tone: "loss",
       effect: "combo-reset",
+      focus: createRowsFocus(context, context.specials.devilRows, context.config.ui.devilFlash),
     });
     context.stages.push(createStage("combo", entries));
     return;
@@ -471,6 +522,13 @@ function evaluateCombo(context) {
       tone: "event",
       effect: "combo-gain",
       comboDelta,
+      focus: mergeFocuses(context.lineWins.map((lineWin) =>
+        createFocus({
+          rows: [lineWin.row],
+          positions: lineWin.matchedPositions,
+          symbolIds: lineWin.matchedSymbolIds,
+          color: context.config.ui.comboFloat,
+        }))),
     });
   }
 
@@ -491,6 +549,7 @@ function evaluateEvents(context) {
       tone: "loss",
       effect: "event-devil",
       coinDelta: -penalty,
+      focus: createRowsFocus(context, context.specials.devilRows, context.config.ui.devilFlash),
       overlay: {
         theme: "dv",
         title: "6  6  6  6  6",
@@ -515,6 +574,7 @@ function evaluateEvents(context) {
       coinDelta,
       ticketsDelta: context.config.rewards.jackpotTickets,
       row: context.specials.jackpotRows[0] ?? 1,
+      focus: createRowsFocus(context, context.specials.jackpotRows, context.config.ui.jackpotFlash),
       overlay: {
         theme: "gd",
         title: "LUCKY  7  7  7",
@@ -536,6 +596,7 @@ function evaluateEvents(context) {
       effect: "event-overdrive",
       coinDelta,
       color: "#ff8a20",
+      focus: createRowsFocus(context, context.lineWins.map((lineWin) => lineWin.row), "#ff8a20"),
     });
   }
 
@@ -549,6 +610,13 @@ function evaluateEvents(context) {
       effect: "event-fever",
       coinDelta,
       color: "#40c8ff",
+      focus: mergeFocuses(context.lineWins.map((lineWin) =>
+        createFocus({
+          rows: [lineWin.row],
+          positions: lineWin.matchedPositions,
+          symbolIds: lineWin.matchedSymbolIds,
+          color: "#40c8ff",
+        }))),
     });
   }
 
@@ -586,6 +654,84 @@ function createStage(key, entries) {
     title: STAGE_TITLES[key],
     entries,
   };
+}
+
+function createRowsFocus(context, rows, color) {
+  const uniqueRows = [...new Set(rows)].filter((row) => Number.isInteger(row));
+  const positions = uniqueRows.flatMap((row) => context.rowResults[row]?.matchedPositions?.length
+    ? context.rowResults[row].matchedPositions
+    : context.config.paylines[row]?.positions ?? []);
+  return createFocus({ rows: uniqueRows, positions, color });
+}
+
+function createSymbolFocus(context, symbolId, color) {
+  const positions = findSymbolPositions(context.grid, symbolId);
+  return createFocus({ positions, symbolIds: [symbolId], color });
+}
+
+function getScoringRows(context) {
+  return [
+    ...context.lineWins.map((lineWin) => lineWin.row),
+    ...context.specials.jackpotRows,
+  ];
+}
+
+function findSymbolPositions(grid, symbolId) {
+  const positions = [];
+
+  for (let column = 0; column < grid.length; column += 1) {
+    for (let row = 0; row < grid[column].length; row += 1) {
+      if (grid[column][row].id === symbolId) {
+        positions.push([column, row]);
+      }
+    }
+  }
+
+  return positions;
+}
+
+function createFocus({ rows = [], positions = [], symbolIds = [], color = "" }) {
+  const uniqueRows = [...new Set(rows)].filter((row) => Number.isInteger(row));
+  const uniquePositions = dedupePositions(positions);
+  const uniqueColumns = [...new Set(uniquePositions.map(([column]) => column))];
+
+  return {
+    rows: uniqueRows,
+    positions: uniquePositions,
+    columns: uniqueColumns,
+    symbolIds: [...new Set(symbolIds)],
+    color,
+  };
+}
+
+function mergeFocuses(focuses) {
+  const validFocuses = focuses.filter(Boolean);
+  if (validFocuses.length === 0) {
+    return null;
+  }
+
+  return createFocus({
+    rows: validFocuses.flatMap((focus) => focus.rows ?? []),
+    positions: validFocuses.flatMap((focus) => focus.positions ?? []),
+    symbolIds: validFocuses.flatMap((focus) => focus.symbolIds ?? []),
+    color: validFocuses.find((focus) => focus.color)?.color ?? "",
+  });
+}
+
+function dedupePositions(positions) {
+  const seen = new Set();
+  const uniquePositions = [];
+
+  for (const [column, row] of positions) {
+    const key = `${column}:${row}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    uniquePositions.push([column, row]);
+  }
+
+  return uniquePositions;
 }
 
 function getLeadingRun(line, positions) {

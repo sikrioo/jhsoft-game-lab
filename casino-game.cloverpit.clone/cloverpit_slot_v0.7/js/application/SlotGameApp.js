@@ -12,6 +12,8 @@ export class SlotGameApp {
     this.view = view;
     this.fx = fx;
     this.state = createInitialGameState(config);
+    this.currentSpinWinTotal = 0;
+    this.currentSpinNetDelta = 0;
     refreshSymbolWeights(this.state, this.config);
     this.pickSymbol = createSymbolPicker(() => getWeightedSymbolPool(this.config, this.state));
   }
@@ -23,6 +25,7 @@ export class SlotGameApp {
     this.refreshWeightUi();
     this.view.renderCombo(describeCombo(this.state.combo));
     this.view.renderState(this.state, this.config);
+    this.view.resetSpinWin();
     this.view.bindActions({
       onSpin: () => this.handleSpin(),
       onDeposit: () => this.handleDeposit(),
@@ -45,6 +48,8 @@ export class SlotGameApp {
     }
 
     this.state.spinning = true;
+    this.currentSpinWinTotal = 0;
+    this.currentSpinNetDelta = 0;
     this.state.coins -= this.config.costs.spin;
     this.state.coinDisplay = this.state.coins;
     this.view.setSpinEnabled(false);
@@ -130,22 +135,25 @@ export class SlotGameApp {
     }
 
     await this.view.showFinalSummary(this.buildSpinSummary(outcome));
-    this.view.renderState(this.state, this.config);
+    await this.flushSpinSettlement();
   }
 
   async applyChainEntry(entry, machineMetrics) {
     switch (entry.effect) {
       case "line-win":
         this.emitRowReward(machineMetrics, entry.row, entry.color, entry.coinDelta);
+        this.view.playImpact(this.getImpactLevelForCoinDelta(entry.coinDelta));
         await this.applyCoinDelta(entry.coinDelta);
         return;
 
       case "arm-jackpot":
         this.fx.flash(this.config.ui.jackpotFlash, 0.35, 0.08);
+        this.view.playImpact("medium");
         return;
 
       case "arm-devil":
         this.fx.flash(this.config.ui.devilFlash, 0.35, 0.08);
+        this.view.playImpact("medium");
         return;
 
       case "count-bonus":
@@ -153,11 +161,13 @@ export class SlotGameApp {
       case "pattern-bonus":
       case "item-bonus":
         this.fx.flash(entry.color ?? this.config.ui.gainFloat, 0.2, 0.08);
+        this.view.playImpact(this.getImpactLevelForCoinDelta(entry.coinDelta));
         await this.applyCoinDelta(entry.coinDelta);
         return;
 
       case "count-penalty":
         this.fx.flash(this.config.ui.lossFlash, 0.25, 0.08);
+        this.view.playImpact("light");
         await this.applyCoinDelta(entry.coinDelta);
         return;
 
@@ -168,6 +178,7 @@ export class SlotGameApp {
           const comboView = describeCombo(this.state.combo);
           this.view.renderCombo(comboView);
           this.refreshWeightUi();
+          this.view.playImpact(this.getImpactLevelForCombo(comboView, entry.comboDelta));
           await this.view.showComboBurst(comboView, entry.comboDelta);
         }
         this.view.showFloatingNumber(`COMBO +${entry.comboDelta}`, this.config.ui.comboFloat);
@@ -179,12 +190,14 @@ export class SlotGameApp {
         this.view.renderCombo(describeCombo(this.state.combo));
         this.refreshWeightUi();
         this.fx.flash(this.config.ui.lossFlash, 0.24, 0.08);
+        this.view.playImpact("light");
         return;
 
       case "event-jackpot":
         this.state.tickets += entry.ticketsDelta ?? 0;
         this.view.markAllReels("jp");
         this.fx.flash(this.config.ui.jackpotFlash, 0.9, 0.04);
+        this.view.playImpact("heavy");
         this.playJackpotFx(machineMetrics, entry.row ?? 1);
         this.view.showOverlay(entry.overlay);
         await this.applyCoinDelta(entry.coinDelta);
@@ -195,18 +208,20 @@ export class SlotGameApp {
         this.fx.flash(this.config.ui.devilFlash, 0.9, 0.04);
         this.fx.tint(this.config.ui.devilTint, 2000);
         this.view.showNoise();
+        this.view.playImpact("heavy");
         this.view.showOverlay(entry.overlay);
         await this.applyCoinDelta(entry.coinDelta);
         return;
 
       case "event-overdrive":
         this.fx.flash(this.config.ui.overdriveFlash, 0.45, 0.05);
-        this.view.shakeMachine();
+        this.view.playImpact("heavy");
         await this.applyCoinDelta(entry.coinDelta);
         return;
 
       case "event-fever":
         this.fx.flash(this.config.ui.feverFlash, 0.35, 0.05);
+        this.view.playImpact("medium");
         await this.applyCoinDelta(entry.coinDelta);
         return;
 
@@ -276,26 +291,67 @@ export class SlotGameApp {
 
   async applyCoinDelta(delta) {
     if (!delta) {
-      this.view.renderState(this.state, this.config);
       return;
     }
 
-    const from = this.state.coinDisplay;
+    this.currentSpinNetDelta += delta;
     this.state.coins = Math.max(0, this.state.coins + delta);
-    this.state.coinDisplay = this.state.coins;
-    this.view.showCoinDeltaHud(delta);
 
-    await this.view.animateCoinCounter(
-      from,
-      this.state.coinDisplay,
-      Math.min(900, 260 + Math.abs(delta) * 18),
-      delta < 0,
-      () => this.view.renderState(this.state, this.config),
-    );
+    if (delta > 0) {
+      this.currentSpinWinTotal += delta;
+      this.view.updateSpinWin(this.currentSpinWinTotal, delta);
+    }
   }
 
   formatDelta(delta) {
     return `${delta >= 0 ? "+" : ""}${delta}`;
+  }
+
+  async flushSpinSettlement() {
+    const netDelta = this.currentSpinNetDelta;
+    const from = this.state.coinDisplay;
+    const to = this.state.coins;
+
+    if (!netDelta) {
+      this.view.renderState(this.state, this.config);
+      return;
+    }
+
+    await this.view.playSpinWinCollect(netDelta > 0);
+    this.view.showCoinDeltaHud(netDelta);
+    this.view.playImpact(this.getImpactLevelForCoinDelta(netDelta));
+    this.state.coinDisplay = to;
+
+    await this.view.animateCoinCounter(
+      from,
+      to,
+      Math.min(1100, 320 + Math.abs(netDelta) * 16),
+      netDelta < 0,
+      () => this.view.renderState(this.state, this.config),
+    );
+
+    this.currentSpinNetDelta = 0;
+  }
+
+  getImpactLevelForCoinDelta(delta = 0) {
+    const amount = Math.abs(delta);
+    if (amount >= 100) {
+      return "heavy";
+    }
+    if (amount >= 35) {
+      return "medium";
+    }
+    return "light";
+  }
+
+  getImpactLevelForCombo(comboView, comboDelta = 0) {
+    if (comboView.multiplier >= 3 || comboView.combo >= 20 || comboDelta >= 5) {
+      return "heavy";
+    }
+    if (comboView.multiplier >= 2 || comboView.combo >= 10 || comboDelta >= 3) {
+      return "medium";
+    }
+    return "light";
   }
 
   buildSpinSummary(outcome) {

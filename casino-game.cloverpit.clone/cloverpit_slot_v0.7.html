@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Cloverpit Slot Prototype v0.7</title>
+  <title>Slot District Prototype v0.7</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Bungee:wght@400&family=Chakra+Petch:wght@400;500;600;700&family=Orbitron:wght@500;700;800&family=Rubik+Spray+Paint&display=swap" rel="stylesheet">
@@ -14,17 +14,16 @@
     <canvas id="fx"></canvas>
 
     <div class="hdr">
-      <div class="logo" aria-label="Cloverpit">
+      <div class="logo" aria-label="Slot District">
         <span class="logo-image-slot" aria-hidden="true"></span>
-        <span class="logo-badge">☘</span>
+        <span class="logo-badge">SD</span>
         <span class="logo-stack">
-          <span class="logo-word logo-word-main" data-text="CLOVER">CLOVER</span>
-          <span class="logo-word logo-word-accent" data-text="PIT">PIT</span>
+          <span class="logo-word logo-word-main" data-text="SLOT">SLOT</span>
+          <span class="logo-divider" aria-hidden="true"></span>
+          <span class="logo-word logo-word-accent" data-text="DISTRICT">DISTRICT</span>
         </span>
-        <span class="logo-crown">♛</span>
       </div>
       <div class="sub">SPIN TO SURVIVE - DO NOT LOSE</div>
-      <div class="build">Prototype v0.7 - Chain Evaluation Build</div>
     </div>
 
     <div class="game-layout">
@@ -53,17 +52,20 @@
       </aside>
 
       <section class="main-stack">
-        <div class="stats">
-          <div class="sc"><div class="scl">COIN</div><div class="scv" id="vc">120</div></div>
-          <div class="sc"><div class="scl">TICKET</div><div class="scv" id="vt">5</div></div>
-          <div class="sc"><div class="scl">DEADLINE</div><div class="scv r" id="vd">75</div></div>
-          <div class="sc"><div class="scl">PAID</div><div class="scv g" id="vp">0</div></div>
-        </div>
+        <div class="status-hud">
+          <div class="sc coin-sc"><div class="scl">COIN</div><div class="scv" id="vc">120</div></div>
 
-        <div class="dlrow">
-          <span>PAYMENT</span>
-          <div class="dlbar"><div class="dlf" id="dlf" style="width:0%"></div></div>
-          <span id="dlpct">0%</span>
+          <div class="cbar" id="cbar">
+            <div class="spin-win" id="spinwin">
+              <div class="spin-win-label">SPIN WIN</div>
+              <div class="spin-win-value" id="spinwinval">+0</div>
+            </div>
+            <div class="combo-mini">
+              <div class="cb-label">COMBO</div>
+              <div class="cb-val" id="cb-val">0</div>
+              <div class="cb-mult" id="cb-mult"></div>
+            </div>
+          </div>
         </div>
 
         <div class="play-row">
@@ -81,14 +83,6 @@
               </button>
             </div>
 
-            <div class="cbar" id="cbar">
-              <div class="cb-label">COMBO</div>
-              <div class="cb-val" id="cb-val">0</div>
-              <div class="cb-mult" id="cb-mult"></div>
-              <div class="cb-track"><div class="cb-fill" id="cb-fill" style="width:0%"></div></div>
-              <div class="cb-txt" id="cb-txt">NO BONUS</div>
-            </div>
-
             <div class="res-panel" id="resultpanel"></div>
 
             <div class="btns">
@@ -100,6 +94,8 @@
         </div>
       </section>
     </div>
+
+    <div class="build">Prototype v0.7 - Chain Evaluation Build</div>
   </main>
 
   <script type="module" src="./cloverpit_slot_v0.7/js/main.js"></script>

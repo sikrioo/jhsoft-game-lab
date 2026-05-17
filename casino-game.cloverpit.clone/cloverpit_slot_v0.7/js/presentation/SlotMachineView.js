@@ -4,6 +4,8 @@ export class SlotMachineView {
     this.root = document.getElementById("wrap");
     this.refs = {
       comboBar: document.getElementById("cbar"),
+      spinWinPanel: document.getElementById("spinwin"),
+      spinWinValue: document.getElementById("spinwinval"),
       comboValue: document.getElementById("cb-val"),
       comboMultiplier: document.getElementById("cb-mult"),
       comboFill: document.getElementById("cb-fill"),
@@ -34,6 +36,9 @@ export class SlotMachineView {
     this.refs.coinCard = this.refs.coinValue?.closest(".sc");
     this.reelTracks = [];
     this.reelWraps = [];
+    this.previewClearTimer = null;
+    this.activeChainEntry = null;
+    this.impactTimers = new Set();
     this.createHudLayer();
     this.createPaylineDisplay();
     this.resetChainLog();
@@ -211,16 +216,20 @@ export class SlotMachineView {
     this.refs.comboMultiplier.className = comboView.combo >= 3
       ? `cb-mult ${this.getMultiplierTierClass(comboView.multiplier)}`
       : "cb-mult";
-    this.refs.comboFill.style.width = `${comboView.percent}%`;
-    this.refs.comboFill.style.background =
-      comboView.combo >= 20
-        ? "#ff40ff"
-        : comboView.combo >= 10
-          ? "#40c8ff"
-          : comboView.combo >= 5
-            ? "#d4a020"
-            : "#6a5828";
-    this.refs.comboText.textContent = comboView.bonusText;
+    if (this.refs.comboFill) {
+      this.refs.comboFill.style.width = `${comboView.percent}%`;
+      this.refs.comboFill.style.background =
+        comboView.combo >= 20
+          ? "#ff40ff"
+          : comboView.combo >= 10
+            ? "#40c8ff"
+            : comboView.combo >= 5
+              ? "#d4a020"
+              : "#6a5828";
+    }
+    if (this.refs.comboText) {
+      this.refs.comboText.textContent = comboView.bonusText;
+    }
     this.renderComboFrame(comboView.combo);
   }
 
@@ -230,18 +239,77 @@ export class SlotMachineView {
     this.refs.comboValue.classList.add("pop");
   }
 
+  resetSpinWin() {
+    if (!this.refs.spinWinValue) {
+      return;
+    }
+
+    this.refs.spinWinPanel?.classList.remove("active");
+    this.refs.spinWinValue.classList.remove("pop");
+    this.refs.spinWinValue.textContent = "+0";
+  }
+
+  updateSpinWin(total, delta = 0) {
+    if (!this.refs.spinWinValue) {
+      return;
+    }
+
+    this.refs.spinWinValue.textContent = total > 0 ? `+${total}` : "+0";
+    this.refs.spinWinPanel?.classList.toggle("active", total > 0);
+
+    if (delta > 0) {
+      this.refs.spinWinValue.classList.remove("pop");
+      void this.refs.spinWinValue.offsetWidth;
+      this.refs.spinWinValue.classList.add("pop");
+    }
+  }
+
+  playSpinWinCollect(isGain = true) {
+    const spinWinPanel = this.refs.spinWinPanel;
+    const coinCard = this.refs.coinCard;
+
+    if (!spinWinPanel && !coinCard) {
+      return Promise.resolve();
+    }
+
+    spinWinPanel?.classList.remove("banking", "banking-loss");
+    coinCard?.classList.remove("coin-collect", "coin-collect-loss");
+    void this.root.offsetWidth;
+
+    spinWinPanel?.classList.add(isGain ? "banking" : "banking-loss");
+    coinCard?.classList.add(isGain ? "coin-collect" : "coin-collect-loss");
+
+    return new Promise((resolve) => {
+      window.setTimeout(() => {
+        spinWinPanel?.classList.remove("banking", "banking-loss");
+        coinCard?.classList.remove("coin-collect", "coin-collect-loss");
+        resolve();
+      }, 620);
+    });
+  }
+
   renderState(state, config) {
     const deadline = config.deadlines[state.deadlineIndex];
     this.refs.coinValue.textContent = String(state.coinDisplay);
-    this.refs.ticketValue.textContent = String(state.tickets);
-    this.refs.deadlineValue.textContent = String(deadline);
-    this.refs.paidValue.textContent = String(state.paid);
+    if (this.refs.ticketValue) {
+      this.refs.ticketValue.textContent = String(state.tickets);
+    }
+    if (this.refs.deadlineValue) {
+      this.refs.deadlineValue.textContent = String(deadline);
+    }
+    if (this.refs.paidValue) {
+      this.refs.paidValue.textContent = String(state.paid);
+    }
 
     const percentage = Math.min(100, Math.round((state.paid / deadline) * 100));
-    this.refs.paymentFill.style.width = `${percentage}%`;
-    this.refs.paymentFill.style.background =
-      percentage >= 100 ? "#30b060" : percentage >= 60 ? "#d4a020" : "#c05020";
-    this.refs.paymentText.textContent = `${percentage}%`;
+    if (this.refs.paymentFill) {
+      this.refs.paymentFill.style.width = `${percentage}%`;
+      this.refs.paymentFill.style.background =
+        percentage >= 100 ? "#30b060" : percentage >= 60 ? "#d4a020" : "#c05020";
+    }
+    if (this.refs.paymentText) {
+      this.refs.paymentText.textContent = `${percentage}%`;
+    }
   }
 
   setSpinEnabled(enabled) {
@@ -263,9 +331,11 @@ export class SlotMachineView {
 
   clearOutcome() {
     this.clearHitClasses();
+    this.clearPreviewFocus();
     this.resetPaylines();
     this.resetResultRows();
     this.resetChainLog();
+    this.resetSpinWin();
     this.clearHud();
   }
 
@@ -419,11 +489,35 @@ export class SlotMachineView {
     window.setTimeout(() => chip.remove(), 1350);
   }
 
-  shakeMachine() {
-    this.root.classList.remove("shk");
+  playImpact(level = "light") {
+    const intensity = this.normalizeImpactLevel(level);
+    const rootClass = `shk-${intensity}`;
+    const machineClass = `impact-${intensity}`;
+    const flashClass = `camflash-${intensity}`;
+    const durations = {
+      light: 280,
+      medium: 420,
+      heavy: 620,
+    };
+
+    this.root.classList.remove("shk-light", "shk-medium", "shk-heavy", "camflash-light", "camflash-medium", "camflash-heavy");
+    this.refs.reelMachine.classList.remove("impact-light", "impact-medium", "impact-heavy");
     void this.root.offsetWidth;
-    this.root.classList.add("shk");
-    window.setTimeout(() => this.root.classList.remove("shk"), 380);
+
+    this.root.classList.add(rootClass, flashClass);
+    this.refs.reelMachine.classList.add(machineClass);
+
+    const clearTimer = window.setTimeout(() => {
+      this.root.classList.remove(rootClass, flashClass);
+      this.refs.reelMachine.classList.remove(machineClass);
+      this.impactTimers.delete(clearTimer);
+    }, durations[intensity]);
+
+    this.impactTimers.add(clearTimer);
+  }
+
+  shakeMachine(level = "light") {
+    this.playImpact(level);
   }
 
   showNoise(duration = 1800) {
@@ -579,12 +673,14 @@ export class SlotMachineView {
 
   clearHitClasses() {
     for (const wrap of this.reelWraps) {
-      wrap.classList.remove("hit-r0", "hit-r1", "hit-r2", "jp", "devil");
+      wrap.classList.remove("hit-r0", "hit-r1", "hit-r2", "jp", "devil", "preview-focus");
+      wrap.style.removeProperty("--preview-glow");
     }
 
     const toneClasses = Array.from({ length: this.getPaylineCount() }, (_, index) => `cell-tone-${index}`);
     for (const cell of this.refs.reels.querySelectorAll(".rs")) {
-      cell.classList.remove("cell-hit", ...toneClasses);
+      cell.classList.remove("cell-hit", "preview-focus", ...toneClasses);
+      cell.style.removeProperty("--preview-glow");
     }
 
     for (let row = 0; row < this.getPaylineCount(); row += 1) {
@@ -606,6 +702,7 @@ export class SlotMachineView {
   }
 
   resetChainLog() {
+    this.clearPreviewFocus();
     this.refs.chainLog.innerHTML = `<div class="chain-empty">CHAIN ENGINE STANDBY</div>`;
   }
 
@@ -667,8 +764,101 @@ export class SlotMachineView {
     const row = document.createElement("div");
     row.className = `chain-entry ${entry.tone ?? "neutral"}`;
     row.innerHTML = `<span class="chain-label">${entry.label}</span><span class="chain-text">${entry.text}</span>`;
+
+    if (entry.focus && (entry.focus.rows?.length || entry.focus.positions?.length || entry.focus.columns?.length)) {
+      row.classList.add("is-actionable");
+      row.tabIndex = 0;
+      row.setAttribute("role", "button");
+      row.setAttribute("aria-label", `${entry.label} related reels preview`);
+      row.addEventListener("click", () => this.previewChainFocus(entry.focus, row));
+      row.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") {
+          return;
+        }
+        event.preventDefault();
+        this.previewChainFocus(entry.focus, row);
+      });
+    }
+
     section.appendChild(row);
     this.refs.chainLog.scrollTop = this.refs.chainLog.scrollHeight;
+  }
+
+  previewChainFocus(focus, entryElement = null) {
+    if (!focus) {
+      return;
+    }
+
+    this.clearPreviewFocus();
+    this.refs.reelMachine.classList.add("preview-mode");
+
+    const previewColor = focus.color || "#49e6ff";
+
+    if (entryElement) {
+      entryElement.classList.add("active");
+      entryElement.style.setProperty("--preview-glow", previewColor);
+      this.activeChainEntry = entryElement;
+    }
+
+    for (const [column, row] of focus.positions ?? []) {
+      const cell = this.getVisibleCell(column, row);
+      if (!cell) {
+        continue;
+      }
+      cell.classList.add("preview-focus");
+      cell.style.setProperty("--preview-glow", previewColor);
+    }
+
+    for (const paylineIndex of focus.rows ?? []) {
+      const line = document.getElementById(`pll${paylineIndex}`);
+      const label = document.getElementById(`pl${paylineIndex}`);
+
+      if (line) {
+        line.classList.add("preview-focus");
+        line.style.setProperty("--preview-stroke", previewColor);
+      }
+
+      if (label) {
+        label.classList.add("preview-focus");
+        label.style.setProperty("--preview-stroke", previewColor);
+      }
+    }
+
+    this.previewClearTimer = window.setTimeout(() => this.clearPreviewFocus(), 1800);
+  }
+
+  clearPreviewFocus() {
+    if (this.previewClearTimer) {
+      window.clearTimeout(this.previewClearTimer);
+      this.previewClearTimer = null;
+    }
+
+    this.refs.reelMachine.classList.remove("preview-mode");
+
+    if (this.activeChainEntry) {
+      this.activeChainEntry.classList.remove("active");
+      this.activeChainEntry.style.removeProperty("--preview-glow");
+      this.activeChainEntry = null;
+    }
+
+    for (const wrap of this.reelWraps) {
+      wrap.classList.remove("preview-focus");
+      wrap.style.removeProperty("--preview-glow");
+    }
+
+    for (const cell of this.refs.reels.querySelectorAll(".rs.preview-focus")) {
+      cell.classList.remove("preview-focus");
+      cell.style.removeProperty("--preview-glow");
+    }
+
+    for (let row = 0; row < this.getPaylineCount(); row += 1) {
+      const line = document.getElementById(`pll${row}`);
+      const label = document.getElementById(`pl${row}`);
+      line?.classList.remove("preview-focus");
+      line?.style.removeProperty("--preview-stroke");
+      label?.classList.remove("preview-focus");
+      label?.style.removeProperty("--preview-stroke");
+    }
   }
 
   showHudCallout(entry) {
@@ -699,9 +889,14 @@ export class SlotMachineView {
   }
 
   showRowSpotlight(row, color) {
+    const rootRect = this.root.getBoundingClientRect();
+    const machineWrap = this.refs.reelMachine.closest(".machine-wrap") ?? this.refs.reelMachine;
+    const machineWrapRect = machineWrap.getBoundingClientRect();
     const beam = document.createElement("div");
     beam.className = "hud-row-beam";
     beam.style.top = `${this.getMachineMetrics().rowCenters[row]}px`;
+    beam.style.left = `${machineWrapRect.left - rootRect.left}px`;
+    beam.style.width = `${machineWrapRect.width}px`;
     beam.style.setProperty("--beam-color", color);
     beam.style.setProperty("--beam-soft", `${color}22`);
     beam.style.setProperty("--beam-core", `${color}44`);
@@ -837,6 +1032,13 @@ export class SlotMachineView {
 
   formatMultiplier(value) {
     return `X ${value}`;
+  }
+
+  normalizeImpactLevel(level) {
+    if (level === "heavy" || level === "medium") {
+      return level;
+    }
+    return "light";
   }
 
   getMultiplierTierClass(value) {
