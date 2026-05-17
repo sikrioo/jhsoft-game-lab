@@ -67,14 +67,10 @@ function evaluateLines(context) {
   for (let paylineIndex = 0; paylineIndex < context.config.paylines.length; paylineIndex += 1) {
     const payline = context.config.paylines[paylineIndex];
     const line = payline.positions.map(([column, row]) => context.grid[column][row]);
-    const counts = new Map();
-
-    for (const symbol of line) {
-      counts.set(symbol.id, (counts.get(symbol.id) ?? 0) + 1);
-    }
-
-    const allSame = counts.size === 1;
-    const leadSymbol = line[0];
+    const leadRun = getLeadingRun(line, payline.positions);
+    const bestRun = getBestContiguousRun(line, payline.positions, context.state.multipliers);
+    const allSame = leadRun.count === line.length;
+    const leadSymbol = leadRun.symbol;
 
     if (allSame && leadSymbol.special === "devil") {
       context.specials.devilRows.push(paylineIndex);
@@ -86,7 +82,7 @@ function evaluateLines(context) {
         status: "devil",
         message: "REVERSE JACKPOT ARMED",
         matchedSymbolIds: [leadSymbol.id],
-        matchedPositions: payline.positions,
+        matchedPositions: leadRun.positions,
         gain: 0,
         multiplier: 1,
       };
@@ -110,7 +106,7 @@ function evaluateLines(context) {
         status: "jp",
         message: "JACKPOT ARMED",
         matchedSymbolIds: [leadSymbol.id],
-        matchedPositions: payline.positions,
+        matchedPositions: leadRun.positions,
         gain: 0,
         multiplier: comboMultiplier,
       };
@@ -124,22 +120,11 @@ function evaluateLines(context) {
       continue;
     }
 
-    let rowGain = 0;
-    const matchedSymbolIds = [];
-
-    for (const [symbolId, count] of counts.entries()) {
-      if (count >= 3) {
-        rowGain += Math.floor(context.state.multipliers[symbolId] * count * 0.85);
-        matchedSymbolIds.push(symbolId);
-      }
-    }
-
-    if (rowGain > 0) {
+    if (bestRun && bestRun.count >= 3) {
+      const rowGain = Math.floor(context.state.multipliers[bestRun.symbol.id] * bestRun.count * 0.85);
       const gained = Math.round(rowGain * comboMultiplier);
-      const matchSymbol = line.find((symbol) => symbol.id === matchedSymbolIds[0]);
-      const matchedPositions = payline.positions.filter(
-        ([column, row]) => matchedSymbolIds.includes(context.grid[column][row].id),
-      );
+      const matchedSymbolIds = [bestRun.symbol.id];
+      const matchedPositions = bestRun.positions;
 
       context.totalCoinDelta += gained;
       context.lineWins.push({
@@ -150,6 +135,7 @@ function evaluateLines(context) {
         gain: gained,
         matchedSymbolIds,
         matchedPositions,
+        matchedCount: bestRun.count,
         line,
       });
       context.rowResults[paylineIndex] = {
@@ -158,7 +144,7 @@ function evaluateLines(context) {
         paylineLabel: payline.label,
         pathClass: payline.pathClass,
         status: payline.resultClass,
-        message: `${matchSymbol.icon} MATCH +${gained}`,
+        message: `${bestRun.symbol.icon} x${bestRun.count} +${gained}`,
         matchedSymbolIds,
         matchedPositions,
         gain: gained,
@@ -166,7 +152,7 @@ function evaluateLines(context) {
       };
       entries.push({
         label: payline.label,
-        text: `${matchSymbol.icon} match pays +${gained}.`,
+        text: `${bestRun.symbol.icon} forms a ${bestRun.count}-chain -> +${gained}.`,
         tone: "gain",
         effect: "line-win",
         coinDelta: gained,
@@ -380,9 +366,7 @@ function evaluatePatterns(context) {
 
 function evaluateItems(context) {
   const entries = [];
-  const cloverRows = context.lineWins.filter((lineWin) =>
-    lineWin.line.some((symbol) => symbol.id === "clover"),
-  );
+  const cloverRows = context.lineWins.filter((lineWin) => lineWin.matchedSymbolIds.includes("clover"));
   const bellRows = context.lineWins.filter((lineWin) => lineWin.matchedSymbolIds.includes("bell"));
   const crownCount = context.symbolCounts.get("crown") ?? 0;
 
@@ -602,4 +586,74 @@ function createStage(key, entries) {
     title: STAGE_TITLES[key],
     entries,
   };
+}
+
+function getLeadingRun(line, positions) {
+  const symbol = line[0];
+  const matchedPositions = [positions[0]];
+
+  for (let index = 1; index < line.length; index += 1) {
+    if (line[index].id !== symbol.id) {
+      break;
+    }
+
+    matchedPositions.push(positions[index]);
+  }
+
+  return {
+    symbol,
+    count: matchedPositions.length,
+    positions: matchedPositions,
+  };
+}
+
+function getBestContiguousRun(line, positions, multipliers) {
+  let bestRun = null;
+  let currentRun = {
+    symbol: line[0],
+    positions: [positions[0]],
+  };
+
+  const commitRun = () => {
+    if (currentRun.positions.length < 3) {
+      return;
+    }
+
+    const candidate = {
+      symbol: currentRun.symbol,
+      count: currentRun.positions.length,
+      positions: [...currentRun.positions],
+      score: (multipliers[currentRun.symbol.id] ?? 0) * currentRun.positions.length,
+    };
+
+    if (!bestRun) {
+      bestRun = candidate;
+      return;
+    }
+
+    if (candidate.count > bestRun.count) {
+      bestRun = candidate;
+      return;
+    }
+
+    if (candidate.count === bestRun.count && candidate.score > bestRun.score) {
+      bestRun = candidate;
+    }
+  };
+
+  for (let index = 1; index < line.length; index += 1) {
+    if (line[index].id === currentRun.symbol.id) {
+      currentRun.positions.push(positions[index]);
+      continue;
+    }
+
+    commitRun();
+    currentRun = {
+      symbol: line[index],
+      positions: [positions[index]],
+    };
+  }
+
+  commitRun();
+  return bestRun;
 }

@@ -285,7 +285,7 @@ export class SlotMachineView {
       }
 
       if (rowResult.status === "devil") {
-        this.setPayline(rowResult.row, "devil");
+        this.setPayline(rowResult.row, "devil", rowResult.matchedPositions);
         this.setPaylineLabel(rowResult.row, "devil");
         this.renderResultRow(rowResult.row, rowResult.message, "devil");
         continue;
@@ -293,14 +293,14 @@ export class SlotMachineView {
 
       if (rowResult.status === "jp") {
         const winClass = this.getPaylineWinClass(rowResult.row);
-        this.setPayline(rowResult.row, winClass);
+        this.setPayline(rowResult.row, winClass, rowResult.matchedPositions);
         this.setPaylineLabel(rowResult.row, winClass);
         this.renderResultRow(rowResult.row, rowResult.message, "jp");
         this.highlightMatchedPositions(rowResult.row, rowResult.matchedPositions);
         continue;
       }
 
-      this.setPayline(rowResult.row, rowResult.status);
+      this.setPayline(rowResult.row, rowResult.status, rowResult.matchedPositions);
       this.setPaylineLabel(rowResult.row, rowResult.status);
       this.renderResultRow(rowResult.row, rowResult.message, rowResult.status);
       this.highlightMatchedPositions(rowResult.row, rowResult.matchedPositions);
@@ -847,14 +847,17 @@ export class SlotMachineView {
     textElement.textContent = message;
   }
 
-  setPayline(row, className) {
+  setPayline(row, className, positions = null) {
     const line = document.getElementById(`pll${row}`);
     const payline = this.config.paylines[row];
     if (!line || !payline) {
       return;
     }
 
+    const activePositions = positions?.length ? positions : payline.positions;
+
     line.setAttribute("class", `pl-line ${payline.pathClass} ${className}`);
+    line.setAttribute("points", this.getPolylinePointsFromPositions(activePositions));
   }
 
   setPaylineLabel(row, className) {
@@ -895,7 +898,11 @@ export class SlotMachineView {
   }
 
   getPaylinePolylinePoints(payline) {
-    return payline.positions
+    return this.getPolylinePointsFromPositions(payline.positions);
+  }
+
+  getPolylinePointsFromPositions(positions) {
+    return positions
       .map(([column, row]) => {
         const x = ((column + 0.5) / this.config.reels.columns) * 100;
         const y = ((row + 0.5) / this.config.reels.rows) * 100;
