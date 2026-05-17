@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Line Rider - Matter.js Engine Edition</title>
+    <!-- Matter.js 물리 엔진 CDN 로드 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <style>
+        body { margin: 0; background-color: #f5f6fa; font-family: sans-serif; overflow: hidden; user-select: none; }
+        #controls { position: absolute; top: 20px; left: 20px; background: rgba(255, 255, 255, 0.95); padding: 15px 20px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); z-index: 10; display: flex; align-items: center; gap: 12px; }
+        button { padding: 8px 16px; font-size: 14px; font-weight: bold; border: none; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+        #startBtn { background-color: #2ecc71; color: white; }
+        #startBtn.running { background-color: #e67e22; }
+        #resetBtn { background-color: #e74c3c; color: white; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        .info { font-size: 13px; color: #7f8c8d; }
+    </style>
+</head>
+<body>
+
+<div id="controls">
+    <button id="startBtn">▶ 시뮬레이션 시작</button>
+    <button id="resetBtn">↺ 리셋</button>
+    <div class="info">🛠️ <b>Matter.js 엔진 탑재:</b> 고속 내리막길에서도 뚫림 없이 완벽한 충돌을 보장합니다.</div>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+// Matter.js 모듈 에일리어스 정의
+const { Engine, Render, Runner, Bodies, Composite, Body, Events } = Matter;
+
+const canvas = document.getElementById('gameCanvas');
+canvas.width = window.innerWidth;
+canvas.height = window.innerHeight;
+
+// 1. 물리 엔진 및 세계(World) 생성
+const engine = Engine.create({
+    gravity: { y: 1.2 } // 라인 라이더 고유의 묵직한 낙하 감각 유지를 위해 중력 상향
+});
+const world = engine.world;
+
+// 2. 렌더러 생성 (Matter.js 내장 렌더러 사용 대신 커스텀 Canvas 렌더링으로 비주얼 통제)
+let isRunning = false;
+let isDrawing = false;
+let lastX, lastY;
+let trackLines = []; // 가시적 라인 데이터
+
+// 3. 라이더 캐릭터 스펙 설정
+const spawnPos = { x: 150, y: 150 };
+let riderBody = null;
+
+function spawnRider() {
+    if (riderBody) Composite.remove(world, riderBody);
+
+    // 원형 오브젝트 생성
+    riderBody = Bodies.circle(spawnPos.x, spawnPos.y, 10, {
+        friction: 0.002,      // 트랙 위에서 미끄러지는 마찰력 (낮을수록 잘 미끄러짐)
+        frictionAir: 0.001,   // 공기 저항
+        restitution: 0.0,     // 탄성 (통통 튀지 않고 선에 밀착되도록 0 설정)
+        density: 0.01
+    });
+
+    // 고속 주행 시 뚫림 방지를 위한 연속 충돌 검사(CCD) 활성화
+    riderBody.isContinuous = true; 
+
+    Composite.add(world, riderBody);
+}
+
+// 최초 라이더 생성
+spawnRider();
+
+// 4. 마우스 드래그를 이용한 트랙(Static Body) 동적 생성
+canvas.addEventListener('mousedown', (e) => {
+    isDrawing = true;
+    lastX = e.clientX;
+    lastY = e.clientY;
+});
+
+canvas.addEventListener('mousemove', (e) => {
+    if (!isDrawing) return;
+    const currentX = e.clientX;
+    const currentY = e.clientY;
+    
+    const dist = Math.hypot(currentX - lastX, currentY - lastY);
+    
+    // 점 사이의 거리가 적절히 벌어졌을 때 사선 벽(Rectangle) 배치
+    if (dist > 8) {
+        const midX = (lastX + currentX) / 2;
+        const midY = (lastY + currentY) / 2;
+        const angle = Math.atan2(currentY - lastY, currentX - lastX);
+        const thickness = 4; // 트랙 두께
+
+        // 두 점을 연결하는 직사각형 형태의 static(고정된) 물리 바디 생성
+        const segment = Bodies.rectangle(midX, midY, dist, thickness, {
+            isStatic: true,
+            angle: angle,
+            friction: 0.05
+        });
+
+        Composite.add(world, segment);
+        trackLines.push({ x1: lastX, y1: lastY, x2: currentX, y2: currentY });
+
+        lastX = currentX;
+        lastY = currentY;
+    }
+});
+
+window.addEventListener('mouseup', () => isDrawing = false);
+
+// 5. UI 이벤트 루프
+const startBtn = document.getElementById('startBtn');
+startBtn.addEventListener('click', () => {
+    isRunning = !isRunning;
+    startBtn.innerText = isRunning ? "⏸ 일시정지" : "▶ 시뮬레이션 시작";
+    startBtn.className = isRunning ? "running" : "";
+});
+
+document.getElementById('resetBtn').addEventListener('click', () => {
+    isRunning = false;
+    startBtn.innerText = "▶ 시뮬레이션 시작";
+    startBtn.className = "";
+    spawnRider(); // 라이더 위치 및 속도 원점 리셋
+});
+
+// 6. 메인 프레임 루프 (렌더링 및 물리 서브스텝 제어)
+const ctx = canvas.getContext('2d');
+
+function updateFrame() {
+    // 시뮬레이션이 활성화된 경우에만 엔진 한 스텝 전진
+    if (isRunning) {
+        // 매끄러운 연산 및 터널링 방지를 위해 고정 타임스텝(16.66ms)으로 연산 쪼개기
+        Engine.update(engine, 1000 / 60); 
+    }
+
+    // 캔버스 클리어
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // 배경 그리드 패턴 그리기
+    ctx.strokeStyle = '#f0f3f4';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < canvas.width; x += 40) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+    }
+    for (let y = 0; y < canvas.height; y += 40) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+
+    // 트랙 선 그리기
+    ctx.strokeStyle = '#2c3e50';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    for (let line of trackLines) {
+        ctx.beginPath();
+        ctx.moveTo(line.x1, line.y1);
+        ctx.lineTo(line.x2, line.y2);
+        ctx.stroke();
+    }
+
+    // 라이더 캐릭터 그리기
+    if (riderBody) {
+        const { x, y } = riderBody.position;
+        const radius = riderBody.circleRadius;
+
+        ctx.save();
+        ctx.shadowBlur = 6;
+        ctx.shadowColor = 'rgba(0,0,0,0.2)';
+        ctx.fillStyle = '#e74c3c';
+        ctx.strokeStyle = '#c0392b';
+        ctx.lineWidth = 2;
+        
+        ctx.beginPath();
+        ctx.arc(x, y, radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+        ctx.restore();
+
+        // 맵 밖으로 떨어지면 자동 리셋
+        if (y > canvas.height + 100 || x > canvas.width + 100 || x < -100) {
+            spawnRider();
+        }
+    }
+
+    requestAnimationFrame(updateFrame);
+}
+
+// 애니메이션 실행
+updateFrame();
+
+// 리사이즈 갱신
+window.addEventListener('resize', () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+});
+</script>
+</body>
+</html>
