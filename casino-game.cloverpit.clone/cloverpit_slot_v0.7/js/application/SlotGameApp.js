@@ -83,7 +83,7 @@ export class SlotGameApp {
 
     this.fx.resize();
     this.fx.emitBurst(this.fx.canvas.width / 2, this.fx.canvas.height * 0.5, 20, this.config.ui.depositBurst);
-    this.view.showFloatingNumber(`PAID ${amount}`, this.config.ui.depositFloat);
+    this.view.showFloatingNumber(`PAID ${amount}`, this.config.ui.depositFloat, "ambient");
     this.view.renderState(this.state, this.config);
   }
 
@@ -152,7 +152,6 @@ export class SlotGameApp {
       case "multi-bonus":
       case "pattern-bonus":
       case "item-bonus":
-        this.view.showFloatingNumber(this.formatDelta(entry.coinDelta), entry.color ?? this.config.ui.gainFloat);
         this.fx.flash(entry.color ?? this.config.ui.gainFloat, 0.2, 0.08);
         await this.applyCoinDelta(entry.coinDelta);
         return;
@@ -203,13 +202,11 @@ export class SlotGameApp {
       case "event-overdrive":
         this.fx.flash(this.config.ui.overdriveFlash, 0.45, 0.05);
         this.view.shakeMachine();
-        this.view.showFloatingNumber(this.formatDelta(entry.coinDelta), this.config.ui.overdriveFlash);
         await this.applyCoinDelta(entry.coinDelta);
         return;
 
       case "event-fever":
         this.fx.flash(this.config.ui.feverFlash, 0.35, 0.05);
-        this.view.showFloatingNumber(this.formatDelta(entry.coinDelta), this.config.ui.feverFlash);
         await this.applyCoinDelta(entry.coinDelta);
         return;
 
@@ -286,6 +283,7 @@ export class SlotGameApp {
     const from = this.state.coinDisplay;
     this.state.coins = Math.max(0, this.state.coins + delta);
     this.state.coinDisplay = this.state.coins;
+    this.view.showCoinDeltaHud(delta);
 
     await this.view.animateCoinCounter(
       from,

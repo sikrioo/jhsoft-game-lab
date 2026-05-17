@@ -31,6 +31,7 @@ export class SlotMachineView {
       chainToggle: document.getElementById("bchaintoggle"),
       chainToggleState: document.getElementById("chaintogglestate"),
     };
+    this.refs.coinCard = this.refs.coinValue?.closest(".sc");
     this.reelTracks = [];
     this.reelWraps = [];
     this.createHudLayer();
@@ -121,13 +122,10 @@ export class SlotMachineView {
         const rowIndex = index - this.config.reels.extraRows;
         const cell = document.createElement("div");
         cell.className = `rs ${this.getRowClass(rowIndex)}`;
-        cell.textContent = symbol.icon;
+        this.paintSymbolCell(cell, symbol, rowIndex);
 
         if (rowIndex >= 0 && rowIndex < this.config.reels.rows) {
-          cell.dataset.symbolId = initialGrid[column][rowIndex].id;
-          cell.textContent = initialGrid[column][rowIndex].icon;
-        } else {
-          cell.dataset.symbolId = symbol.id;
+          this.paintSymbolCell(cell, initialGrid[column][rowIndex], rowIndex);
         }
 
         track.appendChild(cell);
@@ -143,6 +141,10 @@ export class SlotMachineView {
 
   renderLegend(config, state) {
     this.refs.legend.innerHTML = "";
+    const totalWeight = config.symbols.reduce(
+      (sum, symbol) => sum + (state.symbolWeights?.[symbol.id] ?? symbol.baseWeight ?? symbol.weight ?? 1),
+      0,
+    );
 
     for (const symbol of config.symbols) {
       const card = document.createElement("div");
@@ -161,9 +163,11 @@ export class SlotMachineView {
           ? "m curse"
           : `m ${this.getMultiplierTierClass(multiplierValue)}`;
       const weightClass = weightDelta > 0 ? "sw boosted" : "sw";
-      const deltaText = weightDelta !== 0 ? ` <span>${weightDelta > 0 ? `+${weightDelta}` : weightDelta}</span>` : "";
+      const oddsPercent = Math.round((currentWeight / totalWeight) * 100);
+      const deltaText = weightDelta !== 0 ? `<span>${weightDelta > 0 ? `+${weightDelta}` : weightDelta}W</span>` : "";
+      const oddsText = `ODDS ${oddsPercent}%`;
 
-      card.innerHTML = `<div class="e">${symbol.icon}</div><div class="${multiplierClass}">${valueText}</div><div class="${weightClass}">WT ${currentWeight}${deltaText}</div>`;
+      card.innerHTML = `<div class="e">${this.getSymbolMarkup(symbol, "legend")}</div><div class="${multiplierClass}">${valueText}</div><div class="${weightClass}">${oddsText}${deltaText}</div>`;
       this.refs.legend.appendChild(card);
     }
   }
@@ -385,17 +389,34 @@ export class SlotMachineView {
     overlay.addEventListener("click", () => overlay.remove(), { once: true });
   }
 
-  showFloatingNumber(text, color) {
+  showFloatingNumber(text, color, placement = "center") {
     const element = document.createElement("div");
-    element.className = "fn";
+    element.className = `fn ${placement === "ambient" ? "fn-ambient" : "fn-center"}`;
     element.textContent = text;
     element.style.color = color;
     element.style.textShadow = `0 0 12px ${color}`;
-    element.style.left = `${60 + Math.random() * 230}px`;
-    element.style.top = `${120 + Math.random() * 80}px`;
+
+    if (placement === "ambient") {
+      element.style.left = `${60 + Math.random() * 230}px`;
+      element.style.top = `${120 + Math.random() * 80}px`;
+    }
+
     this.root.appendChild(element);
 
     window.setTimeout(() => element.remove(), 1400);
+  }
+
+  showCoinDeltaHud(delta) {
+    if (!this.refs.coinCard || !delta) {
+      return;
+    }
+
+    const chip = document.createElement("div");
+    chip.className = `coin-delta-hud ${delta > 0 ? "up" : "down"}`;
+    chip.textContent = `${delta > 0 ? "+" : ""}${delta} COIN`;
+    chip.style.setProperty("--coin-delta-color", delta > 0 ? "#d8ff3e" : "#ff6b8d");
+    this.refs.coinCard.appendChild(chip);
+    window.setTimeout(() => chip.remove(), 1350);
   }
 
   shakeMachine() {
@@ -467,16 +488,14 @@ export class SlotMachineView {
       const rowIndex = index - this.config.reels.extraRows;
       if (rowIndex >= 0 && rowIndex < this.config.reels.rows) {
         const symbol = symbols[rowIndex];
-        cell.textContent = symbol.icon;
-        cell.dataset.symbolId = symbol.id;
         cell.className = `rs ${this.getRowClass(rowIndex)}`;
+        this.paintSymbolCell(cell, symbol, rowIndex);
         return;
       }
 
       const filler = pickSymbol();
-      cell.textContent = filler.icon;
-      cell.dataset.symbolId = filler.id;
       cell.className = "rs buffer";
+      this.paintSymbolCell(cell, filler, rowIndex);
     });
 
     this.reelTracks[column].style.transform = `translateY(-${this.config.reels.extraRows * this.config.reels.rowHeight}px)`;
@@ -525,8 +544,7 @@ export class SlotMachineView {
           swapTimer = 0;
           cells.forEach((cell) => {
             const symbol = pickSymbol();
-            cell.textContent = symbol.icon;
-            cell.dataset.symbolId = symbol.id;
+            this.paintSymbolCell(cell, symbol, -1);
           });
         }
 
@@ -899,6 +917,81 @@ export class SlotMachineView {
 
   getPaylinePolylinePoints(payline) {
     return this.getPolylinePointsFromPositions(payline.positions);
+  }
+
+  paintSymbolCell(cell, symbol, rowIndex) {
+    cell.dataset.symbolId = symbol.id;
+    cell.dataset.symbolFamily = symbol.family ?? "";
+    cell.dataset.symbolVariant = rowIndex >= 0 && rowIndex < this.config.reels.rows ? "reel" : "buffer";
+    cell.innerHTML = this.getSymbolMarkup(symbol, "reel");
+  }
+
+  getSymbolMarkup(symbol, variant = "reel") {
+    return `<span class="symbol-badge symbol-${symbol.id} symbol-${variant}">
+      <span class="symbol-mark" aria-hidden="true">${this.getSymbolMarkSvg(symbol.id)}</span>
+      <span class="symbol-code">${symbol.icon}</span>
+    </span>`;
+  }
+
+  getSymbolMarkSvg(symbolId) {
+    const marks = {
+      cherry: `
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="11" cy="20" r="5.5" class="glyph-fill"/>
+          <circle cx="21" cy="20" r="5.5" class="glyph-fill"/>
+          <path d="M16 11C14 8 12 6 8 5" class="glyph-stroke"/>
+          <path d="M16 11C18 8 21 6 24 7" class="glyph-stroke"/>
+          <path d="M15 8C17 6 20 5 23 6" class="glyph-leaf"/>
+        </svg>`,
+      lemon: `
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M7 16C7 11 11 8 16 8C21 8 25 11 25 16C25 21 21 24 16 24C11 24 7 21 7 16Z" class="glyph-fill"/>
+          <path d="M10 13C12 11 20 11 22 13" class="glyph-stroke"/>
+          <path d="M16 8C18 6 21 5 24 6" class="glyph-leaf"/>
+        </svg>`,
+      diamond: `
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M10 10H22L26 15L16 25L6 15L10 10Z" class="glyph-fill"/>
+          <path d="M10 10L16 25L22 10M6 15H26" class="glyph-stroke"/>
+        </svg>`,
+      clover: `
+        <svg viewBox="0 0 32 32" fill="none">
+          <circle cx="12" cy="11" r="4.5" class="glyph-fill"/>
+          <circle cx="20" cy="11" r="4.5" class="glyph-fill"/>
+          <circle cx="12" cy="19" r="4.5" class="glyph-fill"/>
+          <circle cx="20" cy="19" r="4.5" class="glyph-fill"/>
+          <path d="M16 19V26C16 27 15 27 14 26" class="glyph-stroke"/>
+        </svg>`,
+      crown: `
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M7 22L9 11L15 17L20 9L24 17L27 12L25 22H7Z" class="glyph-fill"/>
+          <path d="M7 22H25M11 24H21" class="glyph-stroke"/>
+          <circle cx="9" cy="11" r="1.5" class="glyph-leaf"/>
+          <circle cx="20" cy="9" r="1.5" class="glyph-leaf"/>
+          <circle cx="27" cy="12" r="1.5" class="glyph-leaf"/>
+        </svg>`,
+      bell: `
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M10 22V16C10 12 12 9 16 9C20 9 22 12 22 16V22H10Z" class="glyph-fill"/>
+          <path d="M8 22H24M14 25H18M16 9V7" class="glyph-stroke"/>
+          <circle cx="16" cy="23" r="1.8" class="glyph-leaf"/>
+        </svg>`,
+      devil: `
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M11 11L9 7L13 8M21 11L23 7L19 8" class="glyph-stroke"/>
+          <path d="M10 12C10 9 12 8 16 8C20 8 22 9 22 12V19C22 22 20 24 16 24C12 24 10 22 10 19V12Z" class="glyph-fill"/>
+          <path d="M13 17H14M18 17H19M13 20C15 22 17 22 19 20" class="glyph-stroke"/>
+        </svg>`,
+      jackpot: `
+        <svg viewBox="0 0 32 32" fill="none">
+          <path d="M8 9H25V12L18 24H13.8L20.4 13.6H8V9Z" class="glyph-fill"/>
+          <path d="M8 9H25V12L18 24H13.8L20.4 13.6H8V9Z" class="glyph-stroke"/>
+          <path d="M23.5 5.5L24.5 8.2L27.5 8.4L25.1 10.1L25.9 12.8L23.5 11.3L21.1 12.8L21.9 10.1L19.5 8.4L22.5 8.2L23.5 5.5Z" class="glyph-leaf"/>
+          <circle cx="9.5" cy="21.5" r="1.6" class="glyph-leaf"/>
+        </svg>`,
+    };
+
+    return marks[symbolId] ?? marks.jackpot;
   }
 
   getPolylinePointsFromPositions(positions) {
