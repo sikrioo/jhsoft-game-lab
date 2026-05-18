@@ -26,20 +26,44 @@
       <div class="sub">SPIN TO SURVIVE - DO NOT LOSE</div>
     </div>
 
+    <section class="manager-overlay" id="manageroverlay" aria-label="Alice live dialogue">
+      <img
+        id="manageroverlayportrait"
+        class="manager-overlay-portrait"
+        src="./cloverpit_slot_v0.7/assets/images/characters/alice_main.webp"
+        alt="Alice, the casino manager AI"
+      >
+      <div class="manager-overlay-bubble">
+        <div class="manager-overlay-title" id="manageroverlaytitle">ALICE</div>
+        <div class="manager-overlay-text" id="manageroverlaytext"></div>
+        <div class="manager-overlay-choices" id="manageroverlaychoices"></div>
+      </div>
+    </section>
+
     <div class="game-layout">
       <aside class="side-stack">
-        <div class="item-panel" id="itempanel"></div>
+        <section class="manager-panel" id="managerpanel" hidden>
+          <div class="manager-hero">
+            <img
+              id="managerportrait"
+              class="manager-portrait"
+              src="./cloverpit_slot_v0.7/assets/images/characters/alice_main.webp"
+              alt="Alice, the casino manager AI"
+            >
+            <div class="manager-meta">
+              <div class="manager-kicker">CASINO MANAGER AI</div>
+              <div class="manager-name" id="managername">ALICE</div>
+              <div class="manager-role" id="managerrole">Helpful until your appetite becomes interesting.</div>
+            </div>
+          </div>
+          <div class="manager-bubble">
+            <div class="manager-bubble-title" id="managertitle">ALICE</div>
+            <div class="manager-bubble-text" id="managertext"></div>
+          </div>
+          <div class="manager-choices" id="managerchoices"></div>
+        </section>
 
-        <div class="chain-panel collapsed" id="chainpanel">
-          <button class="chain-toggle" id="bchaintoggle" type="button" aria-expanded="false">
-            <span class="chain-title-wrap">
-              <span>CHAIN LOG</span>
-              <span class="chain-sub">open when you want the breakdown</span>
-            </span>
-            <span class="chain-toggle-state" id="chaintogglestate">OPEN</span>
-          </button>
-          <div class="chain-log" id="chainlog"></div>
-        </div>
+        <div class="item-panel" id="itempanel" hidden></div>
 
         <div class="symbol-panel">
           <div class="chain-head">
@@ -49,6 +73,19 @@
           <div class="symrow" id="symrow"></div>
           <div class="weight-notes" id="weightnotes"></div>
         </div>
+
+        <div class="chain-panel collapsed" id="chainpanel">
+          <button class="chain-toggle" id="bchaintoggle" type="button" aria-expanded="false">
+            <span class="chain-title-wrap">CHAIN LOG</span>
+            <span class="chain-toggle-state" id="chaintogglestate">OPEN</span>
+          </button>
+          <div class="chain-log" id="chainlog"></div>
+        </div>
+
+        <button class="alice-toggle" id="balice" type="button" aria-expanded="true">
+          <span class="alice-toggle-label">ALICE</span>
+          <span class="alice-toggle-state" id="alicetogglestate">CLOSE</span>
+        </button>
       </aside>
 
       <section class="main-stack">

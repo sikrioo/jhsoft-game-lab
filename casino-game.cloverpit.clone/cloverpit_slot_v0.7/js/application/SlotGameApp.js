@@ -21,15 +21,18 @@ export class SlotGameApp {
   init() {
     this.state.grid = buildSpinGrid(this.config, this.pickSymbol);
     this.view.buildReels(this.state.grid, this.pickSymbol);
+    this.view.renderManager(this.config);
     this.view.renderItems(this.config);
     this.refreshWeightUi();
     this.view.renderCombo(describeCombo(this.state.combo));
     this.view.renderState(this.state, this.config);
     this.view.resetSpinWin();
+    this.view.setManagerDialogue(this.buildManagerDialogue("intro"));
     this.view.bindActions({
       onSpin: () => this.handleSpin(),
       onDeposit: () => this.handleDeposit(),
       onNext: () => this.handleNextDeadline(),
+      onManagerTopic: (topicId) => this.handleManagerTopic(topicId),
     });
 
     this.fx.resize();
@@ -111,6 +114,10 @@ export class SlotGameApp {
 
     this.refreshWeightUi();
     this.view.renderState(this.state, this.config);
+  }
+
+  handleManagerTopic(topicId) {
+    this.view.setManagerDialogue(this.buildManagerDialogue(topicId), topicId);
   }
 
   async resolveSpinOutcome(outcome) {
@@ -421,5 +428,52 @@ export class SlotGameApp {
     this.view.renderLegend(this.config, this.state);
     this.view.renderWeightNotes(weightState.notes);
     return weightState;
+  }
+
+  buildManagerDialogue(topicId) {
+    const cherryRules = this.config.countRules.cherry;
+    const cloverRules = this.config.countRules.clover;
+    const diamondRules = this.config.countRules.diamond;
+    const jackpotRules = this.config.countRules.jackpot;
+    const devilRules = this.config.countRules.devil;
+
+    switch (topicId) {
+      case "lines":
+        return {
+          title: "PAYLINES",
+          text: `There are ${this.config.paylines.length} active lines. A line pays when the same symbol forms a contiguous run of 3 or more anywhere on that line. Left edge obedience is no longer required. Continuity is.`,
+        };
+      case "cherry":
+        return {
+          title: "CHERRIES",
+          text: `You were right to notice them. ${cherryRules.lowCount} cherries now trigger a screen bonus for +${cherryRules.lowBonus}. ${cherryRules.highCount} or more pay +${cherryRules.highBonus}. It stacks on top of any line win. Greed should be numerate.`,
+        };
+      case "counts":
+        return {
+          title: "SCREEN COUNTS",
+          text: `Screen-wide bonuses ignore line paths. Clover pays at ${cloverRules.min}+ on screen. Diamond activates at ${diamondRules.min}+ and amplifies whatever payout already exists. Seven scatters begin at ${jackpotRules.min}+. Devil faces start bleeding coins at ${devilRules.min}+.`,
+        };
+      case "combo":
+        return {
+          title: "COMBO",
+          text: `Any rewarding spin sustains combo. Stronger chains and multi-line hits grow it faster. Jackpots accelerate it. Devil chains cut it cleanly. If the number becomes large enough, the machine becomes interested in you.`,
+        };
+      case "relics":
+        return {
+          title: "RELICS",
+          text: `Lucky Clover boosts winning clover paylines. Golden Bell repeats bell payouts once more. Crown Reserve releases reserve coins when 2 or more crowns appear on screen. I advise treating relics as leverage, not comfort.`,
+        };
+      case "risk":
+        return {
+          title: "RISK",
+          text: `A full line of sevens arms jackpot. A full line of devils arms reverse jackpot. That is separate from the screen-wide devil penalty. The machine offers help and ruin with the same gesture. Distinguish them if you can.`,
+        };
+      case "intro":
+      default:
+        return {
+          title: "ALICE",
+          text: "Ask precisely and I will explain the floor. I am here to guide your odds, not protect your future.",
+        };
+    }
   }
 }

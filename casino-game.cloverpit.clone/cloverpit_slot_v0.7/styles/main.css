@@ -516,6 +516,84 @@ canvas#fx{
   text-shadow:none;
   opacity:.88;
 }
+.manager-overlay{
+  position:absolute;
+  left:10px;
+  bottom:42px;
+  z-index:30;
+  width:316px;
+  min-height:365px;
+  pointer-events:none;
+  transition:opacity .18s ease,transform .18s ease;
+}
+.manager-overlay.is-hidden{
+  opacity:0;
+  transform:translateX(-16px);
+  pointer-events:none;
+}
+.manager-overlay-portrait{
+  position:absolute;
+  left:-18px;
+  bottom:0;
+  width:157px;
+  height:347px;
+  object-fit:contain;
+  object-position:left bottom;
+  filter:drop-shadow(0 14px 24px #00000055);
+}
+.manager-overlay-bubble{
+  position:relative;
+  margin-left:93px;
+  padding:17px 17px 15px;
+  border-radius:18px 18px 18px 10px;
+  border:2px solid #1f1828;
+  background:
+    linear-gradient(180deg,#1b0d1ef4 0%,#0d0610f8 100%);
+  box-shadow:
+    0 16px 30px #00000040,
+    inset 0 0 24px #33f2ff08,
+    0 0 0 2px #241124;
+  pointer-events:auto;
+}
+.manager-overlay-bubble::before{
+  content:"";
+  position:absolute;
+  left:-19px;
+  bottom:24px;
+  width:26px;
+  height:26px;
+  border-left:2px solid #1f1828;
+  border-bottom:2px solid #1f1828;
+  background:linear-gradient(180deg,#1b0d1ef4 0%,#0d0610f8 100%);
+  transform:rotate(28deg) skewX(6deg);
+  box-shadow:-2px 4px 10px #00000024;
+}
+.manager-overlay-title{
+  font-family:"Bungee","Impact",sans-serif;
+  font-size:12px;
+  font-weight:400;
+  letter-spacing:1px;
+  color:#ff8a1d;
+}
+.manager-overlay-text{
+  margin-top:8px;
+  font-family:"Chakra Petch","Rajdhani","Trebuchet MS",sans-serif;
+  font-size:14px;
+  line-height:1.5;
+  color:#f1e9ff;
+}
+.manager-overlay-text.pop{
+  animation:managerBubblePop .22s ease;
+}
+.manager-overlay-choices{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:12px;
+}
+.manager-overlay .manager-chip{
+  pointer-events:auto;
+}
 
 .status-hud{
   position:relative;
@@ -763,9 +841,9 @@ canvas#fx{
   position:relative;
   z-index:2;
   display:grid;
-  grid-template-columns:minmax(196px, 220px) fit-content(100%);
+  grid-template-columns:minmax(220px, 250px) fit-content(100%);
   gap:14px;
-  align-items:start;
+  align-items:stretch;
   justify-content:start;
 }
 .side-stack{
@@ -773,7 +851,152 @@ canvas#fx{
   flex-direction:column;
   gap:14px;
   min-width:0;
-  max-width:220px;
+  max-width:250px;
+  align-self:stretch;
+}
+.alice-toggle{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  width:100%;
+  padding:10px 12px;
+  border-radius:16px 12px 16px 10px;
+  border:2px solid #171717;
+  background:linear-gradient(180deg,#210920f2 0%,#0c0412f6 100%);
+  box-shadow:inset 0 0 18px #33f2ff08,0 10px 22px #00000028,0 0 0 2px #241123;
+  color:#f3fbff;
+  cursor:pointer;
+  transition:border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+  margin-top:auto;
+}
+.alice-toggle:hover,
+.alice-toggle:focus-visible{
+  outline:none;
+  transform:translateY(-1px);
+  border-color:#49e6ff66;
+  box-shadow:inset 0 0 18px #33f2ff10,0 0 18px #33f2ff16,0 0 0 2px #241123;
+}
+.alice-toggle-label{
+  font-family:"Bungee","Impact",sans-serif;
+  font-size:11px;
+  font-weight:400;
+  letter-spacing:1px;
+  color:#ffdf63;
+}
+.alice-toggle-state{
+  font-family:"Orbitron","Rajdhani",sans-serif;
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:1px;
+  color:#7eddff;
+}
+.manager-panel{
+  background:linear-gradient(180deg,#220a24f0 0%,#0d0510f6 100%);
+  border:2px solid #171717;
+  border-radius:24px 16px 24px 12px;
+  padding:12px;
+  box-shadow:inset 0 0 24px #33f2ff08,0 12px 26px #00000032,0 0 0 3px #251225;
+}
+.manager-hero{
+  display:grid;
+  grid-template-columns:84px minmax(0,1fr);
+  gap:10px;
+  align-items:end;
+}
+.manager-portrait{
+  width:84px;
+  height:188px;
+  object-fit:contain;
+  object-position:center bottom;
+  filter:drop-shadow(0 10px 18px #0000004d);
+}
+.manager-meta{
+  padding-bottom:10px;
+}
+.manager-kicker{
+  font-family:"Bungee","Impact",sans-serif;
+  font-size:9px;
+  font-weight:400;
+  letter-spacing:.8px;
+  color:#ff8a1d;
+}
+.manager-name{
+  margin-top:4px;
+  font-family:"Orbitron","Rajdhani",sans-serif;
+  font-size:24px;
+  font-weight:800;
+  letter-spacing:2px;
+  color:#f3fbff;
+  text-shadow:0 0 16px #33f2ff22;
+}
+.manager-role{
+  margin-top:5px;
+  font-family:"Chakra Petch","Rajdhani","Trebuchet MS",sans-serif;
+  font-size:11px;
+  line-height:1.35;
+  color:#bea9d4;
+}
+.manager-bubble{
+  margin-top:8px;
+  padding:10px 12px 11px;
+  border-radius:16px 16px 16px 8px;
+  background:linear-gradient(180deg,#17091cf4 0%,#0a040df8 100%);
+  border:1px solid #352040;
+  box-shadow:inset 0 0 18px #ffffff05;
+}
+.manager-bubble-title{
+  font-family:"Bungee","Impact",sans-serif;
+  font-size:10px;
+  font-weight:400;
+  letter-spacing:1px;
+  color:#7eddff;
+}
+.manager-bubble-text{
+  margin-top:6px;
+  font-family:"Chakra Petch","Rajdhani","Trebuchet MS",sans-serif;
+  font-size:12px;
+  line-height:1.5;
+  color:#f3eaff;
+}
+.manager-bubble-text.pop{
+  animation:managerBubblePop .22s ease;
+}
+@keyframes managerBubblePop{
+  0%{opacity:.6;transform:translateY(3px)}
+  100%{opacity:1;transform:translateY(0)}
+}
+.manager-choices{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-top:10px;
+}
+.manager-chip{
+  padding:7px 10px 6px;
+  border-radius:999px;
+  border:1px solid #34213d;
+  background:linear-gradient(180deg,#190b1cf0 0%,#0b050ef6 100%);
+  color:#d6c7e8;
+  font-family:"Bungee","Impact",sans-serif;
+  font-size:9px;
+  font-weight:400;
+  letter-spacing:.6px;
+  cursor:pointer;
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease,color .16s ease;
+}
+.manager-chip:hover,
+.manager-chip:focus-visible{
+  outline:none;
+  transform:translateY(-1px);
+  border-color:#49e6ff66;
+  box-shadow:0 0 14px #49e6ff18;
+  color:#f3fbff;
+}
+.manager-chip.active{
+  border-color:#ff8a1d88;
+  box-shadow:0 0 16px #ff8a1d20,inset 0 0 14px #ff8a1d14;
+  color:#ffe071;
 }
 .main-stack{
   min-width:0;
@@ -1456,6 +1679,9 @@ canvas#fx{
   gap:6px;
   opacity:1;
 }
+.item-panel[hidden]{
+  display:none !important;
+}
 .item-chip{
   flex:1 1 auto;
   min-width:0;
@@ -1515,7 +1741,7 @@ canvas#fx{
   align-items:center;
   justify-content:space-between;
   gap:12px;
-  padding:2px 0 4px;
+  padding:0;
   background:transparent;
   border:none;
   color:inherit;
@@ -1523,9 +1749,7 @@ canvas#fx{
   text-align:left;
 }
 .chain-title-wrap{
-  display:flex;
-  flex-direction:column;
-  gap:2px;
+  display:block;
 }
 .chain-toggle-state{
   font-family:"Bungee","Impact",sans-serif;
@@ -2148,9 +2372,29 @@ canvas#fx{
   }
   .side-stack{order:2}
   .main-stack{order:1}
+  .manager-hero{
+    grid-template-columns:64px minmax(0,1fr);
+    align-items:center;
+  }
+  .manager-portrait{
+    width:64px;
+    height:138px;
+  }
+  .manager-name{
+    font-size:18px;
+  }
+  .manager-role{
+    font-size:10px;
+  }
+  .manager-bubble-text{
+    font-size:11px;
+  }
   .status-hud{
     width:100%;
     align-items:stretch;
+  }
+  .manager-overlay{
+    display:none;
   }
   .coin-sc{
     min-width:0;

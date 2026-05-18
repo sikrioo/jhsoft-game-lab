@@ -10,6 +10,33 @@ export const GAME_CONFIG = {
     multiplierGrowth: 1.7,
     jackpotTickets: 5,
   },
+  countRules: {
+    cherry: {
+      lowCount: 4,
+      lowBonus: 10,
+      highCount: 5,
+      highBonus: 18,
+    },
+    clover: {
+      min: 3,
+      perSymbol: 6,
+    },
+    diamond: {
+      min: 2,
+      perSymbol: 4,
+      baseFloor: 20,
+      ratio: 0.25,
+    },
+    jackpot: {
+      min: 2,
+      perSymbol: 9,
+    },
+    devil: {
+      min: 3,
+      perSymbol: 6,
+      cap: 24,
+    },
+  },
   reels: {
     columns: 5,
     rows: 3,
@@ -51,6 +78,20 @@ export const GAME_CONFIG = {
         name: "Crown Reserve",
         summary: "2+ crowns release reserve coins.",
       },
+    ],
+  },
+  manager: {
+    name: "ALICE",
+    role: "Casino Manager AI",
+    avatarPath: "./cloverpit_slot_v0.7/assets/images/characters/alice_main.webp",
+    descriptor: "Helpful until your appetite becomes interesting.",
+    topics: [
+      { id: "lines", label: "LINES" },
+      { id: "cherry", label: "CHERRY" },
+      { id: "counts", label: "COUNTS" },
+      { id: "combo", label: "COMBO" },
+      { id: "relics", label: "RELICS" },
+      { id: "risk", label: "RISK" },
     ],
   },
   paylines: [

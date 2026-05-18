@@ -25,6 +25,20 @@ export class SlotMachineView {
       leverButton: document.getElementById("blever"),
       depositButton: document.getElementById("bdeposit"),
       nextButton: document.getElementById("bnext"),
+      aliceToggle: document.getElementById("balice"),
+      aliceToggleState: document.getElementById("alicetogglestate"),
+      managerPanel: document.getElementById("managerpanel"),
+      managerPortrait: document.getElementById("managerportrait"),
+      managerName: document.getElementById("managername"),
+      managerRole: document.getElementById("managerrole"),
+      managerTitle: document.getElementById("managertitle"),
+      managerText: document.getElementById("managertext"),
+      managerChoices: document.getElementById("managerchoices"),
+      managerOverlay: document.getElementById("manageroverlay"),
+      managerOverlayPortrait: document.getElementById("manageroverlayportrait"),
+      managerOverlayTitle: document.getElementById("manageroverlaytitle"),
+      managerOverlayText: document.getElementById("manageroverlaytext"),
+      managerOverlayChoices: document.getElementById("manageroverlaychoices"),
       legend: document.getElementById("symrow"),
       weightNotes: document.getElementById("weightnotes"),
       itemPanel: document.getElementById("itempanel"),
@@ -104,6 +118,17 @@ export class SlotMachineView {
     this.refs.depositButton.addEventListener("click", actions.onDeposit);
     this.refs.nextButton.addEventListener("click", actions.onNext);
     this.refs.chainToggle.addEventListener("click", () => this.toggleChainPanel());
+    this.refs.aliceToggle?.addEventListener("click", () => this.toggleManagerOverlay());
+    const handleManagerChoice = (event) => {
+      const button = event.target.closest("[data-topic-id]");
+      if (!button) {
+        return;
+      }
+
+      actions.onManagerTopic?.(button.dataset.topicId);
+    };
+    this.refs.managerChoices?.addEventListener("click", handleManagerChoice);
+    this.refs.managerOverlayChoices?.addEventListener("click", handleManagerChoice);
   }
 
   buildReels(initialGrid, pickSymbol) {
@@ -206,6 +231,79 @@ export class SlotMachineView {
       </div>
       <div class="item-desc">${item.summary}</div>`;
       this.refs.itemPanel.appendChild(chip);
+    }
+  }
+
+  renderManager(config) {
+    if (!this.refs.managerPanel) {
+      return;
+    }
+
+    this.refs.managerName.textContent = config.manager?.name ?? "ALICE";
+    this.refs.managerRole.textContent = config.manager?.descriptor ?? "";
+    if (this.refs.managerPortrait && config.manager?.avatarPath) {
+      this.refs.managerPortrait.src = config.manager.avatarPath;
+    }
+    if (this.refs.managerOverlayPortrait && config.manager?.avatarPath) {
+      this.refs.managerOverlayPortrait.src = config.manager.avatarPath;
+    }
+
+    const topicMarkup = (config.manager?.topics ?? [])
+      .map(
+        (topic) => `<button class="manager-chip" type="button" data-topic-id="${topic.id}">${topic.label}</button>`,
+      )
+      .join("");
+
+    this.refs.managerChoices.innerHTML = topicMarkup;
+    if (this.refs.managerOverlayChoices) {
+      this.refs.managerOverlayChoices.innerHTML = topicMarkup;
+    }
+  }
+
+  setManagerDialogue(dialogue, activeTopicId = "") {
+    if (!this.refs.managerText || !this.refs.managerTitle) {
+      return;
+    }
+
+    this.refs.managerTitle.textContent = dialogue.title ?? "ALICE";
+    this.refs.managerText.textContent = dialogue.text ?? "";
+    this.refs.managerText.classList.remove("pop");
+    void this.refs.managerText.offsetWidth;
+    this.refs.managerText.classList.add("pop");
+
+    if (this.refs.managerOverlayTitle) {
+      this.refs.managerOverlayTitle.textContent = dialogue.title ?? "ALICE";
+    }
+    if (this.refs.managerOverlayText) {
+      this.refs.managerOverlayText.textContent = dialogue.text ?? "";
+      this.refs.managerOverlayText.classList.remove("pop");
+      void this.refs.managerOverlayText.offsetWidth;
+      this.refs.managerOverlayText.classList.add("pop");
+    }
+
+    this.syncManagerTopicState(this.refs.managerChoices, activeTopicId);
+    this.syncManagerTopicState(this.refs.managerOverlayChoices, activeTopicId);
+  }
+
+  syncManagerTopicState(container, activeTopicId) {
+    for (const chip of container?.querySelectorAll(".manager-chip") ?? []) {
+      chip.classList.toggle("active", chip.dataset.topicId === activeTopicId);
+    }
+  }
+
+  toggleManagerOverlay(forceVisible) {
+    if (!this.refs.managerOverlay) {
+      return;
+    }
+
+    const shouldShow = typeof forceVisible === "boolean"
+      ? forceVisible
+      : this.refs.managerOverlay.classList.contains("is-hidden");
+
+    this.refs.managerOverlay.classList.toggle("is-hidden", !shouldShow);
+    this.refs.aliceToggle?.setAttribute("aria-expanded", shouldShow ? "true" : "false");
+    if (this.refs.aliceToggleState) {
+      this.refs.aliceToggleState.textContent = shouldShow ? "CLOSE" : "TALK";
     }
   }
 

@@ -206,13 +206,35 @@ function evaluateLines(context) {
 
 function evaluateSymbolCounts(context) {
   const entries = [];
+  const cherryCount = context.symbolCounts.get("cherry") ?? 0;
   const cloverCount = context.symbolCounts.get("clover") ?? 0;
   const diamondCount = context.symbolCounts.get("diamond") ?? 0;
   const jackpotCount = context.symbolCounts.get("jackpot") ?? 0;
   const devilCount = context.symbolCounts.get("devil") ?? 0;
+  const countRules = context.config.countRules;
 
-  if (cloverCount >= 3) {
-    const coinDelta = cloverCount * 6;
+  if (cherryCount >= countRules.cherry.lowCount) {
+    const coinDelta =
+      cherryCount >= countRules.cherry.highCount
+        ? countRules.cherry.highBonus
+        : countRules.cherry.lowBonus;
+    context.totalCoinDelta += coinDelta;
+    entries.push({
+      label: "CHERRY",
+      text:
+        cherryCount >= countRules.cherry.highCount
+          ? `${cherryCount} cherries flood the floor -> +${coinDelta}.`
+          : `${cherryCount} cherries sweeten the screen -> +${coinDelta}.`,
+      tone: "gain",
+      effect: "count-bonus",
+      coinDelta,
+      color: "#ff7aa8",
+      focus: createSymbolFocus(context, "cherry", "#ff7aa8"),
+    });
+  }
+
+  if (cloverCount >= countRules.clover.min) {
+    const coinDelta = cloverCount * countRules.clover.perSymbol;
     context.totalCoinDelta += coinDelta;
     entries.push({
       label: "CLOVER",
@@ -225,8 +247,11 @@ function evaluateSymbolCounts(context) {
     });
   }
 
-  if (diamondCount >= 2) {
-    const coinDelta = Math.max(diamondCount * 4, Math.round(Math.max(context.totalCoinDelta, 20) * 0.25));
+  if (diamondCount >= countRules.diamond.min) {
+    const coinDelta = Math.max(
+      diamondCount * countRules.diamond.perSymbol,
+      Math.round(Math.max(context.totalCoinDelta, countRules.diamond.baseFloor) * countRules.diamond.ratio),
+    );
     context.totalCoinDelta += coinDelta;
     entries.push({
       label: "DIAMOND",
@@ -239,8 +264,8 @@ function evaluateSymbolCounts(context) {
     });
   }
 
-  if (jackpotCount >= 2) {
-    const coinDelta = jackpotCount * 9;
+  if (jackpotCount >= countRules.jackpot.min) {
+    const coinDelta = jackpotCount * countRules.jackpot.perSymbol;
     context.totalCoinDelta += coinDelta;
     entries.push({
       label: "SEVENS",
@@ -253,8 +278,8 @@ function evaluateSymbolCounts(context) {
     });
   }
 
-  if (devilCount >= 3) {
-    const coinDelta = -Math.min(24, devilCount * 6);
+  if (devilCount >= countRules.devil.min) {
+    const coinDelta = -Math.min(countRules.devil.cap, devilCount * countRules.devil.perSymbol);
     context.totalCoinDelta += coinDelta;
     entries.push({
       label: "CURSE",
