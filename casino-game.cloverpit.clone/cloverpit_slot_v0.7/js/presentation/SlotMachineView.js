@@ -33,11 +33,13 @@ export class SlotMachineView {
       managerRole: document.getElementById("managerrole"),
       managerTitle: document.getElementById("managertitle"),
       managerText: document.getElementById("managertext"),
+      managerGuide: document.getElementById("managerguide"),
       managerChoices: document.getElementById("managerchoices"),
       managerOverlay: document.getElementById("manageroverlay"),
       managerOverlayPortrait: document.getElementById("manageroverlayportrait"),
       managerOverlayTitle: document.getElementById("manageroverlaytitle"),
       managerOverlayText: document.getElementById("manageroverlaytext"),
+      managerOverlayGuide: document.getElementById("manageroverlayguide"),
       managerOverlayChoices: document.getElementById("manageroverlaychoices"),
       legend: document.getElementById("symrow"),
       weightNotes: document.getElementById("weightnotes"),
@@ -51,8 +53,10 @@ export class SlotMachineView {
     this.reelTracks = [];
     this.reelWraps = [];
     this.previewClearTimer = null;
-    this.activeChainEntry = null;
-    this.impactTimers = new Set();
+      this.activeChainEntry = null;
+      this.currentManagerGuide = null;
+      this.activeManagerGuideCardId = "";
+      this.impactTimers = new Set();
     this.createHudLayer();
     this.createPaylineDisplay();
     this.resetChainLog();
@@ -81,35 +85,7 @@ export class SlotMachineView {
   createPaylineDisplay() {
     this.refs.paylineLabels.innerHTML = "";
     this.refs.resultPanel.innerHTML = "";
-
-    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("class", "pl-svg");
-    svg.setAttribute("viewBox", "0 0 100 100");
-    svg.setAttribute("preserveAspectRatio", "none");
-    svg.setAttribute("aria-hidden", "true");
-
-    this.config.paylines.forEach((payline, paylineIndex) => {
-      const label = document.createElement("div");
-      label.className = "pl-label lost";
-      label.id = `pl${paylineIndex}`;
-      label.textContent = payline.shortLabel;
-      this.refs.paylineLabels.appendChild(label);
-
-      const polyline = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
-      polyline.setAttribute("class", `pl-line ${payline.pathClass} idle`);
-      polyline.setAttribute("id", `pll${paylineIndex}`);
-      polyline.setAttribute("points", this.getPaylinePolylinePoints(payline));
-      svg.appendChild(polyline);
-
-      const row = document.createElement("div");
-      row.className = "res-row";
-      row.id = `rrow${paylineIndex}`;
-      row.innerHTML = `<span class="rr-tag">${payline.shortLabel}</span><span id="rtxt${paylineIndex}">--</span>`;
-      this.refs.resultPanel.appendChild(row);
-    });
-
     this.refs.paylineLines.innerHTML = "";
-    this.refs.paylineLines.appendChild(svg);
   }
 
   bindActions(actions) {
@@ -118,18 +94,28 @@ export class SlotMachineView {
     this.refs.depositButton.addEventListener("click", actions.onDeposit);
     this.refs.nextButton.addEventListener("click", actions.onNext);
     this.refs.chainToggle.addEventListener("click", () => this.toggleChainPanel());
-    this.refs.aliceToggle?.addEventListener("click", () => this.toggleManagerOverlay());
-    const handleManagerChoice = (event) => {
-      const button = event.target.closest("[data-topic-id]");
-      if (!button) {
-        return;
+      this.refs.aliceToggle?.addEventListener("click", () => this.toggleManagerOverlay());
+      const handleManagerChoice = (event) => {
+        const button = event.target.closest("[data-topic-id]");
+        if (!button) {
+          return;
       }
 
       actions.onManagerTopic?.(button.dataset.topicId);
-    };
-    this.refs.managerChoices?.addEventListener("click", handleManagerChoice);
-    this.refs.managerOverlayChoices?.addEventListener("click", handleManagerChoice);
-  }
+      };
+      this.refs.managerChoices?.addEventListener("click", handleManagerChoice);
+      this.refs.managerOverlayChoices?.addEventListener("click", handleManagerChoice);
+      const handleGuideSelection = (event) => {
+        const button = event.target.closest("[data-guide-card-select]");
+        if (!button) {
+          return;
+        }
+
+        this.setActiveManagerGuideCard(button.dataset.guideCardSelect);
+      };
+      this.refs.managerGuide?.addEventListener("click", handleGuideSelection);
+      this.refs.managerOverlayGuide?.addEventListener("click", handleGuideSelection);
+    }
 
   buildReels(initialGrid, pickSymbol) {
     this.refs.reels.innerHTML = "";
@@ -220,6 +206,10 @@ export class SlotMachineView {
   }
 
   renderItems(config) {
+    if (!this.refs.itemPanel || this.refs.itemPanel.hidden) {
+      return;
+    }
+
     this.refs.itemPanel.innerHTML = "";
 
     for (const item of config.items.active) {
@@ -281,8 +271,53 @@ export class SlotMachineView {
       this.refs.managerOverlayText.classList.add("pop");
     }
 
+    this.renderManagerGuide(dialogue.guide ?? null);
+
     this.syncManagerTopicState(this.refs.managerChoices, activeTopicId);
     this.syncManagerTopicState(this.refs.managerOverlayChoices, activeTopicId);
+  }
+
+  renderManagerGuide(guide = null) {
+    const cards = guide?.cards ?? [];
+    const kind = guide?.kind ?? "pattern";
+    this.currentManagerGuide = cards.length ? guide : null;
+
+    const activeCard = cards.find((card) => card.id === this.activeManagerGuideCardId) ?? cards[0] ?? null;
+    if (activeCard) {
+      this.activeManagerGuideCardId = activeCard.id;
+    }
+
+    const markup = activeCard
+      ? `<div class="pattern-guide-intro">
+          <span class="pattern-guide-intro-eyebrow">${guide?.eyebrow ?? "ALICE NOTES"}</span>
+          <p>${guide?.intro ?? ""}</p>
+        </div>
+        <div class="manager-guide-rail" role="tablist" aria-label="${guide?.kind ?? "guide"} guide">
+          ${cards.map((card) => this.getManagerGuideChipMarkup(card, activeCard.id)).join("")}
+        </div>
+        <div class="manager-guide-stage">
+          ${this.getManagerGuideCardMarkup(activeCard, kind)}
+        </div>`
+      : "";
+
+    if (this.refs.managerGuide) {
+      this.refs.managerGuide.innerHTML = markup;
+      this.refs.managerGuide.classList.toggle("is-visible", cards.length > 0);
+    }
+
+    if (this.refs.managerOverlayGuide) {
+      this.refs.managerOverlayGuide.innerHTML = markup;
+      this.refs.managerOverlayGuide.classList.toggle("is-visible", cards.length > 0);
+    }
+  }
+
+  setActiveManagerGuideCard(cardId) {
+    if (!this.currentManagerGuide?.cards?.some((card) => card.id === cardId)) {
+      return;
+    }
+
+    this.activeManagerGuideCardId = cardId;
+    this.renderManagerGuide(this.currentManagerGuide);
   }
 
   syncManagerTopicState(container, activeTopicId) {
@@ -438,44 +473,27 @@ export class SlotMachineView {
   }
 
   renderGlobalResult(message, className) {
-    for (let row = 0; row < this.getPaylineCount(); row += 1) {
-      this.renderResultRow(row, message, className);
-    }
+    this.renderSpinResults([{ tag: "INFO", message, className }]);
   }
 
   renderOutcome(outcome) {
-    for (const rowResult of outcome.rowResults) {
-      if (rowResult.status === "pending") {
-        continue;
-      }
+    this.renderSpinResults(outcome.summaryRows ?? []);
 
-      if (rowResult.status === "lose") {
-        this.setPayline(rowResult.row, "lose");
-        this.setPaylineLabel(rowResult.row, "lost");
-        this.renderResultRow(rowResult.row, rowResult.message, "lose");
-        continue;
-      }
+    if (outcome.devilTriggered) {
+      this.markAllReels("devil");
+      const devilEntry = outcome.stages
+        .flatMap((stage) => stage.entries)
+        .find((entry) => entry.effect === "event-devil");
 
-      if (rowResult.status === "devil") {
-        this.setPayline(rowResult.row, "devil", rowResult.matchedPositions);
-        this.setPaylineLabel(rowResult.row, "devil");
-        this.renderResultRow(rowResult.row, rowResult.message, "devil");
-        continue;
+      for (const [column, row] of devilEntry?.focus?.positions ?? []) {
+        const cell = this.getVisibleCell(column, row);
+        cell?.classList.add("cell-hit", "cell-tone-0");
       }
+      return;
+    }
 
-      if (rowResult.status === "jp") {
-        const winClass = this.getPaylineWinClass(rowResult.row);
-        this.setPayline(rowResult.row, winClass, rowResult.matchedPositions);
-        this.setPaylineLabel(rowResult.row, winClass);
-        this.renderResultRow(rowResult.row, rowResult.message, "jp");
-        this.highlightMatchedPositions(rowResult.row, rowResult.matchedPositions);
-        continue;
-      }
-
-      this.setPayline(rowResult.row, rowResult.status, rowResult.matchedPositions);
-      this.setPaylineLabel(rowResult.row, rowResult.status);
-      this.renderResultRow(rowResult.row, rowResult.message, rowResult.status);
-      this.highlightMatchedPositions(rowResult.row, rowResult.matchedPositions);
+    for (const [index, win] of (outcome.wins ?? []).entries()) {
+      this.highlightMatchedPositions(index % 10, win.positions);
     }
   }
 
@@ -665,6 +683,31 @@ export class SlotMachineView {
     };
   }
 
+  getFocusCenter(positions = []) {
+    if (!positions.length) {
+      const machineRect = this.refs.reelMachine.getBoundingClientRect();
+      const rootRect = this.root.getBoundingClientRect();
+      return {
+        x: machineRect.left - rootRect.left + machineRect.width / 2,
+        y: machineRect.top - rootRect.top + machineRect.height / 2,
+      };
+    }
+
+    const rootRect = this.root.getBoundingClientRect();
+    const pointTotal = positions.reduce((sum, [column, row]) => {
+      const reelRect = this.reelWraps[column].getBoundingClientRect();
+      return {
+        x: sum.x + (reelRect.left - rootRect.left + reelRect.width / 2),
+        y: sum.y + (reelRect.top - rootRect.top + this.config.reels.rowHeight * (row + 0.5)),
+      };
+    }, { x: 0, y: 0 });
+
+    return {
+      x: pointTotal.x / positions.length,
+      y: pointTotal.y / positions.length,
+    };
+  }
+
   getRowClass(rowIndex) {
     if (rowIndex >= 0 && rowIndex < this.config.reels.rows) {
       return this.config.reels.rowClasses[rowIndex];
@@ -793,10 +836,16 @@ export class SlotMachineView {
     }
   }
 
-  resetResultRows() {
+  hideResolvedPaylines() {
     for (let row = 0; row < this.getPaylineCount(); row += 1) {
-      this.renderResultRow(row, "--", "");
+      this.setPayline(row, "idle");
+      this.setPaylineLabel(row, "lost");
+      document.getElementById(`pll${row}`)?.classList.remove("pulse");
     }
+  }
+
+  resetResultRows() {
+    this.refs.resultPanel.innerHTML = "";
   }
 
   resetChainLog() {
@@ -1059,26 +1108,14 @@ export class SlotMachineView {
     if (entry.effect?.startsWith("event-")) {
       return "SPECIAL EVENT";
     }
-    if (entry.effect === "item-bonus") {
-      return "RELIC TRIGGER";
-    }
-    if (entry.effect === "pattern-bonus") {
-      return "PATTERN READ";
-    }
-    if (entry.effect === "multi-bonus") {
-      return "MULTI WIN";
-    }
-    if (entry.effect === "count-bonus" || entry.effect === "count-penalty") {
-      return "SCREEN COUNT";
-    }
-    if (entry.effect === "line-win") {
-      return "PAYLINE HIT";
-    }
-    if (entry.effect === "arm-jackpot") {
-      return "JACKPOT LOCK";
-    }
-    if (entry.effect === "arm-devil") {
-      return "CURSE LOCK";
+    if (entry.effect === "pattern-win") {
+      if (entry.patternMultiplier >= 10) {
+        return `${entry.symbolName} JACKPOT`;
+      }
+      if (entry.patternMultiplier >= 7) {
+        return `${entry.patternName} PATTERN`;
+      }
+      return `${entry.symbolName} ${entry.patternLabel}`;
     }
     return "CHAIN STEP";
   }
@@ -1165,6 +1202,21 @@ export class SlotMachineView {
     textElement.textContent = message;
   }
 
+  renderSpinResults(rows) {
+    this.refs.resultPanel.innerHTML = "";
+
+    const sourceRows = rows.length
+      ? rows
+      : [{ tag: "MISS", message: "NO PATTERN WIN", className: "lose" }];
+
+    for (const row of sourceRows) {
+      const rowElement = document.createElement("div");
+      rowElement.className = `res-row${row.className ? ` ${row.className}` : ""}`;
+      rowElement.innerHTML = `<span class="rr-tag">${row.tag}</span><span>${row.message}</span>`;
+      this.refs.resultPanel.appendChild(rowElement);
+    }
+  }
+
   setPayline(row, className, positions = null) {
     const line = document.getElementById(`pll${row}`);
     const payline = this.config.paylines[row];
@@ -1204,7 +1256,7 @@ export class SlotMachineView {
   }
 
   getPaylineCount() {
-    return this.config.paylines.length;
+    return Math.max(this.config.paylines.length, this.config.ui.lineColors.length);
   }
 
   getVisibleCell(column, row) {
@@ -1217,6 +1269,68 @@ export class SlotMachineView {
 
   getPaylinePolylinePoints(payline) {
     return this.getPolylinePointsFromPositions(payline.positions);
+  }
+
+  getManagerGuideCardMarkup(card, kind = "pattern") {
+    return kind === "symbol"
+      ? this.getSymbolGuideMarkup(card)
+      : this.getPatternGuideMarkup(card);
+  }
+
+  getManagerGuideChipMarkup(card, activeId) {
+    return `<button
+        class="manager-guide-chip${card.id === activeId ? " active" : ""}"
+        type="button"
+        data-guide-card-select="${card.id}"
+        role="tab"
+        aria-selected="${card.id === activeId ? "true" : "false"}"
+      >${card.name}</button>`;
+  }
+
+  getPatternGuideMarkup(pattern) {
+    const cells = pattern.grid
+      .map((row, rowIndex) =>
+        row.split("").map((cell, columnIndex) =>
+          `<span class="pattern-mini-cell${cell === "1" ? " is-on" : ""}" data-row="${rowIndex}" data-col="${columnIndex}"></span>`,
+        ).join(""),
+      )
+      .join("");
+
+    return `<details class="pattern-guide-card" open>
+        <summary class="pattern-guide-summary">
+          <span class="pattern-guide-top">
+            <span class="pattern-guide-name">${pattern.name}</span>
+            <span class="pattern-guide-mult">x${pattern.multiplier.toFixed(1)}</span>
+          </span>
+          <span class="pattern-guide-desc">${pattern.description}</span>
+        </summary>
+        <div class="pattern-guide-body">
+          <div class="pattern-mini-grid">${cells}</div>
+        </div>
+      </details>`;
+  }
+
+  getSymbolGuideMarkup(symbol) {
+    const multiplierLabel = symbol.multiplierLabel
+      ?? `x${Number.isInteger(symbol.multiplier) ? symbol.multiplier : Number(symbol.multiplier).toFixed(1)}`;
+
+    return `<details class="pattern-guide-card symbol-guide-card" open>
+        <summary class="pattern-guide-summary">
+          <span class="pattern-guide-top">
+            <span class="pattern-guide-name">${symbol.name}</span>
+            <span class="pattern-guide-mult">${multiplierLabel}</span>
+          </span>
+          <span class="pattern-guide-desc">${symbol.description}</span>
+        </summary>
+        <div class="pattern-guide-body symbol-guide-body">
+          <div class="symbol-guide-mark">
+            <span class="symbol-badge symbol-${symbol.id} symbol-guide">
+              <span class="symbol-mark" aria-hidden="true">${this.getSymbolMarkSvg(symbol.id)}</span>
+              <span class="symbol-code">${symbol.icon}</span>
+            </span>
+          </div>
+        </div>
+      </details>`;
   }
 
   paintSymbolCell(cell, symbol, rowIndex) {
@@ -1262,13 +1376,11 @@ export class SlotMachineView {
           <circle cx="20" cy="19" r="4.5" class="glyph-fill"/>
           <path d="M16 19V26C16 27 15 27 14 26" class="glyph-stroke"/>
         </svg>`,
-      crown: `
+      treasure: `
         <svg viewBox="0 0 32 32" fill="none">
-          <path d="M7 22L9 11L15 17L20 9L24 17L27 12L25 22H7Z" class="glyph-fill"/>
-          <path d="M7 22H25M11 24H21" class="glyph-stroke"/>
-          <circle cx="9" cy="11" r="1.5" class="glyph-leaf"/>
-          <circle cx="20" cy="9" r="1.5" class="glyph-leaf"/>
-          <circle cx="27" cy="12" r="1.5" class="glyph-leaf"/>
+          <path d="M8 13L11 9H21L24 13V23H8V13Z" class="glyph-fill"/>
+          <path d="M8 13H24M12 17H20M16 13V23" class="glyph-stroke"/>
+          <path d="M12 9L14 6H18L20 9" class="glyph-leaf"/>
         </svg>`,
       bell: `
         <svg viewBox="0 0 32 32" fill="none">

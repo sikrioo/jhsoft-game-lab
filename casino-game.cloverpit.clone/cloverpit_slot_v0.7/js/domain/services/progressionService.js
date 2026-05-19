@@ -38,12 +38,6 @@ export function advanceDeadline(state, config) {
   state.tickets += config.rewards.advanceTickets;
   state.coinDisplay = state.coins;
 
-  for (const symbol of config.symbols) {
-    state.multipliers[symbol.id] = Math.floor(
-      state.multipliers[symbol.id] * config.rewards.multiplierGrowth,
-    );
-  }
-
   return {
     status: "advanced",
   };

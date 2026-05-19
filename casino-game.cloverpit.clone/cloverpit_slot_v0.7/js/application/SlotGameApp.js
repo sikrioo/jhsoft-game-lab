@@ -22,7 +22,6 @@ export class SlotGameApp {
     this.state.grid = buildSpinGrid(this.config, this.pickSymbol);
     this.view.buildReels(this.state.grid, this.pickSymbol);
     this.view.renderManager(this.config);
-    this.view.renderItems(this.config);
     this.refreshWeightUi();
     this.view.renderCombo(describeCombo(this.state.combo));
     this.view.renderState(this.state, this.config);
@@ -143,38 +142,17 @@ export class SlotGameApp {
 
     await this.view.showFinalSummary(this.buildSpinSummary(outcome));
     await this.flushSpinSettlement();
+    this.view.hideResolvedPaylines();
   }
 
   async applyChainEntry(entry, machineMetrics) {
     switch (entry.effect) {
-      case "line-win":
-        this.emitRowReward(machineMetrics, entry.row, entry.color, entry.coinDelta);
+      case "pattern-win":
+        this.emitPatternReward(entry.focus?.positions ?? [], entry.color);
+        if (entry.patternMultiplier >= 7) {
+          this.fx.flash(entry.color ?? this.config.ui.gainFloat, entry.patternMultiplier >= 10 ? 0.42 : 0.26, 0.06);
+        }
         this.view.playImpact(this.getImpactLevelForCoinDelta(entry.coinDelta));
-        await this.applyCoinDelta(entry.coinDelta);
-        return;
-
-      case "arm-jackpot":
-        this.fx.flash(this.config.ui.jackpotFlash, 0.35, 0.08);
-        this.view.playImpact("medium");
-        return;
-
-      case "arm-devil":
-        this.fx.flash(this.config.ui.devilFlash, 0.35, 0.08);
-        this.view.playImpact("medium");
-        return;
-
-      case "count-bonus":
-      case "multi-bonus":
-      case "pattern-bonus":
-      case "item-bonus":
-        this.fx.flash(entry.color ?? this.config.ui.gainFloat, 0.2, 0.08);
-        this.view.playImpact(this.getImpactLevelForCoinDelta(entry.coinDelta));
-        await this.applyCoinDelta(entry.coinDelta);
-        return;
-
-      case "count-penalty":
-        this.fx.flash(this.config.ui.lossFlash, 0.25, 0.08);
-        this.view.playImpact("light");
         await this.applyCoinDelta(entry.coinDelta);
         return;
 
@@ -216,20 +194,12 @@ export class SlotGameApp {
         this.fx.tint(this.config.ui.devilTint, 2000);
         this.view.showNoise();
         this.view.playImpact("heavy");
-        this.view.showOverlay(entry.overlay);
-        await this.applyCoinDelta(entry.coinDelta);
-        return;
-
-      case "event-overdrive":
-        this.fx.flash(this.config.ui.overdriveFlash, 0.45, 0.05);
-        this.view.playImpact("heavy");
-        await this.applyCoinDelta(entry.coinDelta);
-        return;
-
-      case "event-fever":
-        this.fx.flash(this.config.ui.feverFlash, 0.35, 0.05);
-        this.view.playImpact("medium");
-        await this.applyCoinDelta(entry.coinDelta);
+        if (entry.overlay) {
+          this.view.showOverlay(entry.overlay);
+        }
+        if (entry.coinDelta) {
+          await this.applyCoinDelta(entry.coinDelta);
+        }
         return;
 
       default:
@@ -238,62 +208,22 @@ export class SlotGameApp {
   }
 
   primeHudCue(entry) {
-    if (typeof entry.row === "number") {
-      this.view.pulsePayline(entry.row);
-    }
-
-    if (typeof entry.row === "number" && entry.color && entry.row < this.config.reels.rows) {
-      this.view.showRowSpotlight(entry.row, entry.color);
-    }
-
-    if (entry.effect === "arm-jackpot" && (entry.row ?? 99) < this.config.reels.rows) {
-      this.view.showRowSpotlight(entry.row ?? 1, this.config.ui.jackpotFlash);
-    }
-
-    if (entry.effect === "arm-devil" && (entry.row ?? 99) < this.config.reels.rows) {
-      this.view.showRowSpotlight(entry.row ?? 1, this.config.ui.devilFlash);
-    }
-
-    if (entry.effect === "event-overdrive") {
-      this.view.showRowSpotlight(1, this.config.ui.overdriveFlash);
+    if (entry.effect === "pattern-win" && entry.focus?.positions?.length && entry.color) {
+      const center = this.view.getFocusCenter(entry.focus.positions);
+      this.fx.emitBurst(center.x, center.y, 12, entry.color);
     }
   }
 
-  emitRowReward(machineMetrics, row, color, gain) {
-    const paylineCenter = machineMetrics.paylineCenters?.[row];
-    const effectX = paylineCenter?.x ?? machineMetrics.centerX;
-    const effectY = paylineCenter?.y ?? machineMetrics.rowCenters[Math.min(row, this.config.reels.rows - 1)] ?? machineMetrics.rowCenters[1];
-
-    this.fx.emitBurst(effectX, effectY, 18, color);
-    if (gain >= 50) {
-      this.fx.emitStarBurst(effectX, effectY, 8, color);
-    }
+  emitPatternReward(positions, color) {
+    const center = this.view.getFocusCenter(positions);
+    this.fx.emitBurst(center.x, center.y, 18, color);
   }
 
-  playJackpotFx(machineMetrics, row) {
-    const paylineCenter = machineMetrics.paylineCenters?.[row];
-    const centerX = paylineCenter?.x ?? machineMetrics.centerX;
-    const rowCenter = paylineCenter?.y ?? machineMetrics.rowCenters[Math.min(row, this.config.reels.rows - 1)] ?? machineMetrics.rowCenters[1];
-
-    for (let index = 0; index < 10; index += 1) {
-      const angle = Math.random() * Math.PI * 2;
-      const distance = 80 + Math.random() * 70;
-      window.setTimeout(() => {
-        this.fx.emitLightning(
-          centerX,
-          rowCenter,
-          centerX + Math.cos(angle) * distance,
-          rowCenter + Math.sin(angle) * distance,
-          "#ff8040",
-        );
-      }, index * 35);
-    }
-
-    window.setTimeout(() => {
-      this.fx.flash(this.config.ui.jackpotBurst, 0.5, 0.03);
-      this.fx.emitBurst(centerX, rowCenter, 100, this.config.ui.jackpotBurst);
-      this.fx.emitStarBurst(centerX, rowCenter, 50, this.config.ui.jackpotStars);
-    }, 200);
+  playJackpotFx(machineMetrics, row = 1) {
+    const centerX = machineMetrics.paylineCenters?.[row]?.x ?? machineMetrics.centerX;
+    const centerY = machineMetrics.paylineCenters?.[row]?.y ?? machineMetrics.rowCenters?.[1] ?? 0;
+    this.fx.emitBurst(centerX, centerY, 80, this.config.ui.jackpotBurst);
+    this.fx.emitStarBurst(centerX, centerY, 30, this.config.ui.jackpotStars);
   }
 
   async applyCoinDelta(delta) {
@@ -400,11 +330,19 @@ export class SlotGameApp {
       };
     }
 
+    if (stats.hasLoss && stats.hasEvent) {
+      return {
+        tone: "loss",
+        headline: "VOIDED SPIN",
+        detail: `${stats.eventName || "DEVIL"} overrode the board before normal pattern rewards could cash out.`,
+      };
+    }
+
     if (stats.hasEvent) {
       return {
         tone: "event",
         headline: `+${stats.coinDelta} COINS`,
-        detail: `${stats.eventName || "EVENT"} fired with ${stats.ticketsDelta > 0 ? `+${stats.ticketsDelta} tickets and ` : ""}${stats.comboDelta > 0 ? `combo +${stats.comboDelta}.` : "chain overflow."}`,
+        detail: `${stats.eventName || "EVENT"} interrupted the pattern board. ${stats.comboDelta > 0 ? `Combo shifted by ${stats.comboDelta}.` : "Payout resolved outside the normal win chain."}`,
       };
     }
 
@@ -412,7 +350,7 @@ export class SlotGameApp {
       return {
         tone: "gain",
         headline: `+${stats.coinDelta} COINS`,
-        detail: `${stats.comboDelta > 0 ? `Combo advanced by ${stats.comboDelta}. ` : ""}Every bonus step stacked into the final payout.`,
+        detail: `${stats.comboDelta > 0 ? `Combo advanced by ${stats.comboDelta}. ` : ""}Pattern payout resolved from bet x symbol x pattern.`,
       };
     }
 
@@ -431,42 +369,48 @@ export class SlotGameApp {
   }
 
   buildManagerDialogue(topicId) {
-    const cherryRules = this.config.countRules.cherry;
-    const cloverRules = this.config.countRules.clover;
-    const diamondRules = this.config.countRules.diamond;
-    const jackpotRules = this.config.countRules.jackpot;
-    const devilRules = this.config.countRules.devil;
-
     switch (topicId) {
-      case "lines":
+      case "patterns":
         return {
-          title: "PAYLINES",
-          text: `There are ${this.config.paylines.length} active lines. A line pays when the same symbol forms a contiguous run of 3 or more anywhere on that line. Left edge obedience is no longer required. Continuity is.`,
+          title: "PATTERNS",
+          text: "This floor pays for shapes, not line chains. Read the board as a 3x5 field. Match the shape, then resolve the payout as bet x symbol x pattern. Open any card below and I will show you the silhouette the room recognizes.",
+          guide: {
+            kind: "pattern",
+            eyebrow: "ALICE NOTES",
+            intro: "Pick a pattern and I will show you what the room recognizes. The silhouette stays hidden until you ask for it.",
+            cards: this.config.patternGuide,
+          },
         };
-      case "cherry":
+      case "symbols":
         return {
-          title: "CHERRIES",
-          text: `You were right to notice them. ${cherryRules.lowCount} cherries now trigger a screen bonus for +${cherryRules.lowBonus}. ${cherryRules.highCount} or more pay +${cherryRules.highBonus}. It stacks on top of any line win. Greed should be numerate.`,
+          title: "SYMBOLS",
+          text: "Cherry and Lemon pay x2. Clover and Bell pay x3. Diamond and Treasure pay x5. Seven pays x7. The symbol sets the base appetite. The pattern decides how severely the house indulges it.",
+          guide: {
+            kind: "symbol",
+            eyebrow: "ALICE NOTES",
+            intro: "Start with the mark itself. Open a symbol and I will show you its face, its payout tier, and whether it feeds you or erases you.",
+            cards: this.config.symbolGuide,
+          },
         };
-      case "counts":
+      case "devil":
         return {
-          title: "SCREEN COUNTS",
-          text: `Screen-wide bonuses ignore line paths. Clover pays at ${cloverRules.min}+ on screen. Diamond activates at ${diamondRules.min}+ and amplifies whatever payout already exists. Seven scatters begin at ${jackpotRules.min}+. Devil faces start bleeding coins at ${devilRules.min}+.`,
+          title: "DEVIL",
+          text: "DEVIL does not participate in normal symbol multiplication. If a registered devil pattern forms, 666 voids the spin before ordinary rewards are paid. Efficient, isn't it?",
         };
       case "combo":
         return {
           title: "COMBO",
-          text: `Any rewarding spin sustains combo. Stronger chains and multi-line hits grow it faster. Jackpots accelerate it. Devil chains cut it cleanly. If the number becomes large enough, the machine becomes interested in you.`,
+          text: "Combo still exists, but not inside the payout formula. It tracks momentum only. For now, your coins come from bet x symbol x pattern. Nothing else is permitted to flatter you.",
         };
-      case "relics":
+      case "odds":
         return {
-          title: "RELICS",
-          text: `Lucky Clover boosts winning clover paylines. Golden Bell repeats bell payouts once more. Crown Reserve releases reserve coins when 2 or more crowns appear on screen. I advise treating relics as leverage, not comfort.`,
+          title: "ODDS",
+          text: "Weights control appearance rate. Symbol and pattern multipliers control value after the shape is complete. Probability and worth are separate appetites. Do not confuse them.",
         };
-      case "risk":
+      case "jackpot":
         return {
-          title: "RISK",
-          text: `A full line of sevens arms jackpot. A full line of devils arms reverse jackpot. That is separate from the screen-wide devil penalty. The machine offers help and ruin with the same gesture. Distinguish them if you can.`,
+          title: "JACKPOT",
+          text: "If the full 3x5 board becomes one non-devil symbol, Jackpot pays x10 on top of that symbol. A full screen of Sevens is not subtle. It is merely expensive.",
         };
       case "intro":
       default:

@@ -13,7 +13,7 @@ const ITEM_WEIGHT_RULES = {
   },
   "crown-reserve": {
     source: "Crown Reserve",
-    modifiers: [{ symbolId: "crown", delta: 2 }],
+    modifiers: [{ symbolId: "treasure", delta: 2 }],
   },
 };
 
@@ -22,9 +22,7 @@ export function refreshSymbolWeights(state, config) {
   const nextWeights = createBaseWeightMap(config.symbols);
   const notes = [];
 
-  applyItemModifiers(nextWeights, config, notes);
   applyRoundModifier(nextWeights, config.symbols, state.deadlineIndex, notes);
-  applyComboModifier(nextWeights, config.symbols, state.combo, notes);
 
   state.symbolWeights = nextWeights;
   state.weightNotes = notes;
@@ -76,7 +74,7 @@ function applyRoundModifier(weights, symbols, deadlineIndex, notes) {
   const chaosBoost = Math.max(0, deadlineIndex - 1);
   const modifiers = [
     { symbolId: "diamond", delta: rareBoost },
-    { symbolId: "crown", delta: rareBoost },
+    { symbolId: "treasure", delta: rareBoost },
     { symbolId: "bell", delta: rareBoost },
     { symbolId: "jackpot", delta: Math.max(1, chaosBoost) },
     { symbolId: "devil", delta: chaosBoost + Math.floor(deadlineIndex / 2) },
@@ -91,29 +89,6 @@ function applyRoundModifier(weights, symbols, deadlineIndex, notes) {
     text: formatModifierText(symbols, modifiers),
   });
 }
-
-function applyComboModifier(weights, symbols, combo, notes) {
-  if (combo < 10) {
-    return;
-  }
-
-  const modifiers = [
-    { symbolId: "clover", delta: combo >= 20 ? 4 : 2 },
-    { symbolId: "diamond", delta: combo >= 20 ? 3 : 2 },
-    { symbolId: "jackpot", delta: combo >= 20 ? 2 : 1 },
-    { symbolId: "devil", delta: combo >= 20 ? 1 : 0 },
-  ].filter((modifier) => modifier.delta > 0);
-
-  for (const modifier of modifiers) {
-    modifyWeight(weights, modifier.symbolId, modifier.delta);
-  }
-
-  notes.push({
-    source: combo >= 20 ? "Fever Mode" : "Combo Heat",
-    text: formatModifierText(symbols, modifiers),
-  });
-}
-
 function modifyWeight(weights, symbolId, delta) {
   weights[symbolId] = clamp((weights[symbolId] ?? MIN_WEIGHT) + delta, MIN_WEIGHT, 999);
 }
