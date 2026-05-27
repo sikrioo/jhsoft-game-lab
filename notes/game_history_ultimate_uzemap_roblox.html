@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>유즈맵 & 로블록스 명작 총정리</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#fafafa;color:#1a1a1a;padding:1rem;}
+.wrap{max-width:900px;margin:0 auto;padding:1rem 0 3rem;}
+h1{font-size:18px;font-weight:700;margin-bottom:1.25rem;}
+.tab-bar{display:flex;gap:6px;margin-bottom:1.25rem;border-bottom:1px solid #e5e5e5;padding-bottom:.75rem;flex-wrap:wrap;}
+.tab{font-size:12px;font-weight:500;padding:5px 14px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#666;transition:all .12s;}
+.tab.active{background:#1a1a1a;color:#fff;border-color:#1a1a1a;}
+.panel{display:none;}.panel.active{display:block;}
+.filter-bar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:1rem;}
+.fbtn{font-size:10.5px;padding:3px 8px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;color:#666;}
+.fbtn.active,.fbtn:hover{background:#f0f0f0;color:#1a1a1a;border-color:#999;}
+.era{margin-bottom:1.5rem;}
+.era-header{display:flex;align-items:center;gap:8px;margin-bottom:.5rem;}
+.el{flex:1;height:1px;background:#eee;}
+.et{font-size:10px;font-weight:600;color:#999;letter-spacing:.06em;white-space:nowrap;}
+table{width:100%;border-collapse:collapse;}
+tr.gr{border-bottom:1px solid #f0f0f0;}
+tr.gr:hover{background:#f8f8f8;}
+td{padding:6px 7px;font-size:12px;vertical-align:middle;}
+.cd{width:20px;text-align:center;}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+.cy{width:50px;font-size:10px;color:#aaa;}
+.cn{font-weight:600;color:#1a1a1a;width:160px;}
+.cv{font-size:10px;color:#888;width:100px;}
+.cs{color:#555;font-size:11px;line-height:1.4;}
+.b{display:inline-block;font-size:8px;font-weight:600;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:middle;}
+.bst{background:#FEF3C7;color:#92400E;}
+.bgn{background:#D1FAE5;color:#065F46;}
+.bkr{background:#FCE7F3;color:#9D174D;}
+.note{font-size:11px;color:#666;background:#f5f5f5;border-radius:6px;padding:.6rem .8rem;margin-bottom:1rem;line-height:1.5;}
+.cnt{font-size:10.5px;color:#aaa;margin-bottom:.75rem;}
+.hidden{display:none;}
+.legend{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:.9rem;}
+.leg{display:flex;align-items:center;gap:4px;font-size:10px;color:#666;}
+.ld{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>📂 유즈맵 · 모드 · 로블록스 명작 총정리</h1>
+
+<div class="tab-bar">
+  <button class="tab active" data-t="sc">🎮 StarCraft 유즈맵</button>
+  <button class="tab" data-t="wc">⚔️ Warcraft III 유즈맵</button>
+  <button class="tab" data-t="mod">🔧 모드→독립게임</button>
+  <button class="tab" data-t="rb">🟥 Roblox 명작</button>
+</div>
+
+<!-- SC -->
+<div class="panel active" id="sc">
+<div class="note">스타크래프트 유즈맵은 한국 PC방 문화의 핵심이었어요. 23만 개 이상의 맵이 존재했고, 장르 자체를 창시한 맵들이 수두룩해요.</div>
+<div class="legend">
+  <div class="leg"><div class="ld" style="background:#185FA5;"></div>RPG</div>
+  <div class="leg"><div class="ld" style="background:#BA7517;"></div>디펜스</div>
+  <div class="leg"><div class="ld" style="background:#D85A30;"></div>액션</div>
+  <div class="leg"><div class="ld" style="background:#0F6E56;"></div>생존/공포</div>
+  <div class="leg"><div class="ld" style="background:#993556;"></div>미니게임</div>
+  <div class="leg"><div class="ld" style="background:#534AB7;"></div>AOS</div>
+</div>
+<div class="filter-bar">
+  <button class="fbtn active" data-f="all">전체</button>
+  <button class="fbtn" data-f="rpg">RPG</button>
+  <button class="fbtn" data-f="defense">디펜스</button>
+  <button class="fbtn" data-f="survival">생존/공포</button>
+  <button class="fbtn" data-f="mini">미니게임</button>
+  <button class="fbtn" data-f="aos">AOS</button>
+  <button class="fbtn" data-f="star">전설급</button>
+</div>
+<div class="cnt" id="sc-cnt"></div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">AOS / MOBA 원형</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="aos star"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2002</td><td class="cn">Aeon of Strife (AoS)</td><td class="cv">Gunner_4_ever</td><td class="cs">영웅 1명+AI병사+3라인 구조 최초. DotA와 MOBA 장르 전체의 조상 <span class="b bst">전설</span> <span class="b bgn">MOBA원형</span></td></tr>
+<tr class="gr" data-c="aos"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2000s</td><td class="cn">AoS 파생 맵들</td><td class="cv">다수</td><td class="cs">스타 배틀넷에서 AoS 장르 수십 개 파생. 한국에서 독자적 AoS 생태계 형성</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">디펜스 / 타워디펜스</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="defense star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">캐슬 파이트</td><td class="cv">한국 유저</td><td class="cs">팀별 유닛 생산+상대 캐슬 파괴. 전략적 카운터픽 핵심. 배틀넷 최고 인기 디펜스 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="defense star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">좀비 디펜스 (H라인)</td><td class="cv">한국 유저</td><td class="cs">6명 협동으로 H라인 좀비 막기. 유닛 주글링+업그레이드. 이후 좀비 디펜스 장르의 표준 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="defense"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">패스 디펜스</td><td class="cv">한국 유저</td><td class="cs">건물 파괴로 경로 만드는 역발상 타워디펜스. 독창적 메커니즘</td></tr>
+<tr class="gr" data-c="defense"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">스플래쉬 디펜스</td><td class="cv">한국 유저</td><td class="cs">리버·러커·시즈탱크 스플래쉬 유닛만으로 방어. 유닛 배치 전략성이 핵심</td></tr>
+<tr class="gr" data-c="defense star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">스나이퍼 디펜스</td><td class="cv">한국 유저</td><td class="cs">고스트로 원거리 저격+협동 역할 분담. 수백만 플레이 <span class="b bkr">KR대표</span></td></tr>
+<tr class="gr" data-c="defense"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">벙커 디펜스 계열</td><td class="cv">한국 유저</td><td class="cs">SCV 수리+마린 방어 협동. 기본 유닛만으로 구현한 협동 디펜스의 교과서</td></tr>
+<tr class="gr" data-c="defense"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">포트리스</td><td class="cv">한국 유저</td><td class="cs">포대 건설+포탄 물리 시뮬. 독창적인 물리 기반 게임플레이</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">RPG / 어드벤처</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000s</td><td class="cn">스타 RPG 계열 (수십 종)</td><td class="cv">한국 유저</td><td class="cs">캐릭터 성장+스킬+스토리+퀘스트+저장 기능. RTS 엔진으로 구현한 독자적 MMORPG 문화 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000s</td><td class="cn">헌터즈 RPG / 프로즌 스론 RPG</td><td class="cv">한국 유저</td><td class="cs">스타 RPG 대표 시리즈. 파티 구성+보스 레이드 개념 도입 <span class="b bkr">KR대표</span></td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000s</td><td class="cn">DBZ (드래곤볼Z) 계열</td><td class="cv">한국/해외</td><td class="cs">애니메이션 캐릭터를 스타 유닛으로 구현. 성장+변신 시스템. 글로벌 인기</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000s</td><td class="cn">스페셜 포스 계열</td><td class="cv">다수</td><td class="cs">미션 기반 액션 RPG. 팀 협동 임무 수행. 한국 PC방 장기 인기</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">생존 / 공포 / 사회추론</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="survival star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2000s</td><td class="cn">뱀파이어 (Parasite)</td><td class="cv">한국 유저</td><td class="cs">숨어있는 뱀파이어가 인간 감염. 사회적 추론+숨바꼭질 결합. Among Us의 정신적 조상 <span class="b bst">전설</span> <span class="b bgn">사회추론원형</span></td></tr>
+<tr class="gr" data-c="survival"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2000s</td><td class="cn">래쿤시티 좀비</td><td class="cv">해외 유저</td><td class="cs">바이오하자드 세계관 재현. 좀비 서바이벌 협동. 공포+협동의 결합</td></tr>
+<tr class="gr" data-c="survival"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2000s</td><td class="cn">데이 스쿨 계열</td><td class="cv">다수</td><td class="cs">학교 생활 스토리. RTS 엔진으로 일상 시뮬 구현. 독창적 시도</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">미니게임 / 스포츠 / 기타</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="mini star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2000s</td><td class="cn">SCV 풋볼 (축구)</td><td class="cv">한국 유저</td><td class="cs">SCV로 축구. 물리 기반 스포츠 미니게임. 독창적 발상으로 리그까지 운영 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="mini"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2000s</td><td class="cn">스나이퍼 페인트볼</td><td class="cv">한국 유저</td><td class="cs">고스트 저격 대전. 포지션 싸움+심리전. 한국 배틀넷 인기 대전 미니게임</td></tr>
+<tr class="gr" data-c="mini"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2000s</td><td class="cn">골로 맵 / 바운드 계열</td><td class="cv">다수</td><td class="cs">마린 하나로 장애물 통과. 바운드 장르의 원형. 난이도 설계의 극한</td></tr>
+<tr class="gr" data-c="mini star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2000s</td><td class="cn">리듬게임 유즈맵</td><td class="cv">한국 유저</td><td class="cs">스타 엔진으로 리듬게임 구현. 불가능해 보이는 것을 가능하게 만든 한국 맵제작 문화의 정수 <span class="b bkr">KR독창</span></td></tr>
+<tr class="gr" data-c="mini"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2000s</td><td class="cn">마린 키우기 계열</td><td class="cv">한국 유저</td><td class="cs">유닛 강화+서바이벌. 방치형 게임의 원초적 형태</td></tr>
+</table>
+</div>
+</div>
+
+<!-- WC3 -->
+<div class="panel" id="wc">
+<div class="note">워크래프트 3의 World Editor는 당시 가장 강력한 맵 제작 도구였어요. DotA 하나만으로 MOBA 장르 전체를 창시했고, 나머지 맵들도 독립 게임으로 발전한 것들이 많아요.</div>
+<div class="legend">
+  <div class="leg"><div class="ld" style="background:#534AB7;"></div>AOS/MOBA</div>
+  <div class="leg"><div class="ld" style="background:#BA7517;"></div>디펜스</div>
+  <div class="leg"><div class="ld" style="background:#185FA5;"></div>RPG</div>
+  <div class="leg"><div class="ld" style="background:#0F6E56;"></div>생존/파티</div>
+  <div class="leg"><div class="ld" style="background:#993556;"></div>아레나</div>
+</div>
+<div class="filter-bar">
+  <button class="fbtn active" data-f="all">전체</button>
+  <button class="fbtn" data-f="aos">AOS/MOBA</button>
+  <button class="fbtn" data-f="defense">디펜스</button>
+  <button class="fbtn" data-f="rpg">RPG</button>
+  <button class="fbtn" data-f="party">파티/생존</button>
+  <button class="fbtn" data-f="arena">아레나</button>
+  <button class="fbtn" data-f="star">전설급</button>
+</div>
+<div class="cnt" id="wc-cnt"></div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">AOS / MOBA — 장르를 창시한 맵들</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="aos star"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2002</td><td class="cn">DotA (Defense of the Ancients)</td><td class="cv">Eul</td><td class="cs">스타 AoS를 WC3로 이식. 두 팀이 영웅으로 상대 기지 파괴. MOBA 장르의 실질적 시작 <span class="b bst">전설</span> <span class="b bgn">MOBA창시</span></td></tr>
+<tr class="gr" data-c="aos star"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2004</td><td class="cn">DotA Allstars</td><td class="cv">Guinsoo → IceFrog</td><td class="cs">Guinsoo가 완성, IceFrog가 밸런스 극한 발전. 전세계 수천만 플레이. Valve IP 인수 → Dota 2 탄생 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="aos"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2003</td><td class="cn">Valley of Dissent</td><td class="cv">Karukef</td><td class="cs">WC3 커스텀 스킬을 AOS에 최초 적용. DotA의 직접적 선조</td></tr>
+<tr class="gr" data-c="aos"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2000s</td><td class="cn">Angel Arena</td><td class="cv">다수</td><td class="cs">영웅 성장+아이템 자유도. DotA와 함께 배틀넷 AOS 투톱. 독자적 팬층</td></tr>
+<tr class="gr" data-c="aos"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2000s</td><td class="cn">Hero Line Wars</td><td class="cv">다수</td><td class="cs">영웅+타워라인 방어 결합. AOS와 디펜스의 하이브리드</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">디펜스 / 타워디펜스</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="defense star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2003</td><td class="cn">Wintermaul TD</td><td class="cv">다수</td><td class="cs">WC3 타워디펜스의 표준. 경로 설계 자유도+타워 조합 전략 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="defense star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">Legion TD</td><td class="cv">다수</td><td class="cs">타워디펜스+협동 레이스. 2019년 Legion TD 2로 독립 게임화 <span class="b bgn">독립게임화</span> <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="defense star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2003</td><td class="cn">Footmen Frenzy</td><td class="cv">다수</td><td class="cs">초기 WC3 배틀넷 점령. 팀 간 병력 생산 경쟁. DotA 이전의 왕 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="defense"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">Maze TD / Arkguil TD</td><td class="cv">다수</td><td class="cs">초창기 WC3 타워디펜스 최고 인기작. 미로 설계 타워디펜스의 원형</td></tr>
+<tr class="gr" data-c="defense"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">Element TD</td><td class="cv">다수</td><td class="cs">원소 조합으로 타워 강화. 복잡한 조합 시스템. Steam으로 독립 게임화 <span class="b bgn">독립게임화</span></td></tr>
+<tr class="gr" data-c="defense"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2000s</td><td class="cn">Line Tower Wars</td><td class="cv">다수</td><td class="cs">일렬 라인 타워 짓기+적 통과시켜 상대 공격. 독특한 공수 전환 메커니즘</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">RPG / 어드벤처 / 캠페인</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000s</td><td class="cn">Curse of Time ORPG</td><td class="cv">다수</td><td class="cs">WC3 최고 수준의 온라인 RPG. 저장+파티+퀘스트. 수백 시간 플레이 가능 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000s</td><td class="cn">Defiance ORPG</td><td class="cv">다수</td><td class="cs">방대한 세계관+캐릭터 성장. WC3 ORPG 장르의 정점 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000s</td><td class="cn">Azeroth Wars: Lordaeron Tactics</td><td class="cv">다수</td><td class="cs">워크래프트 세계관 대규모 전략 RPG. 파벌 선택+역사 분기</td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000s</td><td class="cn">Uther Party</td><td class="cv">다수</td><td class="cs">멀티 미니게임 파티맵. 마리오파티 WC3판. WC3 파티 문화의 상징 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000s</td><td class="cn">The Black Road ORPG</td><td class="cv">다수</td><td class="cs">다크 판타지 ORPG. 독자적 스토리+윤리적 선택 시스템</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">파티 / 생존 / 미니게임</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="party star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2000s</td><td class="cn">Vampirism 계열</td><td class="cv">다수</td><td class="cs">뱀파이어 vs 인간 생존. 숨바꼭질+감염 메커니즘. WC3 최고 파티맵 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="party star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2000s</td><td class="cn">Island Defense</td><td class="cv">다수</td><td class="cs">타이탄 1명 vs 빌더 여러 명. 비대칭 생존. 독특한 역할 불균형 메커니즘 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="party star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2000s</td><td class="cn">Sheep Tag</td><td class="cv">다수</td><td class="cs">늑대가 양 잡기. 극단적으로 단순한 술래잡기. WC3 파티맵 입문 표준 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="party"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2000s</td><td class="cn">Kodo Tag / Tree Tag</td><td class="cv">다수</td><td class="cs">코도 몰기·나무 숨기 숨바꼭질. 팀워크+포지셔닝이 핵심</td></tr>
+<tr class="gr" data-c="party"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2000s</td><td class="cn">Life of a Peasant 계열</td><td class="cv">다수</td><td class="cs">농민의 자유 롤플레이. Roblox Brookhaven의 WC3 선조. 자유 역할극 문화 선구</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">아레나 / 전투</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="arena star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2000s</td><td class="cn">Custom Hero Survival</td><td class="cv">다수</td><td class="cs">자유 영웅 빌드+웨이브 생존. 로그라이크 빌드 게임의 원초적 형태 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="arena"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2000s</td><td class="cn">Hero Push</td><td class="cv">다수</td><td class="cs">영웅 밀기 vs 방어. 공격팀+방어팀 역할 분리</td></tr>
+<tr class="gr" data-c="arena"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2000s</td><td class="cn">Ring Wars</td><td class="cv">다수</td><td class="cs">원형 링 위 영웅 대전. 간결한 규칙+높은 기술 격차</td></tr>
+</table>
+</div>
+</div>
+
+<!-- MOD -->
+<div class="panel" id="mod">
+<div class="note">모드에서 시작해 독립 게임이 되거나, 완전히 새로운 장르를 창시한 역사적인 사례들이에요.</div>
+<div class="filter-bar">
+  <button class="fbtn active" data-f="all">전체</button>
+  <button class="fbtn" data-f="fps">FPS 출신</button>
+  <button class="fbtn" data-f="survival">생존 출신</button>
+  <button class="fbtn" data-f="narrative">내러티브 출신</button>
+  <button class="fbtn" data-f="star">전설급</button>
+</div>
+<div class="cnt" id="mod-cnt"></div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">Half-Life / Quake 모드 출신</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1999</td><td class="cn">Counter-Strike</td><td class="cv">Gooseman+Cliffe</td><td class="cs">Half-Life 모드로 시작. 5개 베타 후 Valve 인수. e스포츠 FPS 역사상 가장 영향력 있는 게임 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1996</td><td class="cn">Team Fortress</td><td class="cv">Cook+Walker</td><td class="cs">Quake 모드 출신. Valve 영입 후 TF2로 발전. 히어로 슈터 장르의 선구자 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="narrative star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2011</td><td class="cn">The Stanley Parable</td><td class="cv">Davey Wreden</td><td class="cs">Half-Life 2 모드. 독학으로 제작. 내러티브 게임 혁신 → 독립 게임 극찬 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="fps"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2000s</td><td class="cn">Day of Defeat</td><td class="cv">Valve 인수</td><td class="cs">Half-Life 2차대전 모드. Valve가 인수해 정식 출시. 리얼 전술 FPS 선구</td></tr>
+<tr class="gr" data-c="fps"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2002</td><td class="cn">Natural Selection</td><td class="cv">Unknown Worlds</td><td class="cs">Half-Life FPS+RTS 하이브리드 모드. 커맨더 역할+보병 역할 분리. NS2로 독립 게임화</td></tr>
+<tr class="gr" data-c="fps"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2003</td><td class="cn">Killing Floor</td><td class="cv">Tripwire</td><td class="cs">UT2004 협동 생존 모드. 독립 게임화 후 시리즈 형성. 협동 좀비 슈터 장르 정착</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">ArmA 모드 출신 — 배틀로얄 계보</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="survival star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2012</td><td class="cn">DayZ</td><td class="cv">Dean Hall</td><td class="cs">ArmA 2 모드. 좀비+오픈월드+리얼 생존 결합. 서바이벌 장르 폭발의 방아쇠. 독립 게임화 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="survival star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2013</td><td class="cn">Battle Royale (ArmA 3 모드)</td><td class="cv">Brendan Greene</td><td class="cs">배틀로얄 개념 첫 구현. PUBG의 직접 선조 → 배틀로얄 장르 창시 <span class="b bst">전설</span> <span class="b bgn">장르창시</span></td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">Skyrim 모드 출신</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="narrative star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2015</td><td class="cn">The Forgotten City</td><td class="cv">Nick Pearce</td><td class="cs">Skyrim 모드로 1,700시간 혼자 제작. 고대 로마 시간 루프 추리. 2022년 독립 게임 출시, 극찬 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="narrative"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2012</td><td class="cn">Enderal</td><td class="cv">SureAI</td><td class="cs">Skyrim 엔진으로 완전 새로운 세계관+스토리. 독립 게임 수준 완성도. 무료 공개</td></tr>
+</table>
+</div>
+</div>
+
+<!-- Roblox -->
+<div class="panel" id="rb">
+<div class="note">Roblox는 2026년 기준 일 활성 유저 1억 1,180만 명. 유저가 만든 게임이 수백억 방문수를 기록하는 독자적 생태계예요.</div>
+<div class="legend">
+  <div class="leg"><div class="ld" style="background:#D85A30;"></div>롤플레이/소셜</div>
+  <div class="leg"><div class="ld" style="background:#185FA5;"></div>어드벤처/RPG</div>
+  <div class="leg"><div class="ld" style="background:#993556;"></div>FPS/전투</div>
+  <div class="leg"><div class="ld" style="background:#0F6E56;"></div>생존/공포</div>
+  <div class="leg"><div class="ld" style="background:#5A7A3A;"></div>시뮬/경영</div>
+  <div class="leg"><div class="ld" style="background:#BA7517;"></div>오비/파쿠르</div>
+</div>
+<div class="filter-bar">
+  <button class="fbtn active" data-f="all">전체</button>
+  <button class="fbtn" data-f="roleplay">롤플레이</button>
+  <button class="fbtn" data-f="rpg">RPG/어드벤처</button>
+  <button class="fbtn" data-f="fps">FPS/전투</button>
+  <button class="fbtn" data-f="survival">생존/공포</button>
+  <button class="fbtn" data-f="sim">시뮬/경영</button>
+  <button class="fbtn" data-f="obby">오비/파쿠르</button>
+  <button class="fbtn" data-f="star">초대형 히트</button>
+</div>
+<div class="cnt" id="rb-cnt"></div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">역대 방문수 TOP — 롤플레이 / 소셜</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="roleplay star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2020</td><td class="cn">Brookhaven RP</td><td class="cv">Wolfpaq</td><td class="cs">역대 최다 방문 로블록스 게임. 780억 방문. 자유 역할극+집 꾸미기+소셜. 퀘스트 없이 순수 사교 공간 <span class="b bst">역대1위</span></td></tr>
+<tr class="gr" data-c="roleplay star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2017</td><td class="cn">Adopt Me!</td><td class="cv">Uplift Games</td><td class="cs">펫 입양+육아+거래. 수백억 방문. 희귀 펫 $100+ 거래 경제. 개발사 수익 $16M+ <span class="b bst">역대급</span></td></tr>
+<tr class="gr" data-c="roleplay sim star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2014</td><td class="cn">Welcome to Bloxburg</td><td class="cv">Coeptus</td><td class="cs">The Sims 스타일 생활 시뮬. Roblox 유료 대형 성공작. Embracer Group에 인수 <span class="b bst">역대급</span></td></tr>
+<tr class="gr" data-c="roleplay star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2007</td><td class="cn">Work at a Pizza Place</td><td class="cv">Dued1</td><td class="cs">피자 배달 협동 시뮬. 2007년 첫 버전. Roblox 최장수 인기 게임. 소셜 협동의 원형 <span class="b bst">클래식</span></td></tr>
+<tr class="gr" data-c="roleplay"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2015</td><td class="cn">Royale High</td><td class="cv">callmehbob</td><td class="cs">마법 고등학교 판타지 롤플레이. 드레스업+소셜+스토리. 10억 방문 이상</td></tr>
+<tr class="gr" data-c="roleplay"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2014</td><td class="cn">Meep City</td><td class="cv">alexnewtron</td><td class="cs">소셜 타운 최초로 10억 방문 달성한 Roblox 게임. 아바타 커스터마이징+소셜</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">어드벤처 / RPG / 애니메이션 기반</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2019</td><td class="cn">Blox Fruits</td><td class="cv">go_su+ribs</td><td class="cs">원피스 악마의 열매 오마주. 584억 방문으로 역대 2위. 과일 능력+전투+탐험 <span class="b bst">역대2위</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2018</td><td class="cn">Pet Simulator 99</td><td class="cv">BIG Games</td><td class="cs">펫 수집+강화+그라인딩. 100억 방문 돌파. 수집 중독 메커니즘의 정점 <span class="b bst">100억+</span></td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2021</td><td class="cn">Grand Piece Online</td><td class="cv">Grand Quest Games</td><td class="cs">원피스 세계관 오픈월드 RPG. 항해+전투+악마 열매. 뛰어난 완성도로 극찬</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2016</td><td class="cn">Dragon Ball Z Final Stand</td><td class="cv">WhoBloxedWho</td><td class="cs">DBZ 세계관 충실 재현. 파워 레벨 그라인딩+변신 시스템</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2018</td><td class="cn">Dungeon Quest</td><td class="cv">vCaffy</td><td class="cs">던전 탐험+장비 파밍 RPG. Diablo 스타일 루팅. Roblox RPG 장르의 표준</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2020</td><td class="cn">Project Slayers</td><td class="cv">Goo</td><td class="cs">귀멸의 칼날 기반 전투 RPG. 정밀한 호흡 스킬+1인칭 전투. 애니팬 폭발적 반응</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">FPS / 전투 / 배틀</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2015</td><td class="cn">Phantom Forces</td><td class="cv">StyLiS Studios</td><td class="cs">Roblox 최고 FPS. CS·CoD 수준 리얼 총기 메커니즘. 3개 Bloxy Award <span class="b bst">최고FPS</span></td></tr>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2015</td><td class="cn">Arsenal</td><td class="cv">Rolve</td><td class="cs">킬할 때마다 총기 교체. CS:GO 스타일 경쟁 FPS. 일 1만 명 이상 꾸준히 유지</td></tr>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2019</td><td class="cn">Murder Mystery 2</td><td class="cv">Nikilis</td><td class="cs">살인자·보안관·시민 역할. 사회 추론+생존. 10억 방문+. 스킨 거래 경제 형성 <span class="b bst">10억+</span></td></tr>
+<tr class="gr" data-c="fps"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2022</td><td class="cn">BedWars</td><td class="cv">Easy.gg</td><td class="cs">Minecraft BedWars의 Roblox판. 침대 수호+상대 침대 파괴. 2022 최고 인기</td></tr>
+<tr class="gr" data-c="fps"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2017</td><td class="cn">Tower Battles</td><td class="cv">다수</td><td class="cs">타워디펜스+PvP 결합. 커스텀 타워 빌딩. Roblox 전략 장르의 대표작</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">생존 / 공포 / 미스터리</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="survival star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2020</td><td class="cn">Piggy</td><td class="cv">MiniToon</td><td class="cs">Peppa Pig+공포+좀비 묵시록. 에피소드 스토리텔링. Roblox 최초 팬덤 문화 형성 <span class="b bst">문화아이콘</span></td></tr>
+<tr class="gr" data-c="survival star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2022</td><td class="cn">Doors</td><td class="cv">LSPLASH</td><td class="cs">방 탈출+공포 괴물 회피. Outlast 스타일 퍼즐 호러. 10억 방문 돌파 <span class="b bst">10억+</span></td></tr>
+<tr class="gr" data-c="survival"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2021</td><td class="cn">Apeirophobia</td><td class="cv">Polaroid Studios</td><td class="cs">Backrooms 크리피파스타 기반 공포 탈출. 알파임에도 폭발적 인기</td></tr>
+<tr class="gr" data-c="survival"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2018</td><td class="cn">Natural Disaster Survival</td><td class="cv">Stickmasterluke</td><td class="cs">재난에서 살아남기. Roblox 생존 장르의 고전</td></tr>
+<tr class="gr" data-c="survival"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2020</td><td class="cn">The Mimic</td><td class="cv">MUCDICH</td><td class="cs">일본 공포 전설 기반 호러. 챕터식 스토리+조사 퍼즐. Roblox 스토리 호러의 정점</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">시뮬 / 경영 / 방치형</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="sim star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2025</td><td class="cn">Steal a Brainrot</td><td class="cv">SpyderSammy</td><td class="cs">Roblox 역대 최고 동시접속자 2,000만+. Italian Brainrot 밈 기반. 아이들 반응 영상 바이럴 <span class="b bst">역대1위CCU</span></td></tr>
+<tr class="gr" data-c="sim star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2025</td><td class="cn">Grow a Garden</td><td class="cv">Moonfrost</td><td class="cs">출시 33일 만에 10억 방문(Roblox 최단 기록). 농장 시뮬+SNS 바이럴 <span class="b bst">신기록</span></td></tr>
+<tr class="gr" data-c="sim star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2018</td><td class="cn">Jailbreak</td><td class="cv">Badimo</td><td class="cs">경찰vs죄수 오픈월드. 탈옥+은행 강도+도주. Roblox 오픈월드 표준. 수억 방문 <span class="b bst">역대급</span></td></tr>
+<tr class="gr" data-c="sim"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2017</td><td class="cn">Vehicle Simulator</td><td class="cv">다수</td><td class="cs">자동차+비행기+보트 시뮬. 오픈월드 드라이빙. Roblox 이동 시뮬의 표준</td></tr>
+<tr class="gr" data-c="sim"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2020</td><td class="cn">Anime Fighting Simulator</td><td class="cv">BlockZone</td><td class="cs">스탯 그라인딩+애니 능력 획득. 방치형+전투 결합. 수억 방문</td></tr>
+</table>
+</div>
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">오비 / 파쿠르 / 스킬 / 클래식</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="obby star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2019</td><td class="cn">Tower of Hell</td><td class="cv">YXceptional</td><td class="cs">랜덤 생성 탑 오르기. 체크포인트 없음. 100억 방문+. Roblox 오비 장르의 왕 <span class="b bst">100억+</span></td></tr>
+<tr class="gr" data-c="obby star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2008</td><td class="cn">Mega Fun Obby</td><td class="cv">Bloxtun</td><td class="cs">2,000+ 스테이지. 역대 최장 오비. 수십억 방문. Roblox 오비 문화의 상징 <span class="b bst">클래식</span></td></tr>
+<tr class="gr" data-c="obby"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2021</td><td class="cn">Obby But You're On a Bike</td><td class="cv">다수</td><td class="cs">자전거 타고 오비 클리어. 물리 기반 유머+난이도. 틱톡 바이럴</td></tr>
+<tr class="gr" data-c="obby"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2016</td><td class="cn">Speed Run 4</td><td class="cv">Vurse</td><td class="cs">스피드런 오비. 타임어택+기술 연습. Roblox 스피드런 장르 표준</td></tr>
+</table>
+</div>
+</div>
+
+</div>
+<script>
+const tabs=document.querySelectorAll('.tab');
+const panels=document.querySelectorAll('.panel');
+tabs.forEach(t=>{
+  t.addEventListener('click',()=>{
+    tabs.forEach(x=>x.classList.remove('active'));
+    panels.forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById(t.dataset.t).classList.add('active');
+  });
+});
+function setupFilter(pid,cid){
+  const p=document.getElementById(pid);
+  const btns=p.querySelectorAll('.fbtn');
+  const rows=p.querySelectorAll('.gr');
+  const cnt=document.getElementById(cid);
+  function upd(f){
+    let n=0;
+    rows.forEach(r=>{
+      const c=r.dataset.c||'';
+      const show=f==='all'||c.includes(f);
+      r.classList.toggle('hidden',!show);
+      if(show)n++;
+    });
+    p.querySelectorAll('.era').forEach(e=>{
+      const v=e.querySelectorAll('.gr:not(.hidden)');
+      e.style.display=v.length?'':'none';
+    });
+    if(cnt)cnt.textContent=`총 ${n}개`;
+  }
+  btns.forEach(b=>{
+    b.addEventListener('click',()=>{
+      btns.forEach(x=>x.classList.remove('active'));
+      b.classList.add('active');
+      upd(b.dataset.f);
+    });
+  });
+  upd('all');
+}
+setupFilter('sc','sc-cnt');
+setupFilter('wc','wc-cnt');
+setupFilter('mod','mod-cnt');
+setupFilter('rb','rb-cnt');
+</script>
+</body>
+</html>

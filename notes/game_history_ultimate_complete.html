@@ -1,0 +1,334 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font-sans);}
+.wrap{padding:.75rem 0 3rem;}
+.filter-bar{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:1.1rem;}
+.fbtn{font-size:11px;padding:3px 9px;border-radius:10px;border:.5px solid var(--color-border-secondary);background:transparent;cursor:pointer;color:var(--color-text-secondary);transition:all .12s;}
+.fbtn.active,.fbtn:hover{background:var(--color-background-secondary);color:var(--color-text-primary);border-color:var(--color-border-primary);}
+.era{margin-bottom:1.6rem;}
+.era-header{display:flex;align-items:center;gap:8px;margin-bottom:.55rem;}
+.el{flex:1;height:.5px;background:var(--color-border-tertiary);}
+.et{font-size:10.5px;font-weight:500;color:var(--color-text-tertiary);letter-spacing:.06em;white-space:nowrap;}
+table{width:100%;border-collapse:collapse;}
+tr.gr{border-bottom:.5px solid var(--color-border-tertiary);}
+tr.gr:last-child{border-bottom:none;}
+tr.gr:hover{background:var(--color-background-secondary);}
+td{padding:5px 6px;font-size:12px;vertical-align:middle;}
+.cd{width:20px;text-align:center;}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block;}
+.cy{width:42px;font-size:10px;color:var(--color-text-tertiary);font-variant-numeric:tabular-nums;}
+.cn{font-weight:500;color:var(--color-text-primary);width:165px;}
+.cv{font-size:10px;color:var(--color-text-secondary);width:120px;}
+.cs{color:var(--color-text-secondary);font-size:11px;line-height:1.4;}
+.b{display:inline-block;font-size:8.5px;font-weight:500;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:middle;}
+.bso{background:#EEEDFE;color:#3C3489;}
+.bkr{background:#FBEAF0;color:#72243E;}
+.bgn{background:#E1F5EE;color:#085041;}
+.bst{background:#FAEEDA;color:#633806;}
+.bmd{background:#E6F1FB;color:#0C447C;}
+@media(prefers-color-scheme:dark){
+.bso{background:#26215C;color:#CECBF6;}.bkr{background:#4B1528;color:#F4C0D1;}
+.bgn{background:#04342C;color:#9FE1CB;}.bst{background:#412402;color:#FAC775;}
+.bmd{background:#042C53;color:#B5D4F4;}
+}
+.legend{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:.9rem;}
+.leg{display:flex;align-items:center;gap:4px;font-size:10px;color:var(--color-text-secondary);}
+.ld{width:7px;height:7px;border-radius:50%;flex-shrink:0;}
+.hidden{display:none;}
+.cnt{font-size:11px;color:var(--color-text-tertiary);margin-bottom:.8rem;}
+.section-divider{font-size:12px;font-weight:600;color:var(--color-text-primary);margin:2rem 0 1rem;padding:.5rem 0;border-top:1.5px solid var(--color-border-secondary);}
+</style>
+
+<div class="wrap">
+<div class="legend">
+  <div class="leg"><div class="ld" style="background:#534AB7;"></div>리듬/타이밍</div>
+  <div class="leg"><div class="ld" style="background:#0F6E56;"></div>생존/스코어</div>
+  <div class="leg"><div class="ld" style="background:#5A7A3A;"></div>시뮬/경영</div>
+  <div class="leg"><div class="ld" style="background:#BA7517;"></div>전략/RTS</div>
+  <div class="leg"><div class="ld" style="background:#D85A30;"></div>액션/어드벤처</div>
+  <div class="leg"><div class="ld" style="background:#185FA5;"></div>RPG/퍼즐/내러티브</div>
+  <div class="leg"><div class="ld" style="background:#993556;"></div>FPS/스포츠</div>
+  <div class="leg"><div class="ld" style="background:#888780;"></div>플랫포머</div>
+  <div class="leg"><div class="ld" style="background:#7B5EA7;"></div>유저창작/모드</div>
+</div>
+
+<div class="filter-bar">
+  <button class="fbtn active" data-f="all">전체</button>
+  <button class="fbtn" data-f="rhythm">리듬</button>
+  <button class="fbtn" data-f="survival">생존/스코어</button>
+  <button class="fbtn" data-f="sim">시뮬/경영</button>
+  <button class="fbtn" data-f="strategy">전략</button>
+  <button class="fbtn" data-f="action">액션</button>
+  <button class="fbtn" data-f="rpg">RPG/퍼즐</button>
+  <button class="fbtn" data-f="fps">FPS/슈터</button>
+  <button class="fbtn" data-f="sports">스포츠</button>
+  <button class="fbtn" data-f="platform">플랫포머</button>
+  <button class="fbtn" data-f="mod">유저창작/모드</button>
+  <button class="fbtn" data-f="mobile">모바일</button>
+  <button class="fbtn" data-f="solo">1인개발</button>
+  <button class="fbtn" data-f="kr">한국</button>
+  <button class="fbtn" data-f="star">전설급</button>
+</div>
+<div class="cnt" id="cnt"></div>
+
+<!-- 태동기 -->
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">태동기 1970s</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="survival star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">1972</td><td class="cn">Pong</td><td class="cv">Atari</td><td class="cs">상업 게임의 시작. 두 막대기와 공 — 산업 전체를 창시 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="survival star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">1978</td><td class="cn">Space Invaders</td><td class="cv">Taito</td><td class="cs">스코어어택 문화의 기원. 아케이드 산업 폭발의 방아쇠</td></tr>
+<tr class="gr" data-c="survival star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">1980</td><td class="cn">Pac-Man</td><td class="cv">Namco</td><td class="cs">게임 캐릭터가 팝컬처 아이콘이 된 최초. 패턴 암기 문화 창시 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">1981</td><td class="cn">Donkey Kong</td><td class="cv">Nintendo</td><td class="cs">플랫포머·캐릭터 게임의 원형. 마리오 첫 등장</td></tr>
+<tr class="gr" data-c="survival"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">1981</td><td class="cn">Galaga</td><td class="cv">Namco</td><td class="cs">슈팅 장르 완성형. 패턴+반응의 결합. 아케이드 황금기 대표작</td></tr>
+<tr class="gr" data-c="survival mobile solo"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">1976~</td><td class="cn">Snake</td><td class="cv">여러 개발자</td><td class="cs">성장할수록 어려워지는 구조. 노키아로 수억 명 도달</td></tr>
+</table>
+</div>
+
+<!-- 황금기 -->
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">아케이드·콘솔 황금기 1983–1995</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="rpg solo star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1984</td><td class="cn">Tetris</td><td class="cv">Alexey Pajitnov <span class="b bso">solo</span></td><td class="cs">규칙 5초, 숙련 평생. T스핀·퍼펙트클리어. 역대 최다 판매. 퍼즐의 원형 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="strategy star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">1983</td><td class="cn">Nobunaga's Ambition</td><td class="cv">Koei</td><td class="cs">역사 전략 시뮬 장르 창시. 콘솔 전략 시뮬의 원형 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="strategy star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">1985</td><td class="cn">삼국지 (Romance of the Three Kingdoms)</td><td class="cv">Koei</td><td class="cs">동아시아 역사 전략의 바이블. 40년 시리즈. 역사+게임의 독보적 결합 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="platform star"><td class="cd"><div class="dot" style="background:#888780;"></div></td><td class="cy">1985</td><td class="cn">Super Mario Bros.</td><td class="cv">Nintendo</td><td class="cs">플랫포머 장르 정의. 게임 산업 붕괴 후 부활시킨 작품 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">1986</td><td class="cn">The Legend of Zelda</td><td class="cv">Nintendo</td><td class="cs">오픈월드 탐험의 원형. 배터리 세이브 최초 도입 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1986</td><td class="cn">Dragon Quest</td><td class="cv">Enix</td><td class="cs">JRPG 장르 창시. 일본 RPG 문화 전체의 시작점 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="platform star"><td class="cd"><div class="dot" style="background:#888780;"></div></td><td class="cy">1986</td><td class="cn">Metroid</td><td class="cv">Nintendo</td><td class="cs">메트로이드배니아 장르 창시. 비선형 탐험·고립감의 원형 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1987</td><td class="cn">Final Fantasy</td><td class="cv">Square</td><td class="cs">JRPG 서사 기준 정립. 시리즈 전체로 게임 스토리텔링 진화 견인</td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">1987</td><td class="cn">Metal Gear</td><td class="cv">Konami (Kojima)</td><td class="cs">스텔스 액션 장르의 원형. 전투 대신 회피 개념 최초 도입 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="rpg solo star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1987</td><td class="cn">Rogue</td><td class="cv">Toy/A.I. Design</td><td class="cs">로그라이크 장르 창시. 절차적 생성·퍼마데스의 원형 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="sim star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">1989</td><td class="cn">SimCity</td><td class="cv">Will Wright / Maxis</td><td class="cs">도시 건설 시뮬 원형. 경영 시뮬 장르 전체의 조상 <span class="b bst">전설</span> <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="sim"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">1990</td><td class="cn">Railroad Tycoon</td><td class="cv">Sid Meier</td><td class="cs">교통 경영 타이쿤 장르 최초. 이후 타이쿤 붐의 씨앗</td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">1991</td><td class="cn">Street Fighter II</td><td class="cv">Capcom</td><td class="cs">대전 격투 장르 정의. 커맨드 입력·캐릭터 선택 시스템 표준화 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="strategy star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">1991</td><td class="cn">Civilization</td><td class="cv">Sid Meier</td><td class="cs">4X 전략 장르 정의. "한 턴만 더" 중독성의 원형 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="platform"><td class="cd"><div class="dot" style="background:#888780;"></div></td><td class="cy">1991</td><td class="cn">Sonic the Hedgehog</td><td class="cv">Sega</td><td class="cs">속도감 플랫포머. 스피드런 문화의 씨앗</td></tr>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1993</td><td class="cn">Doom</td><td class="cv">id Software</td><td class="cs">FPS 대중화·모딩·공유 문화 창시. 30년 후에도 현재진행형 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">1992</td><td class="cn">Mortal Kombat</td><td class="cv">Midway</td><td class="cs">잔혹성 논란으로 게임 등급제도(ESRB) 탄생시킨 게임</td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1995</td><td class="cn">Chrono Trigger</td><td class="cv">Square</td><td class="cs">시간여행 서사·멀티엔딩. 역대 최고 RPG 목록 단골</td></tr>
+<tr class="gr" data-c="strategy star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">1994</td><td class="cn">Warcraft I / II</td><td class="cv">Blizzard</td><td class="cs">판타지 RTS 대중화. 맵에디터 문화 씨앗. WC3로 DotA→MOBA 탄생</td></tr>
+<tr class="gr" data-c="sim star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">1994</td><td class="cn">Theme Park</td><td class="cv">Bullfrog</td><td class="cs">테마파크 경영 장르 창시. 손님 행복도·가격 설계 시스템</td></tr>
+<tr class="gr" data-c="sports star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1993</td><td class="cn">FIFA International Soccer</td><td class="cv">EA Sports</td><td class="cs">축구 게임 30년 패권의 시작. FUT 모드로 수십억 달러 매출 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="sports star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1992</td><td class="cn">Mario Kart</td><td class="cv">Nintendo</td><td class="cs">아이템 카트 레이싱 장르 창시. 파티게임의 정의. 시리즈 1억 장+ <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="sports"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1994~</td><td class="cn">Super Smash Bros.</td><td class="cv">Nintendo</td><td class="cs">파티 격투 장르 창시. 자생적 e스포츠 문화 형성 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="sim star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">1996</td><td class="cn">Harvest Moon (牧場物語)</td><td class="cv">Amccus</td><td class="cs">농장+일상 시뮬 장르 창시. Stardew Valley의 직접 선조 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="strategy star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">1999</td><td class="cn">Dynasty Warriors (真·三國無双)</td><td class="cv">Koei Tecmo</td><td class="cs">무쌍(Musou) 장르 창시. 1:1000 전투 쾌감. 아시아 컬트적 인기 <span class="b bgn">장르창시</span></td></tr>
+</table>
+</div>
+
+<!-- 3D 혁명 -->
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">3D 혁명 & CD-ROM 시대 1996–2002</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">1996</td><td class="cn">Resident Evil</td><td class="cv">Capcom</td><td class="cs">서바이벌 호러 장르 정의. 자원 관리·긴장감 설계의 교과서 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1997</td><td class="cn">Final Fantasy VII</td><td class="cv">Square</td><td class="cs">게임 서사·영상미 혁명. 에어리스 죽음 — 감정적 스토리텔링 전환점 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="platform star"><td class="cd"><div class="dot" style="background:#888780;"></div></td><td class="cy">1996</td><td class="cn">Super Mario 64</td><td class="cv">Nintendo</td><td class="cs">3D 플랫포머 표준 정립. 아날로그 카메라·이동 시스템의 원형 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">1998</td><td class="cn">Zelda: Ocarina of Time</td><td class="cv">Nintendo</td><td class="cs">Z타겟팅·컨텍스트 액션 발명. 3D 액션 어드벤처의 바이블 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">1998</td><td class="cn">Metal Gear Solid</td><td class="cv">Konami (Kojima)</td><td class="cs">시네마틱 스토리텔링·메타픽션 게임화. 성인 서사 가능성 증명</td></tr>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1998</td><td class="cn">Half-Life</td><td class="cv">Valve</td><td class="cs">FPS에 서사 결합. 컷씬 없이 스토리 전달. 모딩으로 CS 탄생 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="platform star"><td class="cd"><div class="dot" style="background:#888780;"></div></td><td class="cy">1997</td><td class="cn">Castlevania: SotN</td><td class="cv">Konami</td><td class="cs">메트로이드배니아 장르 완성. RPG+비선형 탐험 결합</td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1998</td><td class="cn">Pokémon Red/Blue</td><td class="cv">Game Freak</td><td class="cs">교환·수집 메커니즘. 휴대용 RPG 가능성 증명 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="strategy kr star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">1998</td><td class="cn">StarCraft</td><td class="cv">Blizzard</td><td class="cs">e스포츠 산업 창시. 한국 PC방 문화 형성. 비대칭 밸런스의 교과서 <span class="b bkr">KR연관</span> <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg mobile kr star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1996</td><td class="cn">바람의나라</td><td class="cv">Nexon <span class="b bkr">KR</span></td><td class="cs">세계 최초 상용 그래픽 MMORPG. 한국 온라인 게임의 시작 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg mobile kr star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1998</td><td class="cn">리니지 (Lineage)</td><td class="cv">NCSoft <span class="b bkr">KR</span></td><td class="cs">한국 MMORPG의 원형. 혈맹·공성전 창시. 누적 매출 $1.8B <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">1999</td><td class="cn">Diablo II</td><td class="cv">Blizzard</td><td class="cs">루트 그라인드 시스템 창시. 핵앤슬래시·ARPG 장르 정의 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="fps mod star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1999</td><td class="cn">Counter-Strike</td><td class="cv">Valve (Half-Life 모드)</td><td class="cs">팀 전술 FPS 정의. FPS e스포츠 생태계 창시. 원래 Half-Life 모드 <span class="b bmd">모드출신</span> <span class="b bgn">장르창시</span> <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="sim solo star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">1999</td><td class="cn">RollerCoaster Tycoon</td><td class="cv">Chris Sawyer <span class="b bso">solo</span></td><td class="cs">1인 개발. Assembly 언어로 만든 기적. 경영 타이쿤 장르 완성형 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2001</td><td class="cn">GTA III</td><td class="cv">Rockstar</td><td class="cs">오픈월드 샌드박스 현대적 정의. 3D 자유도·범죄 서사 대중화 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2001</td><td class="cn">ICO</td><td class="cv">Team Ico (Ueda)</td><td class="cs">게임이 예술임을 증명. 미니멀 서사·동반자 감정 최초 구현</td></tr>
+<tr class="gr" data-c="sports"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1997</td><td class="cn">Gran Turismo</td><td class="cv">Polyphony Digital</td><td class="cs">사실적 자동차 시뮬의 기준. PS1 최고 판매작 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="sports"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">1999</td><td class="cn">Tony Hawk's Pro Skater</td><td class="cv">Neversoft</td><td class="cs">스케이트보드 게임 장르 정의. 스트리트 문화+게임 결합</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">1998</td><td class="cn">Baldur's Gate</td><td class="cv">BioWare</td><td class="cs">CRPG 황금기 선도. D&D 파티 기반. BG3의 정신적 조상</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2000</td><td class="cn">Deus Ex</td><td class="cv">Ion Storm</td><td class="cs">RPG+FPS+스텔스. 이머시브 심(Immersive Sim) 장르 창시 <span class="b bgn">장르창시</span></td></tr>
+</table>
+</div>
+
+<!-- 온라인 전성기 -->
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">온라인·콘솔 전성기 2003–2009</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="rpg mobile kr"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2003</td><td class="cn">메이플스토리</td><td class="cv">Nexon <span class="b bkr">KR</span></td><td class="cs">2D 횡스크롤 MMORPG. 전세계 1억 8,000만 계정. 한국 온라인 게임 글로벌화</td></tr>
+<tr class="gr" data-c="rpg mobile kr"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2003</td><td class="cn">리니지 II</td><td class="cv">NCSoft <span class="b bkr">KR</span></td><td class="cs">3D MMORPG 진화. 전세계 9,400만 유저. 한국 MMORPG 수출 본격화</td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2004</td><td class="cn">Monster Hunter</td><td class="cv">Capcom</td><td class="cs">헌팅 액션 장르 창시. PSP 협동 문화. 시리즈 누적 1억 2,500만 장 <span class="b bst">전설</span> <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="fps"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2004</td><td class="cn">Half-Life 2</td><td class="cv">Valve</td><td class="cs">물리 엔진 게임플레이 혁명. Source Engine 모딩 생태계 정의</td></tr>
+<tr class="gr" data-c="strategy star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2004</td><td class="cn">World of Warcraft</td><td class="cv">Blizzard</td><td class="cs">MMORPG 대중화. 최고 1천만 구독자. 구독 모델 정립 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action solo"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2004</td><td class="cn">Cave Story</td><td class="cv">Pixel <span class="b bso">solo</span></td><td class="cs">5년 개발 후 무료 배포. 인디게임 정신의 상징</td></tr>
+<tr class="gr" data-c="action rpg kr"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2005</td><td class="cn">던전앤파이터 (DNF)</td><td class="cv">Neople/Nexon <span class="b bkr">KR</span></td><td class="cs">2D 벨트스크롤 MMORPG. 중국 역대 최고 매출 온라인 게임. 누적 8억 명+</td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2005</td><td class="cn">Resident Evil 4</td><td class="cv">Capcom</td><td class="cs">어깨너머 시점(TPS) 발명. 이후 모든 3인칭 액션의 표준 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="sim"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2006</td><td class="cn">Wii Sports</td><td class="cv">Nintendo</td><td class="cs">모션 컨트롤·접근성 혁명. 비게이머를 게이머로</td></tr>
+<tr class="gr" data-c="mod ugc solo star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2006</td><td class="cn">Roblox</td><td class="cv">Roblox Corp</td><td class="cs">유저 게임 제작 플랫폼. 2억 명+ MAU. 어린이 세대의 메타버스 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="fps kr"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2007</td><td class="cn">카트라이더</td><td class="cv">Nexon <span class="b bkr">KR</span></td><td class="cs">캐주얼 레이싱 MMORPG. 한국 PC방 점유율 1위 장기 유지</td></tr>
+<tr class="gr" data-c="fps"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2007</td><td class="cn">Call of Duty 4: MW</td><td class="cv">Infinity Ward</td><td class="cs">레벨업 시스템을 FPS에 결합. 캐주얼 FPS 대중화</td></tr>
+<tr class="gr" data-c="rpg solo"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2007</td><td class="cn">Portal</td><td class="cv">Valve</td><td class="cs">공간 퍼즐 재정의. "케이크는 거짓말" — 게임 밈 문화 창시</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2007</td><td class="cn">BioShock</td><td class="cv">Irrational Games</td><td class="cs">철학·정치사상을 게임화. FPS+철학의 결합. "선택의 환상" 서사 비틀기</td></tr>
+<tr class="gr" data-c="rpg solo star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2008</td><td class="cn">Braid</td><td class="cv">Jonathan Blow <span class="b bso">solo</span></td><td class="cs">인디게임 상업화 전환점. 게임=예술 가능성 증명</td></tr>
+<tr class="gr" data-c="rpg mobile kr"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2008</td><td class="cn">아이온 (AION)</td><td class="cv">NCSoft <span class="b bkr">KR</span></td><td class="cs">날개 비행 MMORPG. 서양 시장 진출 본격화. 미적 완성도로 센세이션</td></tr>
+<tr class="gr" data-c="sim solo"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2006</td><td class="cn">Dwarf Fortress</td><td class="cv">Bay 12 Games <span class="b bso">solo</span></td><td class="cs">텍스트 기반 요새 건설. 극도의 복잡성. Minecraft·RimWorld의 정신적 조상</td></tr>
+<tr class="gr" data-c="action"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2009</td><td class="cn">Batman: Arkham Asylum</td><td class="cv">Rocksteady</td><td class="cs">프리플로우 전투 시스템 발명. 히어로 게임의 새 기준</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2008</td><td class="cn">Persona 4</td><td class="cv">Atlus</td><td class="cs">소셜링크+던전탐험+JRPG 결합. Persona 5로 이어지는 시리즈 부활</td></tr>
+</table>
+</div>
+
+<!-- 스마트폰·인디 -->
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">스마트폰 혁명 & 인디 여명 2009–2014</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="survival mobile"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2009</td><td class="cn">Doodle Jump</td><td class="cv">Lima Sky</td><td class="cs">수직 무한 점프. 친구 기록 경쟁 바이럴 공식 정착</td></tr>
+<tr class="gr" data-c="rpg mobile"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2009</td><td class="cn">Angry Birds</td><td class="cv">Rovio</td><td class="cs">터치스크린 물리 퍼즐. 모바일 캐주얼 게임 공식 정착</td></tr>
+<tr class="gr" data-c="strategy solo star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2011</td><td class="cn">Minecraft</td><td class="cv">Notch <span class="b bso">solo</span></td><td class="cs">샌드박스 창의성의 극한. MS $2.5B 인수. 역대 최다 판매 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action rpg star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2011</td><td class="cn">Dark Souls</td><td class="cv">FromSoftware</td><td class="cs">"다크소울같은" — 장르 이름이 된 게임. 난이도+암시적 서사 혁명 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2011</td><td class="cn">Skyrim</td><td class="cv">Bethesda</td><td class="cs">오픈월드 RPG 대중화. 모딩으로 영구 생존</td></tr>
+<tr class="gr" data-c="mobile strategy star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2012</td><td class="cn">Clash of Clans</td><td class="cv">Supercell</td><td class="cs">모바일 전략의 혁명. 기지 건설+PvP 공식 창시. 누적 매출 $6B+ <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2012</td><td class="cn">League of Legends</td><td class="cv">Riot Games</td><td class="cs">MOBA 대중화. e스포츠 현재 형태 정립. 무료+스킨 수익 모델 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rhythm survival solo star"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2012</td><td class="cn">Super Hexagon</td><td class="cv">Terry Cavanagh <span class="b bso">solo</span></td><td class="cs">극한 반응 게임의 완성형. 리듬+생존+중독의 삼위일체</td></tr>
+<tr class="gr" data-c="ugc mod sim"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2012</td><td class="cn">Terraria</td><td class="cv">Re-Logic (소규모)</td><td class="cs">2D 샌드박스+서바이벌. 스팀 역대 최고 평점. Minecraft의 2D 대안</td></tr>
+<tr class="gr" data-c="rhythm solo star"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2013</td><td class="cn">Geometry Dash</td><td class="cv">RobTop <span class="b bso">solo</span></td><td class="cs">탭 하나·유저맵 생태계. 4개월 개발로 10년 현역 $100M+ 매출 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg solo star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2013</td><td class="cn">Papers, Please</td><td class="cv">Lucas Pope <span class="b bso">solo</span></td><td class="cs">서류 심사→도덕 딜레마. 단순 반복→감정 깊이</td></tr>
+<tr class="gr" data-c="survival mobile solo"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2013</td><td class="cn">Flappy Bird</td><td class="cv">Dong Nguyen <span class="b bso">solo</span></td><td class="cs">탭 하나·극한 난이도. 단일 개발자 바이럴 전설. 하루 $50K 광고 수익</td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2013</td><td class="cn">The Last of Us</td><td class="cv">Naughty Dog</td><td class="cs">게임 서사의 새 정점. 넷플릭스 드라마로 이어진 문화적 영향력</td></tr>
+<tr class="gr" data-c="rpg solo mobile"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2014</td><td class="cn">2048</td><td class="cv">Gabriele Cirulli <span class="b bso">solo</span></td><td class="cs">주말 개발. 머지 퍼즐의 원형. 수십억 플레이</td></tr>
+<tr class="gr" data-c="strategy"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2012</td><td class="cn">FTL: Faster Than Light</td><td class="cv">Subset Games (2인)</td><td class="cs">로그라이크+우주 전략. 현대 인디 로그라이크 붐의 선발대</td></tr>
+</table>
+</div>
+
+<!-- 인디 르네상스 -->
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">인디 르네상스 & 모바일 황금기 2015–2019</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="survival mobile"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2015</td><td class="cn">무한의 계단</td><td class="cv">NFLY Studio <span class="b bkr">KR</span></td><td class="cs">계단 오르기 단 하나의 규칙. 글로벌 흥행</td></tr>
+<tr class="gr" data-c="rpg solo star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2015</td><td class="cn">Undertale</td><td class="cv">Toby Fox <span class="b bso">solo</span></td><td class="cs">전투 안 해도 클리어. 플레이어의 도덕적 선택을 게임화 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="sim star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2015</td><td class="cn">Cities: Skylines</td><td class="cv">Colossal Order</td><td class="cs">SimCity 공백 메운 현대 도시 건설의 표준. 모딩으로 수명 연장</td></tr>
+<tr class="gr" data-c="platform solo star"><td class="cd"><div class="dot" style="background:#888780;"></div></td><td class="cy">2015</td><td class="cn">Shovel Knight</td><td class="cv">Yacht Club (소규모)</td><td class="cs">8비트 향수를 현대적으로 재해석. 인디 킥스타터 성공 공식의 교과서</td></tr>
+<tr class="gr" data-c="action"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2015</td><td class="cn">Bloodborne</td><td class="cv">FromSoftware</td><td class="cs">고딕 호러+소울라이크. 공격이 최선의 방어인 설계. 팬덤 열정 최고 수준</td></tr>
+<tr class="gr" data-c="mobile strategy star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2016</td><td class="cn">Clash Royale</td><td class="cv">Supercell</td><td class="cs">카드+타워디펜스+실시간 PvP. 1년 $1B 달성. 누적 $4B <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="strategy solo star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2016</td><td class="cn">Stardew Valley</td><td class="cv">ConcernedApe <span class="b bso">solo</span></td><td class="cs">1인 4년 개발. 2천만 장 $200M+. 힐링 농장 시뮬의 완성 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="mobile star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2016</td><td class="cn">Pokémon GO</td><td class="cv">Niantic</td><td class="cs">AR+위치기반 모바일 창시. 출시 1주일 $60M. 현실 세계를 게임 공간으로 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2016</td><td class="cn">Inside</td><td class="cv">Playdead</td><td class="cs">대사 없이 분위기로만 서사 전달. 엔딩 충격으로 유명. Limbo의 후속</td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2016</td><td class="cn">NieR: Automata</td><td class="cv">PlatinumGames</td><td class="cs">멀티플레이스루+철학적 서사. 게임이어야만 가능한 이야기 구조 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2017</td><td class="cn">Persona 5</td><td class="cv">Atlus</td><td class="cs">스타일리시 JRPG의 최고봉. UI·음악·세계관 전부 혁신</td></tr>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2017</td><td class="cn">PUBG</td><td class="cv">Krafton <span class="b bkr">KR</span></td><td class="cs">배틀로얄 장르 창시. 포트나이트·Apex 등 수십 개 후속작 탄생 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="fps star"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2017</td><td class="cn">Fortnite</td><td class="cv">Epic Games</td><td class="cs">배틀로얄 대중화. 무료+스킨 모델. 게임=소셜 공간 정의 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2017</td><td class="cn">Zelda: Breath of the Wild</td><td class="cv">Nintendo</td><td class="cs">오픈월드 자유도 재정의. "보이면 갈 수 있다" 설계 철학 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="platform star"><td class="cd"><div class="dot" style="background:#888780;"></div></td><td class="cy">2017</td><td class="cn">Hollow Knight</td><td class="cv">Team Cherry (3인)</td><td class="cs">메트로이드배니아 현대 최고봉. 3인 인디팀의 기적 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="mobile strategy"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2018</td><td class="cn">Brawl Stars</td><td class="cv">Supercell</td><td class="cs">팀 배틀 슈터 캐주얼화. 누적 매출 $2.1B</td></tr>
+<tr class="gr" data-c="platform solo"><td class="cd"><div class="dot" style="background:#888780;"></div></td><td class="cy">2018</td><td class="cn">Celeste</td><td class="cv">Maddy Thorson 소규모</td><td class="cs">정밀 플랫포머+정신건강 서사. 어려운 게임도 포용적일 수 있다</td></tr>
+<tr class="gr" data-c="action"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2018</td><td class="cn">God of War (2018)</td><td class="cv">Santa Monica</td><td class="cs">시리즈 완전 리부트. 아버지-아들 서사. 단 하나의 컷 없는 카메라 연출</td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2018</td><td class="cn">Monster Hunter: World</td><td class="cv">Capcom</td><td class="cs">글로벌화 성공. Capcom 역대 최다 판매 2,100만 장 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="sim"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2018</td><td class="cn">Factorio</td><td class="cv">Wube Software</td><td class="cs">공장 자동화 시뮬. 스팀 역대 최고 평점 게임 중 하나</td></tr>
+<tr class="gr" data-c="rhythm kr"><td class="cd"><div class="dot" style="background:#534AB7;"></div></td><td class="cy">2019</td><td class="cn">A Dance of Fire and Ice</td><td class="cv">7th Beat Games <span class="b bkr">KR</span></td><td class="cs">한국 인디 글로벌 리듬 히트. 정밀도 극한 구조</td></tr>
+<tr class="gr" data-c="strategy mobile kr"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2019</td><td class="cn">랜덤다이스</td><td class="cv">111% <span class="b bkr">KR</span></td><td class="cs">주사위 머지 타워디펜스. 월 $40만 매출</td></tr>
+<tr class="gr" data-c="strategy star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2019</td><td class="cn">Slay the Spire</td><td class="cv">MegaCrit (2인)</td><td class="cs">덱빌더 로그라이크 장르 창시. 수백 개 후속작 탄생 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2019</td><td class="cn">Disco Elysium</td><td class="cv">ZA/UM</td><td class="cs">전투 없는 순수 대화 RPG. 실패도 이야기가 된다 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2019</td><td class="cn">Outer Wilds</td><td class="cv">Mobius Digital</td><td class="cs">22분 루프+탐험. 튜토리얼 없는 발견의 순수한 기쁨</td></tr>
+<tr class="gr" data-c="sim solo"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2019</td><td class="cn">RimWorld</td><td class="cv">Ludeon Studios <span class="b bso">solo</span></td><td class="cs">식민지 생존 시뮬. AI 스토리텔러로 매번 다른 이야기 생성</td></tr>
+<tr class="gr" data-c="sports"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2015</td><td class="cn">Rocket League</td><td class="cv">Psyonix</td><td class="cs">축구+자동차. 단순 규칙, 무한 숙련도. e스포츠 정식 종목</td></tr>
+<tr class="gr" data-c="rpg solo star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2018</td><td class="cn">Return of the Obra Dinn</td><td class="cv">Lucas Pope <span class="b bso">solo</span></td><td class="cs">논리 추리+1비트 그래픽. 게임 디자이너들이 가장 사랑하는 인디</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2017</td><td class="cn">What Remains of Edith Finch</td><td class="cv">Giant Sparrow</td><td class="cs">한 가족의 이야기를 각각 다른 장르로. 게임으로만 가능한 이야기</td></tr>
+</table>
+</div>
+
+<!-- 2020s -->
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">2020년대 현재 2020–2025</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="mobile star"><td class="cd"><div class="dot" style="background:#5A7A3A;"></div></td><td class="cy">2020</td><td class="cn">Genshin Impact</td><td class="cv">HoYoverse</td><td class="cs">가챠+오픈월드+무료 결합. 출시 2주 $100M. 누적 $6.3B. 중국 게임의 글로벌 돌파 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="fps"><td class="cd"><div class="dot" style="background:#993556;"></div></td><td class="cy">2020</td><td class="cn">Among Us</td><td class="cv">InnerSloth (3인)</td><td class="cs">사회적 추론 게임. 팬데믹 최대 히트. 스트리머 문화 폭발</td></tr>
+<tr class="gr" data-c="rpg solo star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2020</td><td class="cn">Hades</td><td class="cv">Supergiant Games</td><td class="cs">로그라이트+서사 결합. 죽을수록 이야기가 진행. 로그라이크 서사 혁신 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="rpg solo"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2021</td><td class="cn">Wordle</td><td class="cv">Josh Wardle <span class="b bso">solo</span></td><td class="cs">하루 1판 공유 공식. NYT $1M+ 인수</td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2021</td><td class="cn">It Takes Two</td><td class="cv">Hazelight</td><td class="cs">두 명이 함께해야만 하는 협동 게임. 2021 GOTY. 매 챕터마다 다른 장르 경험</td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2022</td><td class="cn">Elden Ring</td><td class="cv">FromSoftware × G.R.R. Martin</td><td class="cs">소울라이크+오픈월드 완성형. 2022 GOTY <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="survival solo star"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2022</td><td class="cn">Vampire Survivors</td><td class="cv">Luca Galante <span class="b bso">solo</span></td><td class="cs">오토배틀러 장르 창시. 수백만 판매. $5 게임이 장르를 만든 사례 <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="rpg"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2023</td><td class="cn">Baldur's Gate 3</td><td class="cv">Larian Studios</td><td class="cs">CRPG 완성형. 2023 GOTY. D&D 자유도의 게임화 극한</td></tr>
+<tr class="gr" data-c="survival solo"><td class="cd"><div class="dot" style="background:#0F6E56;"></div></td><td class="cy">2023</td><td class="cn">Lethal Company</td><td class="cv">Zeekerss <span class="b bso">solo</span></td><td class="cs">1인 멀티 공포 생존. 2023 최대 인디 히트</td></tr>
+<tr class="gr" data-c="rpg solo"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2023</td><td class="cn">Tunic</td><td class="cv">Isometricorp <span class="b bso">solo</span></td><td class="cs">설명서가 게임 안에 숨어있는 퍼즐. 발견의 기쁨 극대화</td></tr>
+<tr class="gr" data-c="strategy solo star"><td class="cd"><div class="dot" style="background:#BA7517;"></div></td><td class="cy">2024</td><td class="cn">Balatro</td><td class="cv">LocalThunk <span class="b bso">solo</span></td><td class="cs">포커 로그라이크. GOTY 후보 최초 솔로 개발작. 500만 판매 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="action star"><td class="cd"><div class="dot" style="background:#D85A30;"></div></td><td class="cy">2025</td><td class="cn">Monster Hunter: Wilds</td><td class="cv">Capcom</td><td class="cs">출시 3일 800만 장. Capcom 역대 최단 기간 최다 판매</td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2025</td><td class="cn">Clair Obscur: Expedition 33</td><td class="cv">Sandfall Interactive</td><td class="cs">2025 TGA GOTY. 프랑스 소규모 인디. 턴제 RPG+액션 입력 결합의 혁신</td></tr>
+<tr class="gr" data-c="rpg star"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2025</td><td class="cn">Hades 2</td><td class="cv">Supergiant Games</td><td class="cs">로그라이트 서사 심화. 2025 최고 작품성 인디 중 하나</td></tr>
+<tr class="gr" data-c="platform star"><td class="cd"><div class="dot" style="background:#888780;"></div></td><td class="cy">2025</td><td class="cn">Hollow Knight: Silksong</td><td class="cv">Team Cherry (3인)</td><td class="cs">역대 가장 오래 기다린 인디 속편. 메트로이드배니아 장르 재정의</td></tr>
+<tr class="gr" data-c="rpg solo"><td class="cd"><div class="dot" style="background:#185FA5;"></div></td><td class="cy">2025</td><td class="cn">Blue Prince</td><td class="cv">Dogubomb <span class="b bso">solo</span></td><td class="cs">매일 달라지는 저택 퍼즐. 2025 최고 인디 퍼즐 게임</td></tr>
+</table>
+</div>
+
+<!-- 번외: 유즈맵/모드에서 탄생한 게임들 -->
+<div class="section-divider">📂 번외 — 유즈맵 · 모드 · 유저창작에서 탄생한 게임들</div>
+
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">모드 → 독립 게임으로 성장한 사례</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="mod fps star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">1999</td><td class="cn">Counter-Strike</td><td class="cv">Half-Life 모드 출신</td><td class="cs">Minh "Gooseman" Le가 취미로 만든 Half-Life 모드. Valve가 IP 인수 후 e스포츠 역사상 가장 영향력 있는 FPS로 성장 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="mod fps star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">1996</td><td class="cn">Team Fortress</td><td class="cv">Quake 모드 출신</td><td class="cs">Quake 모드로 시작. Valve가 개발진 영입해 TF2로 발전. 히어로 슈터 장르의 선구자</td></tr>
+<tr class="gr" data-c="mod strategy star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2002</td><td class="cn">Aeon of Strife (AoS)</td><td class="cv">StarCraft 유즈맵</td><td class="cs">Gunner_4_ever가 만든 StarCraft 유즈맵. 영웅 하나로 3라인 싸우는 구조 최초 구현. DotA의 직접적 조상 <span class="b bgn">MOBA 원형</span></td></tr>
+<tr class="gr" data-c="mod strategy star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2003</td><td class="cn">DotA (Defense of the Ancients)</td><td class="cv">Warcraft III 유즈맵</td><td class="cs">Eul이 AoS를 WC3로 이식. Guinsoo·IceFrog가 발전시켜 WC3 역대 최고 인기 유즈맵. Valve가 2009년 IceFrog 영입 → Dota 2 탄생. MOBA 장르 창시 <span class="b bst">전설</span> <span class="b bgn">장르창시</span></td></tr>
+<tr class="gr" data-c="mod fps star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2013</td><td class="cn">Dota 2</td><td class="cv">Valve (DotA 모드 계승)</td><td class="cs">유즈맵에서 탄생한 장르가 $40M+ 상금 토너먼트(The International)로 성장. 모드→게임→e스포츠의 완벽한 계보</td></tr>
+<tr class="gr" data-c="mod strategy star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2009</td><td class="cn">League of Legends</td><td class="cv">DotA 모드에서 영감</td><td class="cs">DotA 개발자 Guinsoo·Pendragon이 창업한 Riot Games의 작품. 유즈맵→독립 게임→세계 최대 e스포츠 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="mod rpg star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2011</td><td class="cn">The Stanley Parable</td><td class="cv">Half-Life 2 모드 출신</td><td class="cs">Davey Wreden이 경험 없이 독학으로 만든 HL2 모드. 출시 몇 주 만에 입소문 폭발 → 독립 게임으로 리메이크. 내러티브 게임 혁신</td></tr>
+<tr class="gr" data-c="mod rpg star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2015</td><td class="cn">The Forgotten City</td><td class="cv">Skyrim 모드 출신</td><td class="cs">Nick Pearce가 1,700시간 혼자 만든 Skyrim 모드. 고대 로마 시간 루프 추리. 2022년 독립 게임으로 출시, 비평 극찬</td></tr>
+<tr class="gr" data-c="mod fps star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2012</td><td class="cn">PUBG</td><td class="cv">ArmA 2 모드 출신</td><td class="cs">Brendan Greene이 ArmA 2 모드 "DayZ"에서 배틀로얄 개념 실험 → 독립 개발 → 배틀로얄 장르 창시 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="mod ugc"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2009</td><td class="cn">DayZ</td><td class="cv">ArmA 2 모드 출신</td><td class="cs">ArmA 2 모드. 생존+좀비+PvP 결합. 서바이벌 오픈월드 장르의 씨앗. PUBG의 직접 선조</td></tr>
+</table>
+</div>
+
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">StarCraft 유즈맵 명작들</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="mod strategy kr"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2000s</td><td class="cn">Aeon of Strife 계열</td><td class="cv">SC 유즈맵</td><td class="cs">MOBA 장르의 씨앗. 영웅 1명+AI 병사+3라인 구조의 최초 구현</td></tr>
+<tr class="gr" data-c="mod strategy kr"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2000s</td><td class="cn">스타 유즈맵 RPG 계열</td><td class="cv">SC 유즈맵</td><td class="cs">캐릭터 성장+스킬+스토리를 RTS 엔진으로. 한국 PC방에서 수백만 명이 즐긴 독자적 장르</td></tr>
+<tr class="gr" data-c="mod survival kr"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2000s</td><td class="cn">캐슬파이트 / 뱀파이어 계열</td><td class="cv">SC 유즈맵</td><td class="cs">타워디펜스·생존 장르 원형. 한국 유즈맵 문화의 독자적 발전</td></tr>
+</table>
+</div>
+
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">Warcraft III 유즈맵 명작들</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="mod strategy star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2003</td><td class="cn">DotA Allstars</td><td class="cv">WC3 유즈맵</td><td class="cs">Guinsoo가 완성한 DotA의 결정판. 전세계 수천만 명 플레이. MOBA 장르의 실질적 시작 <span class="b bst">전설</span></td></tr>
+<tr class="gr" data-c="mod strategy"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2000s</td><td class="cn">Legion TD</td><td class="cv">WC3 유즈맵</td><td class="cs">타워디펜스+협동 레이스 결합. 이후 Legion TD 2로 독립 게임화</td></tr>
+<tr class="gr" data-c="mod strategy"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2000s</td><td class="cn">Footmen Frenzy</td><td class="cv">WC3 유즈맵</td><td class="cs">대규모 팀전 타워디펜스. 한국 배틀넷에서 압도적 인기</td></tr>
+<tr class="gr" data-c="mod survival"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2000s</td><td class="cn">Vampirism / Tower Defense 계열</td><td class="cv">WC3 유즈맵</td><td class="cs">랜덤다이스·기타 타워디펜스 모바일 게임의 정신적 조상</td></tr>
+</table>
+</div>
+
+<div class="era">
+<div class="era-header"><div class="el"></div><div class="et">Minecraft 모드 / Roblox 명작 게임들</div><div class="el"></div></div>
+<table>
+<tr class="gr" data-c="mod ugc survival star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2012</td><td class="cn">DayZ (Minecraft 영향권)</td><td class="cv">ArmA 2 모드</td><td class="cs">Minecraft 영향받은 생존 개념. 서바이벌 장르의 생태계 폭발에 기여</td></tr>
+<tr class="gr" data-c="mod ugc star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2013~</td><td class="cn">Minecraft 미니게임 서버</td><td class="cv">Hypixel 등 커뮤니티</td><td class="cs">Hypixel: 월 수백만 유저. Sky Wars·Bed Wars·SkyBlock 등 독자 장르 창시. 일부 Roblox로 이식됨</td></tr>
+<tr class="gr" data-c="mod ugc star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2017</td><td class="cn">Adopt Me!</td><td class="cv">Roblox 유저창작</td><td class="cs">Roblox 역대 최다 플레이 게임. 억 단위 방문. 펫 수집+육아 시뮬. 개발사 누적 $16M 수익</td></tr>
+<tr class="gr" data-c="mod ugc"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2020</td><td class="cn">Piggy</td><td class="cv">Roblox 유저창작</td><td class="cs">공포+에피소드 스토리텔링. Roblox에서 팬덤 문화 형성한 첫 사례</td></tr>
+<tr class="gr" data-c="mod ugc fps"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2015</td><td class="cn">Phantom Forces</td><td class="cv">Roblox 유저창작</td><td class="cs">Roblox 최고의 FPS. CS·CoD 수준의 메커니즘을 Roblox 안에서 구현</td></tr>
+<tr class="gr" data-c="mod ugc sim"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2014</td><td class="cn">Welcome to Bloxburg</td><td class="cv">Roblox 유저창작</td><td class="cs">The Sims 스타일 생활 시뮬. Roblox 최초 유료(25 Robux) 게임 중 하나. Embracer Group에 인수</td></tr>
+<tr class="gr" data-c="mod ugc star"><td class="cd"><div class="dot" style="background:#7B5EA7;"></div></td><td class="cy">2025</td><td class="cn">Grow a Garden / Steal a Brainrot</td><td class="cv">Roblox 유저창작</td><td class="cs">Roblox 역대 최고 동시접속자 기록 경신. SNS 바이럴+전략의 결합</td></tr>
+</table>
+</div>
+
+</div>
+
+<script>
+const btns=document.querySelectorAll('.fbtn');
+const rows=document.querySelectorAll('.gr');
+const eras=document.querySelectorAll('.era');
+const cnt=document.getElementById('cnt');
+function upd(f){
+  let n=0;
+  rows.forEach(r=>{
+    const c=r.dataset.c||'';
+    const show=f==='all'||c.includes(f);
+    r.classList.toggle('hidden',!show);
+    if(show)n++;
+  });
+  eras.forEach(e=>{
+    const v=e.querySelectorAll('.gr:not(.hidden)');
+    e.style.display=v.length?'':'none';
+  });
+  cnt.textContent=`총 ${n}개`;
+}
+btns.forEach(b=>{
+  b.addEventListener('click',()=>{
+    btns.forEach(x=>x.classList.remove('active'));
+    b.classList.add('active');
+    upd(b.dataset.f);
+  });
+});
+upd('all');
+</script>
