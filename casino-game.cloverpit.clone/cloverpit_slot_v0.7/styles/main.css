@@ -249,8 +249,8 @@ canvas#fx{
 .hud-summary{
   position:absolute;
   left:50%;
-  bottom:92px;
-  transform:translateX(-50%);
+  top:50%;
+  transform:translate(-50%,-50%);
   width:min(86%,360px);
   border-radius:18px;
   border:1px solid #4f3210;
@@ -286,11 +286,11 @@ canvas#fx{
 .hud-summary.tone-event .hud-main{color:#7eddff;text-shadow:0 0 26px #40c8ff70}
 .hud-summary.tone-loss .hud-main{color:#ff8f8f;text-shadow:0 0 26px #c0302070}
 @keyframes hudSummaryIn{
-  0%{opacity:0;transform:translateX(-50%) translateY(18px) scale(.88)}
-  14%{opacity:1;transform:translateX(-50%) translateY(0) scale(1.04)}
-  24%{transform:translateX(-50%) translateY(0) scale(1)}
-  78%{opacity:1;transform:translateX(-50%) translateY(0) scale(1)}
-  100%{opacity:0;transform:translateX(-50%) translateY(-6px) scale(.98)}
+  0%{opacity:0;transform:translate(-50%,-46%) scale(.88)}
+  14%{opacity:1;transform:translate(-50%,-50%) scale(1.04)}
+  24%{transform:translate(-50%,-50%) scale(1)}
+  78%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-54%) scale(.98)}
 }
 .hud-combo-burst{
   position:absolute;
@@ -985,22 +985,25 @@ canvas#fx{
 .coin-delta-hud{
   position:absolute;
   left:50%;
-  bottom:-28px;
-  transform:translateX(-50%);
-  padding:4px 10px 5px;
+  top:56%;
+  transform:translate(-50%,-50%);
+  min-width:190px;
+  padding:8px 16px 10px;
   border-radius:999px;
   border:2px solid #161216;
   background:linear-gradient(180deg,#2b1128f6 0%,#120510f8 100%);
-  font-family:"Bungee","Impact",sans-serif;
-  font-size:10px;
+  font-family:"Orbitron","Rajdhani",sans-serif;
+  font-size:22px;
+  font-weight:800;
   line-height:1;
-  letter-spacing:.5px;
+  letter-spacing:1px;
   color:var(--coin-delta-color,#d8ff3e);
-  text-shadow:0 0 12px var(--coin-delta-color,#d8ff3e);
-  box-shadow:0 10px 18px #00000042,0 0 0 2px #2b1025;
+  text-align:center;
+  text-shadow:0 0 16px var(--coin-delta-color,#d8ff3e);
+  box-shadow:0 18px 32px #00000054,0 0 0 2px #2b1025;
   pointer-events:none;
   white-space:nowrap;
-  z-index:8;
+  z-index:130;
   animation:coinDeltaRise 1.35s cubic-bezier(.2,.9,.35,1) forwards;
 }
 .coin-delta-hud.up{
@@ -1010,10 +1013,10 @@ canvas#fx{
   --coin-delta-color:#ff7aa8;
 }
 @keyframes coinDeltaRise{
-  0%{opacity:0;transform:translateX(-50%) translateY(6px) scale(.9)}
-  18%{opacity:1;transform:translateX(-50%) translateY(0) scale(1.03)}
-  70%{opacity:1;transform:translateX(-50%) translateY(-10px) scale(1)}
-  100%{opacity:0;transform:translateX(-50%) translateY(-18px) scale(.96)}
+  0%{opacity:0;transform:translate(-50%,-50%) scale(.88)}
+  18%{opacity:1;transform:translate(-50%,-50%) scale(1.03)}
+  70%{opacity:1;transform:translate(-50%,-96px) scale(1.04)}
+  100%{opacity:0;transform:translate(-50%,-132px) scale(.92)}
 }
 
 .game-layout{
@@ -1682,7 +1685,9 @@ canvas#fx{
 .rs.cell-hit.cell-tone-1::after,
 .rs.cell-hit.cell-tone-2::after,
 .rs.cell-hit.cell-tone-3::after,
-.rs.cell-hit.cell-tone-4::after{
+.rs.cell-hit.cell-tone-4::after,
+.rs.cell-hit.cell-tone-current::after,
+.rs.cell-hit.cell-tone-final::after{
   content:"";
   position:absolute;
   inset:2px;
@@ -1701,6 +1706,15 @@ canvas#fx{
 .rs.cell-hit.cell-tone-7::after{border-color:#ff6b6b;box-shadow:inset 0 0 14px #ff6b6b50,0 0 20px #ff6b6baa}
 .rs.cell-hit.cell-tone-8::after{border-color:#ffe066;box-shadow:inset 0 0 14px #ffe06650,0 0 20px #ffe066aa}
 .rs.cell-hit.cell-tone-9::after{border-color:#7fb3ff;box-shadow:inset 0 0 14px #7fb3ff50,0 0 20px #7fb3ffaa}
+.rs.cell-hit.cell-tone-current::after{
+  border-color:#49e6ff;
+  box-shadow:inset 0 0 14px #49e6ff50,0 0 20px #49e6ffaa;
+}
+.rs.cell-hit.cell-tone-final::after{
+  border-color:#ffe066;
+  box-shadow:inset 0 0 14px #ffe06645,0 0 16px #ffe06688;
+  animation:none;
+}
 .rs.cell-hit .symbol-badge{
   animation:symbolBreath 1.35s ease-in-out infinite;
 }
@@ -2259,15 +2273,38 @@ canvas#fx{
   padding:0;
   color:inherit;
   display:block;
-  filter:drop-shadow(0 10px 16px #00000048);
+  perspective:900px;
+  perspective-origin:50% 28%;
+  transform-style:preserve-3d;
+  filter:drop-shadow(0 12px 18px #0000004f);
+}
+.lever::before{
+  content:"";
+  position:absolute;
+  right:6px;
+  top:18px;
+  width:38px;
+  height:142px;
+  border-radius:999px;
+  background:linear-gradient(180deg,#00000012 0%,#00000044 45%,#00000008 100%);
+  filter:blur(10px);
+  opacity:.42;
+  transform:translateX(6px) translateY(6px);
+  transition:transform .2s ease,opacity .2s ease;
+  pointer-events:none;
 }
 .lever:disabled{cursor:not-allowed;opacity:.6}
 .lever-arm{
   position:absolute;
-  top:0;
+  top:2px;
   right:0;
   width:60px;
   height:160px;
+  transform-origin:50% calc(100% - 12px);
+  transform-style:preserve-3d;
+  transform:rotate(-5deg) rotateY(-8deg) translateZ(0);
+  transition:transform .22s ease;
+  will-change:transform;
 }
 .lever-arm::before{
   content:"";
@@ -2276,7 +2313,7 @@ canvas#fx{
   top:20px;
   width:13px;
   height:116px;
-  transform:translateX(-50%);
+  transform:translateX(-50%) translateZ(4px);
   border-radius:999px;
   background:
     repeating-linear-gradient(
@@ -2284,8 +2321,12 @@ canvas#fx{
       #00000010 0 5px,
       transparent 5px 10px
     ),
-    linear-gradient(90deg,#2c2f39 0%,#ffd84b 20%,#fff6d5 48%,#ff8a1d 72%,#40221d 100%);
-  box-shadow:inset 0 0 8px #fff4,0 0 12px #ff8a1d30;
+    linear-gradient(90deg,#4a2a1e 0%,#8e581c 16%,#ffd84b 30%,#fff6d5 48%,#ffad2a 68%,#5d301b 100%);
+  box-shadow:
+    inset 0 0 8px #fff4,
+    inset -2px 0 8px #00000024,
+    0 0 12px #ff8a1d30,
+    5px 10px 12px #00000022;
 }
 .lever-arm::after{
   content:"";
@@ -2294,19 +2335,23 @@ canvas#fx{
   bottom:4px;
   width:28px;
   height:16px;
-  transform:translateX(-50%);
+  transform:translateX(-50%) translateZ(1px);
   border-radius:8px 8px 10px 10px;
   background:
-    linear-gradient(180deg,#1d1c1a 0%,#070707 100%);
-  box-shadow:0 0 0 2px #2a1323,inset 0 1px 3px #fff1;
+    linear-gradient(180deg,#31231f 0%,#090707 100%);
+  box-shadow:
+    0 0 0 2px #2a1323,
+    inset 0 1px 3px #fff1,
+    0 8px 16px #00000030;
 }
 .lever-knob{
   position:absolute;
   left:50%;
-  top:-2px;
+  top:-3px;
   width:50px;
   height:50px;
-  transform:translateX(-50%);
+  transform:translateX(-50%) translateZ(10px);
+  transform-origin:center center;
   border-radius:50%;
   background:
     repeating-linear-gradient(
@@ -2314,23 +2359,62 @@ canvas#fx{
       #ffffff10 0 3px,
       transparent 3px 7px
     ),
-    radial-gradient(circle at 34% 26%,#ffe9ce 0%,#ffb558 16%,#ff4f4f 42%,#bc1124 68%,#44000b 100%);
-  box-shadow:0 0 0 4px #2b0d28,0 0 20px #ff4f4f62,0 0 30px #7f00142e;
+    radial-gradient(circle at 32% 26%,#fff1d7 0%,#ffc879 14%,#ff9b57 24%,#ec5650 46%,#a90f22 72%,#3e000c 100%);
+  box-shadow:
+    0 0 0 4px #2b0d28,
+    -6px 10px 14px #0000002f,
+    0 0 20px #ff4f4f62,
+    0 0 30px #7f00142e;
+  transition:transform .22s ease,box-shadow .22s ease,filter .22s ease;
+  will-change:transform;
 }
-.lever:hover .lever-knob{box-shadow:0 0 0 4px #2b0d28,0 0 28px #ff6f6faa,0 0 40px #7f001d40}
-.lever:hover .lever-arm::before{box-shadow:inset 0 0 8px #fff4,0 0 16px #ff8a1d44}
-.lever.is-pulling .lever-knob{animation:leverPullDown .62s cubic-bezier(.22,.9,.25,1),leverGlow .62s ease}
-@keyframes leverPull{
-  0%{transform:rotate(0deg)}
-  28%{transform:rotate(22deg)}
-  58%{transform:rotate(30deg)}
-  100%{transform:rotate(0deg)}
+.lever:hover .lever-knob{
+  box-shadow:
+    0 0 0 4px #2b0d28,
+    -7px 12px 16px #00000034,
+    0 0 28px #ff6f6faa,
+    0 0 40px #7f001d40;
 }
-@keyframes leverPullDown{
-  0%{transform:translateX(-50%) translateY(0)}
-  24%{transform:translateX(-50%) translateY(42px)}
-  58%{transform:translateX(-50%) translateY(66px)}
-  100%{transform:translateX(-50%) translateY(0)}
+.lever:hover::before{
+  opacity:.54;
+  transform:translateX(9px) translateY(10px);
+}
+.lever:hover .lever-arm{
+  transform:translate(1px,2px) rotate(-7deg) rotateY(-10deg) translateZ(0);
+}
+.lever:hover .lever-arm::before{
+  box-shadow:
+    inset 0 0 8px #fff4,
+    inset -2px 0 8px #00000024,
+    0 0 16px #ff8a1d44,
+    6px 12px 14px #00000024;
+}
+.lever.is-pulling::before{
+  animation:leverShadowPull .62s cubic-bezier(.22,.9,.25,1);
+}
+.lever.is-pulling .lever-arm{
+  animation:leverArmPull3d .62s cubic-bezier(.2,.86,.24,1);
+}
+.lever.is-pulling .lever-knob{
+  animation:leverKnobPull3d .62s cubic-bezier(.2,.86,.24,1),leverGlow .62s ease;
+}
+@keyframes leverArmPull3d{
+  0%{transform:translate(0,0) rotate(-5deg) rotateY(-8deg) translateZ(0)}
+  26%{transform:translate(4px,10px) rotate(10deg) rotateY(-10deg) translateZ(0)}
+  60%{transform:translate(8px,20px) rotate(24deg) rotateY(-12deg) translateZ(0)}
+  100%{transform:translate(0,0) rotate(-5deg) rotateY(-8deg) translateZ(0)}
+}
+@keyframes leverKnobPull3d{
+  0%{transform:translateX(-50%) translateZ(10px) scale(1)}
+  26%{transform:translateX(-50%) translate3d(1px,4px,14px) scale(1.02)}
+  60%{transform:translateX(-50%) translate3d(3px,8px,20px) scale(1.05,.96)}
+  100%{transform:translateX(-50%) translateZ(10px) scale(1)}
+}
+@keyframes leverShadowPull{
+  0%{opacity:.42;transform:translateX(6px) translateY(6px)}
+  26%{opacity:.52;transform:translateX(12px) translateY(22px)}
+  60%{opacity:.62;transform:translateX(20px) translateY(38px)}
+  100%{opacity:.42;transform:translateX(6px) translateY(6px)}
 }
 @keyframes leverGlow{
   0%,100%{box-shadow:0 0 0 4px #2b100d,0 0 18px #ff4c3f52,0 0 28px #7f000026}
@@ -2596,7 +2680,7 @@ canvas#fx{
   .hud-toast{width:min(90%,320px);padding:12px 12px 14px}
   .hud-toast .hud-main{font-size:15px}
   .hud-toast .hud-delta{font-size:19px}
-  .hud-summary{bottom:86px;width:min(90%,330px)}
+  .hud-summary{top:50%;width:min(90%,330px)}
   .hud-summary .hud-main{font-size:22px}
   .hud-combo-burst{width:min(92%,340px);padding:18px 14px 16px}
   .hud-combo-main{font-size:42px}

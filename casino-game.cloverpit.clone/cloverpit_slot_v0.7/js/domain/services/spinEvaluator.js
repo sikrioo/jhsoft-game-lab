@@ -118,6 +118,17 @@ function evaluatePatternBoard(context) {
     }
   }
 
+  entries.sort((left, right) => {
+    if (left.effect !== "pattern-win" || right.effect !== "pattern-win") {
+      return 0;
+    }
+
+    return left.patternMultiplier - right.patternMultiplier
+      || left.coinDelta - right.coinDelta
+      || left.patternName.localeCompare(right.patternName)
+      || left.symbolName.localeCompare(right.symbolName);
+  });
+
   wins.sort((left, right) => right.winAmount - left.winAmount || right.patternMultiplier - left.patternMultiplier);
   context.patternWins = wins;
 
@@ -172,6 +183,25 @@ function evaluateCombo(context) {
   }
 
   const highestPatternMultiplier = Math.max(...context.patternWins.map((win) => win.patternMultiplier));
+  const singleMinorWin = context.patternWins.length === 1 && highestPatternMultiplier < 7;
+
+  if (singleMinorWin) {
+    context.comboPlan = {
+      reset: false,
+      delta: 0,
+    };
+    entries.push({
+      label: "COMBO",
+      text: "A single minor pattern pays coins, but does not build combo. Combo holds where it is.",
+      tone: "neutral",
+      effect: "combo-hold",
+      comboDelta: 0,
+      focus: mergeFocuses(context.patternWins.map((win) => win.focus)),
+    });
+    context.stages.push(createStage("combo", entries));
+    return;
+  }
+
   const comboDelta =
     highestPatternMultiplier >= 10
       ? 5

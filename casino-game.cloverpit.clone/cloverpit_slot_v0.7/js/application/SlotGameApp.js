@@ -14,6 +14,7 @@ export class SlotGameApp {
     this.state = createInitialGameState(config);
     this.currentSpinWinTotal = 0;
     this.currentSpinNetDelta = 0;
+    this.currentPatternRevealCount = 0;
     refreshSymbolWeights(this.state, this.config);
     this.pickSymbol = createSymbolPicker(() => getWeightedSymbolPool(this.config, this.state));
   }
@@ -52,6 +53,7 @@ export class SlotGameApp {
     this.state.spinning = true;
     this.currentSpinWinTotal = 0;
     this.currentSpinNetDelta = 0;
+    this.currentPatternRevealCount = 0;
     this.state.coins -= this.config.costs.spin;
     this.state.coinDisplay = this.state.coins;
     this.view.setSpinEnabled(false);
@@ -123,6 +125,7 @@ export class SlotGameApp {
     const machineMetrics = this.view.getMachineMetrics();
 
     for (const stage of outcome.stages) {
+      const patternWins = stage.entries.filter((entry) => entry.effect === "pattern-win");
       this.view.appendChainStage(stage);
 
       for (const entry of stage.entries) {
@@ -138,6 +141,10 @@ export class SlotGameApp {
         ]);
         await sleep(entry.effect === "none" ? 50 : 120);
       }
+
+      if (stage.key === "patterns" && patternWins.length > 0) {
+        this.view.finalizePatternWinHighlights(patternWins);
+      }
     }
 
     await this.view.showFinalSummary(this.buildSpinSummary(outcome));
@@ -148,6 +155,8 @@ export class SlotGameApp {
   async applyChainEntry(entry, machineMetrics) {
     switch (entry.effect) {
       case "pattern-win":
+        this.view.revealPatternWin(entry, this.currentPatternRevealCount);
+        this.currentPatternRevealCount += 1;
         this.emitPatternReward(entry.focus?.positions ?? [], entry.color);
         if (entry.patternMultiplier >= 7) {
           this.fx.flash(entry.color ?? this.config.ui.gainFloat, entry.patternMultiplier >= 10 ? 0.42 : 0.26, 0.06);
@@ -176,6 +185,11 @@ export class SlotGameApp {
         this.refreshWeightUi();
         this.fx.flash(this.config.ui.lossFlash, 0.24, 0.08);
         this.view.playImpact("light");
+        return;
+
+      case "combo-hold":
+        this.view.renderCombo(describeCombo(this.state.combo));
+        this.refreshWeightUi();
         return;
 
       case "event-jackpot":

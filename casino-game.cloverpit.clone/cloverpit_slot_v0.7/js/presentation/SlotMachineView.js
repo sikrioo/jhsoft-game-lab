@@ -477,7 +477,11 @@ export class SlotMachineView {
   }
 
   renderOutcome(outcome) {
-    this.renderSpinResults(outcome.summaryRows ?? []);
+    if (outcome.devilTriggered || (outcome.wins?.length ?? 0) === 0) {
+      this.renderSpinResults(outcome.summaryRows ?? []);
+    } else {
+      this.resetResultRows();
+    }
 
     if (outcome.devilTriggered) {
       this.markAllReels("devil");
@@ -490,10 +494,6 @@ export class SlotMachineView {
         cell?.classList.add("cell-hit", "cell-tone-0");
       }
       return;
-    }
-
-    for (const [index, win] of (outcome.wins ?? []).entries()) {
-      this.highlightMatchedPositions(index % 10, win.positions);
     }
   }
 
@@ -593,7 +593,7 @@ export class SlotMachineView {
   }
 
   showCoinDeltaHud(delta) {
-    if (!this.refs.coinCard || !delta) {
+    if (!delta) {
       return;
     }
 
@@ -601,7 +601,7 @@ export class SlotMachineView {
     chip.className = `coin-delta-hud ${delta > 0 ? "up" : "down"}`;
     chip.textContent = `${delta > 0 ? "+" : ""}${delta} COIN`;
     chip.style.setProperty("--coin-delta-color", delta > 0 ? "#d8ff3e" : "#ff6b8d");
-    this.refs.coinCard.appendChild(chip);
+    this.root.appendChild(chip);
     window.setTimeout(() => chip.remove(), 1350);
   }
 
@@ -820,7 +820,7 @@ export class SlotMachineView {
 
     const toneClasses = Array.from({ length: this.getPaylineCount() }, (_, index) => `cell-tone-${index}`);
     for (const cell of this.refs.reels.querySelectorAll(".rs")) {
-      cell.classList.remove("cell-hit", "preview-focus", ...toneClasses);
+      cell.classList.remove("cell-hit", "preview-focus", "cell-tone-current", "cell-tone-final", ...toneClasses);
       cell.style.removeProperty("--preview-glow");
     }
 
@@ -1102,6 +1102,9 @@ export class SlotMachineView {
     if (entry.effect === "combo-gain") {
       return "COMBO SURGE";
     }
+    if (entry.effect === "combo-hold") {
+      return "COMBO HOLD";
+    }
     if (entry.effect === "combo-reset") {
       return "CHAIN BROKEN";
     }
@@ -1126,6 +1129,9 @@ export class SlotMachineView {
     }
     if (typeof entry.comboDelta === "number" && entry.comboDelta !== 0) {
       return `+${entry.comboDelta}C`;
+    }
+    if (entry.effect === "combo-hold") {
+      return "0C";
     }
     if (typeof entry.ticketsDelta === "number" && entry.ticketsDelta !== 0) {
       return `+${entry.ticketsDelta}T`;
@@ -1217,6 +1223,18 @@ export class SlotMachineView {
     }
   }
 
+  appendPatternWinResult(entry, revealIndex = 0) {
+    if (!this.refs.resultPanel || !entry) {
+      return;
+    }
+
+    const rowElement = document.createElement("div");
+    const className = this.getPatternWinResultClass(entry, revealIndex);
+    rowElement.className = `res-row${className ? ` ${className}` : ""}`;
+    rowElement.innerHTML = `<span class="rr-tag">${entry.patternLabel}</span><span>${entry.symbolIcon} x${entry.symbolMultiplier} x ${entry.patternMultiplier} = +${entry.coinDelta}</span>`;
+    this.refs.resultPanel.appendChild(rowElement);
+  }
+
   setPayline(row, className, positions = null) {
     const line = document.getElementById(`pll${row}`);
     const payline = this.config.paylines[row];
@@ -1239,13 +1257,48 @@ export class SlotMachineView {
   }
 
   highlightMatchedPositions(paylineIndex, positions) {
+    const toneClass = typeof paylineIndex === "string"
+      ? paylineIndex
+      : `cell-tone-${paylineIndex}`;
+
     for (const [column, row] of positions) {
       const cell = this.getVisibleCell(column, row);
       if (!cell) {
         continue;
       }
 
-      cell.classList.add("cell-hit", `cell-tone-${paylineIndex}`);
+      cell.classList.add("cell-hit", toneClass);
+    }
+  }
+
+  revealPatternWin(entry, revealIndex = 0) {
+    if (!entry) {
+      return;
+    }
+
+    this.clearPatternWinHighlights();
+    this.appendPatternWinResult(entry, revealIndex);
+    this.highlightMatchedPositions("cell-tone-current", entry.focus?.positions ?? entry.positions ?? []);
+  }
+
+  finalizePatternWinHighlights(entries = []) {
+    const positions = [];
+
+    for (const entry of entries) {
+      for (const position of entry.focus?.positions ?? entry.positions ?? []) {
+        positions.push(position);
+      }
+    }
+
+    this.clearPatternWinHighlights();
+    this.highlightMatchedPositions("cell-tone-final", this.dedupePositions(positions));
+  }
+
+  clearPatternWinHighlights() {
+    const toneClasses = Array.from({ length: this.getPaylineCount() }, (_, index) => `cell-tone-${index}`);
+
+    for (const cell of this.refs.reels.querySelectorAll(".rs")) {
+      cell.classList.remove("cell-hit", "cell-tone-current", "cell-tone-final", ...toneClasses);
     }
   }
 
@@ -1265,6 +1318,30 @@ export class SlotMachineView {
 
   getPaylineWinClass(paylineIndex) {
     return this.config.paylines[paylineIndex]?.resultClass ?? "win0";
+  }
+
+  getPatternWinResultClass(entry, revealIndex = 0) {
+    if (entry.patternMultiplier >= 10 || entry.symbolId === "jackpot") {
+      return "jp";
+    }
+    return `win${revealIndex % 10}`;
+  }
+
+  dedupePositions(positions = []) {
+    const seen = new Set();
+    const uniquePositions = [];
+
+    for (const [column, row] of positions) {
+      const key = `${column}:${row}`;
+      if (seen.has(key)) {
+        continue;
+      }
+
+      seen.add(key);
+      uniquePositions.push([column, row]);
+    }
+
+    return uniquePositions;
   }
 
   getPaylinePolylinePoints(payline) {
