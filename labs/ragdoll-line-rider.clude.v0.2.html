@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ragdoll Line Rider</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #f7f7f4;
+      font-family: 'Courier New', monospace;
+    }
+
+    #ui {
+      position: fixed;
+      left: 18px;
+      top: 18px;
+      z-index: 10;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+      border: 2px solid #111;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(8px);
+      box-shadow: 4px 4px 0 #111;
+      user-select: none;
+    }
+
+    button, select {
+      border: 2px solid #111;
+      border-radius: 10px;
+      background: #fff;
+      padding: 7px 10px;
+      font-weight: 700;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      cursor: pointer;
+      transition: transform 0.08s, box-shadow 0.08s;
+      box-shadow: 2px 2px 0 #111;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 2px 4px 0 #111;
+    }
+    button:active {
+      transform: translateY(0);
+      box-shadow: 1px 1px 0 #111;
+    }
+
+    #hint {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 10;
+      padding: 10px 14px;
+      border: 2px solid #111;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.88);
+      box-shadow: 4px 4px 0 #111;
+      font-size: 12px;
+      line-height: 1.7;
+      font-family: 'Courier New', monospace;
+    }
+
+    /* HUD: 속도계 */
+    #hud {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 10;
+      padding: 12px 16px;
+      border: 2px solid #111;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.92);
+      box-shadow: 4px 4px 0 #111;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      min-width: 210px;
+      line-height: 1.4;
+    }
+
+    #hud-speed-label {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      color: #888;
+      margin-bottom: 4px;
+    }
+
+    #hud-speed-val {
+      font-size: 32px;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      line-height: 1;
+      color: #111;
+      transition: color 0.3s;
+    }
+
+    #hud-stage-dots {
+      display: flex;
+      gap: 5px;
+      margin: 6px 0 8px 0;
+    }
+
+    .stage-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid #111;
+      background: #fff;
+      transition: background 0.2s, transform 0.15s;
+    }
+    .stage-dot.active {
+      background: #111;
+      transform: scale(1.2);
+    }
+    .stage-dot.active.s1 { background: #2a83ff; }
+    .stage-dot.active.s2 { background: #f5a623; }
+    .stage-dot.active.s3 { background: #ff3a3a; }
+
+    #hud-bar-wrap {
+      width: 100%;
+      height: 8px;
+      border-radius: 4px;
+      border: 1.5px solid #111;
+      overflow: hidden;
+      background: #f0f0f0;
+      margin-bottom: 6px;
+    }
+    #hud-bar {
+      height: 100%;
+      border-radius: 3px;
+      background: #2a83ff;
+      transition: width 0.1s, background 0.3s;
+      width: 0%;
+    }
+
+    #hud-sub {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      color: #555;
+      font-weight: 700;
+    }
+
+    #hud-boost-bar-wrap {
+      width: 100%;
+      height: 5px;
+      border-radius: 3px;
+      border: 1.5px solid #34a6ff;
+      overflow: hidden;
+      background: #f0f9ff;
+      margin-top: 6px;
+    }
+    #hud-boost-bar {
+      height: 100%;
+      border-radius: 2px;
+      background: #34a6ff;
+      transition: width 0.07s;
+      width: 0%;
+    }
+
+    #landing-flash {
+      position: fixed;
+      inset: 0;
+      z-index: 20;
+      pointer-events: none;
+      opacity: 0;
+      background: rgba(255,255,255,0.55);
+      transition: opacity 0.06s;
+    }
+
+    canvas {
+      display: block;
+      width: 100vw;
+      height: 100vh;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body>
+
+<div id="ui">
+  <button id="spawnBtn">▶ Respawn</button>
+  <button id="clearBtn">✕ Clear Lines</button>
+  <button id="resetBtn">↺ Reset</button>
+  <select id="toolSelect">
+    <option value="line">Draw line</option>
+    <option value="boost">Boost pad</option>
+  </select>
+</div>
+
+<div id="hint">
+  드래그: 선 그리기<br />
+  Shift+드래그: 직선 보정<br />
+  A/D 또는 ←/→: 가속/감속<br />
+  Space/W/↑: 점프<br />
+  R: 리셋
+</div>
+
+<div id="hud">
+  <div id="hud-speed-label">SPEED</div>
+  <div id="hud-speed-val">0.0</div>
+  <div id="hud-stage-dots">
+    <div class="stage-dot" id="dot0"></div>
+    <div class="stage-dot" id="dot1"></div>
+    <div class="stage-dot" id="dot2"></div>
+    <div class="stage-dot" id="dot3"></div>
+  </div>
+  <div id="hud-bar-wrap"><div id="hud-bar"></div></div>
+  <div id="hud-sub">
+    <span>TARGET <span id="statTargetSpeed">8.0</span></span>
+    <span>BOOST <span id="statBoost">0.0</span></span>
+    <span><span id="statGround">AIR</span></span>
+  </div>
+  <div id="hud-boost-bar-wrap"><div id="hud-boost-bar"></div></div>
+</div>
+
+<div id="landing-flash"></div>
+
+<canvas id="game"></canvas>
+
+<script>
+const { Engine, World, Bodies, Body, Constraint, Composite, Events, Vector } = Matter;
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const landingFlash = document.getElementById('landing-flash');
+
+// ─── 물리 엔진 ─────────────────────────────────────────────────────────────
+const engine = Engine.create({
+  gravity: { x: 0, y: 1.05 },
+  positionIterations: 10,
+  velocityIterations: 8,
+  constraintIterations: 4,
+});
+const world = engine.world;
+
+// ─── 상태 ──────────────────────────────────────────────────────────────────
+const state = {
+  // 지형
+  stageBodies: [],   // createStage() 에서 추가 — clearLines 에서 건드리지 않음
+  userBodies: [],    // 유저가 직접 그린 선
+  lines: [],
+  boosts: [],
+
+  rider: null,
+  keys: { left: false, right: false, jump: false },
+  jumpQueued: false,
+
+  // coyote time 카운터
+  groundedFrames: 0,
+  COYOTE_FRAMES: 7,
+
+  drawing: false,
+  drawStart: null,
+  drawEnd: null,
+
+  camera: { x: 0, y: 0, targetX: 0, targetY: 0, leadX: 0, leadY: 0 },
+  viewport: { w: innerWidth, h: innerHeight },  // 캐싱
+
+  stats: {
+    speed: 0,
+    targetSpeed: 8,
+    boostPower: 0,
+    verticalSpeed: 0,
+    prevVerticalSpeed: 0,
+    grounded: false,
+  },
+
+  lastTime: performance.now(),
+  shake: 0,
+
+  // 파티클 시스템
+  particles: [],
+
+  // 래그돌 파츠 렌더링 여부 (구조는 유지, 그리기만 비활성화)
+  DRAW_RAGDOLL: false,
+};
+
+// ─── 유틸 ──────────────────────────────────────────────────────────────────
+function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+
+function lerpColor(a, b, t) {
+  const ah = a.replace('#',''), bh = b.replace('#','');
+  const ar = parseInt(ah.slice(0,2),16), ag = parseInt(ah.slice(2,4),16), ab_ = parseInt(ah.slice(4,6),16);
+  const br = parseInt(bh.slice(0,2),16), bg_ = parseInt(bh.slice(2,4),16), bb = parseInt(bh.slice(4,6),16);
+  const r = Math.round(ar + (br-ar)*t);
+  const g = Math.round(ag + (bg_-ag)*t);
+  const b2 = Math.round(ab_ + (bb-ab_)*t);
+  return `rgb(${r},${g},${b2})`;
+}
+
+function getSpeedIntensity(speed = state.stats.speed) {
+  return clamp((speed - 18) / 55, 0, 1);
+}
+function getSpeedStage(speed = state.stats.speed) {
+  if (speed >= 60) return 3;
+  if (speed >= 42) return 2;
+  if (speed >= 24) return 1;
+  return 0;
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.floor(innerWidth * dpr);
+  canvas.height = Math.floor(innerHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  state.viewport.w = innerWidth;
+  state.viewport.h = innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+function screenToWorld(x, y) {
+  return { x: x + state.camera.x, y: y + state.camera.y };
+}
+
+// ─── 지형 추가 ─────────────────────────────────────────────────────────────
+function addSegment(x1, y1, x2, y2, type = 'line', isStage = false) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (len < 35) return;
+
+  const angle = Math.atan2(dy, dx);
+  const cx = (x1+x2)/2, cy = (y1+y2)/2;
+  const thickness = type === 'boost' ? 14 : 10;
+
+  const body = Bodies.rectangle(cx, cy, len, thickness, {
+    isStatic: true,
+    angle,
+    friction: type === 'boost' ? 0.01 : 0.55,
+    restitution: type === 'boost' ? 0.18 : 0.02,
+    label: type === 'boost' ? 'boost' : 'line',
+  });
+
+  World.add(world, body);
+
+  if (isStage) {
+    state.stageBodies.push(body);
+  } else {
+    state.userBodies.push(body);
+  }
+
+  const item = { x1, y1, x2, y2, type, body, isStage };
+  if (type === 'boost') state.boosts.push(item);
+  else state.lines.push(item);
+}
+
+function addSmoothCurve(startX, startY, sections, type = 'line') {
+  let prev = { x: startX, y: startY };
+  let cursorX = startX, cursorY = startY;
+  const points = [{ x: startX, y: startY }];
+
+  for (const section of sections) {
+    const originX = cursorX, originY = cursorY;
+    const steps = Math.max(14, Math.round(Math.abs(section.dx) / 180));
+    for (let i = 1; i <= steps; i++) {
+      const t = i / steps;
+      const eased = 0.5 - Math.cos(Math.PI * t) * 0.5;
+      const point = {
+        x: originX + section.dx * t,
+        y: originY + section.dy * eased,
+      };
+      addSegment(prev.x, prev.y, point.x, point.y, type, true);
+      prev = point;
+      points.push(point);
+    }
+    cursorX += section.dx;
+    cursorY += section.dy;
+  }
+  return points;
+}
+
+function addBoostPadsAlongPath(points, { startOffset = 0, interval = 2600, padLength = 180, maxPads = Infinity } = {}) {
+  if (!points || points.length < 2) return;
+  let nextDistance = startOffset, placed = 0, traveled = 0;
+  for (let i = 1; i < points.length && placed < maxPads; i++) {
+    const a = points[i-1], b = points[i];
+    const dx = b.x-a.x, dy = b.y-a.y;
+    const segLength = Math.hypot(dx, dy);
+    if (segLength < 1) continue;
+    while (traveled + segLength >= nextDistance && placed < maxPads) {
+      const local = clamp((nextDistance - traveled) / segLength, 0, 1);
+      const cx = a.x + dx*local, cy = a.y + dy*local;
+      const angle = Math.atan2(dy, dx);
+      const half = padLength * 0.5;
+      addSegment(
+        cx - Math.cos(angle)*half, cy - Math.sin(angle)*half,
+        cx + Math.cos(angle)*half, cy + Math.sin(angle)*half,
+        'boost', true
+      );
+      placed++;
+      nextDistance += interval;
+    }
+    traveled += segLength;
+  }
+}
+
+// ─── 스테이지 생성 ──────────────────────────────────────────────────────────
+function createStage() {
+  const straightEndX = 30000;
+  const straightY = 420;
+  const curveSections = [
+    { dx: 5200, dy: 220 },
+    { dx: 4700, dy: 720 },
+    { dx: 3900, dy: -280 },
+    { dx: 5400, dy: 860 },
+    { dx: 4300, dy: -320 },
+    { dx: 6200, dy: 820 },
+  ];
+
+  addSegment(-300, straightY, straightEndX, straightY, 'line', true);
+  const curvePoints = addSmoothCurve(straightEndX, straightY, curveSections);
+  const stagePath = [
+    { x: -300, y: straightY },
+    { x: straightEndX, y: straightY },
+    ...curvePoints.slice(1),
+  ];
+
+  addBoostPadsAlongPath(stagePath, {
+    startOffset: 3200,
+    interval: 3600,
+    padLength: 220,
+  });
+}
+
+// ─── 래그돌 스폰 ────────────────────────────────────────────────────────────
+function makeLimb(a, b, stiffness = 0.72) {
+  return Constraint.create({ bodyA: a, bodyB: b, stiffness, damping: 0.18, render: { visible: false } });
+}
+
+function spawnRider(x, y, color = '#2a83ff') {
+  const vw = state.viewport.w, vh = state.viewport.h;
+  if (x === undefined) x = state.camera.x + vw * 0.28;
+  if (y === undefined) y = state.camera.y + vh * 0.2;
+
+  if (state.rider) removeRider();
+
+  const group = Body.nextGroup(true);
+  const bodyOptions = {
+    collisionFilter: { group },
+    friction: 0.78,
+    frictionAir: 0.009,
+    restitution: 0.05,
+    density: 0.0012,
+  };
+
+  const head  = Bodies.circle(x, y-30, 10, { ...bodyOptions, label: 'riderHead' });
+  const torso = Bodies.rectangle(x, y, 15, 34, { ...bodyOptions, label: 'riderTorso' });
+  const hip   = Bodies.circle(x, y+24, 7, { ...bodyOptions, label: 'riderHip' });
+  const lArm  = Bodies.rectangle(x-15, y+2, 24, 5, { ...bodyOptions, label: 'riderLArm' });
+  const rArm  = Bodies.rectangle(x+15, y+2, 24, 5, { ...bodyOptions, label: 'riderRArm' });
+  const lLeg  = Bodies.rectangle(x-10, y+42, 28, 5, { ...bodyOptions, label: 'riderLLeg' });
+  const rLeg  = Bodies.rectangle(x+12, y+42, 28, 5, { ...bodyOptions, label: 'riderRLeg' });
+  const board = Bodies.rectangle(x+10, y+58, 52, 7, {
+    inertia: Infinity,
+    collisionFilter: { group },
+    friction: 0.16,
+    frictionAir: 0.005,
+    restitution: 0.02,
+    density: 0.0025,
+    chamfer: { radius: 4 },
+    label: 'board'
+  });
+
+  const constraints = [
+    makeLimb(head, torso, 0.55),
+    makeLimb(torso, hip, 0.75),
+    makeLimb(torso, lArm, 0.45),
+    makeLimb(torso, rArm, 0.45),
+    makeLimb(hip, lLeg, 0.62),
+    makeLimb(hip, rLeg, 0.62),
+    Constraint.create({ bodyA: lLeg, bodyB: board, pointA: { x:12, y:0 }, pointB: { x:-14, y:0 }, stiffness: 0.8, damping: 0.15 }),
+    Constraint.create({ bodyA: rLeg, bodyB: board, pointA: { x:12, y:0 }, pointB: { x:16, y:0 },  stiffness: 0.8, damping: 0.15 }),
+  ];
+
+  const parts = [head, torso, hip, lArm, rArm, lLeg, rLeg, board];
+  World.add(world, [...parts, ...constraints]);
+
+  state.rider = {
+    parts, constraints,
+    head, torso, hip, board,
+    color,
+    trail: [],
+    groundedFrames: 0,
+  };
+  state.groundedFrames = 0;
+  return state.rider;
+}
+
+function removeRider() {
+  if (!state.rider) return;
+  World.remove(world, state.rider.parts);
+  World.remove(world, state.rider.constraints);
+  state.rider = null;
+}
+
+// ─── clearLines: 유저 그린 선만 제거 ───────────────────────────────────────
+function clearLines() {
+  for (const body of state.userBodies) World.remove(world, body);
+  state.userBodies = [];
+  state.lines = state.lines.filter(l => l.isStage);
+  state.boosts = state.boosts.filter(b => b.isStage);
+}
+
+function resetAll() {
+  removeRider();
+
+  // 스테이지 포함 모든 지형 제거
+  for (const body of state.stageBodies) World.remove(world, body);
+  for (const body of state.userBodies)  World.remove(world, body);
+  state.stageBodies = [];
+  state.userBodies  = [];
+  state.lines = [];
+  state.boosts = [];
+  state.particles = [];
+
+  state.camera.x = state.camera.y = 0;
+  state.camera.targetX = state.camera.targetY = 0;
+  state.camera.leadX = state.camera.leadY = 0;
+  state.stats.targetSpeed = 8;
+  state.stats.boostPower = 0;
+
+  createStage();
+  spawnRider(160, 90);
+}
+
+// ─── 파티클 시스템 ──────────────────────────────────────────────────────────
+function emitDustParticles(x, y, count, intensity) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.PI + (Math.random() - 0.5) * 1.2;
+    const speed = 1.5 + Math.random() * intensity * 2.5;
+    state.particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed * (0.5 + Math.random()),
+      vy: Math.sin(angle) * speed - Math.random() * 2,
+      life: 1.0,
+      decay: 0.04 + Math.random() * 0.04,
+      size: 3 + Math.random() * 5 * intensity,
+      color: `hsl(${30 + Math.random()*20}, 20%, ${70 + Math.random()*20}%)`,
+    });
+  }
+}
+
+function emitBoostParticles(x, y) {
+  for (let i = 0; i < 10; i++) {
+    const angle = -Math.PI/6 + (Math.random()-0.5)*0.8;
+    const speed = 4 + Math.random() * 6;
+    state.particles.push({
+      x, y,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed - 1,
+      life: 1.0,
+      decay: 0.055 + Math.random() * 0.04,
+      size: 4 + Math.random() * 6,
+      color: `hsl(${200 + Math.random()*20}, 90%, ${55 + Math.random()*25}%)`,
+    });
+  }
+}
+
+function updateParticles() {
+  for (let i = state.particles.length - 1; i >= 0; i--) {
+    const p = state.particles[i];
+    p.x  += p.vx;
+    p.y  += p.vy;
+    p.vy += 0.18;   // 중력
+    p.vx *= 0.94;
+    p.life -= p.decay;
+    if (p.life <= 0) state.particles.splice(i, 1);
+  }
+}
+
+function drawParticles() {
+  for (const p of state.particles) {
+    ctx.save();
+    ctx.globalAlpha = p.life * 0.75;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(
+      p.x - state.camera.x,
+      p.y - state.camera.y,
+      p.size * p.life, 0, Math.PI*2
+    );
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+// ─── 충돌 이벤트 ────────────────────────────────────────────────────────────
+Events.on(engine, 'collisionStart', (event) => {
+  for (const pair of event.pairs) {
+    const labels = [pair.bodyA.label, pair.bodyB.label];
+
+    // 부스트 패드
+    if (labels.includes('boost')) {
+      const riderBody = pair.bodyA.label === 'boost' ? pair.bodyB : pair.bodyA;
+      if (!riderBody.isStatic) {
+        state.stats.boostPower = Math.min(12, state.stats.boostPower + 5.5);
+        Body.setVelocity(riderBody, {
+          x: Math.max(riderBody.velocity.x, 18),
+          y: riderBody.velocity.y - 1.8,
+        });
+        state.shake = Math.min(5, state.shake + 1.5);
+
+        // 부스트 파티클
+        emitBoostParticles(riderBody.position.x, riderBody.position.y);
+      }
+    }
+
+    // 보드 접지 감지
+    if (labels.includes('board') && (labels.includes('line') || labels.includes('boost'))) {
+      if (state.rider) {
+        state.rider.groundedFrames = state.COYOTE_FRAMES;
+      }
+    }
+  }
+});
+
+// ─── 플레이어 컨트롤 ────────────────────────────────────────────────────────
+function updatePlayerControl() {
+  const rider = state.rider;
+  if (!rider) return;
+
+  const board = rider.board;
+
+  // coyote time: 프레임 카운터 방식
+  if (rider.groundedFrames > 0) rider.groundedFrames--;
+  const grounded = rider.groundedFrames > 0;
+
+  // 가속/감속
+  if (state.keys.right) state.stats.targetSpeed = Math.min(72, state.stats.targetSpeed + 0.2);
+  if (state.keys.left)  state.stats.targetSpeed = Math.max(8,  state.stats.targetSpeed - 0.24);
+
+  // 부스트 감쇠
+  state.stats.boostPower = Math.max(0, Math.min(12, state.stats.boostPower * 0.965));
+
+  // 속도 보간
+  const targetSpeed  = state.stats.targetSpeed + state.stats.boostPower;
+  const currentSpeed = board.velocity.x;
+  const lerpRate     = grounded ? 0.22 : 0.09;
+  const nextSpeed    = currentSpeed + (targetSpeed - currentSpeed) * lerpRate;
+  Body.setVelocity(board, { x: nextSpeed, y: board.velocity.y });
+
+  // 보드 회전: 완전 고정이 아니라 부드럽게 수평 복원
+  const angleDiff = -board.angle;
+  Body.setAngularVelocity(board, board.angularVelocity + angleDiff * 0.1);
+
+  // 착지 임팩트 감지
+  const prevVY = state.stats.prevVerticalSpeed;
+  const curVY  = board.velocity.y;
+  if (!grounded && prevVY > 6 && curVY < prevVY * 0.4) {
+    // 이번 프레임에 급격히 수직속도가 꺾였다 = 착지
+    const impact = clamp((prevVY - 4) / 20, 0, 1);
+    state.shake = Math.max(state.shake, impact * 7);
+    emitDustParticles(board.position.x, board.position.y + 6, Math.round(6 + impact * 10), impact);
+
+    // 착지 플래시 (DOM)
+    if (impact > 0.25) {
+      landingFlash.style.opacity = (impact * 0.6).toFixed(2);
+      setTimeout(() => { landingFlash.style.opacity = '0'; }, 60);
+    }
+  }
+  state.stats.prevVerticalSpeed = curVY;
+
+  // 점프
+  if (state.jumpQueued && grounded) {
+    Body.setVelocity(board, { x: board.velocity.x, y: -12 });
+    state.jumpQueued = false;
+    rider.groundedFrames = 0;
+    state.shake = 2;
+    emitDustParticles(board.position.x, board.position.y + 6, 8, 0.5);
+  }
+
+  state.stats.speed         = Math.hypot(board.velocity.x, board.velocity.y);
+  state.stats.verticalSpeed = curVY;
+  state.stats.grounded      = grounded;
+}
+
+// ─── HUD 업데이트 ───────────────────────────────────────────────────────────
+function updateHUD() {
+  const s = state.stats;
+  const stage = getSpeedStage();
+  const intensity = getSpeedIntensity();
+
+  // 속도 숫자
+  const speedEl = document.getElementById('hud-speed-val');
+  speedEl.textContent = s.speed.toFixed(1);
+  const stageColors = ['#111', '#2a83ff', '#f5a623', '#ff3a3a'];
+  speedEl.style.color = stageColors[stage];
+
+  // 도트 인디케이터
+  for (let i = 0; i < 4; i++) {
+    const dot = document.getElementById(`dot${i}`);
+    dot.className = 'stage-dot' + (i <= stage ? ` active s${i}` : '');
+  }
+
+  // 속도 바 (0~72)
+  const barEl = document.getElementById('hud-bar');
+  barEl.style.width = clamp(s.speed / 72, 0, 1) * 100 + '%';
+  barEl.style.background = stageColors[stage];
+
+  // 부스트 바
+  document.getElementById('hud-boost-bar').style.width = clamp(s.boostPower / 12, 0, 1) * 100 + '%';
+
+  // 서브 텍스트
+  document.getElementById('statTargetSpeed').textContent = s.targetSpeed.toFixed(1);
+  document.getElementById('statBoost').textContent = s.boostPower.toFixed(1);
+  document.getElementById('statGround').textContent = s.grounded ? 'GND' : 'AIR';
+}
+
+// ─── 카메라 ────────────────────────────────────────────────────────────────
+function updateCamera() {
+  const rider = state.rider;
+  if (!rider) return;
+  const { w: vw, h: vh } = state.viewport;
+  const board = rider.board;
+  const speedFx = getSpeedIntensity();
+  const speedStage = getSpeedStage();
+
+  const stageLeadBoost = [0, 40, 90, 150][speedStage];
+  const lookAhead = clamp(
+    board.velocity.x * (9 + speedStage * 1.8),
+    -120,
+    vw * 0.28 + speedFx * 140 + stageLeadBoost
+  );
+  const lookDown = clamp(
+    Math.abs(board.velocity.x) * (0.18 + speedStage * 0.03) + Math.max(0, board.velocity.y) * 4,
+    0, 140
+  );
+
+  state.camera.leadX += (lookAhead - state.camera.leadX) * (0.14 + speedStage * 0.02);
+  state.camera.leadY += (lookDown  - state.camera.leadY) * 0.08;
+
+  state.camera.targetX = board.position.x - vw * (0.33 - speedFx * 0.08 - speedStage * 0.015) + state.camera.leadX;
+  state.camera.targetY = board.position.y - vh * 0.45 + state.camera.leadY;
+
+  const camLerp = 0.055 + speedFx * 0.035 + speedStage * 0.01;
+  state.camera.x += (state.camera.targetX - state.camera.x) * camLerp;
+  state.camera.y += (state.camera.targetY - state.camera.y) * (0.055 + speedFx * 0.02);
+}
+
+// ─── 렌더링 ────────────────────────────────────────────────────────────────
+function drawGrid() {
+  const { w: vw, h: vh } = state.viewport;
+  const speedFx = getSpeedIntensity();
+  const speedStage = getSpeedStage();
+  ctx.save();
+  ctx.strokeStyle = `rgba(0,0,0,${0.045 + speedFx * 0.03})`;
+  ctx.lineWidth = 1;
+  const gap = 80 - speedFx * 16 - speedStage * 3;
+  const startX = Math.floor(state.camera.x / gap) * gap;
+  const startY = Math.floor(state.camera.y / gap) * gap;
+  for (let x = startX; x < state.camera.x + vw + gap; x += gap) {
+    ctx.beginPath();
+    ctx.moveTo(x - state.camera.x, 0);
+    ctx.lineTo(x - state.camera.x, vh);
+    ctx.stroke();
+  }
+  for (let y = startY; y < state.camera.y + vh + gap; y += gap) {
+    ctx.beginPath();
+    ctx.moveTo(0, y - state.camera.y);
+    ctx.lineTo(vw, y - state.camera.y);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSpeedLines() {
+  const { w: vw, h: vh } = state.viewport;
+  const rider = state.rider;
+  if (!rider) return;
+  const speedFx = getSpeedIntensity();
+  const speedStage = getSpeedStage();
+  if (speedStage === 0) return;
+
+  const count = [0, 14, 24, 36][speedStage] + Math.floor(speedFx * 8);
+  const length = [0, 36, 62, 96][speedStage] + speedFx * 26;
+  const drift = (performance.now() * (0.45 + speedStage * 0.25 + speedFx * 0.9)) % 120;
+
+  ctx.save();
+  ctx.lineCap = 'round';
+  for (let i = 0; i < count; i++) {
+    const lane  = ((i * 47) + drift * 7) % (vh + 120);
+    const y     = lane - 60;
+    const phase = ((i * 83) + drift * 17) % (vw + 220);
+    const startX = vw - phase;
+    const alpha = [0, 0.07, 0.11, 0.17][speedStage] * (1 - i / count);
+    ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+    ctx.lineWidth = 1 + speedStage * 0.7 + speedFx * 1.5;
+    ctx.beginPath();
+    ctx.moveTo(startX, y);
+    ctx.lineTo(startX - length, y + rider.board.velocity.y * 0.08);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSpeedVignette() {
+  const { w: vw, h: vh } = state.viewport;
+  const speedFx = getSpeedIntensity();
+  const speedStage = getSpeedStage();
+  if (speedStage === 0) return;
+
+  ctx.save();
+  const edge = ctx.createLinearGradient(0, 0, vw, 0);
+  edge.addColorStop(0, `rgba(20,30,40,${0.12 + speedStage*0.07 + speedFx*0.08})`);
+  edge.addColorStop(0.18, 'rgba(20,30,40,0)');
+  edge.addColorStop(0.82, 'rgba(20,30,40,0)');
+  edge.addColorStop(1, `rgba(20,30,40,${0.1 + speedStage*0.06 + speedFx*0.06})`);
+  ctx.fillStyle = edge;
+  ctx.fillRect(0, 0, vw, vh);
+
+  const glow = ctx.createRadialGradient(vw*0.72, vh*0.35, vw*0.08, vw*0.72, vh*0.35, vw*0.62);
+  glow.addColorStop(0, `rgba(90,210,255,${0.03 + speedStage*0.025 + speedFx*0.03})`);
+  glow.addColorStop(1, 'rgba(90,210,255,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(0, 0, vw, vh);
+
+  if (speedStage >= 2) {
+    const heat = ctx.createLinearGradient(0, vh, 0, vh*0.25);
+    heat.addColorStop(0, `rgba(255,90,90,${0.05 + speedStage*0.035})`);
+    heat.addColorStop(1, 'rgba(255,90,90,0)');
+    ctx.fillStyle = heat;
+    ctx.fillRect(0, 0, vw, vh);
+  }
+  ctx.restore();
+}
+
+// 부스트 패드 방향 화살표 애니메이션
+const BOOST_ANIM_SPEED = 0.0018;
+
+function drawSegment(seg) {
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  if (seg.type === 'boost') {
+    // 두꺼운 외곽선
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 9;
+    ctx.beginPath();
+    ctx.moveTo(seg.x1 - state.camera.x, seg.y1 - state.camera.y);
+    ctx.lineTo(seg.x2 - state.camera.x, seg.y2 - state.camera.y);
+    ctx.stroke();
+
+    // 파란 기본 선
+    ctx.strokeStyle = '#34a6ff';
+    ctx.lineWidth = 5;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(seg.x1 - state.camera.x, seg.y1 - state.camera.y);
+    ctx.lineTo(seg.x2 - state.camera.x, seg.y2 - state.camera.y);
+    ctx.stroke();
+
+    // 흐르는 화살표 애니메이션
+    const now = performance.now();
+    const dx = seg.x2 - seg.x1, dy = seg.y2 - seg.y1;
+    const len = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+    const arrowSpacing = 28;
+    const flow = (now * BOOST_ANIM_SPEED * len * 0.004) % arrowSpacing;
+
+    ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([]);
+
+    const arrowSize = 5;
+    for (let d = flow; d < len; d += arrowSpacing) {
+      const t = d / len;
+      const ax = seg.x1 + dx * t - state.camera.x;
+      const ay = seg.y1 + dy * t - state.camera.y;
+      ctx.save();
+      ctx.translate(ax, ay);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(-arrowSize, -arrowSize * 0.6);
+      ctx.lineTo(0, 0);
+      ctx.lineTo(-arrowSize, arrowSize * 0.6);
+      ctx.stroke();
+      ctx.restore();
+    }
+  } else {
+    ctx.strokeStyle = '#111';
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.moveTo(seg.x1 - state.camera.x, seg.y1 - state.camera.y);
+    ctx.lineTo(seg.x2 - state.camera.x, seg.y2 - state.camera.y);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+// 보드 아래 드롭 섀도우
+function drawBoardShadow(board) {
+  const bx = board.position.x - state.camera.x;
+  const by = board.position.y - state.camera.y;
+  const speed = state.stats.speed;
+  // 속도가 빠를수록 그림자를 뒤로 늘림
+  const shadowLen = clamp(board.velocity.x * 0.6, 0, 40);
+  const shadowAlpha = clamp(0.12 - state.stats.verticalSpeed * 0.01, 0.02, 0.12);
+
+  ctx.save();
+  ctx.globalAlpha = shadowAlpha;
+  ctx.filter = 'blur(4px)';
+  ctx.fillStyle = '#000';
+  ctx.beginPath();
+  // 보드 아래 약 12px, 보드 형태 타원
+  ctx.ellipse(bx - shadowLen * 0.5, by + 14, 26 + shadowLen * 0.4, 5, board.angle, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawRider(rider) {
+  const { w: vw } = state.viewport;
+  const accent = rider.color;
+  const board = rider.board;
+  const speedFx = getSpeedIntensity();
+  const speedStage = getSpeedStage();
+  const pulse = 0.82 + Math.sin(performance.now() * 0.018) * 0.18;
+
+  // 트레일
+  rider.trail.push({ x: board.position.x, y: board.position.y });
+  const maxTrail = Math.round(18 + speedFx * 18);
+  while (rider.trail.length > maxTrail) rider.trail.shift();
+
+  ctx.save();
+  for (let i = 1; i < rider.trail.length; i++) {
+    const p = rider.trail[i], prev = rider.trail[i-1];
+    ctx.globalAlpha = (i / rider.trail.length) * (0.2 + speedFx * 0.26);
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 6 + speedFx * 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(prev.x - state.camera.x, prev.y - state.camera.y);
+    ctx.lineTo(p.x - state.camera.x, p.y - state.camera.y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+
+  // 드롭 섀도우
+  drawBoardShadow(board);
+
+  // 래그돌 파츠: DRAW_RAGDOLL 플래그로 제어 (현재 비활성화, 구조 유지)
+  if (state.DRAW_RAGDOLL) {
+    ctx.strokeStyle = accent;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    const drawPart = (a, b) => {
+      ctx.beginPath();
+      ctx.moveTo(a.position.x - state.camera.x, a.position.y - state.camera.y);
+      ctx.lineTo(b.position.x - state.camera.x, b.position.y - state.camera.y);
+      ctx.stroke();
+    };
+    drawPart(rider.head, rider.torso);
+    drawPart(rider.torso, rider.hip);
+    drawPart(rider.torso, rider.parts[3]); // lArm
+    drawPart(rider.torso, rider.parts[4]); // rArm
+    drawPart(rider.hip, rider.parts[5]);   // lLeg
+    drawPart(rider.hip, rider.parts[6]);   // rLeg
+  }
+
+  // 큐브 캐릭터
+  const visualOffsetY = 17;
+  ctx.save();
+  ctx.translate(board.position.x - state.camera.x, board.position.y - state.camera.y - visualOffsetY);
+  ctx.rotate(0); // 큐브는 항상 정방향
+
+  const size = 34;
+  ctx.shadowColor = accent;
+  ctx.shadowBlur = 18 + speedFx * 18;
+  ctx.fillStyle = accent;
+  ctx.fillRect(-size/2, -size/2, size, size);
+  ctx.shadowBlur = 0;
+
+  ctx.lineWidth = 4;
+  ctx.strokeStyle = '#111';
+  ctx.strokeRect(-size/2, -size/2, size, size);
+
+  // 속도 눈 트레일
+  if (speedStage >= 2) {
+    const trailLength = speedStage === 3 ? 16 + speedFx * 10 : 10 + speedFx * 6;
+    const trailAlpha  = speedStage === 3 ? 0.3 + pulse * 0.14 : 0.2 + speedFx * 0.08;
+    const eyeTrail = ctx.createLinearGradient(4 - trailLength, 0, 11, 0);
+    eyeTrail.addColorStop(0, 'rgba(255,90,90,0)');
+    eyeTrail.addColorStop(0.5, `rgba(255,90,90,${trailAlpha*0.45})`);
+    eyeTrail.addColorStop(1, `rgba(255,90,90,${trailAlpha})`);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = eyeTrail;
+    ctx.shadowColor = 'rgba(255,90,90,0.9)';
+    ctx.shadowBlur = speedStage === 3 ? 12 : 7;
+    ctx.fillRect(4 - trailLength, -5, trailLength + 7, 5.5);
+    ctx.restore();
+  }
+
+  // 눈
+  ctx.fillStyle = speedStage >= 2
+    ? `rgba(255,90,90,${speedStage === 3 ? 0.82 + pulse*0.18 : 0.78})`
+    : '#fff';
+  ctx.fillRect(4, -6, 7, 7);
+
+  // 하이라이트
+  ctx.fillStyle = 'rgba(255,255,255,0.18)';
+  ctx.fillRect(-size/2+4, -size/2+4, size*0.35, size*0.35);
+
+  ctx.restore(); // 큐브 transform
+  ctx.restore(); // 전체 save
+}
+
+// ─── 메인 렌더 루프 ────────────────────────────────────────────────────────
+function render() {
+  const { w: vw, h: vh } = state.viewport;
+  ctx.clearRect(0, 0, vw, vh);
+
+  const speedFx = getSpeedIntensity();
+  const speedStage = getSpeedStage();
+
+  // 배경: 연속 색상 보간
+  const t = speedFx;
+  const skyTop = lerpColor('#f8f8f3', '#edf8ff', t);
+  const skyBot = lerpColor('#f8f8f3', '#f3f0e6', t);
+  const sky = ctx.createLinearGradient(0, 0, 0, vh);
+  sky.addColorStop(0, skyTop);
+  sky.addColorStop(1, skyBot);
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, vw, vh);
+
+  // 카메라 셰이크
+  const motionShake = speedFx * Math.min(3.5 + speedStage*0.6, Math.abs(state.stats.verticalSpeed)*0.045 + speedStage*0.25);
+  const sx = (Math.random()-0.5) * (state.shake + motionShake);
+  const sy = (Math.random()-0.5) * (state.shake*0.8 + motionShake);
+  state.shake *= 0.88;
+
+  ctx.save();
+  ctx.translate(sx, sy);
+
+  // 속도 줌
+  const zoom = [1, 1.008, 1.018, 1.032][speedStage];
+  ctx.translate(vw/2, vh/2);
+  ctx.scale(zoom, zoom);
+  ctx.translate(-vw/2, -vh/2);
+
+  drawGrid();
+  drawSpeedLines();
+
+  // 세그먼트 (스테이지 + 유저)
+  [...state.lines, ...state.boosts].forEach(drawSegment);
+
+  // 그리는 중 프리뷰
+  if (state.drawing && state.drawStart && state.drawEnd) {
+    ctx.save();
+    ctx.lineCap = 'round';
+    const isBooost = document.getElementById('toolSelect').value === 'boost';
+    ctx.strokeStyle = isBooost ? '#34a6ff' : 'rgba(0,0,0,0.45)';
+    ctx.lineWidth = 4;
+    ctx.setLineDash([10, 7]);
+    ctx.beginPath();
+    ctx.moveTo(state.drawStart.x - state.camera.x, state.drawStart.y - state.camera.y);
+    ctx.lineTo(state.drawEnd.x - state.camera.x, state.drawEnd.y - state.camera.y);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  drawParticles();
+
+  if (state.rider) drawRider(state.rider);
+
+  ctx.restore();
+
+  drawSpeedVignette();
+}
+
+// ─── 게임 루프 ─────────────────────────────────────────────────────────────
+function loop(now) {
+  const delta = Math.min(33.33, now - state.lastTime);
+  state.lastTime = now;
+
+  updatePlayerControl();
+  updateParticles();
+
+  const riderSpeed = state.rider ? Math.abs(state.rider.board.velocity.x) : 0;
+  const substeps = clamp(
+    Math.ceil(delta / 8.5) + (riderSpeed >= 60 ? 2 : riderSpeed >= 40 ? 1 : 0),
+    1, 6
+  );
+  const stepDelta = delta / substeps;
+  for (let i = 0; i < substeps; i++) Engine.update(engine, stepDelta);
+
+  updateCamera();
+  updateHUD();
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ─── 입력 이벤트 ────────────────────────────────────────────────────────────
+canvas.addEventListener('pointerdown', (e) => {
+  state.drawing = true;
+  state.drawStart = screenToWorld(e.clientX, e.clientY);
+  state.drawEnd = { ...state.drawStart };
+});
+
+canvas.addEventListener('pointermove', (e) => {
+  if (!state.drawing) return;
+  const p = screenToWorld(e.clientX, e.clientY);
+  if (e.shiftKey && state.drawStart) {
+    const dx = p.x - state.drawStart.x, dy = p.y - state.drawStart.y;
+    if (Math.abs(dx) > Math.abs(dy)) p.y = state.drawStart.y;
+    else p.x = state.drawStart.x;
+  }
+  state.drawEnd = p;
+});
+
+window.addEventListener('pointerup', () => {
+  if (!state.drawing || !state.drawStart || !state.drawEnd) return;
+  const type = document.getElementById('toolSelect').value;
+  addSegment(state.drawStart.x, state.drawStart.y, state.drawEnd.x, state.drawEnd.y, type, false);
+  state.drawing = false;
+  state.drawStart = null;
+  state.drawEnd = null;
+});
+
+document.getElementById('spawnBtn').addEventListener('click', () => spawnRider());
+document.getElementById('clearBtn').addEventListener('click', clearLines);
+document.getElementById('resetBtn').addEventListener('click', resetAll);
+
+window.addEventListener('keydown', (e) => {
+  const key = e.key.toLowerCase();
+  if (key === 'a' || e.key === 'ArrowLeft')  state.keys.left = true;
+  if (key === 'd' || e.key === 'ArrowRight') state.keys.right = true;
+  if (key === 'w' || e.key === 'ArrowUp' || e.code === 'Space') {
+    state.keys.jump = true;
+    state.jumpQueued = true;
+    e.preventDefault();
+  }
+  if (key === 'r') resetAll();
+});
+
+window.addEventListener('keyup', (e) => {
+  const key = e.key.toLowerCase();
+  if (key === 'a' || e.key === 'ArrowLeft')  state.keys.left = false;
+  if (key === 'd' || e.key === 'ArrowRight') state.keys.right = false;
+  if (key === 'w' || e.key === 'ArrowUp' || e.code === 'Space') state.keys.jump = false;
+});
+
+// ─── 시작 ──────────────────────────────────────────────────────────────────
+resetAll();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ragdoll Line Rider</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0; width: 100%; height: 100%;
+      overflow: hidden; background: #f7f7f4;
+      font-family: 'Courier New', monospace;
+    }
+    #ui {
+      position: fixed; left: 18px; top: 18px; z-index: 10;
+      display: flex; gap: 8px; align-items: center;
+      padding: 10px 12px; border: 2px solid #111; border-radius: 14px;
+      background: rgba(255,255,255,.9); backdrop-filter: blur(8px);
+      box-shadow: 4px 4px 0 #111; user-select: none;
+    }
+    button, select {
+      border: 2px solid #111; border-radius: 10px; background: #fff;
+      padding: 7px 10px; font-weight: 700;
+      font-family: 'Courier New', monospace; font-size: 12px;
+      cursor: pointer; transition: transform .08s, box-shadow .08s;
+      box-shadow: 2px 2px 0 #111;
+    }
+    button:hover  { transform: translateY(-2px); box-shadow: 2px 4px 0 #111; }
+    button:active { transform: translateY(0);    box-shadow: 1px 1px 0 #111; }
+    #hint {
+      position: fixed; right: 18px; bottom: 18px; z-index: 10;
+      padding: 10px 14px; border: 2px solid #111; border-radius: 14px;
+      background: rgba(255,255,255,.9); box-shadow: 4px 4px 0 #111;
+      font-size: 12px; line-height: 1.7;
+    }
+    #hud {
+      position: fixed; left: 18px; bottom: 18px; z-index: 10;
+      padding: 12px 16px; border: 2px solid #111; border-radius: 14px;
+      background: rgba(255,255,255,.94); box-shadow: 4px 4px 0 #111;
+      min-width: 220px; line-height: 1.4;
+    }
+    #hud-speed-label { font-size:10px; font-weight:700; letter-spacing:.12em; color:#888; margin-bottom:3px; }
+    #hud-speed-val   { font-size:34px; font-weight:900; letter-spacing:-.02em; line-height:1; color:#111; transition:color .25s; }
+    #hud-stage-dots  { display:flex; gap:5px; margin:6px 0 8px; }
+    .stage-dot {
+      width:10px; height:10px; border-radius:50%;
+      border:2px solid #111; background:#fff;
+      transition:background .2s, transform .15s, box-shadow .2s;
+    }
+    .stage-dot.active            { transform:scale(1.25); }
+    .stage-dot.active.s0         { background:#111; }
+    .stage-dot.active.s1         { background:#2a83ff; box-shadow:0 0 6px #2a83ff88; }
+    .stage-dot.active.s2         { background:#f5a623; box-shadow:0 0 6px #f5a62388; }
+    .stage-dot.active.s3         { background:#ff3a3a; box-shadow:0 0 8px #ff3a3a99; }
+    .stage-dot.pulse { animation: dotPulse .35s ease-out; }
+    @keyframes dotPulse {
+      0%   { transform:scale(1.25); }
+      40%  { transform:scale(2.0);  }
+      100% { transform:scale(1.25); }
+    }
+    #hud-bar-wrap {
+      width:100%; height:8px; border-radius:4px;
+      border:1.5px solid #111; overflow:hidden; background:#f0f0f0; margin-bottom:6px;
+    }
+    #hud-bar { height:100%; border-radius:3px; background:#2a83ff; transition:width .1s,background .3s; width:0%; }
+    #hud-sub { display:flex; justify-content:space-between; font-size:11px; color:#555; font-weight:700; }
+    #hud-boost-bar-wrap {
+      width:100%; height:5px; border-radius:3px;
+      border:1.5px solid #34a6ff; overflow:hidden; background:#f0f9ff; margin-top:6px;
+    }
+    #hud-boost-bar { height:100%; border-radius:2px; background:#34a6ff; transition:width .07s; width:0%; }
+    #landing-flash {
+      position:fixed; inset:0; z-index:20; pointer-events:none;
+      opacity:0; background:rgba(255,255,255,.55); transition:opacity .06s;
+    }
+    #stage-flash {
+      position:fixed; inset:0; z-index:19; pointer-events:none;
+      opacity:0; transition:opacity .15s;
+    }
+    #respawn-msg {
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      z-index:30; pointer-events:none;
+      font-size:26px; font-weight:900; letter-spacing:.08em; color:#111;
+      background:rgba(255,255,255,.9); padding:14px 28px;
+      border:3px solid #111; border-radius:16px; box-shadow:5px 5px 0 #111;
+      opacity:0; transition:opacity .2s;
+    }
+    canvas { display:block; width:100vw; height:100vh; cursor:crosshair; }
+  </style>
+</head>
+<body>
+<div id="ui">
+  <button id="spawnBtn">▶ Respawn</button>
+  <button id="clearBtn">✕ Clear Lines</button>
+  <button id="resetBtn">↺ Reset</button>
+  <select id="toolSelect">
+    <option value="line">Draw line</option>
+    <option value="boost">Boost pad</option>
+  </select>
+</div>
+<div id="hint">
+  드래그: 선 그리기<br/>
+  Shift+드래그: 직선 보정<br/>
+  A/D 또는 ←/→: 가속/감속 (접지 시)<br/>
+  Space/W/↑: 점프 / 공중 기울기<br/>
+  R: 리셋
+</div>
+<div id="hud">
+  <div id="hud-speed-label">SPEED</div>
+  <div id="hud-speed-val">0.0</div>
+  <div id="hud-stage-dots">
+    <div class="stage-dot" id="dot0"></div>
+    <div class="stage-dot" id="dot1"></div>
+    <div class="stage-dot" id="dot2"></div>
+    <div class="stage-dot" id="dot3"></div>
+  </div>
+  <div id="hud-bar-wrap"><div id="hud-bar"></div></div>
+  <div id="hud-sub">
+    <span>TARGET <span id="statTargetSpeed">8.0</span></span>
+    <span>BOOST <span id="statBoost">0.0</span></span>
+    <span><span id="statGround">AIR</span></span>
+  </div>
+  <div id="hud-boost-bar-wrap"><div id="hud-boost-bar"></div></div>
+</div>
+<div id="landing-flash"></div>
+<div id="stage-flash"></div>
+<div id="respawn-msg">RESPAWN...</div>
+<canvas id="game"></canvas>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  roundRect 폴리필 — Safari 구버전 대응
+// ═══════════════════════════════════════════════════
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    const R = Math.min(r, w / 2, h / 2);
+    this.beginPath();
+    this.moveTo(x + R, y);
+    this.arcTo(x + w, y,     x + w, y + h, R);
+    this.arcTo(x + w, y + h, x,     y + h, R);
+    this.arcTo(x,     y + h, x,     y,     R);
+    this.arcTo(x,     y,     x + w, y,     R);
+    this.closePath();
+  };
+}
+
+const { Engine, World, Bodies, Body, Constraint, Events } = Matter;
+
+// ═══════════════════════════════════════════════════
+//  DOM 요소 캐싱 — 매 프레임 getElementById 방지
+// ═══════════════════════════════════════════════════
+const canvas         = document.getElementById('game');
+const ctx            = canvas.getContext('2d');
+const landingFlash   = document.getElementById('landing-flash');
+const stageFlash     = document.getElementById('stage-flash');
+const respawnMsg     = document.getElementById('respawn-msg');
+const toolSelect     = document.getElementById('toolSelect');   // ← 캐싱
+const elSpeedVal     = document.getElementById('hud-speed-val');
+const elBar          = document.getElementById('hud-bar');
+const elBoostBar     = document.getElementById('hud-boost-bar');
+const elTargetSpeed  = document.getElementById('statTargetSpeed');
+const elBoostVal     = document.getElementById('statBoost');
+const elGround       = document.getElementById('statGround');
+const elDots         = [0,1,2,3].map(i => document.getElementById(`dot${i}`));
+
+// ═══════════════════════════════════════════════════
+//  물리 엔진
+// ═══════════════════════════════════════════════════
+const engine = Engine.create({
+  gravity: { x:0, y:1.05 },
+  positionIterations:10, velocityIterations:8, constraintIterations:4,
+});
+const world = engine.world;
+
+// ═══════════════════════════════════════════════════
+//  전역 상태
+// ═══════════════════════════════════════════════════
+const INIT_TARGET_SPEED = 8;   // 리스폰 시 초기 속도
+const MAX_SPEED_CAP     = 72;  // 하드 속도 상한
+
+const state = {
+  stageBodies:[], userBodies:[],
+  lines:[], boosts:[],
+
+  rider:null,
+  keys:{ left:false, right:false, jump:false },
+  jumpQueued:false,
+  COYOTE_FRAMES:7,
+
+  drawing:false, drawStart:null, drawEnd:null,
+
+  camera:{ x:0, y:0, targetX:0, targetY:0, leadX:0, leadY:0 },
+  viewport:{ w:innerWidth, h:innerHeight },
+
+  stats:{
+    speed:0, targetSpeed:INIT_TARGET_SPEED, boostPower:0,
+    verticalSpeed:0, prevVerticalSpeed:0, grounded:false,
+  },
+
+  prevSpeedStage : 0,
+  lastTime       : performance.now(),
+  shake          : 0,
+  particles      : [],
+
+  // 리스폰 후 트레일 잔상 방지 쿨다운 (프레임 수)
+  trailCooldown  : 0,
+  TRAIL_COOLDOWN : 4,
+
+  fallTimer      : 0,
+  FALL_TIMEOUT   : 2800,
+
+  DRAW_RAGDOLL   : false,
+};
+
+// ═══════════════════════════════════════════════════
+//  유틸
+// ═══════════════════════════════════════════════════
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+
+// lerpColor: 색상값 미리 분해해 parseInt 반복 제거
+function makeLerpColor(hexA, hexB) {
+  const p = (s,i) => parseInt(s.replace('#','').slice(i*2,i*2+2), 16);
+  const ar=p(hexA,0),ag=p(hexA,1),ab=p(hexA,2);
+  const br=p(hexB,0),bg=p(hexB,1),bb=p(hexB,2);
+  return t => `rgb(${Math.round(ar+(br-ar)*t)},${Math.round(ag+(bg-ag)*t)},${Math.round(ab+(bb-ab)*t)})`;
+}
+const lerpSkyTop = makeLerpColor('#f8f8f3','#edf8ff');
+const lerpSkyBot = makeLerpColor('#f8f8f3','#f3f0e6');
+
+const getSpeedIntensity = (s=state.stats.speed) => clamp((s-18)/55, 0, 1);
+function getSpeedStage(s=state.stats.speed) {
+  if (s>=60) return 3; if (s>=42) return 2; if (s>=24) return 1; return 0;
+}
+
+// ── gradient 캐시 (sfx/ss/뷰포트 변화 시에만 재생성) ─────────────────
+const _gc = { vw:-1, vh:-1, sfxKey:-1, ssKey:-1,
+              skyGrad:null, edgeGrad:null, glowGrad:null, heatGrad:null };
+
+function _rebuildGradientsIfNeeded(vw, vh, sfx, ss) {
+  const sk=Math.round(sfx*20);
+  if (_gc.vw===vw && _gc.vh===vh && _gc.sfxKey===sk && _gc.ssKey===ss) return;
+  _gc.vw=vw; _gc.vh=vh; _gc.sfxKey=sk; _gc.ssKey=ss;
+
+  const sky=ctx.createLinearGradient(0,0,0,vh);
+  sky.addColorStop(0,lerpSkyTop(sfx)); sky.addColorStop(1,lerpSkyBot(sfx));
+  _gc.skyGrad=sky;
+
+  const edge=ctx.createLinearGradient(0,0,vw,0);
+  edge.addColorStop(0,  `rgba(20,30,40,${.12+ss*.07+sfx*.08})`);
+  edge.addColorStop(.18,'rgba(20,30,40,0)');
+  edge.addColorStop(.82,'rgba(20,30,40,0)');
+  edge.addColorStop(1,  `rgba(20,30,40,${.1+ss*.06+sfx*.06})`);
+  _gc.edgeGrad=edge;
+
+  const glow=ctx.createRadialGradient(vw*.72,vh*.35,vw*.08,vw*.72,vh*.35,vw*.62);
+  glow.addColorStop(0,`rgba(90,210,255,${.03+ss*.025+sfx*.03})`);
+  glow.addColorStop(1,'rgba(90,210,255,0)');
+  _gc.glowGrad=glow;
+
+  if (ss>=2) {
+    const heat=ctx.createLinearGradient(0,vh,0,vh*.25);
+    heat.addColorStop(0,`rgba(255,90,90,${.05+ss*.035})`);
+    heat.addColorStop(1,'rgba(255,90,90,0)');
+    _gc.heatGrad=heat;
+  } else { _gc.heatGrad=null; }
+}
+
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = Math.floor(innerWidth  * dpr);
+  canvas.height = Math.floor(innerHeight * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  state.viewport.w = innerWidth;
+  state.viewport.h = innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+const screenToWorld = (x,y) => ({ x: x+state.camera.x, y: y+state.camera.y });
+
+// ═══════════════════════════════════════════════════
+//  지형
+// ═══════════════════════════════════════════════════
+function addSegment(x1,y1,x2,y2, type='line', isStage=false) {
+  const dx=x2-x1, dy=y2-y1, len=Math.hypot(dx,dy);
+  if (len < 35) return false;
+  const body = Bodies.rectangle((x1+x2)/2,(y1+y2)/2, len, type==='boost'?14:10, {
+    isStatic:true, angle:Math.atan2(dy,dx),
+    friction    : type==='boost' ? 0.01 : 0.55,
+    restitution : type==='boost' ? 0.18 : 0.02,
+    label       : type==='boost' ? 'boost' : 'line',
+  });
+  World.add(world, body);
+  (isStage ? state.stageBodies : state.userBodies).push(body);
+  (type==='boost' ? state.boosts : state.lines).push({x1,y1,x2,y2,type,body,isStage});
+  return true;
+}
+
+function addSmoothCurve(sx,sy, sections, type='line') {
+  let prev={x:sx,y:sy}, cx=sx, cy=sy;
+  const pts = [{x:sx,y:sy}];
+  for (const s of sections) {
+    const ox=cx, oy=cy, steps=Math.max(14, Math.round(Math.abs(s.dx)/180));
+    for (let i=1; i<=steps; i++) {
+      const t=i/steps, e=.5-Math.cos(Math.PI*t)*.5;
+      const pt={x:ox+s.dx*t, y:oy+s.dy*e};
+      addSegment(prev.x,prev.y,pt.x,pt.y,type,true);
+      prev=pt; pts.push(pt);
+    }
+    cx+=s.dx; cy+=s.dy;
+  }
+  return pts;
+}
+
+function addBoostPads(points, {startOffset=0,interval=2600,padLength=180,maxPads=Infinity}={}) {
+  if (!points||points.length<2) return;
+  let next=startOffset, placed=0, traveled=0;
+  for (let i=1; i<points.length&&placed<maxPads; i++) {
+    const a=points[i-1], b=points[i];
+    const dx=b.x-a.x, dy=b.y-a.y, seg=Math.hypot(dx,dy);
+    if (seg<1) continue;
+    while (traveled+seg>=next && placed<maxPads) {
+      const t=clamp((next-traveled)/seg,0,1);
+      const pcx=a.x+dx*t, pcy=a.y+dy*t;
+      const ang=Math.atan2(dy,dx), half=padLength*.5;
+      addSegment(pcx-Math.cos(ang)*half, pcy-Math.sin(ang)*half,
+                 pcx+Math.cos(ang)*half, pcy+Math.sin(ang)*half, 'boost', true);
+      placed++; next+=interval;
+    }
+    traveled+=seg;
+  }
+}
+
+function createStage() {
+  const endX=30000, flatY=420;
+  addSegment(-300,flatY,endX,flatY,'line',true);
+  const pts = addSmoothCurve(endX,flatY,[
+    {dx:5200,dy:220},{dx:4700,dy:720},
+    {dx:3900,dy:-280},{dx:5400,dy:860},
+    {dx:4300,dy:-320},{dx:6200,dy:820},
+  ]);
+  addBoostPads([{x:-300,y:flatY},{x:endX,y:flatY},...pts.slice(1)],
+               {startOffset:3200, interval:3600, padLength:220});
+}
+
+// ═══════════════════════════════════════════════════
+//  래그돌 스폰
+// ═══════════════════════════════════════════════════
+function makeLimb(a,b,s=.72) {
+  return Constraint.create({bodyA:a,bodyB:b,stiffness:s,damping:.18,render:{visible:false}});
+}
+
+function spawnRider(x, y, color='#2a83ff') {
+  const {w:vw,h:vh} = state.viewport;
+  if (x===undefined) x = state.camera.x + vw*.28;
+  if (y===undefined) y = state.camera.y + vh*.2;
+  if (state.rider) removeRider();
+
+  // ① 리스폰 시 targetSpeed 초기화
+  state.stats.targetSpeed = INIT_TARGET_SPEED;
+  state.stats.boostPower  = 0;
+  state.trailCooldown     = state.TRAIL_COOLDOWN;  // ② 트레일 잔상 쿨다운
+
+  const group=Body.nextGroup(true);
+  const opt={collisionFilter:{group},friction:.78,frictionAir:.009,restitution:.05,density:.0012};
+
+  const head  = Bodies.circle(x,y-30,10,        {...opt,label:'riderHead'});
+  const torso = Bodies.rectangle(x,y,15,34,     {...opt,label:'riderTorso'});
+  const hip   = Bodies.circle(x,y+24,7,         {...opt,label:'riderHip'});
+  const lArm  = Bodies.rectangle(x-15,y+2,24,5, {...opt,label:'riderLArm'});
+  const rArm  = Bodies.rectangle(x+15,y+2,24,5, {...opt,label:'riderRArm'});
+  const lLeg  = Bodies.rectangle(x-10,y+42,28,5,{...opt,label:'riderLLeg'});
+  const rLeg  = Bodies.rectangle(x+12,y+42,28,5,{...opt,label:'riderRLeg'});
+  const board = Bodies.rectangle(x+10,y+58,52,7,{
+    inertia:Infinity, collisionFilter:{group},
+    friction:.16, frictionAir:.005, restitution:.02, density:.0025,
+    chamfer:{radius:4}, label:'board',
+  });
+
+  const constraints=[
+    makeLimb(head,torso,.55), makeLimb(torso,hip,.75),
+    makeLimb(torso,lArm,.45), makeLimb(torso,rArm,.45),
+    makeLimb(hip,lLeg,.62),   makeLimb(hip,rLeg,.62),
+    Constraint.create({bodyA:lLeg,bodyB:board,pointA:{x:12,y:0},pointB:{x:-14,y:0},stiffness:.8,damping:.15}),
+    Constraint.create({bodyA:rLeg,bodyB:board,pointA:{x:12,y:0},pointB:{x:16, y:0},stiffness:.8,damping:.15}),
+  ];
+
+  const parts=[head,torso,hip,lArm,rArm,lLeg,rLeg,board];
+  World.add(world, [...parts,...constraints]);
+  state.rider = {parts,constraints,head,torso,hip,board,color,trail:[],groundedFrames:0};
+  state.fallTimer=0;
+  return state.rider;
+}
+
+function removeRider() {
+  if (!state.rider) return;
+  World.remove(world, state.rider.parts);
+  World.remove(world, state.rider.constraints);
+  state.rider=null;
+}
+
+function clearLines() {
+  for (const b of state.userBodies) World.remove(world,b);
+  state.userBodies=[];
+  state.lines  = state.lines.filter(l=>l.isStage);
+  state.boosts = state.boosts.filter(b=>b.isStage);
+}
+
+function resetAll() {
+  removeRider();
+  for (const b of state.stageBodies) World.remove(world,b);
+  for (const b of state.userBodies)  World.remove(world,b);
+  state.stageBodies=[]; state.userBodies=[];
+  state.lines=[]; state.boosts=[]; state.particles=[];
+  Object.assign(state.camera,{x:0,y:0,targetX:0,targetY:0,leadX:0,leadY:0});
+  state.stats.targetSpeed=INIT_TARGET_SPEED;
+  state.stats.boostPower=0;
+  state.prevSpeedStage=0;
+  state.fallTimer=0; state.shake=0;
+  createStage();
+  spawnRider(160,90);
+}
+
+// ═══════════════════════════════════════════════════
+//  자동 리스폰
+// ═══════════════════════════════════════════════════
+let respawnTimer=null;
+function triggerAutoRespawn() {
+  if (respawnTimer) return;
+  respawnMsg.style.opacity='1';
+  respawnTimer = setTimeout(()=>{
+    respawnMsg.style.opacity='0';
+    respawnTimer=null;
+    spawnRider();
+  }, 1200);
+}
+function checkFallOut(delta) {
+  if (!state.rider) return;
+  const sy = state.rider.board.position.y - state.camera.y;
+  if (sy > state.viewport.h+150) {
+    state.fallTimer+=delta;
+    if (state.fallTimer>=state.FALL_TIMEOUT) { state.fallTimer=0; triggerAutoRespawn(); }
+  } else {
+    state.fallTimer=0;
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  파티클
+// ═══════════════════════════════════════════════════
+function emitDust(x,y,count,intensity, vxBase=0,vyBase=0) {
+  for (let i=0; i<count; i++) {
+    const baseAngle = Math.atan2(-vyBase,-vxBase) || Math.PI;
+    const angle = baseAngle + (Math.random()-.5)*.9;
+    const spd   = 1.5 + Math.random()*intensity*2.5;
+    state.particles.push({
+      x,y, vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd-Math.random()*1.5,
+      life:1, decay:.04+Math.random()*.04,
+      size:3+Math.random()*5*intensity,
+      color:`hsl(${30+Math.random()*20},20%,${65+Math.random()*20}%)`,
+    });
+  }
+}
+function emitBoost(x,y) {
+  for (let i=0; i<12; i++) {
+    const angle=-Math.PI/6+(Math.random()-.5)*.8, spd=4+Math.random()*6;
+    state.particles.push({
+      x,y, vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd-1,
+      life:1, decay:.055+Math.random()*.04,
+      size:4+Math.random()*6,
+      color:`hsl(${200+Math.random()*20},90%,${55+Math.random()*25}%)`,
+    });
+  }
+}
+function emitStageUp(x,y) {
+  const colors=['#ff3a3a','#f5a623','#2a83ff','#fff'];
+  for (let i=0; i<24; i++) {
+    const angle=Math.random()*Math.PI*2, spd=2+Math.random()*5;
+    state.particles.push({
+      x,y, vx:Math.cos(angle)*spd, vy:Math.sin(angle)*spd-2,
+      life:1, decay:.025+Math.random()*.025,
+      size:4+Math.random()*7,
+      color:colors[Math.floor(Math.random()*colors.length)],
+    });
+  }
+}
+function updateParticles() {
+  const {w:vw,h:vh}=state.viewport;
+  for (let i=state.particles.length-1; i>=0; i--) {
+    const p=state.particles[i];
+    p.x+=p.vx; p.y+=p.vy; p.vy+=.18; p.vx*=.94; p.life-=p.decay;
+    const sx=p.x-state.camera.x, sy=p.y-state.camera.y;
+    if (p.life<=0||sx<-60||sx>vw+60||sy<-60||sy>vh+60) {
+      // swap-and-pop: 배열 중간 삭제 O(n) shift 대신 O(1)
+      state.particles[i]=state.particles[state.particles.length-1];
+      state.particles.pop();
+    }
+  }
+}
+function drawParticles() {
+  for (const p of state.particles) {
+    ctx.save();
+    ctx.globalAlpha=p.life*.75; ctx.fillStyle=p.color;
+    ctx.beginPath();
+    ctx.arc(p.x-state.camera.x, p.y-state.camera.y, p.size*p.life, 0, Math.PI*2);
+    ctx.fill(); ctx.restore();
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  충돌 이벤트
+// ═══════════════════════════════════════════════════
+Events.on(engine,'collisionStart',ev=>{
+  for (const pair of ev.pairs) {
+    const la=pair.bodyA.label, lb=pair.bodyB.label;
+    if (la==='boost'||lb==='boost') {
+      const rb = la==='boost'?pair.bodyB:pair.bodyA;
+      if (!rb.isStatic) {
+        state.stats.boostPower=Math.min(12,state.stats.boostPower+5.5);
+        Body.setVelocity(rb,{x:Math.max(rb.velocity.x,18),y:rb.velocity.y-1.8});
+        state.shake=Math.min(5,state.shake+1.5);
+        emitBoost(rb.position.x,rb.position.y);
+      }
+    }
+    if ((la==='board'||lb==='board')&&(la==='line'||lb==='line'||la==='boost'||lb==='boost')) {
+      if (state.rider) state.rider.groundedFrames=state.COYOTE_FRAMES;
+    }
+  }
+});
+
+// ═══════════════════════════════════════════════════
+//  플레이어 컨트롤
+// ═══════════════════════════════════════════════════
+function updatePlayerControl() {
+  const rider=state.rider;
+  if (!rider) return;
+  const board=rider.board;
+
+  if (rider.groundedFrames>0) rider.groundedFrames--;
+  const grounded=rider.groundedFrames>0;
+
+  // ③ 가속/감속은 접지 시에만 targetSpeed 변경
+  //    공중에서는 A/D가 기울기 전용으로만 쓰임
+  if (grounded) {
+    if (state.keys.right) state.stats.targetSpeed=Math.min(MAX_SPEED_CAP, state.stats.targetSpeed+.2);
+    if (state.keys.left)  state.stats.targetSpeed=Math.max(INIT_TARGET_SPEED, state.stats.targetSpeed-.24);
+  }
+
+  state.stats.boostPower=Math.max(0,Math.min(12,state.stats.boostPower*.965));
+
+  // 경사면 보정: 보드 방향 성분으로 속도 적용
+  const ang=board.angle;
+  const cosA=Math.cos(ang), sinA=Math.sin(ang);
+  const targetSpd  = state.stats.targetSpeed + state.stats.boostPower;
+  const curAlong   = board.velocity.x*cosA + board.velocity.y*sinA;
+  const lerpRate   = grounded ? .22 : .09;
+  const nextAlong  = curAlong + (targetSpd-curAlong)*lerpRate;
+
+  // ④ 하드 속도 상한 — 경사 가속으로 캡 초과 방지
+  const cappedAlong = clamp(nextAlong, -MAX_SPEED_CAP, MAX_SPEED_CAP);
+
+  const perpVx=-sinA, perpVy=cosA;
+  const perpComp=board.velocity.x*perpVx+board.velocity.y*perpVy;
+  Body.setVelocity(board,{
+    x: cosA*cappedAlong + perpVx*perpComp,
+    y: sinA*cappedAlong + perpVy*perpComp,
+  });
+
+  // 보드 회전: 부드러운 수평 복원
+  Body.setAngularVelocity(board, board.angularVelocity+(-board.angle)*.10);
+
+  // ③ 공중 기울기 전용 (A/D가 여기서만 각속도에 작용)
+  if (!grounded) {
+    if (state.keys.right) Body.setAngularVelocity(board, board.angularVelocity-.006);
+    if (state.keys.left)  Body.setAngularVelocity(board, board.angularVelocity+.006);
+  }
+
+  // 착지 임팩트
+  const prevVY=state.stats.prevVerticalSpeed, curVY=board.velocity.y;
+  if (!grounded && prevVY>5 && curVY<prevVY*.35) {
+    const impact=clamp((prevVY-4)/20,0,1);
+    state.shake=Math.max(state.shake,impact*7);
+    emitDust(board.position.x,board.position.y+6,Math.round(6+impact*12),impact,board.velocity.x,prevVY);
+    if (impact>.2) {
+      landingFlash.style.opacity=(impact*.55).toFixed(2);
+      setTimeout(()=>{landingFlash.style.opacity='0';},65);
+    }
+  }
+  state.stats.prevVerticalSpeed=curVY;
+
+  // 점프
+  if (state.jumpQueued&&grounded) {
+    Body.setVelocity(board,{x:board.velocity.x,y:-12});
+    state.jumpQueued=false; rider.groundedFrames=0; state.shake=2;
+    emitDust(board.position.x,board.position.y+6,8,.5,board.velocity.x,0);
+  }
+
+  state.stats.speed         = Math.hypot(board.velocity.x,board.velocity.y);
+  state.stats.verticalSpeed = curVY;
+  state.stats.grounded      = grounded;
+
+  // 속도 단계 전환
+  const curStage=getSpeedStage();
+  if (curStage>state.prevSpeedStage) onSpeedStageUp(curStage);
+  state.prevSpeedStage=curStage;
+}
+
+function onSpeedStageUp(stage) {
+  state.shake=Math.max(state.shake,[0,3,5,8][stage]);
+  const colors=['','rgba(42,131,255,.18)','rgba(245,166,35,.2)','rgba(255,58,58,.22)'];
+  stageFlash.style.background=colors[stage];
+  stageFlash.style.opacity='1';
+  setTimeout(()=>{stageFlash.style.opacity='0';},180);
+  if (state.rider) emitStageUp(state.rider.board.position.x,state.rider.board.position.y);
+  const dot=elDots[stage];
+  if (dot) { dot.classList.remove('pulse'); void dot.offsetWidth; dot.classList.add('pulse'); }
+}
+
+// ═══════════════════════════════════════════════════
+//  HUD (DOM 캐싱 사용)
+// ═══════════════════════════════════════════════════
+const stageColors=['#111','#2a83ff','#f5a623','#ff3a3a'];
+function updateHUD() {
+  const s=state.stats, stage=getSpeedStage();
+  elSpeedVal.textContent=s.speed.toFixed(1);
+  elSpeedVal.style.color=stageColors[stage];
+  elDots.forEach((d,i)=>{
+    d.className='stage-dot'+(i<=stage?` active s${i}`:'');
+  });
+  elBar.style.width     =clamp(s.speed/MAX_SPEED_CAP,0,1)*100+'%';
+  elBar.style.background=stageColors[stage];
+  elBoostBar.style.width=clamp(s.boostPower/12,0,1)*100+'%';
+  elTargetSpeed.textContent=s.targetSpeed.toFixed(1);
+  elBoostVal.textContent   =s.boostPower.toFixed(1);
+  elGround.textContent     =s.grounded?'GND':'AIR';
+}
+
+// ═══════════════════════════════════════════════════
+//  카메라
+// ═══════════════════════════════════════════════════
+function updateCamera() {
+  if (!state.rider) return;
+  const {w:vw,h:vh}=state.viewport;
+  const board=state.rider.board;
+  const sfx=getSpeedIntensity(), ss=getSpeedStage();
+  const lookAhead=clamp(board.velocity.x*(9+ss*1.8),-120,vw*.28+sfx*140+[0,40,90,150][ss]);
+  const lookDown =clamp(Math.abs(board.velocity.x)*(.18+ss*.03)+Math.max(0,board.velocity.y)*4,0,140);
+  state.camera.leadX+=(lookAhead-state.camera.leadX)*(.14+ss*.02);
+  state.camera.leadY+=(lookDown -state.camera.leadY)*.08;
+  state.camera.targetX=board.position.x-vw*(.33-sfx*.08-ss*.015)+state.camera.leadX;
+  state.camera.targetY=board.position.y-vh*.45+state.camera.leadY;
+  const lr=.055+sfx*.035+ss*.01;
+  state.camera.x+=(state.camera.targetX-state.camera.x)*lr;
+  state.camera.y+=(state.camera.targetY-state.camera.y)*(.055+sfx*.02);
+}
+
+// ═══════════════════════════════════════════════════
+//  렌더링
+// ═══════════════════════════════════════════════════
+function drawGrid(sfx, ss) {
+  const {w:vw,h:vh}=state.viewport;
+  ctx.save(); ctx.strokeStyle=`rgba(0,0,0,${.045+sfx*.03})`; ctx.lineWidth=1;
+  const gap=80-sfx*16-ss*3;
+  const sx=Math.floor(state.camera.x/gap)*gap, sy=Math.floor(state.camera.y/gap)*gap;
+  for (let x=sx; x<state.camera.x+vw+gap; x+=gap) {
+    ctx.beginPath(); ctx.moveTo(x-state.camera.x,0); ctx.lineTo(x-state.camera.x,vh); ctx.stroke();
+  }
+  for (let y=sy; y<state.camera.y+vh+gap; y+=gap) {
+    ctx.beginPath(); ctx.moveTo(0,y-state.camera.y); ctx.lineTo(vw,y-state.camera.y); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSpeedLines(sfx, ss) {
+  const {w:vw,h:vh}=state.viewport;
+  if (!state.rider) return;
+  if (ss===0) return;
+  const count=[0,14,24,36][ss]+Math.floor(sfx*8);
+  const length=[0,36,62,96][ss]+sfx*26;
+  const drift=(performance.now()*(.45+ss*.25+sfx*.9))%120;
+  ctx.save(); ctx.lineCap='round';
+  for (let i=0; i<count; i++) {
+    const lane=((i*47)+drift*7)%(vh+120), y=lane-60;
+    const phase=((i*83)+drift*17)%(vw+220), startX=vw-phase;
+    ctx.strokeStyle=`rgba(255,255,255,${[0,.07,.11,.17][ss]*(1-i/count)})`;
+    ctx.lineWidth=1+ss*.7+sfx*1.5;
+    ctx.beginPath();
+    ctx.moveTo(startX,y);
+    ctx.lineTo(startX-length, y+state.rider.board.velocity.y*.08);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawSpeedVignette(sfx, ss) {
+  const {w:vw,h:vh}=state.viewport;
+  if (ss===0) return;
+  ctx.save();
+  ctx.fillStyle=_gc.edgeGrad; ctx.fillRect(0,0,vw,vh);
+  ctx.fillStyle=_gc.glowGrad; ctx.fillRect(0,0,vw,vh);
+  if (_gc.heatGrad) { ctx.fillStyle=_gc.heatGrad; ctx.fillRect(0,0,vw,vh); }
+  ctx.restore();
+}
+
+// ── 부스트 패드 offscreen glow 캐시 ─────────────────────────────────
+// shadowBlur는 GPU composite 비용이 높음 — 패드 glow를 offscreen에 미리 굽고 재사용
+const _boostGlowCache = { ssKey:-1, canvas:null, hw:0 };
+function _getBoostGlow(ss) {
+  if (_boostGlowCache.ssKey===ss) return _boostGlowCache.canvas;
+  const hw=60+ss*18;        // glow 반경
+  const oc=document.createElement('canvas');
+  oc.width=hw*2; oc.height=20;
+  const oc2=oc.getContext('2d');
+  oc2.shadowColor='#34a6ff';
+  oc2.shadowBlur=8+ss*6;
+  oc2.strokeStyle='#34a6ff';
+  oc2.lineWidth=5;
+  oc2.beginPath();
+  oc2.moveTo(0,10); oc2.lineTo(hw*2,10);
+  oc2.stroke();
+  _boostGlowCache.ssKey=ss; _boostGlowCache.canvas=oc; _boostGlowCache.hw=hw;
+  return oc;
+}
+
+const BOOST_FLOW=.0018;
+// 세그먼트 카메라 culling
+const SEG_MARGIN=120;
+function getVisibleSegments() {
+  const camL=state.camera.x-SEG_MARGIN, camR=state.camera.x+state.viewport.w+SEG_MARGIN;
+  const camT=state.camera.y-SEG_MARGIN, camB=state.camera.y+state.viewport.h+SEG_MARGIN;
+  const result=[];
+  const lines=state.lines, boosts=state.boosts;
+  for (let i=0;i<lines.length;i++) {
+    const s=lines[i];
+    if (Math.max(s.x1,s.x2)>=camL&&Math.min(s.x1,s.x2)<=camR&&
+        Math.max(s.y1,s.y2)>=camT&&Math.min(s.y1,s.y2)<=camB) result.push(s);
+  }
+  for (let i=0;i<boosts.length;i++) {
+    const s=boosts[i];
+    if (Math.max(s.x1,s.x2)>=camL&&Math.min(s.x1,s.x2)<=camR&&
+        Math.max(s.y1,s.y2)>=camT&&Math.min(s.y1,s.y2)<=camB) result.push(s);
+  }
+  return result;
+}
+
+function drawSegment(seg, sfx, ss) {
+  const cx=state.camera.x, cy=state.camera.y;
+  ctx.save(); ctx.lineCap='round'; ctx.lineJoin='round';
+
+  if (seg.type==='boost') {
+    const dx=seg.x2-seg.x1, dy=seg.y2-seg.y1, len=Math.hypot(dx,dy);
+    const ang=Math.atan2(dy,dx);
+    const mx=(seg.x1+seg.x2)/2-cx, my=(seg.y1+seg.y2)/2-cy;
+
+    // offscreen glow 스탬프 (shadowBlur 대신 미리 구운 텍스처 사용)
+    const glowOC=_getBoostGlow(ss);
+    ctx.save();
+    ctx.translate(mx,my); ctx.rotate(ang);
+    ctx.globalAlpha=0.55+ss*.08;
+    ctx.drawImage(glowOC, -len/2-10, -10, len+20, 20);
+    ctx.globalAlpha=1;
+    ctx.restore();
+
+    // 외곽선
+    ctx.strokeStyle='#111'; ctx.lineWidth=9;
+    ctx.beginPath();
+    ctx.moveTo(seg.x1-cx,seg.y1-cy); ctx.lineTo(seg.x2-cx,seg.y2-cy);
+    ctx.stroke();
+    // 본선
+    ctx.strokeStyle='#34a6ff'; ctx.lineWidth=5;
+    ctx.beginPath();
+    ctx.moveTo(seg.x1-cx,seg.y1-cy); ctx.lineTo(seg.x2-cx,seg.y2-cy);
+    ctx.stroke();
+    // 흐르는 화살표
+    const now=performance.now(), sp=28;
+    const flow=(now*BOOST_FLOW*len*.004)%sp;
+    ctx.strokeStyle='rgba(255,255,255,.88)'; ctx.lineWidth=2; ctx.setLineDash([]);
+    const as=5;
+    for (let d=flow; d<len; d+=sp) {
+      const t=d/len, ax=seg.x1+dx*t-cx, ay=seg.y1+dy*t-cy;
+      ctx.save(); ctx.translate(ax,ay); ctx.rotate(ang);
+      ctx.beginPath(); ctx.moveTo(-as,-as*.6); ctx.lineTo(0,0); ctx.lineTo(-as,as*.6);
+      ctx.stroke(); ctx.restore();
+    }
+  } else {
+    ctx.strokeStyle='#111'; ctx.lineWidth=5;
+    ctx.beginPath();
+    ctx.moveTo(seg.x1-cx,seg.y1-cy); ctx.lineTo(seg.x2-cx,seg.y2-cy);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ⑥ 보드 렌더링 — 큐브 아래로 삐져나오도록 y오프셋 조정
+function drawBoard(board, accent, sfx) {
+  const bx=board.position.x-state.camera.x;
+  const by=board.position.y-state.camera.y;
+  ctx.save();
+  ctx.translate(bx, by);
+  ctx.rotate(board.angle);    // 실제 물리 각도
+
+  const bw=56, bh=8, br=4;   // 보드를 살짝 더 크게
+
+  ctx.fillStyle='#f8f8f8';
+  ctx.roundRect(-bw/2,-bh/2,bw,bh,br);
+  ctx.fill();
+
+  ctx.strokeStyle='#111'; ctx.lineWidth=2.5;
+  ctx.roundRect(-bw/2,-bh/2,bw,bh,br);
+  ctx.stroke();
+
+  // 가운데 선 장식
+  ctx.strokeStyle=accent+'88'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(-bw/2+9,0); ctx.lineTo(bw/2-9,0); ctx.stroke();
+
+
+
+  ctx.restore();
+}
+
+function drawRider(rider, sfx, ss) {
+  const pulse=.82+Math.sin(performance.now()*.018)*.18;
+  const board=rider.board, accent=rider.color;
+
+  // ② 트레일 쿨다운 — 리스폰 직후 잔상 방지
+  if (state.trailCooldown>0) {
+    state.trailCooldown--;
+    rider.trail=[];   // 쿨다운 중에는 trail 비워서 점프 방지
+  } else {
+    rider.trail.push({x:board.position.x, y:board.position.y});
+    while (rider.trail.length>Math.round(18+sfx*18)) rider.trail.shift();
+  }
+
+  ctx.save();
+  for (let i=1; i<rider.trail.length; i++) {
+    const p=rider.trail[i], pr=rider.trail[i-1];
+    ctx.globalAlpha=(i/rider.trail.length)*(.18+sfx*.24);
+    ctx.strokeStyle=accent; ctx.lineWidth=5+sfx*5; ctx.lineCap='round';
+    ctx.beginPath();
+    ctx.moveTo(pr.x-state.camera.x,pr.y-state.camera.y);
+    ctx.lineTo(p.x -state.camera.x,p.y -state.camera.y);
+    ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+
+
+
+  // 래그돌 파츠 (DRAW_RAGDOLL 플래그 — 구조 유지, 비활성)
+  if (state.DRAW_RAGDOLL) {
+    ctx.strokeStyle=accent; ctx.lineWidth=3; ctx.lineCap='round';
+    const dp=(a,b)=>{
+      ctx.beginPath();
+      ctx.moveTo(a.position.x-state.camera.x,a.position.y-state.camera.y);
+      ctx.lineTo(b.position.x-state.camera.x,b.position.y-state.camera.y);
+      ctx.stroke();
+    };
+    dp(rider.head,rider.torso); dp(rider.torso,rider.hip);
+    dp(rider.torso,rider.parts[3]); dp(rider.torso,rider.parts[4]);
+    dp(rider.hip,rider.parts[5]);   dp(rider.hip,rider.parts[6]);
+  }
+
+  // ⑥ 보드 먼저 그리기 (큐브 뒤에서 삐져나오도록)
+  drawBoard(board, accent, sfx);
+
+  // 큐브 캐릭터 — 보드 위 고정 오프셋
+  //   큐브 하단이 보드 상단과 만나도록: offsetY = bh/2 + sz/2 = 4 + 17 = 21
+  //   board.position.y는 보드 중심이므로 큐브 중심은 보드 중심에서 위로 (bh/2 + sz/2)
+  const BOARD_HALF_H=4, CUBE_HALF=17;
+  const cubeOffsetY = BOARD_HALF_H + CUBE_HALF;  // = 21
+  ctx.save();
+  ctx.translate(board.position.x-state.camera.x,
+                board.position.y-state.camera.y - cubeOffsetY);
+  // 큐브는 정방향 고정, 보드 기울기 무관
+
+  const sz=34;
+  ctx.shadowColor=accent; ctx.shadowBlur=16+sfx*16;
+  ctx.fillStyle=accent; ctx.fillRect(-sz/2,-sz/2,sz,sz);
+  ctx.shadowBlur=0;
+  ctx.lineWidth=4; ctx.strokeStyle='#111'; ctx.strokeRect(-sz/2,-sz/2,sz,sz);
+
+  // 속도 눈 트레일
+  if (ss>=2) {
+    const tl=ss===3?16+sfx*10:10+sfx*6;
+    const ta=ss===3?.3+pulse*.14:.2+sfx*.08;
+    const et=ctx.createLinearGradient(4-tl,0,11,0);
+    et.addColorStop(0,'rgba(255,90,90,0)');
+    et.addColorStop(.5,`rgba(255,90,90,${ta*.45})`);
+    et.addColorStop(1, `rgba(255,90,90,${ta})`);
+    ctx.save();
+    ctx.globalCompositeOperation='lighter';
+    ctx.fillStyle=et; ctx.shadowColor='rgba(255,90,90,.9)';
+    ctx.shadowBlur=ss===3?12:7;
+    ctx.fillRect(4-tl,-5,tl+7,5.5);
+    ctx.restore();
+  }
+  // 눈
+  ctx.fillStyle=ss>=2?`rgba(255,90,90,${ss===3?.82+pulse*.18:.78})`:'#fff';
+  ctx.fillRect(4,-6,7,7);
+  // 하이라이트
+  ctx.fillStyle='rgba(255,255,255,.18)';
+  ctx.fillRect(-sz/2+4,-sz/2+4,sz*.35,sz*.35);
+
+  ctx.restore();
+  ctx.restore();
+}
+
+// 선 그리기 프리뷰 — 길이 부족 시 빨간 경고 (캐싱된 toolSelect 사용)
+function drawPreview() {
+  if (!state.drawing||!state.drawStart||!state.drawEnd) return;
+  const cx=state.camera.x, cy=state.camera.y;
+  const dx=state.drawEnd.x-state.drawStart.x, dy=state.drawEnd.y-state.drawStart.y;
+  const len=Math.hypot(dx,dy);
+  const tooShort=len<35;
+  const isBoost=toolSelect.value==='boost';   // ← 캐싱된 변수
+  ctx.save();
+  ctx.lineCap='round';
+  ctx.strokeStyle=tooShort?'rgba(220,60,60,.8)':(isBoost?'#34a6ff':'rgba(0,0,0,.45)');
+  ctx.lineWidth=4; ctx.setLineDash([10,7]);
+  ctx.beginPath();
+  ctx.moveTo(state.drawStart.x-cx,state.drawStart.y-cy);
+  ctx.lineTo(state.drawEnd.x-cx,  state.drawEnd.y-cy);
+  ctx.stroke();
+  if (tooShort&&len>6) {
+    ctx.setLineDash([]);
+    ctx.font='bold 11px Courier New'; ctx.fillStyle='rgba(200,50,50,.85)';
+    ctx.textAlign='center';
+    ctx.fillText('TOO SHORT',
+      (state.drawStart.x+state.drawEnd.x)/2-cx,
+      (state.drawStart.y+state.drawEnd.y)/2-cy-14);
+  }
+  ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════
+//  메인 렌더
+// ═══════════════════════════════════════════════════
+function render() {
+  const {w:vw,h:vh}=state.viewport;
+  ctx.clearRect(0,0,vw,vh);
+  const sfx=getSpeedIntensity(), ss=getSpeedStage();
+
+  // gradient 캐시에서 가져오기 (변화 없으면 재생성 안 함)
+  _rebuildGradientsIfNeeded(vw,vh,sfx,ss);
+  ctx.fillStyle=_gc.skyGrad; ctx.fillRect(0,0,vw,vh);
+
+  const ms=sfx*Math.min(3.5+ss*.6,Math.abs(state.stats.verticalSpeed)*.045+ss*.25);
+  const shx=(Math.random()-.5)*(state.shake+ms);
+  const shy=(Math.random()-.5)*(state.shake*.8+ms);
+  state.shake*=.88;
+
+  ctx.save();
+  ctx.translate(shx,shy);
+  const zoom=[1,1.008,1.018,1.032][ss];
+  ctx.translate(vw/2,vh/2); ctx.scale(zoom,zoom); ctx.translate(-vw/2,-vh/2);
+
+  drawGrid(sfx,ss);
+  drawSpeedLines(sfx,ss);
+  // 카메라 culling 후 visible 세그먼트만 렌더링, sfx/ss 재계산 없이 전달
+  const visSegs=getVisibleSegments();
+  for (let i=0;i<visSegs.length;i++) drawSegment(visSegs[i],sfx,ss);
+  drawPreview();
+  drawParticles();
+  if (state.rider) drawRider(state.rider,sfx,ss);
+
+  ctx.restore();
+  // vignette도 캐싱된 gradient 사용
+  drawSpeedVignette(sfx,ss);
+}
+
+// ═══════════════════════════════════════════════════
+//  게임 루프
+// ═══════════════════════════════════════════════════
+function loop(now) {
+  const delta=Math.min(33.33,now-state.lastTime);
+  state.lastTime=now;
+  updatePlayerControl();
+  updateParticles();
+  checkFallOut(delta);
+  const rspd=state.rider?Math.abs(state.rider.board.velocity.x):0;
+  const sub=clamp(Math.ceil(delta/8.5)+(rspd>=60?2:rspd>=40?1:0),1,6);
+  for (let i=0;i<sub;i++) Engine.update(engine,delta/sub);
+  updateCamera(); updateHUD(); render();
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════════════
+//  입력
+// ═══════════════════════════════════════════════════
+canvas.addEventListener('pointerdown',e=>{
+  state.drawing=true;
+  state.drawStart=screenToWorld(e.clientX,e.clientY);
+  state.drawEnd={...state.drawStart};
+});
+canvas.addEventListener('pointermove',e=>{
+  if (!state.drawing) return;
+  const p=screenToWorld(e.clientX,e.clientY);
+  if (e.shiftKey&&state.drawStart) {
+    const dx=p.x-state.drawStart.x, dy=p.y-state.drawStart.y;
+    if (Math.abs(dx)>Math.abs(dy)) p.y=state.drawStart.y; else p.x=state.drawStart.x;
+  }
+  state.drawEnd=p;
+});
+window.addEventListener('pointerup',()=>{
+  if (!state.drawing||!state.drawStart||!state.drawEnd) return;
+  addSegment(state.drawStart.x,state.drawStart.y,state.drawEnd.x,state.drawEnd.y,
+             toolSelect.value, false);   // ← 캐싱된 변수
+  state.drawing=false; state.drawStart=null; state.drawEnd=null;
+});
+document.getElementById('spawnBtn').addEventListener('click',()=>spawnRider());
+document.getElementById('clearBtn').addEventListener('click',clearLines);
+document.getElementById('resetBtn').addEventListener('click',resetAll);
+window.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if (k==='a'||e.key==='ArrowLeft')  state.keys.left=true;
+  if (k==='d'||e.key==='ArrowRight') state.keys.right=true;
+  if (k==='w'||e.key==='ArrowUp'||e.code==='Space') {
+    state.keys.jump=true; state.jumpQueued=true; e.preventDefault();
+  }
+  if (k==='r') resetAll();
+});
+window.addEventListener('keyup',e=>{
+  const k=e.key.toLowerCase();
+  if (k==='a'||e.key==='ArrowLeft')  state.keys.left=false;
+  if (k==='d'||e.key==='ArrowRight') state.keys.right=false;
+  if (k==='w'||e.key==='ArrowUp'||e.code==='Space') state.keys.jump=false;
+});
+
+// ═══════════════════════════════════════════════════
+//  시작
+// ═══════════════════════════════════════════════════
+resetAll();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

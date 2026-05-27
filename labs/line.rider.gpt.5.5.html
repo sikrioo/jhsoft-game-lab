@@ -638,6 +638,23 @@
       ctx.strokeStyle = '#111';
       ctx.strokeRect(-size / 2, -size / 2, size, size);
 
+      if (speedStage >= 2) {
+        const trailLength = speedStage === 3 ? 16 + speedFx * 10 : 10 + speedFx * 6;
+        const trailAlpha = speedStage === 3 ? 0.3 + pulse * 0.14 : 0.2 + speedFx * 0.08;
+        const eyeTrail = ctx.createLinearGradient(4 - trailLength, 0, 11, 0);
+        eyeTrail.addColorStop(0, 'rgba(255, 90, 90, 0)');
+        eyeTrail.addColorStop(0.5, `rgba(255, 90, 90, ${trailAlpha * 0.45})`);
+        eyeTrail.addColorStop(1, `rgba(255, 90, 90, ${trailAlpha})`);
+
+        ctx.save();
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = eyeTrail;
+        ctx.shadowColor = 'rgba(255, 90, 90, 0.9)';
+        ctx.shadowBlur = speedStage === 3 ? 12 : 7;
+        ctx.fillRect(4 - trailLength, -5, trailLength + 7, 5.5);
+        ctx.restore();
+      }
+
       ctx.fillStyle = speedStage >= 2
         ? `rgba(255, 90, 90, ${speedStage === 3 ? 0.82 + pulse * 0.18 : 0.78})`
         : '#fff';
