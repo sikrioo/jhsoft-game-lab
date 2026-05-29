@@ -409,7 +409,7 @@ export class SlotGameApp {
       case "devil":
         return {
           title: "DEVIL",
-          text: "DEVIL does not participate in normal symbol multiplication. If a registered devil pattern forms, 666 voids the spin before ordinary rewards are paid. Efficient, isn't it?",
+          text: "DEVIL does not participate in normal symbol multiplication. If a registered devil pattern forms, 6 voids the spin before ordinary rewards are paid. Efficient, isn't it?",
         };
       case "combo":
         return {

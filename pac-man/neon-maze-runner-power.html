@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Neon Maze Runner - Stable Canvas Build</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    width: 100%;
+    height: 100%;
+    background: #060712;
+    overflow: hidden;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #eaf6ff;
+  }
+  #wrap {
+    width: 100vw;
+    height: 100vh;
+    display: grid;
+    place-items: center;
+    background:
+      radial-gradient(circle at 50% 35%, rgba(42, 105, 255, .14), transparent 42%),
+      radial-gradient(circle at 20% 85%, rgba(255, 0, 190, .08), transparent 36%),
+      #050612;
+  }
+  #panel {
+    width: min(96vw, 960px);
+  }
+  #hud {
+    height: 44px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 8px;
+    font-weight: 800;
+    letter-spacing: .5px;
+    text-shadow: 0 0 10px rgba(90, 220, 255, .7);
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    aspect-ratio: 28 / 31;
+    border: 1px solid rgba(90, 220, 255, .35);
+    border-radius: 16px;
+    background: #07101d;
+    box-shadow:
+      0 0 40px rgba(0, 170, 255, .18),
+      inset 0 0 60px rgba(20, 60, 130, .22);
+  }
+  #help {
+    text-align: center;
+    opacity: .76;
+    padding-top: 8px;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="panel">
+    <div id="hud">
+      <div>NEON MAZE</div>
+      <div id="score">SCORE 0</div>
+      <div id="state">READY</div>
+    </div>
+    <canvas id="game" width="896" height="992"></canvas>
+    <div id="help">Arrow / WASD 이동 · R 재시작 · 벽 앞에서는 정지 · 교차로에서만 예약 방향 전환</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d", { alpha: false });
+  const scoreEl = document.getElementById("score");
+  const stateEl = document.getElementById("state");
+
+  const TILE = 32;
+  const COLS = 28;
+  const ROWS = 31;
+  const W = COLS * TILE;
+  const H = ROWS * TILE;
+
+  // 1 = wall, 0 = pellet path, 2 = empty path, 3 = power pellet
+  const RAW_MAP = [
+    "1111111111111111111111111111",
+    "1000000000000110000000000001",
+    "1011110111110110111110111101",
+    "1300010000010000001000010031",
+    "1011110111011111101110111101",
+    "1000000100000011000000100001",
+    "1111100111111011011111001111",
+    "2222100100000000000001001222",
+    "1111100101111221111010001111",
+    "1000000001000000001000000001",
+    "1011111101011111101011111101",
+    "1000000001012222101000000001",
+    "1111101101012222101011011111",
+    "2222101101000000001011012222",
+    "1111101101111111111011011111",
+    "1000000000000000000000000001",
+    "1011110111110110111110111101",
+    "1300010000010110100001000031",
+    "1111011111010110101111011111",
+    "1000000000000110000000000001",
+    "1011110111111111111110111101",
+    "1000010000000000000001000001",
+    "1111010111011111101111010111",
+    "1000000101000000001000100001",
+    "1011111101011111101011111101",
+    "1000000001000000001000000001",
+    "1111100111111011011111001111",
+    "1000000100000011000000100001",
+    "1011110111011111101110111101",
+    "1000000000000000000000000001",
+    "1111111111111111111111111111"
+  ];
+
+  let map, score, gameOver, pelletsLeft, powerTimer, ghostEatCombo;
+  let keys = new Set();
+  let lastTime = 0;
+  let accumulator = 0;
+  const STEP = 1 / 120; // stable physics
+  const MAX_FRAME = 0.05;
+
+  const DIRS = {
+    left:  { x: -1, y:  0, angle: Math.PI },
+    right: { x:  1, y:  0, angle: 0 },
+    up:    { x:  0, y: -1, angle: -Math.PI / 2 },
+    down:  { x:  0, y:  1, angle: Math.PI / 2 },
+    none:  { x:  0, y:  0, angle: 0 }
+  };
+
+  function parseMap() {
+    pelletsLeft = 0;
+    return RAW_MAP.map(row => row.split("").map(ch => {
+      const v = Number(ch);
+      if (v === 0 || v === 3) pelletsLeft++;
+      return v;
+    }));
+  }
+
+  function centerOf(tileX, tileY) {
+    return { x: tileX * TILE + TILE / 2, y: tileY * TILE + TILE / 2 };
+  }
+
+  function tileOf(x, y) {
+    return { tx: Math.floor(x / TILE), ty: Math.floor(y / TILE) };
+  }
+
+  function isWall(tx, ty) {
+    if (ty < 0 || ty >= ROWS || tx < 0 || tx >= COLS) return true;
+    return map[ty][tx] === 1;
+  }
+
+  function isWalkable(tx, ty) {
+    return !isWall(tx, ty);
+  }
+
+  function nearCenter(e, margin = 2.6) {
+    const c = centerOf(Math.floor(e.x / TILE), Math.floor(e.y / TILE));
+    return Math.abs(e.x - c.x) <= margin && Math.abs(e.y - c.y) <= margin;
+  }
+
+  function snapToCenterAxis(e) {
+    const tx = Math.floor(e.x / TILE);
+    const ty = Math.floor(e.y / TILE);
+    const c = centerOf(tx, ty);
+    if (e.dir.x !== 0) e.y = c.y;
+    if (e.dir.y !== 0) e.x = c.x;
+  }
+
+  function canMoveFromHere(e, dirName) {
+    const d = DIRS[dirName];
+    if (!d || dirName === "none") return false;
+
+    const tx = Math.floor(e.x / TILE);
+    const ty = Math.floor(e.y / TILE);
+    const c = centerOf(tx, ty);
+
+    // 방향 전환은 거의 타일 중앙에서만 허용. 그래서 벽에서 엉뚱한 방향으로 밀려가지 않음.
+    if (Math.abs(e.x - c.x) > 3.2 || Math.abs(e.y - c.y) > 3.2) {
+      // 같은 축으로 계속 이동하는 경우만 허용
+      if (e.dir.x === d.x && e.dir.y === d.y) return true;
+      return false;
+    }
+
+    return isWalkable(tx + d.x, ty + d.y);
+  }
+
+  function wouldHitWall(e, nx, ny) {
+    const radius = e.radius;
+    const points = [
+      [nx - radius, ny - radius],
+      [nx + radius, ny - radius],
+      [nx - radius, ny + radius],
+      [nx + radius, ny + radius]
+    ];
+    return points.some(([px, py]) => isWall(Math.floor(px / TILE), Math.floor(py / TILE)));
+  }
+
+  function moveEntity(e, dt) {
+    if (e.want && canMoveFromHere(e, e.want)) {
+      const d = DIRS[e.want];
+      e.dirName = e.want;
+      e.dir = { x: d.x, y: d.y };
+      e.want = null;
+      const c = centerOf(Math.floor(e.x / TILE), Math.floor(e.y / TILE));
+      if (d.x !== 0) e.y = c.y;
+      if (d.y !== 0) e.x = c.x;
+    }
+
+    if (e.dirName === "none") return;
+
+    const nx = e.x + e.dir.x * e.speed * dt;
+    const ny = e.y + e.dir.y * e.speed * dt;
+
+    if (wouldHitWall(e, nx, ny)) {
+      // 벽 앞에서는 정확히 멈춤. 다른 방향으로 자동 이동하지 않음.
+      const tx = Math.floor(e.x / TILE);
+      const ty = Math.floor(e.y / TILE);
+      const c = centerOf(tx, ty);
+      e.x = c.x;
+      e.y = c.y;
+      e.dirName = "none";
+      e.dir = { x: 0, y: 0 };
+      return;
+    }
+
+    e.x = nx;
+    e.y = ny;
+    snapToCenterAxis(e);
+  }
+
+  const player = {
+    x: 0, y: 0,
+    dirName: "none",
+    dir: { x: 0, y: 0 },
+    want: null,
+    speed: 205,
+    radius: 12,
+    angle: 0,
+    mouthClock: 0
+  };
+
+  let ghosts = [];
+
+  function makeGhost(tx, ty, color, mode, speed = 142) {
+    const c = centerOf(tx, ty);
+    return {
+      x: c.x, y: c.y,
+      spawnX: c.x, spawnY: c.y,
+      dirName: "left",
+      dir: { x: -1, y: 0 },
+      want: null,
+      speed,
+      radius: 12,
+      color,
+      normalColor: color,
+      mode,
+      repath: 0,
+      eatenTimer: 0
+    };
+  }
+
+  function reset() {
+    map = parseMap();
+    score = 0;
+    gameOver = false;
+    const p = centerOf(13, 23);
+    player.x = p.x;
+    player.y = p.y;
+    player.dirName = "none";
+    player.dir = { x: 0, y: 0 };
+    player.want = null;
+    player.mouthClock = 0;
+    player.angle = 0;
+    powerTimer = 0;
+    ghostEatCombo = 0;
+
+    ghosts = [
+      makeGhost(13, 13, "#ff4f8b", "chase", 150),
+      makeGhost(14, 13, "#46e6ff", "ambush", 145),
+      makeGhost(13, 14, "#ffb347", "chase", 138),
+      makeGhost(14, 14, "#b968ff", "random", 132)
+    ];
+
+    scoreEl.textContent = "SCORE 0";
+    stateEl.textContent = "READY";
+  }
+
+  function getWantedDirection() {
+    if (keys.has("ArrowLeft") || keys.has("KeyA")) return "left";
+    if (keys.has("ArrowRight") || keys.has("KeyD")) return "right";
+    if (keys.has("ArrowUp") || keys.has("KeyW")) return "up";
+    if (keys.has("ArrowDown") || keys.has("KeyS")) return "down";
+    return null;
+  }
+
+  function collectPellet() {
+    const { tx, ty } = tileOf(player.x, player.y);
+    if (map[ty][tx] === 0) {
+      map[ty][tx] = 2;
+      score += 10;
+      pelletsLeft--;
+    } else if (map[ty][tx] === 3) {
+      map[ty][tx] = 2;
+      score += 50;
+      pelletsLeft--;
+      powerTimer = 7.0;
+      ghostEatCombo = 0;
+      stateEl.textContent = "POWER";
+    }
+    scoreEl.textContent = "SCORE " + score;
+    if (pelletsLeft <= 0) {
+      stateEl.textContent = "CLEAR";
+      gameOver = true;
+    }
+  }
+
+  function bfsNextDir(g) {
+    const start = tileOf(g.x, g.y);
+    const target = tileOf(player.x, player.y);
+
+    let tx = target.tx;
+    let ty = target.ty;
+
+    if (g.mode === "ambush") {
+      tx = Math.max(1, Math.min(COLS - 2, target.tx + player.dir.x * 4));
+      ty = Math.max(1, Math.min(ROWS - 2, target.ty + player.dir.y * 4));
+      if (!isWalkable(tx, ty)) { tx = target.tx; ty = target.ty; }
+    }
+
+    if (g.mode === "random" && Math.random() < 0.45) {
+      const choices = validDirs(g);
+      return choices[Math.floor(Math.random() * choices.length)] || g.dirName;
+    }
+
+    const q = [{ tx: start.tx, ty: start.ty }];
+    const seen = new Set([start.tx + "," + start.ty]);
+    const parent = new Map();
+
+    while (q.length) {
+      const cur = q.shift();
+      if (cur.tx === tx && cur.ty === ty) break;
+
+      for (const name of ["left", "right", "up", "down"]) {
+        const d = DIRS[name];
+        const nx = cur.tx + d.x;
+        const ny = cur.ty + d.y;
+        const key = nx + "," + ny;
+        if (seen.has(key) || !isWalkable(nx, ny)) continue;
+        seen.add(key);
+        parent.set(key, { tx: cur.tx, ty: cur.ty });
+        q.push({ tx: nx, ty: ny });
+      }
+    }
+
+    const targetKey = tx + "," + ty;
+    if (!parent.has(targetKey) && !(start.tx === tx && start.ty === ty)) {
+      const choices = validDirs(g);
+      return choices[0] || g.dirName;
+    }
+
+    let cur = { tx, ty };
+    while (true) {
+      const p = parent.get(cur.tx + "," + cur.ty);
+      if (!p) break;
+      if (p.tx === start.tx && p.ty === start.ty) {
+        const dx = cur.tx - start.tx;
+        const dy = cur.ty - start.ty;
+        if (dx === -1) return "left";
+        if (dx === 1) return "right";
+        if (dy === -1) return "up";
+        if (dy === 1) return "down";
+      }
+      cur = p;
+    }
+
+    return g.dirName;
+  }
+
+  function validDirs(e) {
+    const tx = Math.floor(e.x / TILE);
+    const ty = Math.floor(e.y / TILE);
+    const reverse = {
+      left: "right", right: "left", up: "down", down: "up", none: null
+    }[e.dirName];
+
+    const list = [];
+    for (const name of ["left", "right", "up", "down"]) {
+      if (name === reverse) continue;
+      const d = DIRS[name];
+      if (isWalkable(tx + d.x, ty + d.y)) list.push(name);
+    }
+    if (list.length === 0 && reverse) list.push(reverse);
+    return list;
+  }
+
+  function updateGhost(g, dt) {
+    g.repath -= dt;
+    if (nearCenter(g, 4) && g.repath <= 0) {
+      g.want = bfsNextDir(g);
+      g.repath = 0.12 + Math.random() * 0.08;
+    }
+
+    // 고스트는 방향 예약 실패 시 가능한 방향으로 즉시 보정
+    if (nearCenter(g, 4) && !canMoveFromHere(g, g.want || g.dirName)) {
+      const choices = validDirs(g);
+      g.want = choices[Math.floor(Math.random() * choices.length)] || "left";
+    }
+
+    const originalSpeed = g.speed;
+    if (powerTimer > 0) g.speed = originalSpeed * 0.78;
+    moveEntity(g, dt);
+    g.speed = originalSpeed;
+  }
+
+  function checkCollision() {
+    for (const g of ghosts) {
+      if (g.eatenTimer > 0) continue;
+
+      const dx = player.x - g.x;
+      const dy = player.y - g.y;
+
+      if (dx * dx + dy * dy < 22 * 22) {
+        if (powerTimer > 0) {
+          ghostEatCombo++;
+          score += 200 * ghostEatCombo;
+          scoreEl.textContent = "SCORE " + score;
+
+          // 먹힌 적은 잠시 사라졌다가 시작 위치에서 부활
+          g.eatenTimer = 1.4;
+          g.x = g.spawnX;
+          g.y = g.spawnY;
+          g.dirName = "none";
+          g.dir = { x: 0, y: 0 };
+          g.want = null;
+          stateEl.textContent = "+" + (200 * ghostEatCombo);
+        } else {
+          stateEl.textContent = "CAUGHT - R TO RESTART";
+          gameOver = true;
+        }
+      }
+    }
+  }
+
+  function update(dt) {
+    const wanted = getWantedDirection();
+    if (wanted) player.want = wanted;
+
+    if (!gameOver) {
+      if (powerTimer > 0) {
+        powerTimer = Math.max(0, powerTimer - dt);
+        if (powerTimer === 0) {
+          ghostEatCombo = 0;
+          stateEl.textContent = "RUN";
+        }
+      }
+
+      for (const g of ghosts) {
+        if (g.eatenTimer > 0) g.eatenTimer = Math.max(0, g.eatenTimer - dt);
+      }
+
+      moveEntity(player, dt);
+      collectPellet();
+      for (const g of ghosts) {
+        if (g.eatenTimer <= 0) updateGhost(g, dt);
+      }
+      checkCollision();
+      if (player.dirName !== "none") {
+        const d = DIRS[player.dirName];
+        player.angle = d.angle;
+        player.mouthClock += dt * 12.5;
+      }
+      if (stateEl.textContent === "READY") stateEl.textContent = "RUN";
+    }
+  }
+
+  function drawWalls() {
+    ctx.save();
+    ctx.lineWidth = 2;
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        if (map[y][x] !== 1) continue;
+        const px = x * TILE;
+        const py = y * TILE;
+        const grad = ctx.createLinearGradient(px, py, px + TILE, py + TILE);
+        grad.addColorStop(0, "#12345c");
+        grad.addColorStop(1, "#091a37");
+        ctx.fillStyle = grad;
+        roundRect(ctx, px + 2, py + 2, TILE - 4, TILE - 4, 8);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(75, 215, 255, .38)";
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawPellets() {
+    ctx.save();
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const v = map[y][x];
+        if (v !== 0 && v !== 3) continue;
+        const c = centerOf(x, y);
+        ctx.beginPath();
+        ctx.fillStyle = v === 3 ? "#fff27a" : "#8df7ff";
+        ctx.shadowColor = v === 3 ? "#fff27a" : "#48e8ff";
+        ctx.shadowBlur = v === 3 ? 16 : 7;
+        ctx.arc(c.x, c.y, v === 3 ? 7 : 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawPlayer() {
+    ctx.save();
+    ctx.translate(player.x, player.y);
+    ctx.rotate(player.angle);
+
+    const open = player.dirName === "none" ? 0.18 : 0.16 + Math.abs(Math.sin(player.mouthClock)) * 0.48;
+
+    ctx.shadowColor = "#fff16a";
+    ctx.shadowBlur = 20;
+    ctx.fillStyle = "#ffe84c";
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.arc(0, 0, 14, open, Math.PI * 2 - open, false);
+    ctx.closePath();
+    ctx.fill();
+
+    // 캐릭터 배경/몸 느낌 보존용 작은 중심 glow
+    ctx.shadowBlur = 8;
+    ctx.fillStyle = "rgba(255,255,255,.22)";
+    ctx.beginPath();
+    ctx.arc(-4, -5, 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+
+  function drawGhost(g) {
+    if (g.eatenTimer > 0) return;
+
+    const frightened = powerTimer > 0;
+    const flashing = frightened && powerTimer < 2 && Math.floor(powerTimer * 8) % 2 === 0;
+    const bodyColor = frightened ? (flashing ? "#f7fbff" : "#315cff") : g.color;
+
+    ctx.save();
+    ctx.translate(g.x, g.y);
+    ctx.shadowColor = bodyColor;
+    ctx.shadowBlur = frightened ? 24 : 16;
+    ctx.fillStyle = bodyColor;
+
+    ctx.beginPath();
+    ctx.arc(0, -4, 14, Math.PI, 0);
+    ctx.lineTo(14, 12);
+    ctx.lineTo(8, 8);
+    ctx.lineTo(3, 12);
+    ctx.lineTo(-3, 8);
+    ctx.lineTo(-8, 12);
+    ctx.lineTo(-14, 8);
+    ctx.lineTo(-14, -4);
+    ctx.closePath();
+    ctx.fill();
+
+    const dx = frightened ? 0 : g.dir.x * 2.5;
+    const dy = frightened ? 0 : g.dir.y * 2.5;
+
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath(); ctx.ellipse(-5, -4, 4, 5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(5, -4, 4, 5, 0, 0, Math.PI * 2); ctx.fill();
+
+    ctx.fillStyle = frightened ? "#f7fbff" : "#10162a";
+    if (frightened) {
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 12px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("× ×", 0, 1);
+      ctx.fillText("︶", 0, 9);
+    } else {
+      ctx.beginPath(); ctx.arc(-5 + dx, -4 + dy, 2, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(5 + dx, -4 + dy, 2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    ctx.restore();
+  }
+
+  function drawGridGlow() {
+    ctx.save();
+    ctx.strokeStyle = "rgba(80, 190, 255, .035)";
+    ctx.lineWidth = 1;
+    for (let x = 0; x <= COLS; x++) {
+      ctx.beginPath(); ctx.moveTo(x * TILE, 0); ctx.lineTo(x * TILE, H); ctx.stroke();
+    }
+    for (let y = 0; y <= ROWS; y++) {
+      ctx.beginPath(); ctx.moveTo(0, y * TILE); ctx.lineTo(W, y * TILE); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function render() {
+    ctx.fillStyle = "#07101d";
+    ctx.fillRect(0, 0, W, H);
+
+    const bg = ctx.createRadialGradient(W/2, H/2, 80, W/2, H/2, W * .75);
+    bg.addColorStop(0, "rgba(18, 45, 95, .45)");
+    bg.addColorStop(1, "rgba(4, 7, 18, .95)");
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    drawGridGlow();
+    drawPellets();
+    drawWalls();
+    drawPlayer();
+    for (const g of ghosts) drawGhost(g);
+
+    if (powerTimer > 0 && !gameOver) {
+      ctx.save();
+      ctx.fillStyle = "rgba(255, 242, 122, .95)";
+      ctx.shadowColor = "#fff27a";
+      ctx.shadowBlur = 12;
+      ctx.font = "bold 18px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("POWER " + powerTimer.toFixed(1), W / 2, 28);
+      ctx.restore();
+    }
+
+    if (gameOver) {
+      ctx.save();
+      ctx.fillStyle = "rgba(0,0,0,.42)";
+      ctx.fillRect(0, 0, W, H);
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#eaf6ff";
+      ctx.shadowColor = "#59e8ff";
+      ctx.shadowBlur = 18;
+      ctx.font = "bold 34px system-ui";
+      ctx.fillText(stateEl.textContent, W / 2, H / 2);
+      ctx.font = "18px system-ui";
+      ctx.fillText("Press R", W / 2, H / 2 + 38);
+      ctx.restore();
+    }
+  }
+
+  function roundRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  function loop(t) {
+    if (!lastTime) lastTime = t;
+    let frame = Math.min((t - lastTime) / 1000, MAX_FRAME);
+    lastTime = t;
+    accumulator += frame;
+
+    while (accumulator >= STEP) {
+      update(STEP);
+      accumulator -= STEP;
+    }
+
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener("keydown", e => {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Space"].includes(e.code)) e.preventDefault();
+    keys.add(e.code);
+    if (e.code === "KeyR") reset();
+  });
+
+  window.addEventListener("keyup", e => {
+    keys.delete(e.code);
+  });
+
+  // mobile swipe
+  let sx = 0, sy = 0;
+  canvas.addEventListener("touchstart", e => {
+    const t = e.changedTouches[0];
+    sx = t.clientX; sy = t.clientY;
+  }, { passive: true });
+  canvas.addEventListener("touchend", e => {
+    const t = e.changedTouches[0];
+    const dx = t.clientX - sx;
+    const dy = t.clientY - sy;
+    if (Math.abs(dx) < 20 && Math.abs(dy) < 20) return;
+    player.want = Math.abs(dx) > Math.abs(dy)
+      ? (dx > 0 ? "right" : "left")
+      : (dy > 0 ? "down" : "up");
+  }, { passive: true });
+
+  reset();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

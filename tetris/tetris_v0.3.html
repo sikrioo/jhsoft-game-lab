@@ -1,0 +1,844 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Classic Block Puzzle</title>
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.9.1/dist/pixi.min.js"></script>
+  <style>
+    :root {
+      --bg: #080b12;
+      --panel: rgba(18, 24, 38, 0.86);
+      --line: rgba(150, 170, 220, 0.22);
+      --text: #eaf0ff;
+      --muted: #8d98b8;
+      --accent: #74e0ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(circle at 20% 10%, rgba(74, 224, 255, 0.12), transparent 30%),
+        radial-gradient(circle at 80% 80%, rgba(166, 96, 255, 0.12), transparent 36%),
+        var(--bg);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    .shell {
+      display: grid;
+      grid-template-columns: 220px auto 220px;
+      gap: 18px;
+      align-items: start;
+      padding: 20px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: 0 20px 70px rgba(0,0,0,0.34);
+      backdrop-filter: blur(14px);
+      padding: 16px;
+    }
+
+    .title {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+      color: var(--accent);
+    }
+
+    .stat {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+    }
+
+    .stat span:first-child { color: var(--muted); }
+    .stat span:last-child { font-weight: 800; }
+
+    .hint {
+      margin-top: 14px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .canvas-wrap {
+      padding: 14px;
+      border-radius: 24px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border: 1px solid var(--line);
+      box-shadow: 0 30px 100px rgba(0,0,0,0.55);
+    }
+
+    canvas {
+      display: block;
+      border-radius: 14px;
+    }
+
+    button {
+      width: 100%;
+      margin-top: 10px;
+      padding: 11px 12px;
+      border: 1px solid rgba(116, 224, 255, 0.45);
+      border-radius: 12px;
+      background: rgba(116, 224, 255, 0.12);
+      color: var(--text);
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    button:hover { background: rgba(116, 224, 255, 0.22); }
+
+    @media (max-width: 900px) {
+      body { overflow: auto; }
+      .shell { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <aside class="panel">
+      <div class="title">BLOCK<br/>PUZZLE</div>
+      <div class="stat"><span>Score</span><span id="score">0</span></div>
+      <div class="stat"><span>Lines</span><span id="lines">0</span></div>
+      <div class="stat"><span>Level</span><span id="level">1</span></div>
+      <button id="restartBtn">Restart</button>
+      <button id="pauseBtn">Pause</button>
+      <div class="hint">
+        ← → 이동<br/>
+        ↓ 소프트 드롭<br/>
+        Space 하드 드롭<br/>
+        ↑ / X 회전<br/>
+        Z 반대 회전<br/>
+        C 홀드<br/>
+        P 일시정지
+      </div>
+    </aside>
+
+    <section class="canvas-wrap" id="gameRoot"></section>
+
+    <aside class="panel">
+      <div class="title">STATUS</div>
+      <div class="stat"><span>Hold</span><span id="holdName">-</span></div>
+      <div class="stat"><span>Next</span><span id="nextName">-</span></div>
+      <div class="hint">
+        클래식한 블록 낙하 퍼즐 감성을 유지하면서, PixiJS 기반 렌더링과 게임 루프 구조를 사용했습니다.<br/><br/>
+        상용화 시에는 사운드, 스킨, 랭킹 서버, 모바일 터치 컨트롤, 라이선스 검토를 추가하세요.
+      </div>
+    </aside>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const COLS = 10;
+      const ROWS = 20;
+      const CELL = 32;
+      const BOARD_W = COLS * CELL;
+      const BOARD_H = ROWS * CELL;
+      const PREVIEW_CELL = 20;
+
+      const COLORS = {
+        I: 0x4de7ff,
+        J: 0x4d78ff,
+        L: 0xffa640,
+        O: 0xffe04d,
+        S: 0x48e07d,
+        T: 0xb96cff,
+        Z: 0xff5d73,
+        ghost: 0xffffff,
+        grid: 0x293247,
+        bg: 0x0b1020,
+        text: 0xeaf0ff,
+      };
+
+      const SHAPES = {
+        I: [
+          [0,0,0,0],
+          [1,1,1,1],
+          [0,0,0,0],
+          [0,0,0,0],
+        ],
+        J: [
+          [1,0,0],
+          [1,1,1],
+          [0,0,0],
+        ],
+        L: [
+          [0,0,1],
+          [1,1,1],
+          [0,0,0],
+        ],
+        O: [
+          [1,1],
+          [1,1],
+        ],
+        S: [
+          [0,1,1],
+          [1,1,0],
+          [0,0,0],
+        ],
+        T: [
+          [0,1,0],
+          [1,1,1],
+          [0,0,0],
+        ],
+        Z: [
+          [1,1,0],
+          [0,1,1],
+          [0,0,0],
+        ],
+      };
+
+      const SCORE_TABLE = [0, 100, 300, 500, 800];
+
+      class SevenBag {
+        constructor() {
+          this.queue = [];
+        }
+
+        next() {
+          if (this.queue.length < 7) this.queue.push(...this.createBag());
+          return this.queue.shift();
+        }
+
+        peek(count = 5) {
+          while (this.queue.length < count) this.queue.push(...this.createBag());
+          return this.queue.slice(0, count);
+        }
+
+        createBag() {
+          const bag = Object.keys(SHAPES);
+          for (let i = bag.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [bag[i], bag[j]] = [bag[j], bag[i]];
+          }
+          return bag;
+        }
+      }
+
+      class Piece {
+        constructor(type) {
+          this.type = type;
+          this.matrix = cloneMatrix(SHAPES[type]);
+          this.x = Math.floor(COLS / 2) - Math.ceil(this.matrix[0].length / 2);
+          this.y = -1;
+        }
+      }
+
+      class InputController {
+        constructor(game) {
+          this.game = game;
+          this.keys = new Set();
+          this.dasDelay = 130;
+          this.arrDelay = 38;
+          this.downDelay = 42;
+          this.moveTimers = { left: 0, right: 0, down: 0 };
+          this.moveHeldAt = { left: 0, right: 0 };
+
+          // Use capture so Space is handled before focused buttons/canvas can consume it.
+          window.addEventListener('keydown', e => this.onKeyDown(e), { capture: true });
+          window.addEventListener('keyup', e => this.onKeyUp(e), { capture: true });
+        }
+
+        onKeyDown(e) {
+          const code = e.code || '';
+          const key = e.key || '';
+          const isSpace = code === 'Space' || key === ' ' || key === 'Spacebar';
+          const isHandled = ['ArrowLeft','ArrowRight','ArrowDown','ArrowUp','KeyX','KeyZ','KeyC','KeyP'].includes(code) || isSpace;
+
+          if (isHandled) {
+            e.preventDefault();
+            e.stopPropagation();
+          }
+
+          // One-shot actions must not depend on the held-key Set.
+          // Otherwise Space can appear broken when focus/repeat/key-up gets swallowed.
+          if (isSpace) {
+            this.game.hardDrop();
+            return;
+          }
+          if (code === 'ArrowUp' || code === 'KeyX') {
+            if (!e.repeat) this.game.rotate(1);
+            return;
+          }
+          if (code === 'KeyZ') {
+            if (!e.repeat) this.game.rotate(-1);
+            return;
+          }
+          if (code === 'KeyC') {
+            if (!e.repeat) this.game.hold();
+            return;
+          }
+          if (code === 'KeyP') {
+            if (!e.repeat) this.game.togglePause();
+            return;
+          }
+
+          if (this.keys.has(code)) return;
+          this.keys.add(code);
+
+          if (code === 'ArrowLeft') {
+            this.game.move(-1, 0);
+            this.moveHeldAt.left = performance.now();
+          }
+          if (code === 'ArrowRight') {
+            this.game.move(1, 0);
+            this.moveHeldAt.right = performance.now();
+          }
+          if (code === 'ArrowDown') this.game.softDrop();
+        }
+
+        onKeyUp(e) {
+          this.keys.delete(e.code);
+          if (e.code === 'ArrowLeft') this.moveTimers.left = 0;
+          if (e.code === 'ArrowRight') this.moveTimers.right = 0;
+          if (e.code === 'ArrowDown') this.moveTimers.down = 0;
+        }
+
+        resetState() {
+          this.keys.clear();
+          this.moveTimers.left = 0;
+          this.moveTimers.right = 0;
+          this.moveTimers.down = 0;
+          this.moveHeldAt.left = 0;
+          this.moveHeldAt.right = 0;
+        }
+
+        update(dt) {
+          const now = performance.now();
+
+          if (this.keys.has('ArrowLeft') && now - this.moveHeldAt.left > this.dasDelay) {
+            this.moveTimers.left += dt;
+            if (this.moveTimers.left >= this.arrDelay) {
+              this.game.move(-1, 0);
+              this.moveTimers.left = 0;
+            }
+          }
+
+          if (this.keys.has('ArrowRight') && now - this.moveHeldAt.right > this.dasDelay) {
+            this.moveTimers.right += dt;
+            if (this.moveTimers.right >= this.arrDelay) {
+              this.game.move(1, 0);
+              this.moveTimers.right = 0;
+            }
+          }
+
+          if (this.keys.has('ArrowDown')) {
+            this.moveTimers.down += dt;
+            if (this.moveTimers.down >= this.downDelay) {
+              this.game.softDrop();
+              this.moveTimers.down = 0;
+            }
+          }
+        }
+      }
+
+      class Game {
+        constructor() {
+          this.app = new PIXI.Application();
+          this.ready = this.init();
+        }
+
+        async init() {
+          await this.app.init({
+            width: BOARD_W + 180,
+            height: BOARD_H,
+            background: COLORS.bg,
+            antialias: false,
+            resolution: Math.min(window.devicePixelRatio || 1, 2),
+            autoDensity: true,
+          });
+
+          document.getElementById('gameRoot').appendChild(this.app.canvas);
+
+          // IMPORTANT: use a small fixed number of reusable Graphics objects.
+          // Do not create/destroy hundreds of Graphics every frame.
+          this.bgLayer = new PIXI.Graphics();
+          this.gridLayer = new PIXI.Graphics();
+          this.boardLayer = new PIXI.Graphics();
+          this.ghostLayer = new PIXI.Graphics();
+          this.pieceLayer = new PIXI.Graphics();
+          this.fxLayer = new PIXI.Graphics();
+          this.previewLayer = new PIXI.Graphics();
+          this.overlayLayer = new PIXI.Graphics();
+          this.uiTextLayer = new PIXI.Container();
+
+          this.app.stage.addChild(
+            this.bgLayer,
+            this.gridLayer,
+            this.boardLayer,
+            this.ghostLayer,
+            this.pieceLayer,
+            this.fxLayer,
+            this.previewLayer,
+            this.overlayLayer,
+            this.uiTextLayer
+          );
+
+          this.previewLayer.x = BOARD_W + 34;
+          this.previewLayer.y = 48;
+
+          this.overlayText = new PIXI.Text({
+            text: '',
+            style: new PIXI.TextStyle({
+              fill: 0xeaf0ff,
+              fontSize: 34,
+              fontWeight: '900',
+              letterSpacing: 3,
+              align: 'center',
+            })
+          });
+          this.overlayText.anchor.set(0.5);
+          this.overlayText.x = BOARD_W / 2;
+          this.overlayText.y = BOARD_H / 2;
+          this.overlayText.visible = false;
+          this.uiTextLayer.addChild(this.overlayText);
+
+          this.previewTitle = new PIXI.Text({
+            text: 'NEXT',
+            style: new PIXI.TextStyle({ fill: COLORS.text, fontSize: 14, fontWeight: '800' })
+          });
+          this.previewTitle.x = BOARD_W + 34;
+          this.previewTitle.y = 22;
+          this.uiTextLayer.addChild(this.previewTitle);
+
+          this.input = new InputController(this);
+          this.bindUi();
+          this.reset();
+          this.drawStaticBackground();
+          this.drawStaticGrid();
+
+          let last = performance.now();
+          this.app.ticker.add(() => {
+            const now = performance.now();
+            const dt = Math.min(now - last, 50);
+            last = now;
+            this.update(dt);
+            this.render();
+          });
+        }
+
+        bindUi() {
+          document.getElementById('restartBtn').addEventListener('click', () => this.reset());
+          document.getElementById('pauseBtn').addEventListener('click', () => this.togglePause());
+        }
+
+        reset() {
+          this.input?.resetState();
+          this.fullResetRuntime();
+          this.board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+          this.bag = new SevenBag();
+          this.current = null;
+          this.holdPiece = null;
+          this.canHold = false;
+          this.score = 0;
+          this.lines = 0;
+          this.level = 1;
+          this.stage = 1;
+          this.stageLineTarget = this.getStageLineTarget();
+          this.spawn();
+          this.syncUi();
+        }
+
+        fullResetRuntime() {
+          this.dropCounter = 0;
+          this.lockDelay = 430;
+          this.lockCounter = 0;
+          this.paused = false;
+          this.gameOver = false;
+          this.transitioning = false;
+          this.transitionTimer = 0;
+          this.transitionDuration = 1150;
+          this.pendingClearRows = [];
+          this.lineClearTimer = 0;
+          this.lineClearDuration = 150;
+          this.processingLineClear = false;
+          this.current = this.current || null;
+          document.getElementById('pauseBtn').textContent = 'Pause';
+        }
+
+        getStageLineTarget() {
+          return this.stage * 10;
+        }
+
+        get dropInterval() {
+          // Arcade-like curve: stage 1 is readable, stage 3+ ramps up but does not become 0ms.
+          return Math.max(95, 820 - (this.stage - 1) * 95 - (this.level - 1) * 18);
+        }
+
+        spawn() {
+          this.current = new Piece(this.bag.next());
+          this.canHold = false;
+          if (this.collides(this.current, 0, 0)) this.gameOver = true;
+        }
+
+        update(dt) {
+          if (this.paused || this.gameOver) return;
+
+          if (this.transitioning) {
+            this.transitionTimer += dt;
+            if (this.transitionTimer >= this.transitionDuration) this.finishStageTransition();
+            return;
+          }
+
+          if (this.processingLineClear) {
+            this.lineClearTimer += dt;
+            if (this.lineClearTimer >= this.lineClearDuration) this.commitLineClear();
+            return;
+          }
+
+          this.input.update(dt);
+          this.dropCounter += dt;
+
+          while (this.dropCounter >= this.dropInterval) {
+            this.dropCounter -= this.dropInterval;
+            if (!this.move(0, 1)) {
+              this.lockCounter += this.dropInterval;
+              if (this.lockCounter >= this.lockDelay) {
+                this.lockPiece();
+                break;
+              }
+            } else {
+              this.lockCounter = 0;
+            }
+          }
+        }
+
+        move(dx, dy) {
+          if (!this.current || this.paused || this.gameOver || this.transitioning || this.processingLineClear) return false;
+          if (!this.collides(this.current, dx, dy)) {
+            this.current.x += dx;
+            this.current.y += dy;
+            if (dy === 0) this.lockCounter = 0;
+            return true;
+          }
+          return false;
+        }
+
+        softDrop() {
+          if (this.transitioning || this.processingLineClear) return;
+          if (this.move(0, 1)) this.score += 1;
+          else this.lockPiece();
+          this.syncUi();
+        }
+
+        hardDrop() {
+          if (!this.current || this.paused || this.gameOver || this.transitioning || this.processingLineClear) return;
+
+          let distance = 0;
+          while (!this.collides(this.current, 0, 1)) {
+            this.current.y += 1;
+            distance++;
+          }
+
+          this.score += distance * 2;
+          this.dropCounter = 0;
+          this.lockCounter = 0;
+          this.lockPiece();
+          this.syncUi();
+        }
+
+        rotate(direction) {
+          if (!this.current || this.paused || this.gameOver || this.transitioning || this.processingLineClear) return;
+          if (this.current.type === 'O') return;
+          // Atari-ish feel: one rotation direction is enough, but keep Z support internally.
+          const old = this.current.matrix;
+          const rotated = rotateMatrix(old, direction);
+          this.current.matrix = rotated;
+
+          const kicks = [
+            [0, 0], [-1, 0], [1, 0], [-2, 0], [2, 0],
+            [0, -1], [-1, -1], [1, -1], [0, -2]
+          ];
+          for (const [kx, ky] of kicks) {
+            if (!this.collides(this.current, kx, ky)) {
+              this.current.x += kx;
+              this.current.y += ky;
+              this.lockCounter = 0;
+              return;
+            }
+          }
+          this.current.matrix = old;
+        }
+
+        hold() {
+          // Atari-style mode: hold disabled.
+          return;
+        }
+
+        lockPiece() {
+          if (!this.current || this.processingLineClear || this.transitioning) return;
+          forEachBlock(this.current.matrix, (x, y) => {
+            const bx = this.current.x + x;
+            const by = this.current.y + y;
+            if (by >= 0 && by < ROWS && bx >= 0 && bx < COLS) this.board[by][bx] = this.current.type;
+          });
+
+          this.current = null;
+          const rows = this.findFullRows();
+          if (rows.length > 0) {
+            this.pendingClearRows = rows;
+            this.processingLineClear = true;
+            this.lineClearTimer = 0;
+          } else {
+            this.afterPieceResolved(0);
+          }
+        }
+
+        afterPieceResolved(cleared) {
+          if (cleared > 0) {
+            this.lines += cleared;
+            this.score += SCORE_TABLE[cleared] * this.stage;
+            this.level = Math.floor(this.lines / 10) + 1;
+          }
+
+          this.lockCounter = 0;
+          this.dropCounter = 0;
+
+          if (this.lines >= this.stageLineTarget) {
+            this.startStageTransition();
+          } else {
+            this.spawn();
+          }
+          this.syncUi();
+        }
+
+        findFullRows() {
+          const rows = [];
+          for (let y = ROWS - 1; y >= 0; y--) {
+            if (this.board[y].every(Boolean)) rows.push(y);
+          }
+          return rows;
+        }
+
+        commitLineClear() {
+          const rowsToClear = new Set(this.pendingClearRows);
+          this.board = this.board.filter((_, y) => !rowsToClear.has(y));
+          while (this.board.length < ROWS) this.board.unshift(Array(COLS).fill(null));
+
+          const cleared = this.pendingClearRows.length;
+          this.pendingClearRows = [];
+          this.processingLineClear = false;
+          this.lineClearTimer = 0;
+          this.afterPieceResolved(cleared);
+        }
+
+        startStageTransition() {
+          this.transitioning = true;
+          this.transitionTimer = 0;
+          this.current = null;
+          this.pendingClearRows = [];
+          this.processingLineClear = false;
+          this.lineClearTimer = 0;
+          this.dropCounter = 0;
+          this.lockCounter = 0;
+        }
+
+        finishStageTransition() {
+          // Hard boundary between stages: clear board, input state and render state.
+          this.input?.resetState();
+          this.stage += 1;
+          this.level = this.stage;
+          this.stageLineTarget = this.lines + 10;
+          this.board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+          this.bag = new SevenBag();
+          this.current = null;
+          this.transitioning = false;
+          this.transitionTimer = 0;
+          this.dropCounter = 0;
+          this.lockCounter = 0;
+
+          this.clearRenderSurfaces();
+          this.drawStaticBackground();
+          this.drawStaticGrid();
+          this.spawn();
+          this.syncUi();
+        }
+
+        clearRenderSurfaces() {
+          this.bgLayer.clear();
+          this.boardLayer.clear();
+          this.ghostLayer.clear();
+          this.pieceLayer.clear();
+          this.fxLayer.clear();
+          this.previewLayer.clear();
+          this.overlayLayer.clear();
+          this.overlayText.visible = false;
+        }
+
+        collides(piece, dx, dy) {
+          let hit = false;
+          forEachBlock(piece.matrix, (x, y) => {
+            const bx = piece.x + x + dx;
+            const by = piece.y + y + dy;
+            if (bx < 0 || bx >= COLS || by >= ROWS) hit = true;
+            if (by >= 0 && this.board[by]?.[bx]) hit = true;
+          });
+          return hit;
+        }
+
+        getGhostY() {
+          if (!this.current) return 0;
+          let ghostY = this.current.y;
+          while (!this.collides({ ...this.current, y: ghostY }, 0, 1)) ghostY++;
+          return ghostY;
+        }
+
+        togglePause() {
+          if (this.gameOver || this.transitioning) return;
+          this.paused = !this.paused;
+          document.getElementById('pauseBtn').textContent = this.paused ? 'Resume' : 'Pause';
+        }
+
+        syncUi() {
+          document.getElementById('score').textContent = this.score.toLocaleString();
+          document.getElementById('lines').textContent = `${this.lines}/${this.stageLineTarget}`;
+          document.getElementById('level').textContent = this.stage.toString();
+          document.getElementById('holdName').textContent = 'OFF';
+          document.getElementById('nextName').textContent = this.bag?.peek(1)[0] || '-';
+        }
+
+        drawStaticBackground() {
+          this.bgLayer.clear();
+          this.bgLayer.rect(0, 0, BOARD_W, BOARD_H).fill({ color: 0x05070d });
+          this.bgLayer.rect(0, 0, BOARD_W, BOARD_H).stroke({ color: 0xff3355, alpha: 0.36, width: 5 });
+        }
+
+        drawStaticGrid() {
+          this.gridLayer.clear();
+          for (let x = 0; x <= COLS; x++) {
+            this.gridLayer.moveTo(x * CELL, 0).lineTo(x * CELL, BOARD_H).stroke({ color: 0x1a2540, alpha: 0.9, width: 1 });
+          }
+          for (let y = 0; y <= ROWS; y++) {
+            this.gridLayer.moveTo(0, y * CELL).lineTo(BOARD_W, y * CELL).stroke({ color: 0x1a2540, alpha: 0.9, width: 1 });
+          }
+          this.gridLayer.rect(0, 0, BOARD_W, BOARD_H).stroke({ color: 0xff3355, alpha: 0.7, width: 2 });
+        }
+
+        render() {
+          this.boardLayer.clear();
+          this.ghostLayer.clear();
+          this.pieceLayer.clear();
+          this.fxLayer.clear();
+          this.previewLayer.clear();
+          this.overlayLayer.clear();
+          this.overlayText.visible = false;
+
+          const clearingRows = new Set(this.pendingClearRows || []);
+          for (let y = 0; y < ROWS; y++) {
+            for (let x = 0; x < COLS; x++) {
+              const type = this.board[y][x];
+              if (!type) continue;
+              if (clearingRows.has(y)) {
+                const t = Math.min(1, this.lineClearTimer / this.lineClearDuration);
+                const flash = Math.floor(t * 4) % 2 === 0;
+                this.drawCell(this.boardLayer, x, y, flash ? 0xffffff : COLORS[type], 1 - t * 0.45, false, t);
+              } else {
+                this.drawCell(this.boardLayer, x, y, COLORS[type], 1);
+              }
+            }
+          }
+
+          if (this.current && !this.gameOver && !this.transitioning && !this.processingLineClear) {
+            const ghostY = this.getGhostY();
+            forEachBlock(this.current.matrix, (x, y) => {
+              this.drawCell(this.ghostLayer, this.current.x + x, ghostY + y, COLORS.ghost, 0.12, true);
+              this.drawCell(this.pieceLayer, this.current.x + x, this.current.y + y, COLORS[this.current.type], 1);
+            });
+          }
+
+          this.drawPreviewPanel();
+
+          if (this.transitioning) {
+            const t = Math.min(1, this.transitionTimer / this.transitionDuration);
+            this.drawOverlay(`STAGE ${this.stage} CLEAR\nREADY STAGE ${this.stage + 1}`, 0.72 + Math.sin(t * Math.PI) * 0.16);
+          } else if (this.paused) {
+            this.drawOverlay('PAUSED');
+          } else if (this.gameOver) {
+            this.drawOverlay('GAME OVER');
+          }
+        }
+
+        drawCell(layer, x, y, color, alpha = 1, outlineOnly = false, shrink = 0) {
+          if (y < 0) return;
+          const pad = 2 + shrink * 8;
+          const px = x * CELL + pad;
+          const py = y * CELL + pad;
+          const size = CELL - pad * 2;
+          if (size <= 0) return;
+
+          if (outlineOnly) {
+            layer.roundRect(px, py, size, size, 4).stroke({ color, alpha: 0.65, width: 2 });
+          } else {
+            layer.roundRect(px, py, size, size, 4).fill({ color, alpha });
+            layer.roundRect(px + 4, py + 4, Math.max(0, size - 8), Math.max(0, size - 8), 3).stroke({ color: 0xffffff, alpha: 0.16, width: 1 });
+            layer.roundRect(px, py, size, size, 4).stroke({ color: 0xffffff, alpha: 0.22, width: 1 });
+          }
+        }
+
+        drawPreviewPanel() {
+          const next = this.bag.peek(5);
+          next.forEach((type, index) => this.drawMiniPiece(this.previewLayer, type, 0, index * 74));
+        }
+
+        drawMiniPiece(layer, type, ox, oy) {
+          const matrix = SHAPES[type];
+          forEachBlock(matrix, (x, y) => {
+            const px = ox + x * PREVIEW_CELL;
+            const py = oy + y * PREVIEW_CELL;
+            layer.roundRect(px, py, PREVIEW_CELL - 2, PREVIEW_CELL - 2, 3).fill({ color: COLORS[type], alpha: 1 });
+            layer.roundRect(px, py, PREVIEW_CELL - 2, PREVIEW_CELL - 2, 3).stroke({ color: 0xffffff, alpha: 0.18, width: 1 });
+          });
+        }
+
+        drawOverlay(text, alpha = 0.72) {
+          this.overlayLayer.rect(0, 0, BOARD_W, BOARD_H).fill({ color: 0x000000, alpha });
+          this.overlayText.text = text;
+          this.overlayText.visible = true;
+        }
+      }
+
+      function cloneMatrix(matrix) {
+        return matrix.map(row => [...row]);
+      }
+
+      function rotateMatrix(matrix, direction) {
+        const n = matrix.length;
+        const result = Array.from({ length: n }, () => Array(n).fill(0));
+        for (let y = 0; y < n; y++) {
+          for (let x = 0; x < n; x++) {
+            if (direction > 0) result[x][n - 1 - y] = matrix[y][x];
+            else result[n - 1 - x][y] = matrix[y][x];
+          }
+        }
+        return result;
+      }
+
+      function forEachBlock(matrix, callback) {
+        for (let y = 0; y < matrix.length; y++) {
+          for (let x = 0; x < matrix[y].length; x++) {
+            if (matrix[y][x]) callback(x, y);
+          }
+        }
+      }
+
+      new Game();
+    })();
+  </script>
+</body>
+</html>

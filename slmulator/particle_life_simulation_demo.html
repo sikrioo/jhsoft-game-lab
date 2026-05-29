@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web Particle Life Simulation</title>
+  <style>
+    :root {
+      --bg: #070912;
+      --panel: rgba(13, 18, 34, 0.88);
+      --panel-2: rgba(21, 29, 52, 0.82);
+      --line: rgba(148, 163, 184, 0.22);
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #7dd3fc;
+      --hot: #f97316;
+      --good: #22c55e;
+      --danger: #fb7185;
+      --shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at 30% 20%, #172554 0%, #070912 42%, #020617 100%);
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 1fr 360px;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    .stage {
+      position: relative;
+      min-width: 0;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background:
+        radial-gradient(circle at 50% 40%, rgba(56, 189, 248, 0.08), transparent 34%),
+        radial-gradient(circle at 70% 70%, rgba(168, 85, 247, 0.06), transparent 26%),
+        #040713;
+    }
+
+    .hud {
+      position: absolute;
+      left: 22px;
+      top: 22px;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 13px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.55);
+      backdrop-filter: blur(14px);
+      box-shadow: var(--shadow);
+      pointer-events: none;
+    }
+
+    .dot-live {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--good);
+      box-shadow: 0 0 18px var(--good);
+    }
+
+    .hud strong { font-size: 14px; letter-spacing: 0.02em; }
+    .hud span { color: var(--muted); font-size: 12px; }
+
+    .legend {
+      position: absolute;
+      left: 22px;
+      bottom: 22px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      max-width: 560px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: rgba(2, 6, 23, 0.46);
+      backdrop-filter: blur(12px);
+    }
+
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .swatch {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      box-shadow: 0 0 14px currentColor;
+    }
+
+    .panel {
+      position: relative;
+      z-index: 2;
+      height: 100vh;
+      overflow-y: auto;
+      padding: 20px;
+      border-left: 1px solid var(--line);
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.94), rgba(2, 6, 23, 0.96));
+      box-shadow: -24px 0 80px rgba(0, 0, 0, 0.36);
+    }
+
+    .title {
+      margin-bottom: 18px;
+      padding: 18px;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.13), rgba(168, 85, 247, 0.12));
+    }
+
+    .title h1 {
+      margin: 0 0 7px;
+      font-size: 23px;
+      line-height: 1.1;
+      letter-spacing: -0.04em;
+    }
+
+    .title p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.55;
+    }
+
+    .section {
+      margin-bottom: 14px;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      background: var(--panel);
+    }
+
+    .section h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      letter-spacing: 0.02em;
+      color: #f8fafc;
+    }
+
+    .button-row {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    button, select {
+      width: 100%;
+      border: 1px solid rgba(125, 211, 252, 0.22);
+      border-radius: 13px;
+      background: rgba(15, 23, 42, 0.9);
+      color: var(--text);
+      padding: 10px 11px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.15s ease, border 0.15s ease, background 0.15s ease;
+    }
+
+    button:hover, select:hover {
+      transform: translateY(-1px);
+      border-color: rgba(125, 211, 252, 0.65);
+      background: rgba(30, 41, 59, 0.95);
+    }
+
+    button.primary {
+      color: #082f49;
+      border: none;
+      background: linear-gradient(135deg, #7dd3fc, #c084fc);
+    }
+
+    button.warning {
+      border-color: rgba(251, 113, 133, 0.45);
+      color: #fecdd3;
+    }
+
+    .control {
+      margin: 13px 0;
+    }
+
+    .control:last-child { margin-bottom: 0; }
+
+    .control label {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 7px;
+      color: #cbd5e1;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .control label span:last-child {
+      color: var(--accent);
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: #7dd3fc;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+    }
+
+    .stat {
+      padding: 12px;
+      border-radius: 15px;
+      background: var(--panel-2);
+      border: 1px solid rgba(148, 163, 184, 0.15);
+    }
+
+    .stat b {
+      display: block;
+      font-size: 18px;
+      margin-bottom: 2px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat small { color: var(--muted); }
+
+    .matrix {
+      display: grid;
+      gap: 5px;
+      margin-top: 8px;
+    }
+
+    .matrix-row {
+      display: grid;
+      gap: 5px;
+    }
+
+    .cell {
+      min-height: 24px;
+      border-radius: 8px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      font-size: 10px;
+      display: grid;
+      place-items: center;
+      color: #f8fafc;
+      font-variant-numeric: tabular-nums;
+      user-select: none;
+    }
+
+    .note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .kbd {
+      display: inline-block;
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: rgba(15, 23, 42, 0.82);
+      color: #e2e8f0;
+      font-size: 11px;
+    }
+
+    @media (max-width: 980px) {
+      .app {
+        grid-template-columns: 1fr;
+        grid-template-rows: 1fr auto;
+      }
+      .panel {
+        height: 42vh;
+        border-left: none;
+        border-top: 1px solid var(--line);
+      }
+      .hud { left: 12px; top: 12px; }
+      .legend { left: 12px; bottom: 12px; right: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <main class="stage">
+      <canvas id="simCanvas"></canvas>
+      <div class="hud">
+        <div class="dot-live" id="liveDot"></div>
+        <div>
+          <strong id="runState">RUNNING</strong><br />
+          <span>Particle Life · Toroidal World · Spatial Grid</span>
+        </div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </main>
+
+    <aside class="panel">
+      <div class="title">
+        <h1>Particle Life Simulation</h1>
+        <p>색상별 인력/척력 규칙만으로 군집, 세포막, 포식-도망, 유기적 패턴을 천천히 형성하는 발표용 웹 데모입니다.</p>
+      </div>
+
+      <section class="section">
+        <h2>Simulation Control</h2>
+        <div class="button-row">
+          <button id="playPause" class="primary">Pause</button>
+          <button id="stepBtn">Step</button>
+          <button id="resetBtn">Reset</button>
+          <button id="randomBtn" class="warning">Random Matrix</button>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Preset</h2>
+        <select id="presetSelect">
+          <option value="organism">Organism / Cells</option>
+          <option value="predator">Predator Chase</option>
+          <option value="rings">Rings & Membranes</option>
+          <option value="chaos">Chaotic Bloom</option>
+        </select>
+      </section>
+
+      <section class="section">
+        <h2>Particle Settings</h2>
+        <div class="control">
+          <label><span>Total Particles</span><span id="particleCountValue"></span></label>
+          <input id="particleCount" type="range" min="500" max="10000" step="100" value="2400" />
+        </div>
+        <div class="control">
+          <label><span>Number of Colors</span><span id="colorCountValue"></span></label>
+          <input id="colorCount" type="range" min="3" max="6" step="1" value="5" />
+        </div>
+        <div class="note">입자 수를 크게 올리면 Grid-based Spatial Partitioning 덕분에 주변 입자만 계산합니다.</div>
+      </section>
+
+      <section class="section">
+        <h2>Physics Settings</h2>
+        <div class="control">
+          <label><span>Friction / Damping</span><span id="frictionValue"></span></label>
+          <input id="friction" type="range" min="0.88" max="0.995" step="0.001" value="0.965" />
+        </div>
+        <div class="control">
+          <label><span>rMax Interaction Radius</span><span id="radiusValue"></span></label>
+          <input id="radius" type="range" min="30" max="130" step="1" value="72" />
+        </div>
+        <div class="control">
+          <label><span>Force Strength</span><span id="forceValue"></span></label>
+          <input id="force" type="range" min="0.04" max="0.80" step="0.01" value="0.18" />
+        </div>
+        <div class="control">
+          <label><span>Particle Size</span><span id="sizeValue"></span></label>
+          <input id="particleSize" type="range" min="1.0" max="2.8" step="0.1" value="1.5" />
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Live Stats</h2>
+        <div class="stats">
+          <div class="stat"><b id="fps">0</b><small>FPS</small></div>
+          <div class="stat"><b id="checkedPairs">0</b><small>Nearby checks</small></div>
+          <div class="stat"><b id="gridCells">0</b><small>Active grid cells</small></div>
+          <div class="stat"><b id="energy">0</b><small>Motion energy</small></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>Force Matrix</h2>
+        <div class="note">행 = 내가 느끼는 힘, 열 = 상대 색상입니다. +는 끌림, -는 밀림입니다.</div>
+        <div id="matrix" class="matrix"></div>
+      </section>
+
+      <section class="section">
+        <h2>Presentation Notes</h2>
+        <div class="note">
+          <span class="kbd">Space</span> 재생/정지 · <span class="kbd">R</span> 랜덤 규칙 · <span class="kbd">S</span> 한 프레임<br /><br />
+          핵심 구조: 거리 기반 힘 그래프 + 비대칭 Force Matrix + 토러스 경계 + Spatial Grid 최적화.
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const canvas = document.getElementById('simCanvas');
+      const ctx = canvas.getContext('2d', { alpha: false });
+
+      const ui = {
+        playPause: document.getElementById('playPause'),
+        stepBtn: document.getElementById('stepBtn'),
+        resetBtn: document.getElementById('resetBtn'),
+        randomBtn: document.getElementById('randomBtn'),
+        presetSelect: document.getElementById('presetSelect'),
+        particleCount: document.getElementById('particleCount'),
+        colorCount: document.getElementById('colorCount'),
+        friction: document.getElementById('friction'),
+        radius: document.getElementById('radius'),
+        force: document.getElementById('force'),
+        particleSize: document.getElementById('particleSize'),
+        particleCountValue: document.getElementById('particleCountValue'),
+        colorCountValue: document.getElementById('colorCountValue'),
+        frictionValue: document.getElementById('frictionValue'),
+        radiusValue: document.getElementById('radiusValue'),
+        forceValue: document.getElementById('forceValue'),
+        sizeValue: document.getElementById('sizeValue'),
+        fps: document.getElementById('fps'),
+        checkedPairs: document.getElementById('checkedPairs'),
+        gridCells: document.getElementById('gridCells'),
+        energy: document.getElementById('energy'),
+        matrix: document.getElementById('matrix'),
+        legend: document.getElementById('legend'),
+        runState: document.getElementById('runState'),
+        liveDot: document.getElementById('liveDot')
+      };
+
+      const palette = [
+        '#67e8f9', '#fb7185', '#facc15', '#86efac', '#c084fc', '#fdba74'
+      ];
+
+      const state = {
+        width: 0,
+        height: 0,
+        dpr: Math.min(window.devicePixelRatio || 1, 2),
+        running: true,
+        particles: [],
+        matrix: [],
+        grid: new Map(),
+        lastTime: performance.now(),
+        fpsSamples: [],
+        checkedPairs: 0,
+        activeCells: 0,
+        energy: 0,
+        mouse: { x: 0, y: 0, active: false }
+      };
+
+      const config = {
+        count: Number(ui.particleCount.value),
+        colors: Number(ui.colorCount.value),
+        friction: Number(ui.friction.value),
+        rMax: Number(ui.radius.value),
+        forceStrength: Number(ui.force.value),
+        particleSize: Number(ui.particleSize.value),
+        rMinRatio: 0.34,
+        maxSpeed: 2.15,
+        accelerationScale: 0.34,
+        trailAlpha: 0.36
+      };
+
+      class Particle {
+        constructor(x, y, type) {
+          this.x = x;
+          this.y = y;
+          this.vx = (Math.random() - 0.5) * 0.08;
+          this.vy = (Math.random() - 0.5) * 0.08;
+          this.type = type;
+        }
+      }
+
+      function resize() {
+        const rect = canvas.getBoundingClientRect();
+        state.width = Math.max(320, rect.width);
+        state.height = Math.max(320, rect.height);
+        state.dpr = Math.min(window.devicePixelRatio || 1, 2);
+        canvas.width = Math.floor(state.width * state.dpr);
+        canvas.height = Math.floor(state.height * state.dpr);
+        ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+      }
+
+      function rand(min, max) {
+        return min + Math.random() * (max - min);
+      }
+
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function shortestDelta(a, b, size) {
+        let d = b - a;
+        if (d > size / 2) d -= size;
+        if (d < -size / 2) d += size;
+        return d;
+      }
+
+      function forceCurve(distance, attraction) {
+        const rMin = config.rMax * config.rMinRatio;
+        if (distance < 0.0001) return 0;
+        if (distance < rMin) {
+          return -1.0 * (1 - distance / rMin);
+        }
+        const t = (distance - rMin) / (config.rMax - rMin);
+        return attraction * (1 - t);
+      }
+
+      function createMatrix(mode = 'random') {
+        const c = config.colors;
+        const m = Array.from({ length: c }, () => Array(c).fill(0));
+
+        if (mode === 'organism') {
+          const base = [
+            [ 0.65, -0.35,  0.15, -0.55,  0.30, -0.10],
+            [-0.20,  0.58, -0.62,  0.28, -0.15,  0.18],
+            [ 0.18, -0.25,  0.62, -0.30,  0.46, -0.42],
+            [-0.52,  0.35, -0.22,  0.52, -0.38,  0.25],
+            [ 0.22, -0.42,  0.36, -0.18,  0.55, -0.28],
+            [-0.18,  0.25, -0.48,  0.32, -0.20,  0.50]
+          ];
+          for (let i = 0; i < c; i++) for (let j = 0; j < c; j++) m[i][j] = base[i][j];
+          return m;
+        }
+
+        if (mode === 'predator') {
+          for (let i = 0; i < c; i++) for (let j = 0; j < c; j++) m[i][j] = rand(-0.35, 0.35);
+          for (let i = 0; i < c; i++) {
+            m[i][i] = rand(0.25, 0.75);
+            m[i][(i + 1) % c] = rand(0.55, 0.95);
+            m[(i + 1) % c][i] = rand(-0.95, -0.45);
+          }
+          return m;
+        }
+
+        if (mode === 'rings') {
+          for (let i = 0; i < c; i++) {
+            for (let j = 0; j < c; j++) {
+              if (i === j) m[i][j] = 0.72;
+              else if (Math.abs(i - j) === 1 || Math.abs(i - j) === c - 1) m[i][j] = -0.55;
+              else m[i][j] = rand(-0.15, 0.30);
+            }
+          }
+          return m;
+        }
+
+        if (mode === 'chaos') {
+          for (let i = 0; i < c; i++) for (let j = 0; j < c; j++) m[i][j] = rand(-1.0, 1.0);
+          return m;
+        }
+
+        for (let i = 0; i < c; i++) {
+          for (let j = 0; j < c; j++) {
+            const sameBias = i === j ? rand(0.15, 0.75) : rand(-0.85, 0.85);
+            m[i][j] = Number(sameBias.toFixed(2));
+          }
+        }
+        return m;
+      }
+
+      function resetParticles() {
+        state.particles = [];
+        const centerX = state.width / 2;
+        const centerY = state.height / 2;
+        const clusterRadius = Math.min(state.width, state.height) * 0.38;
+
+        for (let i = 0; i < config.count; i++) {
+          const type = i % config.colors;
+          const angle = Math.random() * Math.PI * 2;
+          const radius = Math.sqrt(Math.random()) * clusterRadius;
+          const x = (centerX + Math.cos(angle) * radius + rand(-30, 30) + state.width) % state.width;
+          const y = (centerY + Math.sin(angle) * radius + rand(-30, 30) + state.height) % state.height;
+          state.particles.push(new Particle(x, y, type));
+        }
+      }
+
+      function rebuildAll(mode = ui.presetSelect.value) {
+        state.matrix = createMatrix(mode);
+        resetParticles();
+        renderMatrix();
+        renderLegend();
+      }
+
+      function updateLabels() {
+        ui.particleCountValue.textContent = config.count.toLocaleString();
+        ui.colorCountValue.textContent = config.colors;
+        ui.frictionValue.textContent = config.friction.toFixed(3);
+        ui.radiusValue.textContent = `${config.rMax}px`;
+        ui.forceValue.textContent = config.forceStrength.toFixed(2);
+        ui.sizeValue.textContent = `${config.particleSize.toFixed(1)}px`;
+      }
+
+      function renderLegend() {
+        ui.legend.innerHTML = '';
+        for (let i = 0; i < config.colors; i++) {
+          const item = document.createElement('div');
+          item.className = 'legend-item';
+          item.innerHTML = `<span class="swatch" style="background:${palette[i]}; color:${palette[i]}"></span> Type ${i + 1}`;
+          ui.legend.appendChild(item);
+        }
+      }
+
+      function renderMatrix() {
+        ui.matrix.innerHTML = '';
+        ui.matrix.style.gridTemplateRows = `repeat(${config.colors}, 1fr)`;
+        for (let i = 0; i < config.colors; i++) {
+          const row = document.createElement('div');
+          row.className = 'matrix-row';
+          row.style.gridTemplateColumns = `repeat(${config.colors}, 1fr)`;
+          for (let j = 0; j < config.colors; j++) {
+            const v = state.matrix[i][j];
+            const cell = document.createElement('div');
+            cell.className = 'cell';
+            const hue = v >= 0 ? '190' : '350';
+            const alpha = 0.12 + Math.min(0.72, Math.abs(v) * 0.62);
+            cell.style.background = `hsla(${hue}, 92%, 58%, ${alpha})`;
+            cell.textContent = `${v >= 0 ? '+' : ''}${v.toFixed(2)}`;
+            row.appendChild(cell);
+          }
+          ui.matrix.appendChild(row);
+        }
+      }
+
+      function buildGrid() {
+        state.grid.clear();
+        const cellSize = config.rMax;
+        const cols = Math.ceil(state.width / cellSize);
+        const rows = Math.ceil(state.height / cellSize);
+
+        for (let i = 0; i < state.particles.length; i++) {
+          const p = state.particles[i];
+          const cx = Math.floor(p.x / cellSize);
+          const cy = Math.floor(p.y / cellSize);
+          const key = `${cx},${cy}`;
+          let bucket = state.grid.get(key);
+          if (!bucket) {
+            bucket = [];
+            state.grid.set(key, bucket);
+          }
+          bucket.push(i);
+        }
+
+        state.activeCells = state.grid.size;
+        return { cellSize, cols, rows };
+      }
+
+      function simulate() {
+        const { cellSize, cols, rows } = buildGrid();
+        const particles = state.particles;
+        const rMaxSq = config.rMax * config.rMax;
+        state.checkedPairs = 0;
+        state.energy = 0;
+
+        for (let i = 0; i < particles.length; i++) {
+          const a = particles[i];
+          const cx = Math.floor(a.x / cellSize);
+          const cy = Math.floor(a.y / cellSize);
+          let fx = 0;
+          let fy = 0;
+
+          for (let oy = -1; oy <= 1; oy++) {
+            for (let ox = -1; ox <= 1; ox++) {
+              const nx = (cx + ox + cols) % cols;
+              const ny = (cy + oy + rows) % rows;
+              const bucket = state.grid.get(`${nx},${ny}`);
+              if (!bucket) continue;
+
+              for (let k = 0; k < bucket.length; k++) {
+                const j = bucket[k];
+                if (i === j) continue;
+                const b = particles[j];
+                const dx = shortestDelta(a.x, b.x, state.width);
+                const dy = shortestDelta(a.y, b.y, state.height);
+                const d2 = dx * dx + dy * dy;
+                if (d2 > rMaxSq || d2 < 0.0001) continue;
+                state.checkedPairs++;
+
+                const d = Math.sqrt(d2);
+                const attraction = state.matrix[a.type][b.type];
+                const f = forceCurve(d, attraction) * config.forceStrength;
+                fx += (dx / d) * f * config.accelerationScale;
+                fy += (dy / d) * f * config.accelerationScale;
+              }
+            }
+          }
+
+          if (state.mouse.active) {
+            const mdx = shortestDelta(a.x, state.mouse.x, state.width);
+            const mdy = shortestDelta(a.y, state.mouse.y, state.height);
+            const md2 = mdx * mdx + mdy * mdy;
+            const mouseRadius = 160;
+            if (md2 < mouseRadius * mouseRadius && md2 > 0.01) {
+              const md = Math.sqrt(md2);
+              const pull = 0.12 * (1 - md / mouseRadius);
+              fx += (mdx / md) * pull;
+              fy += (mdy / md) * pull;
+            }
+          }
+
+          a.vx = (a.vx + fx) * config.friction;
+          a.vy = (a.vy + fy) * config.friction;
+
+          const speed = Math.hypot(a.vx, a.vy);
+          if (speed > config.maxSpeed) {
+            const scale = config.maxSpeed / speed;
+            a.vx *= scale;
+            a.vy *= scale;
+          }
+
+          a.x = (a.x + a.vx + state.width) % state.width;
+          a.y = (a.y + a.vy + state.height) % state.height;
+          state.energy += speed;
+        }
+
+        state.energy /= Math.max(1, particles.length);
+      }
+
+      function drawBackground() {
+        // 반짝이는 잔상보다 부드러운 흐름을 우선하기 위해 매 프레임 더 안정적으로 덮어 그립니다.
+        ctx.fillStyle = `rgba(4, 7, 19, ${config.trailAlpha})`;
+        ctx.fillRect(0, 0, state.width, state.height);
+
+        const g = ctx.createRadialGradient(
+          state.width * 0.5,
+          state.height * 0.45,
+          0,
+          state.width * 0.5,
+          state.height * 0.45,
+          Math.max(state.width, state.height) * 0.68
+        );
+        g.addColorStop(0, 'rgba(14, 165, 233, 0.025)');
+        g.addColorStop(0.62, 'rgba(88, 28, 135, 0.014)');
+        g.addColorStop(1, 'rgba(2, 6, 23, 0.0)');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, state.width, state.height);
+      }
+
+      function render() {
+        drawBackground();
+        const size = config.particleSize;
+        const particles = state.particles;
+
+        ctx.globalCompositeOperation = 'source-over';
+        for (let t = 0; t < config.colors; t++) {
+          ctx.fillStyle = palette[t];
+          ctx.beginPath();
+          for (let i = 0; i < particles.length; i++) {
+            const p = particles[i];
+            if (p.type !== t) continue;
+            ctx.moveTo(p.x + size, p.y);
+            ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+          }
+          ctx.fill();
+        }
+      }
+
+      function updateStats(now) {
+        const dt = now - state.lastTime;
+        state.lastTime = now;
+        const fps = 1000 / Math.max(1, dt);
+        state.fpsSamples.push(fps);
+        if (state.fpsSamples.length > 24) state.fpsSamples.shift();
+        const avg = state.fpsSamples.reduce((a, b) => a + b, 0) / state.fpsSamples.length;
+
+        ui.fps.textContent = Math.round(avg);
+        ui.checkedPairs.textContent = Math.round(state.checkedPairs / 1000) + 'k';
+        ui.gridCells.textContent = state.activeCells;
+        ui.energy.textContent = state.energy.toFixed(2);
+      }
+
+      function loop(now) {
+        if (state.running) simulate();
+        render();
+        updateStats(now);
+        requestAnimationFrame(loop);
+      }
+
+      function setRunning(value) {
+        state.running = value;
+        ui.playPause.textContent = value ? 'Pause' : 'Play';
+        ui.runState.textContent = value ? 'RUNNING' : 'PAUSED';
+        ui.liveDot.style.background = value ? 'var(--good)' : 'var(--danger)';
+        ui.liveDot.style.boxShadow = value ? '0 0 18px var(--good)' : '0 0 18px var(--danger)';
+      }
+
+      function applyConfigFromUI({ reset = false, matrix = false } = {}) {
+        config.count = Number(ui.particleCount.value);
+        config.colors = Number(ui.colorCount.value);
+        config.friction = Number(ui.friction.value);
+        config.rMax = Number(ui.radius.value);
+        config.forceStrength = Number(ui.force.value);
+        config.particleSize = Number(ui.particleSize.value);
+        updateLabels();
+        if (matrix) state.matrix = createMatrix(ui.presetSelect.value);
+        if (reset) resetParticles();
+        renderMatrix();
+        renderLegend();
+      }
+
+      ui.playPause.addEventListener('click', () => setRunning(!state.running));
+      ui.stepBtn.addEventListener('click', () => {
+        setRunning(false);
+        simulate();
+        render();
+      });
+      ui.resetBtn.addEventListener('click', () => {
+        applyConfigFromUI({ reset: true });
+      });
+      ui.randomBtn.addEventListener('click', () => {
+        state.matrix = createMatrix('random');
+        renderMatrix();
+      });
+      ui.presetSelect.addEventListener('change', () => {
+        state.matrix = createMatrix(ui.presetSelect.value);
+        resetParticles();
+        renderMatrix();
+      });
+
+      [ui.friction, ui.radius, ui.force, ui.particleSize].forEach(el => {
+        el.addEventListener('input', () => applyConfigFromUI());
+      });
+
+      [ui.particleCount, ui.colorCount].forEach(el => {
+        el.addEventListener('input', () => applyConfigFromUI({ reset: true, matrix: true }));
+      });
+
+      canvas.addEventListener('pointermove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        state.mouse.x = e.clientX - rect.left;
+        state.mouse.y = e.clientY - rect.top;
+        state.mouse.active = true;
+      });
+      canvas.addEventListener('pointerleave', () => { state.mouse.active = false; });
+
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'Space') {
+          e.preventDefault();
+          setRunning(!state.running);
+        }
+        if (e.key.toLowerCase() === 'r') {
+          state.matrix = createMatrix('random');
+          renderMatrix();
+        }
+        if (e.key.toLowerCase() === 's') {
+          setRunning(false);
+          simulate();
+          render();
+        }
+      });
+
+      window.addEventListener('resize', () => {
+        resize();
+        resetParticles();
+      });
+
+      resize();
+      updateLabels();
+      rebuildAll('organism');
+      ctx.fillStyle = '#040713';
+      ctx.fillRect(0, 0, state.width, state.height);
+      requestAnimationFrame(loop);
+    })();
+  </script>
+</body>
+</html>

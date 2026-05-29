@@ -1603,9 +1603,15 @@ canvas#fx{
   box-shadow:0 0 0 2px #ffffff08,0 0 22px #ffd84b34,inset 0 0 18px #ffd84b1a;
 }
 .symbol-devil{
-  background:linear-gradient(180deg,#4d0915 0%,#1d0307 100%);
-  color:#ff7e7e;
-  box-shadow:0 0 0 2px #ffffff08,0 0 22px #ff4f4f34,inset 0 0 18px #ff4f4f1a;
+  background:
+    radial-gradient(circle at 50% 18%,#ff8ad21a 0%,transparent 42%),
+    linear-gradient(180deg,#3a082f 0%,#1a0418 58%,#09010a 100%);
+  color:#ff9ae6;
+  box-shadow:
+    0 0 0 2px #ffffff08,
+    0 0 24px #ff4fd84a,
+    inset 0 0 22px #ff4fd820,
+    inset 0 -10px 18px #00000040;
 }
 .symbol-jackpot{
   background:

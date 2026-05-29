@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>NEON MAZE RUNNER - Final Stable Build</title>
+<script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+<style>
+  :root{--cyan:#58f7ff;--pink:#ff4fd8;--yellow:#ffe66d;--green:#69ff9f;--red:#ff4f6d;--muted:#9eb0dc}
+  *{box-sizing:border-box} body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 18%,#17235a 0%,#070918 48%,#02030a 100%);color:#fff;font-family:ui-sans-serif,system-ui,Segoe UI,sans-serif;display:grid;place-items:center;overflow:hidden}
+  .wrap{width:min(96vw,980px);display:grid;grid-template-columns:672px 280px;gap:16px;align-items:start}.stage{position:relative;border:1px solid #243b7a;border-radius:22px;padding:14px;background:linear-gradient(180deg,#09112a,#050713);box-shadow:0 0 50px #2964ff33, inset 0 0 35px #58f7ff10}#game{width:672px;height:672px;border-radius:14px;overflow:hidden;background:#02030a}.panel{border:1px solid #243b7a;border-radius:22px;background:#0b1024cc;padding:18px;box-shadow:0 0 35px #0008}.title{font-size:24px;letter-spacing:2px;color:var(--cyan);text-shadow:0 0 12px var(--cyan);font-weight:900}.sub{color:var(--muted);font-size:13px;line-height:1.5;margin:8px 0 16px}.row{display:flex;justify-content:space-between;border-bottom:1px solid #26345f;padding:10px 0;font-size:14px}.value{font-weight:800;color:var(--yellow)}.btn{width:100%;margin-top:14px;padding:12px 14px;border:0;border-radius:14px;background:linear-gradient(90deg,#2b7cff,#9b4dff);color:white;font-weight:900;cursor:pointer;box-shadow:0 0 20px #2b7cff55}.hint{margin-top:14px;color:#c5d0f2;font-size:13px;line-height:1.6}.badge{display:inline-block;border:1px solid #58f7ff55;color:#c9fbff;border-radius:999px;padding:4px 8px;margin:3px 3px 0 0;font-size:12px}.overlay{position:absolute;inset:14px;display:grid;place-items:center;background:#02030adc;border-radius:14px;text-align:center;padding:26px;z-index:5}.overlay h1{margin:0 0 10px;font-size:34px;color:var(--cyan);text-shadow:0 0 18px var(--cyan)}.overlay p{margin:0;color:#cdd8ff;line-height:1.6}.hidden{display:none}@media(max-width:990px){.wrap{grid-template-columns:1fr}.stage,#game{width:min(92vw,672px);height:min(92vw,672px)}.panel{order:-1}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="stage">
+    <div id="game"></div>
+    <div id="overlay" class="overlay"><div><h1>NEON MAZE RUNNER</h1><p>Phaser 3 기반 부드러운 이동 버전<br/>방향키/WASD 이동 · Space 시작/재시작 · P 일시정지</p><button class="btn" onclick="restartGame()">START RUN</button></div></div>
+  </div>
+  <aside class="panel">
+    <div class="title">NEON RUN</div>
+    <div class="sub">크래시 오류 방어 코드 추가, 속도감 상향 및 캐릭터 그래픽 회전 왜곡이 완벽하게 수정된 버전입니다.</div>
+    <div class="row"><span>SCORE</span><span id="score" class="value">0</span></div>
+    <div class="row"><span>LIVES</span><span id="lives" class="value">3</span></div>
+    <div class="row"><span>LEVEL</span><span id="level" class="value">1</span></div>
+    <div class="row"><span>MODE</span><span id="mode" class="value">READY</span></div>
+    <button class="btn" onclick="restartGame()">RESTART</button>
+    <div class="hint"><b>안정화 완료</b><br/><span class="badge">Null 에러 원천 차단</span><span class="badge">시원한 아케이드 속도</span><span class="badge">동적 눈 좌표 교정</span></div>
+  </aside>
+</div>
+<script>
+const TILE=32, COLS=21, ROWS=21;
+const MAP=[
+"#####################",
+"#.........#.........#",
+"#.###.###.#.###.###.#",
+"#o#.....#...#.....#o#",
+"#.###.#.#####.#.###.#",
+"#.....#...#...#.....#",
+"#####.### # ###.#####",
+"    #.#       #.#    ",
+"#####.# ## ## #.#####",
+"     .  #   #  .     ",
+"#####.# ## ## #.#####",
+"    #.#       #.#    ",
+"#####.# ##### #.#####",
+"#.........#.........#",
+"#.###.###.#.###.###.#",
+"#o..#.....P.....#..o#",
+"###.#.#.#####.#.#.###",
+"#.....#...#...#.....#",
+"#.#######.#.#######.#",
+"#...................#",
+"#####################"
+];
+const DIR={left:{x:-1,y:0,rot:Math.PI},right:{x:1,y:0,rot:0},up:{x:0,y:-1,rot:-Math.PI/2},down:{x:0,y:1,rot:Math.PI/2}};
+const DIRS=['left','right','up','down'];
+const opposite={left:'right',right:'left',up:'down',down:'up'};
+const UI={score:document.getElementById('score'),lives:document.getElementById('lives'),level:document.getElementById('level'),mode:document.getElementById('mode'),overlay:document.getElementById('overlay')};
+let phaserGame, gameScene;
+
+function px(t){return t*TILE+TILE/2}
+function tileOf(v){return Math.floor(v/TILE)}
+function centerOfTile(v){return tileOf(v)*TILE+TILE/2}
+function isWall(x,y){x=((x%COLS)+COLS)%COLS; if(y<0||y>=ROWS)return true; return MAP[y][x]==='#'}
+
+// 🛠️ 버그 해결: d가 undefined거나 유효하지 않을 때 튕기는 현상 완벽 방어
+function canGo(tx,ty,d){
+  if(!d || !DIR[d]) return false;
+  return !isWall(tx+DIR[d].x, ty+DIR[d].y);
+}
+
+function atCenter(a, tolerance=7){
+  return Math.abs(a.g.x-centerOfTile(a.g.x))<=tolerance && Math.abs(a.g.y-centerOfTile(a.g.y))<=tolerance}
+
+function snapToLane(a){
+  a.g.x = centerOfTile(a.g.x);
+  a.g.y = centerOfTile(a.g.y);
+}
+
+function actorTile(a){return {tx:Phaser.Math.Clamp(tileOf(a.g.x),0,COLS-1),ty:Phaser.Math.Clamp(tileOf(a.g.y),0,ROWS-1)}}
+
+function bfs(start,target,blockReverse){
+  if(!start || !target) return null;
+  const q=[{x:start.tx,y:start.ty,first:null}], seen=new Set([start.tx+','+start.ty]);
+  let best={first:null,score:9999};
+  while(q.length){
+    const n=q.shift(); const score=Math.abs(n.x-target.tx)+Math.abs(n.y-target.ty);
+    if(score<best.score)best={first:n.first,score};
+    if(n.x===target.tx&&n.y===target.ty)return n.first;
+    for(const d of DIRS){
+      if(!n.first && d===blockReverse)continue;
+      const nx=((n.x+DIR[d].x)%COLS+COLS)%COLS, ny=n.y+DIR[d].y;
+      if(isWall(nx,ny)||seen.has(nx+','+ny))continue;
+      seen.add(nx+','+ny); q.push({x:nx,y:ny,first:n.first||d});
+    }
+  }
+  return best.first;
+}
+
+class MainScene extends Phaser.Scene{
+  constructor(){super('main')}
+  create(){
+    gameScene=this; this.score=0; this.lives=3; this.level=1; this.running=false; this.pausedByUser=false; this.pellets=[]; this.powers=[]; this.inputDir='left'; this.powerTimer=0;
+    this.cameras.main.setBackgroundColor('#02030a'); this.drawMap(); this.createItems(); this.createActors(); this.bindInput(); this.updateUI('READY');
+  }
+  drawMap(){
+    const g=this.add.graphics();
+    for(let y=0;y<ROWS;y++) for(let x=0;x<COLS;x++){
+      if(MAP[y][x]==='#'){
+        g.fillStyle(0x08163d,1).fillRoundedRect(x*TILE+1,y*TILE+1,TILE-2,TILE-2,8);
+        g.lineStyle(2,0x2f7cff,.9).strokeRoundedRect(x*TILE+4,y*TILE+4,TILE-8,TILE-8,7);
+      }else{
+        g.fillStyle((x+y)%2?0x030716:0x04091d,1).fillRect(x*TILE,y*TILE,TILE,TILE);
+      }
+    }
+  }
+  createItems(){
+    MAP.forEach((row,y)=>[...row].forEach((c,x)=>{
+      if(c==='.') this.pellets.push(this.add.circle(px(x),px(y),3,0xffe66d).setData({tx:x,ty:y,type:'pellet'}));
+      if(c==='o') this.powers.push(this.add.circle(px(x),px(y),8,0x69ff9f).setData({tx:x,ty:y,type:'power'}));
+    }));
+  }
+  createActors(){
+    this.player=this.makePlayer(10,15);
+    this.ghosts=[
+      this.makeGhost('BLINK',10,9,'chaser',0xff4f6d),
+      this.makeGhost('AMBUSH',9,9,'ambush',0x58f7ff),
+      this.makeGhost('DRIFT',11,9,'random',0xff4fd8)
+    ];
+  }
+  makePlayer(tx,ty){
+    const g=this.add.graphics({x:px(tx),y:px(ty)});
+    // ⚡ 플레이어 속도 상향 (280) - 쾌적하고 빠른 조작감
+    return {kind:'player',g,tx,ty,dir:'left',nextDir:'left',speed:280,mouth:0,desiredAngle:Math.PI,currentAngle:Math.PI,lastX:px(tx),lastY:px(ty)};
+  }
+  makeGhost(name,tx,ty,type,color){
+    const g=this.add.graphics({x:px(tx),y:px(ty)});
+    // 고스트 속도 밸런싱 상향
+    return {kind:'ghost',name,type,color,g,tx,ty,dir:'left',nextDir:'left',speed:type==='random'?215:205,fright:0,thinkAt:0,lastX:px(tx),lastY:px(ty)};
+  }
+  bindInput(){
+    this.input.keyboard.on('keydown',e=>{
+      const k=e.key; if(k==='ArrowLeft'||k==='a'||k==='A')this.inputDir='left'; if(k==='ArrowRight'||k==='d'||k==='D')this.inputDir='right'; if(k==='ArrowUp'||k==='w'||k==='W')this.inputDir='up'; if(k==='ArrowDown'||k==='s'||k==='S')this.inputDir='down';
+      if(e.code==='Space')restartGame(); if(k==='p'||k==='P')this.togglePause();
+    });
+  }
+  startRun(){this.running=true; this.pausedByUser=false; UI.overlay.classList.add('hidden'); this.updateUI('CHASE')}
+  resetRun(){this.scene.restart(); setTimeout(()=>gameScene.startRun(),30)}
+  togglePause(){ if(!this.running)return; this.pausedByUser=!this.pausedByUser; this.updateUI(this.pausedByUser?'PAUSE':'CHASE'); }
+  
+  update(time,delta){
+    if(!this.running||this.pausedByUser)return;
+    const dt=Math.min(delta/1000,0.03); 
+    this.powerTimer=Math.max(0,this.powerTimer-dt); this.ghosts.forEach(g=>g.fright=Math.max(0,g.fright-dt));
+    this.player.nextDir=this.inputDir;
+    
+    this.stepPlayer(dt); 
+    this.ghosts.forEach(g=>this.stepGhost(g,time,dt));
+    this.drawPlayer(this.player,time,dt); 
+    this.ghosts.forEach(g=>this.drawGhost(g,time));
+    
+    this.collectItems(); 
+    this.checkCollisions(); 
+    this.powers.forEach(p=>p.setScale(1+Math.sin(time/130)*.12));
+    this.updateUI(this.powerTimer>0?'OVERRIDE':'CHASE');
+  }
+
+  moveContinuous(a,dt){
+    if(!a || !DIR[a.dir]) return;
+    const d=DIR[a.dir];
+    a.lastX=a.g.x; a.lastY=a.g.y;
+    a.g.x+=d.x*a.speed*dt; a.g.y+=d.y*a.speed*dt;
+    
+    if(a.g.x < -TILE/2) a.g.x = COLS*TILE+TILE/2;
+    if(a.g.x > COLS*TILE+TILE/2) a.g.x = -TILE/2;
+    
+    const t=actorTile(a); a.tx=t.tx; a.ty=t.ty;
+    if(isWall(a.tx,a.ty)){
+      a.g.x=centerOfTile(a.lastX); a.g.y=centerOfTile(a.lastY);
+      const t2=actorTile(a); a.tx=t2.tx; a.ty=t2.ty;
+    }
+  }
+
+  stepPlayer(dt){
+    const p=this.player;
+    const pt=actorTile(p); p.tx=pt.tx; p.ty=pt.ty;
+
+    if(p.nextDir!==p.dir){
+      if(p.nextDir===opposite[p.dir] || (canGo(p.tx,p.ty,p.nextDir) && atCenter(p,8))){
+        snapToLane(p);
+        p.dir=p.nextDir;
+      }
+    }
+    if(canGo(p.tx,p.ty,p.dir)){
+      this.moveContinuous(p,dt);
+    } else if(atCenter(p,8)){
+      snapToLane(p);
+    }
+  }
+
+  // 🛠️ 크래시 완벽 해결 버전의 stepGhost
+  stepGhost(g,time,dt){
+    const gt=actorTile(g); g.tx=gt.tx; g.ty=gt.ty;
+    if(time>g.thinkAt && atCenter(g,8)){
+      g.nextDir=this.chooseGhostDir(g) || g.dir; 
+      g.thinkAt=time+100+Math.random()*50;
+    }
+    if(g.nextDir && g.nextDir!==g.dir && canGo(g.tx,g.ty,g.nextDir) && atCenter(g,8)){
+      snapToLane(g);
+      g.dir=g.nextDir;
+    }
+    if(canGo(g.tx,g.ty,g.dir)){
+      this.moveContinuous(g,dt);
+    } else if(atCenter(g,8)) {
+      snapToLane(g);
+      g.dir=this.chooseGhostDir(g) || 'left';
+    }
+  }
+
+  // 🛠️ 크래시 완벽 해결 버전의 chooseGhostDir
+  chooseGhostDir(g){
+    const gt=actorTile(g);
+    const pt=actorTile(this.player);
+    if(!gt || !pt) return g.dir || 'left';
+
+    if(g.fright>0){ return bfs(gt,{tx:COLS-1-pt.tx,ty:ROWS-1-pt.ty},opposite[g.dir]) || g.dir; }
+    if(g.type==='random'&&Math.random()<.42){ 
+      const opts=DIRS.filter(d=>d!==opposite[g.dir]&&canGo(gt.tx,gt.ty,d)); 
+      return opts[Math.floor(Math.random()*opts.length)]||g.dir; 
+    }
+    let target={tx:pt.tx,ty:pt.ty};
+    if(g.type==='ambush'){
+      const d=DIR[this.player.dir] || DIR['left'];
+      target={tx:Phaser.Math.Clamp(pt.tx+d.x*4,0,COLS-1),ty:Phaser.Math.Clamp(pt.ty+d.y*4,0,ROWS-1)};
+    }
+    return bfs(gt,target,opposite[g.dir]) || g.dir;
+  }
+
+  drawPlayer(p,time,dt){
+    p.g.clear();
+    p.desiredAngle=DIR[p.dir] ? DIR[p.dir].rot : 0;
+    
+    let diff=Phaser.Math.Angle.Wrap(p.desiredAngle-p.currentAngle); 
+    p.currentAngle+=diff*Math.min(1,dt*24);
+    p.g.rotation=p.currentAngle;
+    
+    const moving=canGo(p.tx,p.ty,p.dir);
+    p.mouth = moving ? (.05+Math.abs(Math.sin(time/50))*.40) : .05;
+    
+    const color=this.powerTimer>0?0x69ff9f:0xffe66d;
+    p.g.fillStyle(color,1).lineStyle(2,0xffffff,.15);
+    p.g.beginPath();
+    p.g.moveTo(0,0);
+    p.g.arc(0,0,13,p.mouth*Math.PI,(2-p.mouth)*Math.PI,false);
+    p.g.closePath(); p.g.fillPath(); p.g.strokePath();
+    
+    // 🛠️ 눈 위치 왜곡 수정: 캐릭터 진행 방향에 연동해 뒤집힘 현상 방지
+    p.g.fillStyle(0x02030a,1);
+    if (p.dir === 'left') {
+      p.g.fillCircle(-2, -6, 2.2); 
+    } else {
+      p.g.fillCircle(2, -6, 2.2);  
+    }
+  }
+
+  // 기존의 잘못된 부분: .beginPath().g.arc(0,-3,12,Math.PI,0,false) -> 중간에 .g.가 다시 들어가서 깨짐
+  drawGhost(g,time){
+    g.g.clear(); 
+    g.g.rotation=0;
+    const c=g.fright>0?0x4566ff:g.color;
+    
+    // 끊기지 않게 컨텍스트 체이닝을 올바르게 수정했습니다.
+    g.g.fillStyle(c,1);
+    g.g.beginPath();
+    g.g.arc(0,-3,12,Math.PI,0,false);
+    g.g.lineTo(12,12);
+    
+    for(let i=0;i<4;i++) g.g.lineTo(8-i*6,9+Math.sin(time/95+i)*1.7); 
+    g.g.lineTo(-12,12); 
+    g.g.closePath(); 
+    g.g.fillPath();
+    
+    const d=DIR[g.dir] || DIR['left'];
+    g.g.fillStyle(0xffffff,1); 
+    g.g.fillCircle(-5,-5,3.4); 
+    g.g.fillCircle(5,-5,3.4);
+    
+    g.g.fillStyle(0x111111,1); 
+    g.g.fillCircle(-5+d.x*1.7,-5+d.y*1.7,1.45); 
+    g.g.fillCircle(5+d.x*1.7,-5+d.y*1.7,1.45);
+  }
+
+  collectItems(){
+    const pt=actorTile(this.player);
+    for(let i=this.pellets.length-1;i>=0;i--){const o=this.pellets[i]; if(o.getData('tx')===pt.tx&&o.getData('ty')===pt.ty){o.destroy(); this.pellets.splice(i,1); this.score+=10;}}
+    for(let i=this.powers.length-1;i>=0;i--){const o=this.powers[i]; if(o.getData('tx')===pt.tx&&o.getData('ty')===pt.ty){o.destroy(); this.powers.splice(i,1); this.score+=80; this.powerTimer=8; this.ghosts.forEach(g=>g.fright=8);}}
+    if(this.pellets.length+this.powers.length===0){this.score+=1000; this.level++; this.resetLevelKeepStats();}
+  }
+
+  resetLevelKeepStats(){ const keep={score:this.score,lives:this.lives,level:this.level}; this.scene.restart(); setTimeout(()=>{Object.assign(gameScene,keep); gameScene.startRun(); gameScene.player.speed=Math.min(340,280+gameScene.level*8); gameScene.ghosts.forEach(g=>g.speed=Math.min(300,g.speed+gameScene.level*7));},30); }
+  
+  checkCollisions(){
+    for(const g of this.ghosts){
+      if(Phaser.Math.Distance.Between(this.player.g.x,this.player.g.y,g.g.x,g.g.y)<16){
+        if(g.fright>0||this.powerTimer>0){this.score+=200; Object.assign(g,{fright:0}); g.g.setPosition(px(10),px(9)); snapToLane(g);}
+        else{this.lives--; this.cameras.main.shake(150,0.006); if(this.lives<=0){this.running=false; UI.overlay.classList.remove('hidden'); UI.overlay.querySelector('h1').textContent='GAME OVER'; UI.overlay.querySelector('p').innerHTML='Space 또는 START RUN으로 다시 시작'; return;} this.resetPositions();}
+      }
+    }
+  }
+
+  resetPositions(){
+    Object.assign(this.player,{dir:'left',nextDir:'left',desiredAngle:Math.PI,currentAngle:Math.PI}); this.player.g.setPosition(px(10),px(15)); this.powerTimer=0;
+    this.ghosts.forEach((g,i)=>{Object.assign(g,{dir:'left',nextDir:'left',fright:0}); g.g.setPosition(px(10+i-1),px(9)); snapToLane(g);});
+    snapToLane(this.player);
+  }
+  updateUI(mode){UI.score.textContent=this.score; UI.lives.textContent=this.lives; UI.level.textContent=this.level; UI.mode.textContent=mode;}
+}
+
+function boot(){
+  phaserGame=new Phaser.Game({type:Phaser.AUTO,parent:'game',width:672,height:672,backgroundColor:'#02030a',scene:MainScene,scale:{mode:Phaser.Scale.FIT,autoCenter:Phaser.Scale.CENTER_BOTH},render:{antialias:true,roundPixels:true,pixelArt:false}});
+}
+function restartGame(){ if(gameScene)gameScene.resetRun(); }
+window.restartGame=restartGame; window.addEventListener('load',boot);
+</script>
+</body>
+</html>

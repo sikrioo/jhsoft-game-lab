@@ -74,7 +74,7 @@ export const GAME_CONFIG = {
       { id: "diamond", name: "Diamond", icon: "GEM", multiplier: 5, description: "High-value and less forgiving. The board rarely offers this shape cheaply." },
       { id: "treasure", name: "Treasure", icon: "TRE", multiplier: 5, description: "A second x5 family. Expensive enough to matter, common enough to tempt you." },
       { id: "jackpot", name: "Seven", icon: "777", multiplier: 7, description: "The premium ordinary symbol. If Seven completes a large pattern, the machine stops pretending to be modest." },
-      { id: "devil", name: "Devil", icon: "666", multiplier: 0, multiplierLabel: "VOID", description: "Not a payout symbol. Devil exists to cancel greed, not reward it." },
+      { id: "devil", name: "Devil", icon: "6", multiplier: 0, multiplierLabel: "VOID", description: "Not a payout symbol. Devil exists to cancel greed, not reward it." },
     ],
     patternGuide: [
       { id: "horizontal", name: "Horizontal", multiplier: 1, description: "The smallest clean line. Three matching cells across one row.", grid: ["00000", "01110", "00000"] },
@@ -99,7 +99,7 @@ export const GAME_CONFIG = {
     { id: "diamond", name: "Diamond", icon: "GEM", baseMultiplier: 5, baseWeight: 8, rarity: "epic", family: "treasure" },
     { id: "treasure", name: "Treasure", icon: "TRE", baseMultiplier: 5, baseWeight: 8, rarity: "epic", family: "treasure" },
     { id: "jackpot", name: "Seven", icon: "777", baseMultiplier: 7, baseWeight: 3, rarity: "legendary", special: "jackpot", family: "fate" },
-    { id: "devil", name: "Devil", icon: "666", baseMultiplier: 0, baseWeight: 5, rarity: "curse", special: "devil", family: "infernal" },
+    { id: "devil", name: "Devil", icon: "6", baseMultiplier: 0, baseWeight: 5, rarity: "curse", special: "devil", family: "infernal" },
   ],
 };
 

@@ -45,7 +45,7 @@ function evaluatePatternBoard(context) {
     context.devilTriggered = true;
     context.devilMatches = devilCandidates;
     entries.push({
-      label: "666 VOID",
+      label: "6 VOID",
       text: `${describePatternLabels(devilCandidates)} formed with DEVIL. Normal pattern rewards are voided.`,
       tone: "loss",
       effect: "event-devil",
@@ -154,7 +154,7 @@ function evaluateCombo(context) {
     };
     entries.push({
       label: "COMBO",
-      text: "666 severs the combo chain. Combo resets, but does not alter this payout.",
+      text: "6 severs the combo chain. Combo resets, but does not alter this payout.",
       tone: "loss",
       effect: "combo-reset",
       focus: mergeFocuses(context.devilMatches.map((match) => createFocus({
@@ -227,7 +227,7 @@ function evaluateCombo(context) {
 function buildSummaryRows(context) {
   if (context.devilTriggered) {
     return [{
-      tag: "666",
+      tag: "6",
       message: "DEVIL PATTERN VOIDED ALL NORMAL WINS",
       className: "devil",
     }];

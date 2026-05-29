@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Web Soft-Body Slime Simulator</title>
+<style>
+  :root{--bg:#070a12;--panel:rgba(10,16,30,.72);--line:rgba(150,230,255,.2);--text:#d9f7ff;--muted:#7fa4b5;--accent:#65ffce;--pink:#ff5edf}
+  *{box-sizing:border-box} body{margin:0;overflow:hidden;background:radial-gradient(circle at 50% 0%,#173348 0%,#07101b 38%,#03050a 100%);font-family:Inter,system-ui,Apple SD Gothic Neo,Malgun Gothic,sans-serif;color:var(--text)}
+  canvas{display:block;width:100vw;height:100vh;cursor:grab} canvas:active{cursor:grabbing}
+  .hud{position:fixed;left:22px;top:20px;width:360px;background:var(--panel);border:1px solid var(--line);box-shadow:0 20px 80px rgba(0,0,0,.45), inset 0 0 30px rgba(72,255,220,.05);backdrop-filter:blur(14px);border-radius:20px;padding:18px 18px 14px;user-select:none}
+  .title{font-size:18px;font-weight:800;letter-spacing:.3px;margin-bottom:5px}.sub{font-size:12px;color:var(--muted);line-height:1.45;margin-bottom:14px}.row{display:grid;grid-template-columns:118px 1fr 42px;gap:10px;align-items:center;margin:9px 0}.row label{font-size:12px;color:#b9d8e6}.val{font-size:12px;color:var(--accent);text-align:right;font-variant-numeric:tabular-nums} input[type=range]{accent-color:#5effd4;width:100%}
+  .buttons{display:flex;gap:8px;margin-top:13px}button{border:1px solid rgba(120,240,255,.25);background:rgba(55,96,128,.28);color:var(--text);border-radius:12px;padding:9px 11px;font-weight:700;cursor:pointer}button:hover{background:rgba(95,255,210,.17)}
+  .hint{position:fixed;right:24px;bottom:22px;text-align:right;color:#a7c8d6;font-size:12px;line-height:1.7;text-shadow:0 2px 12px #000}.badge{display:inline-block;margin-left:8px;padding:2px 8px;border:1px solid rgba(101,255,206,.35);border-radius:999px;color:#65ffce;font-size:11px}.meter{height:8px;border-radius:99px;overflow:hidden;background:rgba(255,255,255,.08);margin-top:8px}.bar{height:100%;width:0%;background:linear-gradient(90deg,#65ffce,#ff5edf);border-radius:99px}.small{font-size:11px;color:#87a8b7;margin-top:7px}
+</style>
+</head>
+<body>
+<canvas id="canvas"></canvas>
+<div class="hud">
+  <div class="title">SOFT-BODY SLIME <span class="badge">VERLET</span></div>
+  <div class="sub">외곽 점 + 내부 스프링 + 면적 보존 + 바닥 점착 상태 머신. 마우스로 잡아당기면 길게 늘어나고, 놓으면 통통하게 복원됩니다.</div>
+  <div class="row"><label>점성 / 감쇠</label><input id="damping" type="range" min="0.88" max="0.995" step="0.001" value="0.955"><span class="val" id="dampingV"></span></div>
+  <div class="row"><label>젤리 탄성</label><input id="stiffness" type="range" min="0.15" max="0.95" step="0.01" value="0.52"><span class="val" id="stiffnessV"></span></div>
+  <div class="row"><label>부피 보존</label><input id="areaForce" type="range" min="0.05" max="0.65" step="0.01" value="0.28"><span class="val" id="areaForceV"></span></div>
+  <div class="row"><label>바닥 끈적임</label><input id="stickiness" type="range" min="0" max="1" step="0.01" value="0.72"><span class="val" id="stickinessV"></span></div>
+  <div class="row"><label>슬라임 크기</label><input id="size" type="range" min="72" max="150" step="1" value="105"><span class="val" id="sizeV"></span></div>
+  <div class="meter"><div id="pullBar" class="bar"></div></div><div class="small">Pull force / 바닥에서 뚝 떨어지는 힘</div>
+  <div class="buttons"><button id="reset">Reset</button><button id="drop">Drop Test</button><button id="jelly">Jelly</button><button id="liquid">Liquid</button></div>
+</div>
+<div class="hint">Drag the slime edge strongly<br/>Space: Drop Test · R: Reset<br/>발표 포인트: Sticky anchors / Area preservation / Procedural eyes</div>
+<script>
+(() => {
+'use strict';
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+let W=0,H=0, groundY=0;
+function resize(){ W=canvas.width=Math.floor(innerWidth*DPR); H=canvas.height=Math.floor(innerHeight*DPR); canvas.style.width=innerWidth+'px'; canvas.style.height=innerHeight+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); W=innerWidth; H=innerHeight; groundY=H-92; }
+addEventListener('resize', resize); resize();
+const $ = id => document.getElementById(id);
+const ui = { damping:$('damping'), stiffness:$('stiffness'), areaForce:$('areaForce'), stickiness:$('stickiness'), size:$('size') };
+function syncUI(){ for(const k in ui) $(k+'V').textContent = Number(ui[k].value).toFixed(k==='size'?0:2); }
+Object.values(ui).forEach(e=>e.addEventListener('input', syncUI)); syncUI();
+const mouse = {x:0,y:0,down:false,point:null,lastX:0,lastY:0,force:0};
+canvas.addEventListener('pointermove', e=>{ const r=canvas.getBoundingClientRect(); mouse.lastX=mouse.x; mouse.lastY=mouse.y; mouse.x=e.clientX-r.left; mouse.y=e.clientY-r.top; });
+canvas.addEventListener('pointerdown', e=>{ canvas.setPointerCapture(e.pointerId); mouse.down=true; pickPoint(); });
+canvas.addEventListener('pointerup', ()=>{ mouse.down=false; if(mouse.point){ mouse.point.sticky=0; mouse.point=null; } });
+function dist(a,b,c,d){ return Math.hypot(a-c,b-d); }
+class Point{
+  constructor(x,y){this.x=x;this.y=y;this.px=x;this.py=y;this.ax=0;this.ay=0;this.sticky=0;this.contact=0;}
+  integrate(){
+    const damping = +ui.damping.value;
+    let vx=(this.x-this.px)*damping, vy=(this.y-this.py)*damping;
+    if(this.sticky>0){ const s=1-this.sticky*.82; vx*=s; vy*=s; this.sticky*=0.965; }
+    this.px=this.x; this.py=this.y; this.x+=vx+this.ax; this.y+=vy+this.ay; this.ax=0; this.ay=0;
+  }
+}
+class Constraint{
+  constructor(a,b,len,stiff=1){this.a=a;this.b=b;this.len=len;this.stiff=stiff;}
+  solve(){
+    const dx=this.b.x-this.a.x, dy=this.b.y-this.a.y, d=Math.hypot(dx,dy)||.0001;
+    const diff=(d-this.len)/d*.5*this.stiff*(+ui.stiffness.value);
+    const ox=dx*diff, oy=dy*diff; this.a.x+=ox; this.a.y+=oy; this.b.x-=ox; this.b.y-=oy;
+  }
+}
+class Slime{
+  constructor(x,y,r=105,n=28){ this.n=n; this.r=r; this.points=[]; this.constraints=[]; this.center=new Point(x,y); this.desiredArea=Math.PI*r*r; this.eyeLag={x:x,y:y}; this.mood=0; this.init(x,y,r); }
+  init(x,y,r){ this.points=[]; this.constraints=[]; this.center=new Point(x,y); for(let i=0;i<this.n;i++){ const a=i/this.n*Math.PI*2; const wob=1+(Math.sin(i*2.1)*.025); this.points.push(new Point(x+Math.cos(a)*r*wob,y+Math.sin(a)*r*wob)); }
+    for(let i=0;i<this.n;i++){ const p=this.points[i], q=this.points[(i+1)%this.n], q2=this.points[(i+2)%this.n], opp=this.points[(i+Math.floor(this.n/2))%this.n]; this.constraints.push(new Constraint(p,q,dist(p.x,p.y,q.x,q.y),1.0)); this.constraints.push(new Constraint(p,q2,dist(p.x,p.y,q2.x,q2.y),.32)); if(i%2===0) this.constraints.push(new Constraint(p,this.center,r,.55)); if(i%4===0) this.constraints.push(new Constraint(p,opp,dist(p.x,p.y,opp.x,opp.y),.18)); }
+  }
+  centroid(){ let x=0,y=0; for(const p of this.points){x+=p.x;y+=p.y} return {x:x/this.n,y:y/this.n}; }
+  area(){ let a=0; for(let i=0;i<this.n;i++){ const p=this.points[i], q=this.points[(i+1)%this.n]; a += p.x*q.y-q.x*p.y; } return Math.abs(a)*.5; }
+  update(){
+    const c=this.centroid(); this.center.x += (c.x-this.center.x)*.22; this.center.y += (c.y-this.center.y)*.22;
+    for(const p of [...this.points,this.center]){ p.ay += .42; p.integrate(); }
+    if(mouse.down && mouse.point){ const p=mouse.point; const dx=mouse.x-p.x, dy=mouse.y-p.y; const k=.26; p.x += dx*k; p.y += dy*k; p.px += dx*k*.22; p.py += dy*k*.22; mouse.force=Math.min(1, Math.hypot(dx,dy)/180); if(mouse.force>.35) p.sticky*=.84; }
+    for(let iter=0;iter<9;iter++){
+      for(const con of this.constraints) con.solve();
+      this.preserveArea();
+      this.collideWorld();
+    }
+    this.updateEyes(c);
+    $('pullBar').style.width = (mouse.force*100).toFixed(0)+'%'; mouse.force*=.92;
+  }
+  preserveArea(){ const c=this.centroid(); const current=this.area(); const target=this.desiredArea; const ratio=Math.sqrt(target/Math.max(10,current)); const force=+ui.areaForce.value; const impact=Math.min(.34, Math.max(0, (current-target)/target*.18)); const f=(ratio-1)*force*(1-impact); for(const p of this.points){ p.x += (p.x-c.x)*f; p.y += (p.y-c.y)*f; } }
+  collideWorld(){
+    const stick=+ui.stickiness.value;
+    for(const p of this.points){
+      const left=28,right=W-28;
+      if(p.x<left){p.x=left; p.px=p.x+(p.px-p.x)*-.18} if(p.x>right){p.x=right; p.px=p.x+(p.px-p.x)*-.18}
+      const wave = Math.sin(p.x*.018+performance.now()*.0012)*4;
+      if(p.y>groundY+wave){
+        p.y=groundY+wave; const vx=p.x-p.px, vy=p.y-p.py; p.px=p.x-vx*(.18+.42*(1-stick)); p.py=p.y-vy*(-.04); p.contact=1; p.sticky=Math.max(p.sticky, stick*(.65+Math.random()*.25));
+      } else p.contact*=.86;
+    }
+    if(this.center.y>groundY-30){this.center.y=groundY-30;}
+  }
+  updateEyes(c){ const vx=c.x-this.eyeLag.x, vy=c.y-this.eyeLag.y; this.eyeLag.x += vx*.11; this.eyeLag.y += vy*.11; this.mood += (mouse.down?.08:-.02); this.mood=Math.max(0,Math.min(1,this.mood)); }
+  render(){
+    const pts=this.points; ctx.save();
+    ctx.shadowColor='rgba(87,255,209,.5)'; ctx.shadowBlur=28;
+    const grd=ctx.createRadialGradient(this.center.x-28,this.center.y-42,15,this.center.x,this.center.y,this.r*1.45);
+    grd.addColorStop(0,'rgba(210,255,245,.96)'); grd.addColorStop(.25,'rgba(95,255,209,.88)'); grd.addColorStop(.72,'rgba(19,190,152,.82)'); grd.addColorStop(1,'rgba(8,85,92,.72)');
+    ctx.fillStyle=grd; ctx.strokeStyle='rgba(215,255,247,.72)'; ctx.lineWidth=3;
+    drawSpline(pts); ctx.fill(); ctx.stroke();
+    ctx.globalCompositeOperation='screen'; ctx.fillStyle='rgba(255,255,255,.13)'; ctx.beginPath(); ctx.ellipse(this.center.x-35,this.center.y-48,38,18,-.5,0,Math.PI*2); ctx.fill(); ctx.globalCompositeOperation='source-over';
+    for(const p of pts){ if(p.contact>.05){ ctx.fillStyle=`rgba(98,255,207,${p.contact*.13})`; ctx.beginPath(); ctx.ellipse(p.x,groundY+6,28,6,0,0,Math.PI*2); ctx.fill(); }}
+    this.renderEyes(); ctx.restore();
+  }
+  renderEyes(){ const c=this.centroid(); const stretch=Math.min(.28, Math.hypot(c.x-this.eyeLag.x,c.y-this.eyeLag.y)/85); const ex1=c.x-25, ex2=c.x+25, ey=c.y-20; const lagX=(this.eyeLag.x-c.x)*-.04, lagY=(this.eyeLag.y-c.y)*-.04; [ex1,ex2].forEach((ex,i)=>{ ctx.save(); ctx.translate(ex,ey); ctx.scale(1+stretch,1-stretch*.45); ctx.fillStyle='rgba(235,255,250,.96)'; ctx.beginPath(); ctx.ellipse(0,0,15,20,0,0,Math.PI*2); ctx.fill(); ctx.fillStyle='#092129'; ctx.beginPath(); ctx.arc(Math.max(-6,Math.min(6,lagX+(i?2:-2))),Math.max(-7,Math.min(7,lagY+this.mood*4)),6.2,0,Math.PI*2); ctx.fill(); ctx.restore(); }); }
+}
+function drawSpline(pts){ ctx.beginPath(); for(let i=0;i<pts.length;i++){ const p0=pts[(i-1+pts.length)%pts.length], p1=pts[i], p2=pts[(i+1)%pts.length], p3=pts[(i+2)%pts.length]; for(let t=0;t<1;t+=.18){ const tt=t*t, ttt=tt*t; const x=.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*tt+(-p0.x+3*p1.x-3*p2.x+p3.x)*ttt); const y=.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*tt+(-p0.y+3*p1.y-3*p2.y+p3.y)*ttt); if(i===0&&t===0)ctx.moveTo(x,y); else ctx.lineTo(x,y); }} ctx.closePath(); }
+let slime = new Slime(W/2, H*.33, +ui.size.value);
+function pickPoint(){ let best=null,bd=9999; for(const p of slime.points){ const d=dist(mouse.x,mouse.y,p.x,p.y); if(d<bd){bd=d;best=p;} } mouse.point = bd<180?best:null; }
+function reset(){ slime = new Slime(W/2,H*.34,+ui.size.value); }
+function drop(){ reset(); for(const p of [...slime.points,slime.center]){ p.py=p.y-30; p.px=p.x+(Math.random()-.5)*10; } }
+$('reset').onclick=reset; $('drop').onclick=drop; $('jelly').onclick=()=>{ ui.damping.value=.968; ui.stiffness.value=.76; ui.areaForce.value=.44; syncUI();}; $('liquid').onclick=()=>{ ui.damping.value=.932; ui.stiffness.value=.30; ui.areaForce.value=.17; syncUI();}; ui.size.addEventListener('change', reset);
+addEventListener('keydown',e=>{ if(e.key==='r'||e.key==='R')reset(); if(e.code==='Space')drop(); });
+function background(){
+  ctx.clearRect(0,0,W,H); const t=performance.now()*.001;
+  for(let i=0;i<70;i++){ const x=(i*173+t*8)%W, y=(i*i*37%Math.max(1,groundY-80))+30; ctx.fillStyle=`rgba(115,220,255,${.05+(i%5)*.015})`; ctx.fillRect(x,y,1.4,1.4); }
+  ctx.save(); ctx.strokeStyle='rgba(101,255,206,.08)'; ctx.lineWidth=1; for(let y=groundY+28;y<H;y+=18){ ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); } ctx.restore();
+  const g=ctx.createLinearGradient(0,groundY-40,0,H); g.addColorStop(0,'rgba(60,255,200,.04)'); g.addColorStop(.25,'rgba(42,105,118,.5)'); g.addColorStop(1,'rgba(6,13,20,.95)'); ctx.fillStyle=g; ctx.fillRect(0,groundY-30,W,H-groundY+30);
+  ctx.strokeStyle='rgba(135,255,222,.25)'; ctx.lineWidth=2; ctx.beginPath(); for(let x=0;x<=W;x+=22){ const y=groundY+Math.sin(x*.018+t*1.2)*4; if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);} ctx.stroke();
+}
+function loop(){ background(); slime.update(); slime.render(); requestAnimationFrame(loop); }
+loop();
+})();
+</script>
+</body>
+</html>
