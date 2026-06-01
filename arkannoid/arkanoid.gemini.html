@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enterprise AI Capability Demo - Arkanoid Engine</title>
+    <style>
+        :root {
+            --bg-dark: #0a0b10;
+            --panel-bg: #121420;
+            --neon-cyan: #00f0ff;
+            --neon-magenta: #ff007f;
+            --neon-amber: #ffaa00;
+            --text-main: #f3f4f6;
+            --font-mono: 'Fira Code', 'Courier New', Courier, monospace;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .workspace {
+            display: flex;
+            gap: 24px;
+            background: var(--panel-bg);
+            padding: 24px;
+            border-radius: 20px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7),
+                        0 0 0 1px rgba(255, 255, 255, 0.05);
+        }
+
+        .game-viewport { position: relative; }
+        
+        canvas {
+            background-color: #05060b;
+            display: block;
+            border-radius: 12px;
+            box-shadow: inset 0 0 40px rgba(0,0,0,0.9);
+        }
+
+        .dashboard {
+            width: 220px;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            background: rgba(255, 255, 255, 0.02);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px rgba(255, 255, 255, 0.05) solid;
+        }
+
+        .meta-title h2 {
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, var(--neon-cyan), var(--neon-magenta));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .meta-title p {
+            font-size: 0.75rem;
+            color: #4b5563;
+            margin-top: 4px;
+            font-family: var(--font-mono);
+        }
+
+        .stat-box {
+            margin-top: 20px;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--neon-cyan);
+            text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
+        }
+
+        .stat-value.lives { color: var(--neon-magenta); text-shadow: 0 0 10px rgba(255, 0, 127, 0.3); }
+
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(5, 6, 11, 0.9);
+            backdrop-filter: blur(8px);
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.3s ease;
+            z-index: 10;
+        }
+        .overlay.hidden { opacity: 0; pointer-events: none; }
+
+        .overlay-btn {
+            background: transparent;
+            color: var(--neon-cyan);
+            border: 1px solid var(--neon-cyan);
+            padding: 12px 28px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            font-family: var(--font-mono);
+            transition: all 0.2s ease;
+            text-transform: uppercase;
+        }
+        .overlay-btn:hover {
+            background: rgba(0, 240, 255, 0.1);
+            box-shadow: 0 0 15px rgba(0, 240, 255, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .system-logs {
+            font-family: var(--font-mono);
+            font-size: 0.7rem;
+            color: #4b5563;
+            line-height: 1.4;
+            margin-top: auto;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="workspace">
+        <div class="game-viewport">
+            <canvas id="engineCanvas" width="600" height="500"></canvas>
+            <div id="engineOverlay" class="overlay">
+                <h1 id="overlayTitle" style="font-size: 1.6rem; margin-bottom: 20px; letter-spacing: 2px;">ARKANOID ENGINE v2.0</h1>
+                <button id="ctrlBtn" class="overlay-btn">Initialize System</button>
+            </div>
+        </div>
+
+        <div class="dashboard">
+            <div class="meta-title">
+                <h2>AI Engine</h2>
+                <p>Onyx Architecture</p>
+            </div>
+
+            <div class="stats-payload">
+                <div class="stat-box">
+                    <div class="stat-label">Score Metrics</div>
+                    <div id="txtScore" class="stat-value">00000</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Current Stage</div>
+                    <div id="txtStage" class="stat-value" style="color: #fff; text-shadow: none;">01</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">Core Integrity</div>
+                    <div id="txtLives" class="stat-value lives">|||</div>
+                </div>
+            </div>
+
+            <div class="system-logs">
+                [SYS] Core initialized.<br>
+                [SYS] Physics: Delta-time locked.<br>
+                [SYS] Engine: Ready.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * Arkanoid Engine Configuration Space
+         */
+        const Config = {
+            paddle: { width: 100, height: 10, speed: 500, color: '#00f0ff' },
+            ball: { radius: 6, initialSpeed: 350, maxSpeed: 600, speedMultiplier: 1.05 },
+            bricks: { rows: 5, cols: 8, padding: 6, topOffset: 60, sideOffset: 12, height: 16 }
+        };
+
+        /**
+         * Particle Simulation Module
+         */
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.size = Math.random() * 2.5 + 1;
+                this.dx = (Math.random() - 0.5) * 200;
+                this.dy = (Math.random() - 0.5) * 200;
+                this.alpha = 1;
+                this.color = color;
+                this.decay = Math.random() * 1.5 + 0.8;
+            }
+            update(dt) {
+                this.x += this.dx * dt;
+                this.y += this.dy * dt;
+                this.alpha -= this.decay * dt;
+            }
+            draw(ctx) {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.size, this.size);
+                ctx.restore();
+            }
+        }
+
+        /**
+         * Core Game Engine Object
+         */
+        class GameEngine {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.lastTime = 0;
+                this.state = 'START';
+                
+                this.score = 0;
+                this.stage = 1;
+                this.lives = 3;
+
+                this.paddle = { x: 0, y: 0, width: Config.paddle.width, height: Config.paddle.height };
+                this.ball = { x: 0, y: 0, dx: 0, dy: 0, speed: Config.ball.initialSpeed, trail: [] };
+                this.bricks = [];
+                this.particles = [];
+
+                this.input = { left: false, right: false, mouseX: null };
+                
+                this.initDOM();
+                this.initInput();
+                this.resetEnvironment();
+            }
+
+            initDOM() {
+                this.uiScore = document.getElementById('txtScore');
+                this.uiStage = document.getElementById('txtStage');
+                this.uiLives = document.getElementById('txtLives');
+                this.uiOverlay = document.getElementById('engineOverlay');
+                this.uiTitle = document.getElementById('overlayTitle');
+                this.uiBtn = document.getElementById('ctrlBtn');
+
+                this.uiBtn.addEventListener('click', () => this.handleAction());
+            }
+
+            initInput() {
+                window.addEventListener('keydown', e => {
+                    if (e.key === 'ArrowLeft') this.input.left = true;
+                    if (e.key === 'ArrowRight') this.input.right = true;
+                    if (e.key === ' ' && this.state === 'SERVE') this.launchBall();
+                });
+                window.addEventListener('keyup', e => {
+                    if (e.key === 'ArrowLeft') this.input.left = false;
+                    if (e.key === 'ArrowRight') this.input.right = false;
+                });
+                this.canvas.addEventListener('mousemove', e => {
+                    const rect = this.canvas.getBoundingClientRect();
+                    this.input.mouseX = e.clientX - rect.left;
+                });
+            }
+
+            resetEnvironment() {
+                this.paddle.x = (this.canvas.width - this.paddle.width) / 2;
+                this.paddle.y = this.canvas.height - 30;
+                this.ball.speed = Config.ball.initialSpeed + (this.stage * 15);
+                this.resetBall();
+                this.generateBricks();
+                this.particles = [];
+            }
+
+            resetBall() {
+                this.ball.x = this.paddle.x + this.paddle.width / 2;
+                this.ball.y = this.paddle.y - Config.ball.radius;
+                this.ball.dx = 0;
+                this.ball.dy = 0;
+                this.ball.trail = [];
+                if (this.state === 'PLAYING') this.state = 'SERVE';
+            }
+
+            generateBricks() {
+                const colors = ['#ff0055', '#ff5500', '#ffaa00', '#aaff00', '#00ffaa'];
+                const brickWidth = Math.floor((this.canvas.width - (Config.bricks.sideOffset * 2) - (Config.bricks.padding * (Config.bricks.cols - 1))) / Config.bricks.cols);
+                
+                this.bricks = [];
+                for (let c = 0; c < Config.bricks.cols; c++) {
+                    this.bricks[c] = [];
+                    for (let r = 0; r < Config.bricks.rows; r++) {
+                        let hp = (this.stage > 1 && Math.random() > 0.7) ? 2 : 1;
+                        this.bricks[c][r] = {
+                            x: c * (brickWidth + Config.bricks.padding) + Config.bricks.sideOffset,
+                            y: r * (Config.bricks.height + Config.bricks.padding) + Config.bricks.topOffset,
+                            width: brickWidth,
+                            height: Config.bricks.height,
+                            hp: hp,
+                            maxHp: hp,
+                            color: colors[r % colors.length]
+                        };
+                    }
+                }
+            }
+
+            launchBall() {
+                this.state = 'PLAYING';
+                this.ball.dx = (Math.random() - 0.5) * this.ball.speed * 0.6;
+                this.ball.dy = -this.ball.speed;
+            }
+
+            handleAction() {
+                if (this.state === 'START' || this.state === 'GAMEOVER' || this.state === 'CLEAR') {
+                    if (this.state === 'GAMEOVER') {
+                        this.score = 0;
+                        this.stage = 1;
+                        this.lives = 3;
+                    }
+                    this.resetEnvironment();
+                    this.state = 'SERVE';
+                    this.uiOverlay.classList.add('hidden');
+                    this.updateUI();
+                }
+            }
+
+            updateUI() {
+                this.uiScore.textContent = String(this.score).padStart(5, '0');
+                this.uiStage.textContent = String(this.stage).padStart(2, '0');
+                this.uiLives.textContent = '|'.repeat(Math.max(0, this.lives));
+            }
+
+            showMenu(title, btnText) {
+                this.uiTitle.textContent = title;
+                this.uiBtn.textContent = btnText;
+                this.uiOverlay.classList.remove('hidden');
+            }
+
+            /**
+             * Deterministic Physics Update (Delta Time Driven)
+             */
+            update(dt) {
+                // Paddle Physics
+                if (this.input.mouseX !== null) {
+                    this.paddle.x = this.input.mouseX - this.paddle.width / 2;
+                } else {
+                    if (this.input.left) this.paddle.x -= Config.paddle.speed * dt;
+                    if (this.input.right) this.paddle.x += Config.paddle.speed * dt;
+                }
+                if (this.paddle.x < 0) this.paddle.x = 0;
+                if (this.paddle.x + this.paddle.width > this.canvas.width) this.paddle.x = this.canvas.width - this.paddle.width;
+
+                if (this.state === 'SERVE') {
+                    this.ball.x = this.paddle.x + this.paddle.width / 2;
+                    return;
+                }
+
+                if (this.state !== 'PLAYING') return;
+
+                // Ball Trail Processing
+                this.ball.trail.push({ x: this.ball.x, y: this.ball.y });
+                if (this.ball.trail.length > 8) this.ball.trail.shift();
+
+                // Move Ball
+                this.ball.x += this.ball.dx * dt;
+                this.ball.y += this.ball.dy * dt;
+
+                // Boundary Collision (Walls)
+                if (this.ball.x - Config.ball.radius < 0) {
+                    this.ball.x = Config.ball.radius; this.ball.dx *= -1;
+                }
+                if (this.ball.x + Config.ball.radius > this.canvas.width) {
+                    this.ball.x = this.canvas.width - Config.ball.radius; this.ball.dx *= -1;
+                }
+                if (this.ball.y - Config.ball.radius < 0) {
+                    this.ball.y = Config.ball.radius; this.ball.dy *= -1;
+                }
+
+                // Paddle Collision (Advanced Angle Vector Reflection)
+                if (this.ball.y + Config.ball.radius >= this.paddle.y &&
+                    this.ball.y - Config.ball.radius <= this.paddle.y + this.paddle.height &&
+                    this.ball.x + Config.ball.radius >= this.paddle.x &&
+                    this.ball.x - Config.ball.radius <= this.paddle.x + this.paddle.width) {
+                    
+                    if (this.ball.dy > 0) {
+                        this.ball.y = this.paddle.y - Config.ball.radius;
+                        const hitPoint = (this.ball.x - (this.paddle.x + this.paddle.width / 2)) / (this.paddle.width / 2);
+                        const angle = hitPoint * (Math.PI / 3); // Max 60 degrees
+                        
+                        this.ball.speed = Math.min(this.ball.speed * Config.ball.speedMultiplier, Config.ball.maxSpeed);
+                        this.ball.dx = this.ball.speed * Math.sin(angle);
+                        this.ball.dy = -this.ball.speed * Math.cos(angle);
+                    }
+                }
+
+                // Brick Logic Collision Matrix
+                let activeBricks = 0;
+                for (let c = 0; c < Config.bricks.cols; c++) {
+                    for (let r = 0; r < Config.bricks.rows; r++) {
+                        const b = this.bricks[c][r];
+                        if (b.hp > 0) {
+                            activeBricks++;
+                            let closestX = Math.max(b.x, Math.min(this.ball.x, b.x + b.width));
+                            let closestY = Math.max(b.y, Math.min(this.ball.y, b.y + b.height));
+                            let distX = this.ball.x - closestX;
+                            let distY = this.ball.y - closestY;
+                            
+                            if ((distX * distX + distY * distY) < Config.ball.radius * Config.ball.radius) {
+                                b.hp--;
+                                this.score += 20 * this.stage;
+                                this.updateUI();
+                                this.triggerExplosion(closestX, closestY, b.color);
+
+                                // Direction Vector Resolution
+                                if (Math.abs(distX) > Math.abs(distY)) this.ball.dx *= -1;
+                                else this.ball.dy *= -1;
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                // Level Completed Check
+                if (activeBricks === 0) {
+                    this.state = 'CLEAR';
+                    this.stage++;
+                    this.showMenu(`STAGE ${this.stage - 1} COMPLETED`, "Advance Engine");
+                }
+
+                // Out of Bounds (Death)
+                if (this.ball.y - Config.ball.radius > this.canvas.height) {
+                    this.lives--;
+                    this.updateUI();
+                    if (this.lives <= 0) {
+                        this.state = 'GAMEOVER';
+                        this.showMenu("CRITICAL FAILURE", "Reboot System");
+                    } else {
+                        this.resetBall();
+                    }
+                }
+
+                // Particle Engine Frame Update
+                for (let i = this.particles.length - 1; i >= 0; i--) {
+                    this.particles[i].update(dt);
+                    if (this.particles[i].alpha <= 0) this.particles.splice(i, 1);
+                }
+            }
+
+            triggerExplosion(x, y, color) {
+                for (let i = 0; i < 16; i++) this.particles.push(new Particle(x, y, color));
+            }
+
+            /**
+             * Render Frame Pipeline
+             */
+            render() {
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                // Grid background effect
+                this.ctx.strokeStyle = 'rgba(255, 255, 255, 0.02)';
+                this.ctx.lineWidth = 1;
+                for(let x=0; x<this.canvas.width; x+=30) { this.ctx.beginPath(); this.ctx.moveTo(x,0); this.ctx.lineTo(x,this.canvas.height); this.ctx.stroke(); }
+                for(let y=0; y<this.canvas.height; y+=30) { this.ctx.beginPath(); this.ctx.moveTo(0,y); this.ctx.lineTo(this.canvas.width,y); this.ctx.stroke(); }
+
+                // Render Bricks
+                for (let c = 0; c < Config.bricks.cols; c++) {
+                    for (let r = 0; r < Config.bricks.rows; r++) {
+                        const b = this.bricks[c][r];
+                        if (b.hp > 0) {
+                            this.ctx.save();
+                            this.ctx.fillStyle = b.color;
+                            if (b.hp > 1) {
+                                this.ctx.shadowBlur = 15;
+                                this.ctx.shadowColor = b.color;
+                                this.ctx.strokeStyle = '#fff';
+                                this.ctx.lineWidth = 2;
+                            } else {
+                                this.ctx.globalAlpha = 0.9;
+                            }
+                            this.ctx.beginPath();
+                            this.ctx.roundRect(b.x, b.y, b.width, b.height, 3);
+                            this.ctx.fill();
+                            if (b.hp > 1) this.ctx.stroke();
+                            this.ctx.restore();
+                        }
+                    }
+                }
+
+                // Render Paddle (Neon Line Style)
+                this.ctx.save();
+                this.ctx.fillStyle = Config.paddle.color;
+                this.ctx.shadowBlur = 14;
+                this.ctx.shadowColor = Config.paddle.color;
+                this.ctx.beginPath();
+                this.ctx.roundRect(this.paddle.x, this.paddle.y, this.paddle.width, this.paddle.height, 4);
+                this.ctx.fill();
+                this.ctx.restore();
+
+                // Render Ball & Motion Trail
+                if (this.state === 'PLAYING') {
+                    this.ball.trail.forEach((pos, i) => {
+                        this.ctx.save();
+                        this.ctx.globalAlpha = (i / this.ball.trail.length) * 0.25;
+                        this.ctx.fillStyle = varColor('--neon-cyan');
+                        this.ctx.beginPath();
+                        this.ctx.arc(pos.x, pos.y, Config.ball.radius * 0.8, 0, Math.PI * 2);
+                        this.ctx.fill();
+                        this.ctx.restore();
+                    });
+                }
+
+                this.ctx.save();
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.shadowBlur = 10;
+                this.ctx.shadowColor = '#ffffff';
+                this.ctx.beginPath();
+                this.ctx.arc(this.ball.x, this.ball.y, Config.ball.radius, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.restore();
+
+                // Render Particles
+                this.particles.forEach(p => p.draw(this.ctx));
+            }
+
+            /**
+             * Execution Frame Loop
+             */
+            run(timestamp) {
+                if (!this.lastTime) this.lastTime = timestamp;
+                let dt = (timestamp - this.lastTime) / 1000;
+                
+                // Cap maximum delta time to prevent clipping at heavy frame drops
+                if (dt > 0.1) dt = 0.1;
+
+                this.lastTime = timestamp;
+
+                this.update(dt);
+                this.render();
+
+                requestAnimationFrame(t => this.run(t));
+            }
+        }
+
+        function varColor(name) {
+            return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+        }
+
+        // Initialize Engine Context
+        const engine = new GameEngine('engineCanvas');
+        requestAnimationFrame(t => engine.run(t));
+    </script>
+</body>
+</html>
