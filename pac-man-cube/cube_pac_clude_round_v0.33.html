@@ -1,0 +1,1944 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CUBE PAC — 3D Grid Walker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<style>
+:root {
+  --c-bg:       #04060c;
+  --c-grid:     #1a3a6e;
+  --c-pellet:   #ffe566;
+  --c-power:    #ff6bce;
+  --c-player:   #ffe566;
+  --c-ghost0:   #ff4d6a;
+  --c-ghost1:   #4de8ff;
+  --c-ghost2:   #a06bff;
+  --c-scared:   #3a7cff;
+  --c-ui:       #0ff;
+  --font-game:  'Press Start 2P', monospace;
+  --font-hud:   'Orbitron', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--c-bg);
+  color: #fff;
+  font-family: var(--font-hud);
+}
+
+#app { width: 100vw; height: 100vh; position: relative; }
+canvas { display: block; width: 100%; height: 100%; }
+
+/* ── TOP HUD ── */
+#hud {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 20;
+  gap: 16px;
+}
+
+.hud-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hud-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  opacity: 0.55;
+  font-family: var(--font-hud);
+  text-transform: uppercase;
+}
+
+.hud-value {
+  font-family: var(--font-game);
+  font-size: 13px;
+  color: var(--c-ui);
+  text-shadow: 0 0 8px rgba(0,255,255,0.6);
+  letter-spacing: 0.05em;
+}
+
+#livesDisplay {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.life-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--c-player);
+  box-shadow: 0 0 6px var(--c-player);
+  transition: all 0.2s;
+}
+
+.life-dot.lost {
+  background: rgba(255,255,255,0.1);
+  box-shadow: none;
+}
+
+#levelDisplay { color: #ff9f43; text-shadow: 0 0 8px rgba(255,150,50,0.7); }
+
+/* ── BOTTOM KEY HUD ── */
+#keyHud {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-areas:
+    ". w ."
+    "a s d"
+    "q . e";
+  gap: 6px;
+  pointer-events: auto;
+  z-index: 20;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.khud-key {
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  font-family: var(--font-hud);
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.35);
+  transition: all 80ms;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* 라벨 아래 작은 방향 힌트 */
+.khud-key .key-hint {
+  display: block;
+  font-size: 7px;
+  opacity: 0.45;
+  line-height: 1;
+  margin-top: 2px;
+  letter-spacing: 0;
+}
+
+.khud-key.avail {
+  color: #78ffcf;
+  border-color: rgba(120,255,207,0.5);
+  background: rgba(120,255,207,0.10);
+  box-shadow: 0 0 10px rgba(120,255,207,0.18);
+}
+
+.khud-key.active {
+  color: #ffd66b;
+  border-color: rgba(255,214,107,0.9);
+  background: rgba(255,214,107,0.28);
+  box-shadow: 0 0 18px rgba(255,214,107,0.45);
+  transform: scale(0.92);
+}
+
+[data-k="w"] { grid-area: w; }
+[data-k="a"] { grid-area: a; }
+[data-k="s"] { grid-area: s; }
+[data-k="d"] { grid-area: d; }
+[data-k="q"] { grid-area: q; }
+[data-k="e"] { grid-area: e; }
+
+/* 모바일: 버튼 더 크게 */
+@media (max-width: 600px) {
+  #keyHud { bottom: 28px; gap: 8px; }
+  .khud-key { width: 58px; height: 58px; font-size: 15px; border-radius: 14px; }
+}
+
+/* ── 스와이프 힌트 (모바일 전용) ── */
+#swipeHint {
+  position: absolute;
+  top: 60px;
+  right: 14px;
+  font-family: var(--font-hud);
+  font-size: 9px;
+  color: rgba(255,255,255,0.28);
+  letter-spacing: 0.06em;
+  line-height: 1.7;
+  text-align: right;
+  pointer-events: none;
+  z-index: 20;
+  display: none;
+}
+@media (hover: none) and (pointer: coarse) {
+  #swipeHint { display: block; }
+}
+
+/* ── OVERLAY SCREENS ── */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  z-index: 50;
+  background: rgba(4, 6, 12, 0.82);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.3s;
+}
+
+.overlay.hidden { display: none; }
+
+.overlay-title {
+  font-family: var(--font-game);
+  font-size: clamp(18px, 3vw, 28px);
+  letter-spacing: 0.06em;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.overlay-sub {
+  font-family: var(--font-hud);
+  font-size: 13px;
+  opacity: 0.65;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.overlay-btn {
+  margin-top: 8px;
+  padding: 10px 28px;
+  font-family: var(--font-game);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(0,255,255,0.5);
+  background: rgba(0,255,255,0.08);
+  color: var(--c-ui);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 120ms;
+}
+
+.overlay-btn:hover {
+  background: rgba(0,255,255,0.2);
+  box-shadow: 0 0 18px rgba(0,255,255,0.3);
+}
+
+/* ── SCARED FLASH ── */
+#scaredFlash {
+  position: absolute;
+  inset: 0;
+  background: var(--c-scared);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 0.12s;
+}
+
+/* ── MESSAGE POPUP ── */
+#msgPopup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-game);
+  font-size: clamp(14px, 2.5vw, 22px);
+  color: #fff;
+  text-shadow: 0 0 20px #fff;
+  letter-spacing: 0.06em;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 40;
+  transition: opacity 0.2s;
+  text-align: center;
+}
+
+#msgPopup.show { opacity: 1; }
+
+/* ── POWER TIMER BAR ── */
+#powerBar {
+  position: absolute;
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 160px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.1);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 20;
+}
+
+#powerBarFill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--c-scared), var(--c-power));
+  transform-origin: left;
+  transition: transform 0.1s linear;
+}
+
+/* ── CAMERA CONTROLS ── */
+#camControls {
+  position: absolute;
+  top: 60px;
+  right: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  z-index: 22;
+  pointer-events: auto;
+}
+
+.cam-btn {
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(0,255,255,0.25);
+  border-radius: 8px;
+  background: rgba(0,255,255,0.06);
+  color: rgba(0,255,255,0.7);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 80ms;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+.cam-btn:active {
+  background: rgba(0,255,255,0.22);
+  box-shadow: 0 0 12px rgba(0,255,255,0.3);
+  transform: scale(0.92);
+}
+
+/* ── MINIMAP ── */
+#minimap {
+  position: absolute;
+  bottom: 20px;
+  right: 16px;
+  z-index: 25;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+#minimapLabel {
+  font-family: var(--font-hud);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+  color: rgba(0,255,255,0.45);
+  text-align: right;
+}
+
+#minimapCanvas {
+  border: 1px solid rgba(0,255,255,0.22);
+  border-radius: 6px;
+  background: rgba(4,6,12,0.78);
+  box-shadow: 0 0 12px rgba(0,255,255,0.10);
+  display: block;
+}
+
+/* 모바일: 살짝 더 작게 */
+@media (max-width: 600px) {
+  #minimap { bottom: 16px; right: 10px; }
+}
+
+/* ── INVINCIBILITY FLASH ── */
+#invincFlash {
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.0);
+  pointer-events: none;
+  z-index: 4;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hud">
+    <div class="hud-block">
+      <span class="hud-label">SCORE</span>
+      <span class="hud-value" id="scoreDisplay">00000</span>
+    </div>
+    <div class="hud-block">
+      <span class="hud-label">LIVES</span>
+      <div id="livesDisplay"></div>
+    </div>
+    <div class="hud-block">
+      <span class="hud-label">ROUND</span>
+      <span class="hud-value" id="levelDisplay">01</span>
+    </div>
+    <div class="hud-block">
+      <span class="hud-label">TIME</span>
+      <span class="hud-value" id="timerDisplay" style="color:#ff9f43; text-shadow:0 0 8px rgba(255,150,50,0.7);">60</span>
+    </div>
+    <div class="hud-block">
+      <span class="hud-label">PELLETS</span>
+      <span class="hud-value" id="pelletDisplay">--</span>
+    </div>
+  </div>
+
+  <div id="keyHud">
+    <div class="khud-key" data-k="w">W<span class="key-hint">UP</span></div>
+    <div class="khud-key" data-k="a">A<span class="key-hint">LEFT</span></div>
+    <div class="khud-key" data-k="s">S<span class="key-hint">DOWN</span></div>
+    <div class="khud-key" data-k="d">D<span class="key-hint">RIGHT</span></div>
+    <div class="khud-key" data-k="q">Q<span class="key-hint">IN</span></div>
+    <div class="khud-key" data-k="e">E<span class="key-hint">OUT</span></div>
+  </div>
+  <div id="swipeHint">스와이프 이동<br>Q/E 앞뒤<br>더블탭 시점리셋</div>
+
+  <!-- 카메라 조작 버튼 -->
+  <div id="camControls">
+    <button class="cam-btn" id="camLeft">◀</button>
+    <button class="cam-btn" id="camZoomIn">＋</button>
+    <button class="cam-btn" id="camZoomOut">－</button>
+    <button class="cam-btn" id="camRight">▶</button>
+  </div>
+
+  <div id="minimap">
+    <div id="minimapLabel">MINIMAP · Y▲</div>
+    <canvas id="minimapCanvas" width="120" height="120"></canvas>
+  </div>
+
+  <div id="powerBar"><div id="powerBarFill"></div></div>
+  <div id="scaredFlash"></div>
+  <div id="invincFlash"></div>
+  <div id="msgPopup"></div>
+
+  <div class="overlay" id="startScreen">
+    <div class="overlay-title" style="color:#ffe566;">CUBE<br/>PAC</div>
+    <div class="overlay-sub">3D 큐브 격자에서 팩맨을<br/>플레이하세요</div>
+    <div class="overlay-sub" style="opacity:0.45; font-size:11px; margin-top:-8px;">
+      W/S: 상하 · A/D: 좌우 · Q/E: 앞뒤<br>
+      Z/X: 카메라 회전 · 휠: 줌
+    </div>
+    <button class="overlay-btn" id="startBtn">PRESS START</button>
+  </div>
+
+  <div class="overlay hidden" id="clearScreen">
+    <div class="overlay-title" style="color:#78ffcf;">ROUND<br/>CLEAR!</div>
+    <div class="overlay-sub" id="clearSub"></div>
+    <button class="overlay-btn" id="nextBtn">NEXT ROUND</button>
+  </div>
+
+  <div class="overlay hidden" id="gameOverScreen">
+    <div class="overlay-title" style="color:#ff4d6a;">GAME<br/>OVER</div>
+    <div class="overlay-sub" id="finalScore"></div>
+    <button class="overlay-btn" id="restartBtn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+
+// ══════════════════════════════════════════════════════
+//  CONSTANTS
+// ══════════════════════════════════════════════════════
+const GRID   = 3;
+const CELL   = 1.4;
+const HALF   = (GRID * CELL) / 2;
+const N      = GRID + 1;
+const TOTAL_NODES = N * N * N;
+
+const MOVE_DUR        = 0.17;
+const GHOST_MOVE_DUR  = 0.72;
+const GHOST_LEVEL_SPEEDUP = 0.04;
+const POWER_DUR       = 7.0;
+const HIT_RADIUS      = 0.34;
+const DEATH_EFFECT_DUR= 1.15;
+const INVINCIBLE_DUR  = 2.5;   // ★ 부활 후 무적 시간
+
+const GHOST_COLORS = [0xff4d6a, 0x4de8ff, 0xa06bff, 0xff9f43, 0x78ffcf]; // 5마리용
+
+// ── 라운드 설정 (5라운드) ──
+const ROUND_CONFIG = [
+  { ghosts: 3, powerCount: 6, ghostSpeed: 0.72, label: 'ROUND 1' }, // 느림
+  { ghosts: 3, powerCount: 5, ghostSpeed: 0.62, label: 'ROUND 2' }, // 보통
+  { ghosts: 4, powerCount: 4, ghostSpeed: 0.54, label: 'ROUND 3' }, // 보통+
+  { ghosts: 4, powerCount: 3, ghostSpeed: 0.46, label: 'ROUND 4' }, // 빠름
+  { ghosts: 5, powerCount: 2, ghostSpeed: 0.46, label: 'ROUND 5' }, // 빠름
+];
+const MAX_ROUNDS    = 5;
+const ROUND_TIME    = 60;   // 초
+
+const POWER_NODES = new Set();
+[[0,0,0],[0,0,3],[0,3,0],[0,3,3],[3,0,0],[3,0,3],[3,3,0],[3,3,3]]
+  .forEach(([x,y,z]) => POWER_NODES.add(nodeId(x,y,z)));
+
+// ══════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════
+function nodeId(x, y, z) { return x * N * N + y * N + z; }
+function nodeCoord(id) {
+  const z = id % N;
+  const y = Math.floor(id / N) % N;
+  const x = Math.floor(id / (N * N));
+  return { x, y, z };
+}
+function gridToWorld(x, y, z) {
+  return new THREE.Vector3(x*CELL-HALF, y*CELL-HALF, z*CELL-HALF);
+}
+function inBounds(x, y, z) {
+  return x>=0 && x<=GRID && y>=0 && y<=GRID && z>=0 && z<=GRID;
+}
+
+const DIRS6 = [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]];
+function neighbors(id) {
+  const {x,y,z} = nodeCoord(id);
+  const result = [];
+  for (const [dx,dy,dz] of DIRS6) {
+    if (inBounds(x+dx, y+dy, z+dz)) result.push(nodeId(x+dx,y+dy,z+dz));
+  }
+  return result;
+}
+
+function bfsNext(fromId, toId) {
+  if (fromId === toId) return fromId;
+  const visited = new Uint8Array(TOTAL_NODES);
+  const prev    = new Int16Array(TOTAL_NODES).fill(-1);
+  const queue   = [fromId];
+  visited[fromId] = 1;
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur === toId) {
+      let n = toId;
+      while (prev[n] !== fromId) n = prev[n];
+      return n;
+    }
+    for (const nb of neighbors(cur)) {
+      if (!visited[nb]) { visited[nb]=1; prev[nb]=cur; queue.push(nb); }
+    }
+  }
+  return fromId;
+}
+
+function bfsFarthest(fromId, avoidId) {
+  const dist = new Int16Array(TOTAL_NODES).fill(-1);
+  const queue = [fromId];
+  dist[fromId] = 0;
+  let best = fromId, bestD = 0;
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const nb of neighbors(cur)) {
+      if (dist[nb]===-1) {
+        dist[nb] = dist[cur]+1;
+        queue.push(nb);
+        if (dist[nb]>bestD && nb!==avoidId) { best=nb; bestD=dist[nb]; }
+      }
+    }
+  }
+  return best;
+}
+
+function easeOutCubic(t) { return 1-Math.pow(1-t,3); }
+
+// ══════════════════════════════════════════════════════
+//  THREE.JS SETUP
+// ══════════════════════════════════════════════════════
+const app      = document.getElementById('app');
+const scene    = new THREE.Scene();
+scene.fog      = new THREE.FogExp2(0x04060c, 0.048);
+
+const camera   = new THREE.PerspectiveCamera(44, innerWidth/innerHeight, 0.1, 60);
+camera.position.set(6.5, 5.2, 8.0);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, powerPreference:'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio||1, 1.5));
+app.appendChild(renderer.domElement);
+
+// 터치가 HUD/버튼 위인지 확인
+function isTouchOnHud(touch) {
+  const el = document.elementFromPoint(touch.clientX, touch.clientY);
+  return el && (el.closest('#keyHud') || el.closest('#hud'));
+}
+
+const controls = {
+  target: new THREE.Vector3(0, 0, 0),
+  update: () => {}  // 하위 호환용 더미
+};
+
+// ══════════════════════════════════════════════════════
+//  커스텀 카메라 시스템
+//  - 줌: 마우스휠 / 핀치 / +- 키
+//  - 회전: Z(좌90°) / X(우90°) / 화면 좌우 스와이프
+// ══════════════════════════════════════════════════════
+const CAM = {
+  theta:     Math.atan2(6.5, 8.0),  // 초기 수평각
+  phi:       Math.PI / 4,            // 초기 수직각 (45도)
+  radius:    10.5,                   // 초기 거리
+  minRadius: 5,
+  maxRadius: 18,
+
+  // 목표값 (lerp 대상)
+  thetaTarget:  Math.atan2(6.5, 8.0),
+  phiTarget:    Math.PI / 4,
+  radiusTarget: 10.5,
+};
+
+const _camOffset = new THREE.Vector3();
+
+function updateCamera() {
+  // lerp
+  CAM.theta  += (CAM.thetaTarget  - CAM.theta)  * 0.10;
+  CAM.phi    += (CAM.phiTarget    - CAM.phi)    * 0.10;
+  CAM.radius += (CAM.radiusTarget - CAM.radius) * 0.12;
+
+  // 구면 좌표 → 카트리전
+  _camOffset.setFromSphericalCoords(CAM.radius, CAM.phi, CAM.theta);
+  camera.position.copy(controls.target).add(_camOffset);
+  camera.lookAt(controls.target);
+}
+
+// 90도 회전
+function rotateCamLeft()  {
+  CAM.thetaTarget -= Math.PI / 2;
+}
+function rotateCamRight() {
+  CAM.thetaTarget += Math.PI / 2;
+}
+
+// 줌
+function zoomIn()  {
+  CAM.radiusTarget = Math.max(CAM.minRadius, CAM.radiusTarget - 1.8);
+}
+function zoomOut() {
+  CAM.radiusTarget = Math.min(CAM.maxRadius, CAM.radiusTarget + 1.8);
+}
+
+// 마우스휠 줌
+renderer.domElement.addEventListener('wheel', e => {
+  e.preventDefault();
+  e.deltaY > 0 ? zoomOut() : zoomIn();
+}, { passive: false });
+
+// 핀치 줌 (터치 2손가락)
+let _pinchDist = 0;
+renderer.domElement.addEventListener('touchstart', e => {
+  if (e.touches.length === 2) {
+    _pinchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }
+}, { passive: true });
+renderer.domElement.addEventListener('touchmove', e => {
+  if (e.touches.length === 2) {
+    const d = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+    const diff = _pinchDist - d;
+    if (Math.abs(diff) > 4) {
+      CAM.radiusTarget = THREE.MathUtils.clamp(
+        CAM.radiusTarget + diff * 0.04,
+        CAM.minRadius, CAM.maxRadius
+      );
+      _pinchDist = d;
+    }
+  }
+}, { passive: true });
+
+// 화면 좌우 스와이프 → 90도 회전 (게임 스와이프와 분리: 2손가락)
+// 단일 손가락 스와이프는 게임 이동에 사용하므로
+// 카메라 회전은 키보드(Z/X) + 화면 버튼으로만 처리
+
+
+scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+const keyL = new THREE.DirectionalLight(0xffffff, 1.8);
+keyL.position.set(5,8,6); scene.add(keyL);
+const fillL = new THREE.PointLight(0x4090ff, 1.8, 16);
+fillL.position.set(-5,-1,4); scene.add(fillL);
+
+// ══════════════════════════════════════════════════════
+//  GRID GEOMETRY
+// ══════════════════════════════════════════════════════
+const world = new THREE.Group(); scene.add(world);
+
+const cubeGeo = new THREE.BoxGeometry(CELL*.95,CELL*.95,CELL*.95);
+const cubeMat = new THREE.MeshBasicMaterial({color:0x1a3a6e,transparent:true,opacity:0.04,depthWrite:false});
+const cubeletMesh = new THREE.InstancedMesh(cubeGeo, cubeMat, GRID*GRID*GRID);
+cubeletMesh.frustumCulled = false; world.add(cubeletMesh);
+const _m4 = new THREE.Matrix4(); const _v3 = new THREE.Vector3();
+let ci=0;
+for(let x=0;x<GRID;x++) for(let y=0;y<GRID;y++) for(let z=0;z<GRID;z++){
+  _v3.set((x+.5)*CELL-HALF,(y+.5)*CELL-HALF,(z+.5)*CELL-HALF);
+  cubeletMesh.setMatrixAt(ci++,_m4.makeTranslation(_v3.x,_v3.y,_v3.z));
+}
+cubeletMesh.instanceMatrix.needsUpdate=true;
+
+const ep=[]; function pl(a,b){ep.push(a.x,a.y,a.z,b.x,b.y,b.z);}
+for(let x=0;x<=GRID;x++) for(let y=0;y<=GRID;y++) for(let z=0;z<GRID;z++) pl(gridToWorld(x,y,z),gridToWorld(x,y,z+1));
+for(let x=0;x<=GRID;x++) for(let z=0;z<=GRID;z++) for(let y=0;y<GRID;y++) pl(gridToWorld(x,y,z),gridToWorld(x,y+1,z));
+for(let y=0;y<=GRID;y++) for(let z=0;z<=GRID;z++) for(let x=0;x<GRID;x++) pl(gridToWorld(x,y,z),gridToWorld(x+1,y,z));
+const edgeGeo=new THREE.BufferGeometry();
+edgeGeo.setAttribute('position',new THREE.Float32BufferAttribute(ep,3));
+const edgeLines=new THREE.LineSegments(edgeGeo,new THREE.LineBasicMaterial({color:0x1a3a6e,transparent:true,opacity:0.55}));
+edgeLines.frustumCulled=false; world.add(edgeLines);
+
+// ══════════════════════════════════════════════════════
+//  PELLETS
+// ══════════════════════════════════════════════════════
+const pelletMeshes = new Map();
+const pelletGroup  = new THREE.Group(); scene.add(pelletGroup);
+
+function buildPellets() {
+  while(pelletGroup.children.length) pelletGroup.remove(pelletGroup.children[0]);
+  pelletMeshes.clear();
+
+  const cfg = ROUND_CONFIG[Math.min(level-1, MAX_ROUNDS-1)];
+
+  // 파워펠렛 위치: 8개 코너 중 cfg.powerCount개 랜덤 선택
+  const cornerList = [
+    [0,0,0],[0,0,3],[0,3,0],[0,3,3],
+    [3,0,0],[3,0,3],[3,3,0],[3,3,3]
+  ];
+  // 셔플
+  for(let i = cornerList.length-1; i>0; i--){
+    const j = Math.floor(Math.random()*(i+1));
+    [cornerList[i], cornerList[j]] = [cornerList[j], cornerList[i]];
+  }
+  const activePowerCorners = new Set(
+    cornerList.slice(0, cfg.powerCount).map(([x,y,z]) => nodeId(x,y,z))
+  );
+
+  for(let x=0;x<=GRID;x++) for(let y=0;y<=GRID;y++) for(let z=0;z<=GRID;z++){
+    const id  = nodeId(x,y,z);
+    const pos = gridToWorld(x,y,z);
+    const isPower = activePowerCorners.has(id);
+
+    if(isPower){
+      const geo  = new THREE.SphereGeometry(0.11,14,14);
+      const mat  = new THREE.MeshStandardMaterial({
+        color:0xff6bce, emissive:0xff00aa, emissiveIntensity:1.2,
+        roughness:0.1,metalness:0
+      });
+      const mesh = new THREE.Mesh(geo,mat);
+      mesh.position.copy(pos);
+      const glow = new THREE.PointLight(0xff00aa, 1.2, 1.6);
+      mesh.add(glow);
+      pelletGroup.add(mesh);
+      pelletMeshes.set(id, {mesh, isPower:true});
+    } else {
+      const geo  = new THREE.SphereGeometry(0.04,8,8);
+      const mat  = new THREE.MeshStandardMaterial({
+        color:0xffe566, emissive:0xffaa00, emissiveIntensity:0.7
+      });
+      const mesh = new THREE.Mesh(geo,mat);
+      mesh.position.copy(pos);
+      pelletGroup.add(mesh);
+      pelletMeshes.set(id, {mesh, isPower:false});
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  PLAYER — 진짜 팩맨 (파이 슬라이스 + 입 애니)
+// ══════════════════════════════════════════════════════
+const playerGroup = new THREE.Group();
+scene.add(playerGroup);
+
+// 팩맨 몸체: LatheGeometry로 반구 두 개를 합쳐 구 형태 + 입 컷
+// 실제 팩맨 입 모양: SphereGeometry phiStart/phiLength 로 입 각도를 조절
+const PAC_R = 0.19;
+
+// 팩맨 바디 — THREE.SphereGeometry의 phiStart/phiLength 로 입 모양을 만든다
+// 입각도: 0(닫힘) ~ Math.PI*0.35(최대 개방)
+let mouthAngle = 0;
+let mouthDir   = 1;   // 1=열림, -1=닫힘
+const MOUTH_SPEED = 3.8;
+const MOUTH_MAX   = Math.PI * 0.32;
+
+// 팩맨은 반구 두 개(위/아래)로 합성: 둘 다 입각도만큼 시작을 오프셋
+const pacMat = new THREE.MeshStandardMaterial({
+  color: 0xffe030,
+  emissive: 0xffa000,
+  emissiveIntensity: 0.8,
+  roughness: 0.18,
+  metalness: 0.04,
+  side: THREE.FrontSide
+});
+
+// 위 반구
+const pacTop = new THREE.Mesh(
+  new THREE.SphereGeometry(PAC_R, 32, 16, 0, Math.PI*2, 0, Math.PI*0.5),
+  pacMat
+);
+// 아래 반구
+const pacBot = new THREE.Mesh(
+  new THREE.SphereGeometry(PAC_R, 32, 16, 0, Math.PI*2, Math.PI*0.5, Math.PI*0.5),
+  pacMat
+);
+playerGroup.add(pacTop);
+playerGroup.add(pacBot);
+
+// 눈: 작고 반짝이는 구
+const eyeMat = new THREE.MeshStandardMaterial({color:0x080a12, roughness:0.2, metalness:0.1});
+const eyeHighMat = new THREE.MeshBasicMaterial({color:0xffffff});
+const eyeMesh = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 10), eyeMat);
+eyeMesh.position.set(0.02, PAC_R*0.55, PAC_R*0.72);
+const eyeHighlight = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), eyeHighMat);
+eyeHighlight.position.set(0.008, PAC_R*0.57, PAC_R*0.76);
+playerGroup.add(eyeMesh);
+playerGroup.add(eyeHighlight);
+
+// 이동 방향 표시용: 팩맨이 향하는 방향으로 그룹 전체를 회전시킴
+// 입(+Z 로컬 방향)이 이동방향을 바라보도록
+const PAC_FORWARD = new THREE.Vector3(0, 0, 1);
+const PAC_DIR_TMP = new THREE.Vector3();
+let   pacTargetQuat = new THREE.Quaternion();
+let   pacCurrentQuat = new THREE.Quaternion();
+
+const playerGlow = new THREE.PointLight(0xffcc44, 1.8, 2.8);
+playerGroup.add(playerGlow);
+
+// 팩맨 입 재빌드 함수 (각도 변경시 geometry 교체)
+function rebuildPacMouth(angle) {
+  const half = angle; // 위/아래 각도
+  // 위 반구: thetaStart = half (입 열림 offset), thetaLength = PI - half*2
+  // 아래 반구도 동일하게
+  // 단순히 위/아래 반구를 피봇 회전으로 벌리는 방식이 더 자연스럽다
+  // pacTop: 위로 회전, pacBot: 아래로 회전
+  pacTop.rotation.x = -angle;
+  pacBot.rotation.x =  angle;
+}
+
+// ══════════════════════════════════════════════════════
+//  GHOSTS
+// ══════════════════════════════════════════════════════
+const GHOST_FORWARD = new THREE.Vector3(0, 0, 1);
+const GHOST_DIR_TMP = new THREE.Vector3();
+
+class Ghost {
+  constructor(idx) {
+    this.idx   = idx;
+    this.color = GHOST_COLORS[idx];
+    this.group = new THREE.Group();
+    scene.add(this.group);
+
+    const ghostMat = new THREE.MeshStandardMaterial({
+      color: this.color,
+      emissive: new THREE.Color(this.color),
+      emissiveIntensity: 0.62,
+      roughness: 0.32,
+      metalness: 0.02
+    });
+    this._mat = ghostMat;
+
+    this.bodyMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.145, 24, 18, 0, Math.PI * 2, 0, Math.PI * 0.78),
+      ghostMat
+    );
+    this.bodyMesh.scale.set(1.0, 1.08, 0.94);
+    this.bodyMesh.position.y = 0.035;
+    this.group.add(this.bodyMesh);
+
+    this.lowerMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.145, 0.145, 0.16, 28, 1, true),
+      ghostMat
+    );
+    this.lowerMesh.position.y = -0.055;
+    this.group.add(this.lowerMesh);
+
+    this.skirtPieces = [];
+    for (const sx of [-0.088, 0, 0.088]) {
+      const skirt = new THREE.Mesh(
+        new THREE.SphereGeometry(0.056, 14, 10),
+        ghostMat
+      );
+      skirt.scale.set(1.05, 0.62, 0.82);
+      skirt.position.set(sx, -0.14, 0);
+      this.group.add(skirt);
+      this.skirtPieces.push(skirt);
+    }
+
+    // 눈 (scared 상태 전환을 위해 참조 보관)
+    this.eyeWhites = [];
+    this.eyeDots   = [];
+    for(const sx of [-0.048, 0.048]){
+      const eye = new THREE.Mesh(
+        new THREE.CircleGeometry(0.027, 18),
+        new THREE.MeshBasicMaterial({ color:0xf6fbff, transparent:true, opacity:0.95, side:THREE.DoubleSide })
+      );
+      eye.scale.set(0.82, 1.18, 1);
+      eye.position.set(sx, 0.043, 0.132);
+      this.group.add(eye);
+      this.eyeWhites.push(eye);
+
+      const dot = new THREE.Mesh(
+        new THREE.CircleGeometry(0.009, 10),
+        new THREE.MeshBasicMaterial({ color:0x07101c, transparent:true, opacity:0.9, side:THREE.DoubleSide })
+      );
+      dot.position.set(sx + 0.006, 0.039, 0.135);
+      this.group.add(dot);
+      this.eyeDots.push(dot);
+    }
+
+    this.baseRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.15, 0.006, 6, 32),
+      new THREE.MeshBasicMaterial({ color:this.color, transparent:true, opacity:0.34 })
+    );
+    this.baseRing.rotation.x = Math.PI / 2;
+    this.baseRing.position.y = -0.17;
+    this.group.add(this.baseRing);
+
+    this.glow = new THREE.PointLight(this.color, 1.15, 2.2);
+    this.group.add(this.glow);
+
+    this.nodeId    = 0;
+    this.targetId  = 0;
+    this.moveFrom  = new THREE.Vector3();
+    this.moveTo    = new THREE.Vector3();
+    this.rotFrom   = new THREE.Quaternion();
+    this.rotTo     = new THREE.Quaternion();
+    this.progress  = 1.0;
+    this.speed     = 1.0;
+    this.scared    = false;
+    this.dead      = false;
+    this.respawnT  = 0;
+  }
+
+  setNode(id){
+    this.nodeId   = id;
+    this.targetId = id;
+    const {x,y,z} = nodeCoord(id);
+    this.group.position.copy(gridToWorld(x,y,z));
+    this.moveFrom.copy(this.group.position);
+    this.moveTo.copy(this.group.position);
+    this.rotFrom.copy(this.group.quaternion);
+    this.rotTo.copy(this.group.quaternion);
+    this.progress = 1.0;
+  }
+
+  setScared(on){
+    this.scared = on;
+    const col = on ? new THREE.Color(0x3a7cff) : new THREE.Color(this.color);
+    this._mat.color.set(col);
+    this._mat.emissive.set(on ? 0x1a40aa : this.color);
+    this._mat.emissiveIntensity = on ? 0.48 : 0.62;
+    this.eyeWhites.forEach(e => e.material.opacity = on ? 0.45 : 0.95);
+    this.eyeDots.forEach(d => d.material.opacity   = on ? 0.30 : 0.90);
+    this.baseRing.material.color.set(on ? 0x3a7cff : this.color);
+    this.glow.color.set(on ? 0x3a7cff : this.color);
+  }
+
+  update(delta, playerNode, level) {
+    if(!this._active) return;  // 이번 라운드 비활성 유령
+    if(this.dead){
+      this.respawnT -= delta;
+      if(this.respawnT<=0){
+        this.dead=false;
+        this.group.visible=true;
+        this.setNode(GHOST_SPAWNS[this.idx]);
+        this.setScared(false);
+      }
+      return;
+    }
+
+    // 라운드 설정에서 ghostSpeed 읽기 (dur = 이동 시간)
+    const cfg = ROUND_CONFIG[Math.min(level-1, MAX_ROUNDS-1)];
+    const dur = cfg.ghostSpeed;
+
+    if(this.progress < 1){
+      this.progress = Math.min(1, this.progress + delta/dur);
+      const t = easeOutCubic(this.progress);
+      this.group.position.lerpVectors(this.moveFrom, this.moveTo, t);
+      const rt = easeOutCubic(Math.min(1, this.progress * 1.35));
+      this.group.quaternion.slerpQuaternions(this.rotFrom, this.rotTo, rt);
+      return;
+    }
+
+    this.nodeId = this.targetId;
+    const nbs   = neighbors(this.nodeId);
+
+    let nextId;
+    if(this.scared){
+      const target = bfsFarthest(this.nodeId, playerNode);
+      nextId = bfsNext(this.nodeId, target);
+    } else {
+      if(this.idx===0){
+        nextId = bfsNext(this.nodeId, playerNode);
+      } else if(this.idx===1){
+        nextId = Math.random()<0.5
+          ? bfsNext(this.nodeId, playerNode)
+          : nbs[Math.floor(Math.random()*nbs.length)];
+      } else {
+        const {x:gx,y:gy,z:gz} = nodeCoord(this.nodeId);
+        const {x:px,y:py,z:pz} = nodeCoord(playerNode);
+        const dist = Math.abs(gx-px)+Math.abs(gy-py)+Math.abs(gz-pz);
+        nextId = dist <= 3
+          ? nbs[Math.floor(Math.random()*nbs.length)]
+          : bfsNext(this.nodeId, playerNode);
+      }
+    }
+
+    if(nextId === this.nodeId) nextId = nbs[Math.floor(Math.random()*nbs.length)];
+
+    this.targetId = nextId;
+    const {x,y,z} = nodeCoord(nextId);
+    this.moveFrom.copy(this.group.position);
+    this.moveTo.copy(gridToWorld(x,y,z));
+
+    GHOST_DIR_TMP.subVectors(this.moveTo, this.moveFrom);
+    if (GHOST_DIR_TMP.lengthSq() > 0.000001) {
+      GHOST_DIR_TMP.normalize();
+      this.rotFrom.copy(this.group.quaternion);
+      this.rotTo.setFromUnitVectors(GHOST_FORWARD, GHOST_DIR_TMP);
+    } else {
+      this.rotFrom.copy(this.group.quaternion);
+      this.rotTo.copy(this.group.quaternion);
+    }
+
+    this.progress = 0;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  GAME STATE
+// ══════════════════════════════════════════════════════
+let state        = 'start';
+let score        = 0;
+let lives        = 3;
+let level        = 1;   // 라운드 번호 (1~5)
+let powerTimer   = 0;
+let scared       = false;
+let invincTimer  = 0;
+let ghostCombo   = 0;
+let roundTimer   = ROUND_TIME;  // ★ 남은 시간
+let roundActive  = false;       // 타이머 동작 중
+
+let playerNode     = 0;
+let playerTarget   = 0;
+let playerMoveFrom = new THREE.Vector3();
+let playerMoveTo   = new THREE.Vector3();
+let playerProgress = 1.0;
+let isYMove        = false;   // ★ 현재 이동이 Y축(층 이동)인지
+const ARC_HEIGHT   = 0.38;    // 포물선 최대 높이
+
+const moveQueue = [];
+const inputLock = new Set();
+let   activeKey = null;
+let   bounceT   = 0;
+
+const SCORE_PELLET = 10;
+const SCORE_POWER  = 50;
+const SCORE_GHOST  = [200,400,800,1600];
+
+// ══════════════════════════════════════════════════════
+//  UI
+// ══════════════════════════════════════════════════════
+const scoreEl        = document.getElementById('scoreDisplay');
+const livesEl        = document.getElementById('livesDisplay');
+const levelEl        = document.getElementById('levelDisplay');
+const pelletEl       = document.getElementById('pelletDisplay');
+const msgEl          = document.getElementById('msgPopup');
+const scFlash        = document.getElementById('scaredFlash');
+const invincFlashEl  = document.getElementById('invincFlash');
+const pwBar          = document.getElementById('powerBar');
+const pwFill         = document.getElementById('powerBarFill');
+
+const startScreen    = document.getElementById('startScreen');
+const clearScreen    = document.getElementById('clearScreen');
+const gameOverScreen = document.getElementById('gameOverScreen');
+
+const khudKeys = {};
+document.querySelectorAll('.khud-key').forEach(el=>khudKeys[el.dataset.k]=el);
+
+let msgTimer = 0;
+
+function showMsg(text, duration=1.5){
+  msgEl.textContent = text;
+  msgEl.classList.add('show');
+  msgTimer = duration;
+}
+
+function updateHudUI(){
+  scoreEl.textContent  = String(score).padStart(5,'0');
+  levelEl.textContent  = String(level).padStart(2,'0');
+  pelletEl.textContent = `${pelletMeshes.size}`;
+
+  // 타이머 표시
+  const timerEl = document.getElementById('timerDisplay');
+  if(timerEl){
+    const t = Math.ceil(roundTimer);
+    timerEl.textContent = String(t).padStart(2,'0');
+    // 10초 이하 빨간색 + 깜박임
+    if(t <= 10){
+      timerEl.style.color = '#ff4d6a';
+      timerEl.style.textShadow = '0 0 12px rgba(255,77,106,0.9)';
+    } else if(t <= 20){
+      timerEl.style.color = '#ff9f43';
+      timerEl.style.textShadow = '0 0 8px rgba(255,150,50,0.7)';
+    } else {
+      timerEl.style.color = '#78ffcf';
+      timerEl.style.textShadow = '0 0 8px rgba(120,255,207,0.5)';
+    }
+  }
+
+  livesEl.innerHTML = '';
+  for(let i=0;i<3;i++){
+    const d=document.createElement('div');
+    d.className='life-dot'+(i>=lives?' lost':'');
+    livesEl.appendChild(d);
+  }
+
+  if(scared && powerTimer>0){
+    pwBar.style.opacity='1';
+    pwFill.style.transform=`scaleX(${powerTimer/POWER_DUR})`;
+  } else {
+    pwBar.style.opacity='0';
+  }
+}
+
+function updateKeyHud(){
+  const {x,y,z} = nodeCoord(playerProgress<1 ? playerTarget : playerNode);
+  for(const k of ['a','d','w','s','q','e']){
+    const el = khudKeys[k];
+    if(!el) continue;
+    // getCamRelDir는 이 함수 호출 시점에 이미 정의되어 있음
+    const dir = (typeof getCamRelDir === 'function') ? getCamRelDir(k) : null;
+    const avail = dir ? inBounds(x+dir[0], y+dir[1], z+dir[2]) : false;
+    el.classList.toggle('avail', avail);
+    el.classList.toggle('active', activeKey===k);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  GHOST SPAWN POSITIONS
+// ══════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════
+//  GHOST SPAWN POSITIONS (5개 — 최대 5마리 대응)
+// ══════════════════════════════════════════════════════
+const GHOST_SPAWNS = [
+  nodeId(3,3,3), nodeId(0,3,3), nodeId(3,0,3),
+  nodeId(0,0,3), nodeId(3,3,0)
+];
+
+// 5마리 생성 (라운드에 따라 일부만 활성화)
+const ghosts = Array.from({length: 5}, (_, i) => new Ghost(i));
+
+function resetPositions(){
+  playerNode     = nodeId(0,0,0);
+  playerTarget   = nodeId(0,0,0);
+  const startPos = gridToWorld(0,0,0);
+  playerMoveFrom.copy(startPos);
+  playerMoveTo.copy(startPos);
+  playerProgress = 1.0;
+  playerGroup.position.copy(startPos);
+  playerGroup.visible = true;
+  moveQueue.length = 0;
+  activeKey = null;
+
+  // ★ 팩맨 방향 초기화
+  pacCurrentQuat.setFromUnitVectors(
+    new THREE.Vector3(0,0,1), new THREE.Vector3(0,0,-1)
+  );
+  pacTargetQuat.copy(pacCurrentQuat);
+  playerGroup.quaternion.copy(pacCurrentQuat);
+
+  // ★ 라운드 설정 적용 — 유령 수 + 속도
+  const cfg = ROUND_CONFIG[Math.min(level-1, MAX_ROUNDS-1)];
+  ghosts.forEach((g, i) => {
+    const active = i < cfg.ghosts;
+    g.dead      = false;
+    g.scared    = false;
+    g.respawnT  = 0;
+    g.speed     = 1.0;
+    g._active   = active;
+    g.group.visible = active;
+    if (active) { g.setNode(GHOST_SPAWNS[i]); g.setScared(false); }
+    g.progress  = 1.0;
+  });
+
+  invincTimer = INVINCIBLE_DUR;
+}
+
+function startLevel(){
+  buildPellets();
+  resetPositions();
+  scared      = false;
+  powerTimer  = 0;
+  ghostCombo  = 0;
+  invincTimer = 0;
+  roundTimer  = ROUND_TIME;
+  roundActive = true;
+  scFlash.style.opacity = '0';
+  updateHudUI();
+}
+
+function startGame(){
+  score = 0; lives = 3; level = 1;
+  startScreen.classList.add('hidden');
+  clearScreen.classList.add('hidden');
+  gameOverScreen.classList.add('hidden');
+  state = 'playing';
+  startLevel();
+  showMsg(ROUND_CONFIG[0].label, 1.8);
+}
+
+function nextLevel(){
+  level++;
+  clearScreen.classList.add('hidden');
+  if(level > MAX_ROUNDS){
+    // 전체 클리어
+    state = 'gameover';
+    document.getElementById('finalScore').textContent =
+      `ALL CLEAR!  SCORE: ${String(score).padStart(5,'0')}`;
+    document.querySelector('#gameOverScreen .overlay-title').textContent = 'YOU WIN!';
+    document.querySelector('#gameOverScreen .overlay-title').style.color = '#78ffcf';
+    gameOverScreen.classList.remove('hidden');
+    return;
+  }
+  state = 'playing';
+  startLevel();
+  showMsg(ROUND_CONFIG[level-1].label, 1.8);
+}
+
+function gameOver(){
+  state = 'gameover';
+  roundActive = false;
+  document.getElementById('finalScore').textContent =
+    `SCORE: ${String(score).padStart(5,'0')}`;
+  document.querySelector('#gameOverScreen .overlay-title').textContent = 'GAME\nOVER';
+  document.querySelector('#gameOverScreen .overlay-title').style.color = '#ff4d6a';
+  gameOverScreen.classList.remove('hidden');
+}
+
+function roundClear(){
+  state = 'clear';
+  roundActive = false;
+  const bonus = Math.ceil(roundTimer) * 10;
+  score += bonus;
+  document.getElementById('clearSub').textContent =
+    `TIME BONUS +${bonus}  SCORE: ${String(score).padStart(5,'0')}`;
+  clearScreen.classList.remove('hidden');
+}
+
+function finishLoseLife(){
+  lives--;
+  updateHudUI();
+  if(lives<=0){ gameOver(); return; }
+
+  state='playing';
+  resetPositions();
+  playerGroup.visible = true;
+  scared=false; powerTimer=0; ghostCombo=0;
+  roundActive = true;  // 타이머 재개 (시간은 유지)
+  scFlash.style.opacity='0';
+}
+
+function triggerPlayerDeath(hitGhost=null){
+  if(state!=='playing') return;
+  state = 'dying';
+  moveQueue.length = 0;
+  activeKey = null;
+  const hitPos = playerGroup.position.clone();
+  spawnBurst(hitPos, 0xffd66b, 42, 1.25);
+  spawnBurst(hitPos, 0xff4d6a, 24, 0.9);
+  if(hitGhost) spawnBurst(hitGhost.group.position, hitGhost.color, 18, 0.75);
+  playerGroup.visible = false;
+  showMsg('CRASH!', DEATH_EFFECT_DUR);
+  setTimeout(()=>{
+    if(state==='dying') finishLoseLife();
+  }, DEATH_EFFECT_DUR * 1000);
+}
+
+function eatGhost(g){
+  if(g.dead) return;
+  const pts = SCORE_GHOST[Math.min(ghostCombo, SCORE_GHOST.length-1)];
+  ghostCombo++;
+  score += pts;
+  spawnBurst(g.group.position, g.color, 34, 1.05);
+  spawnBurst(g.group.position, 0xffffff, 14, 0.75);
+  showMsg(`+${pts}`, 0.8);
+  g.dead = true;
+  g.respawnT = 3.5;
+  g.group.visible = false;
+}
+
+// ══════════════════════════════════════════════════════
+//  INPUT — 카메라 기준 상대 방향
+// ══════════════════════════════════════════════════════
+
+// 카메라 forward/right를 격자 6방향 중 가장 가까운 축으로 스냅
+const _cf = new THREE.Vector3();
+const _cr = new THREE.Vector3();
+
+function snapAxis(v) {
+  const ax = Math.abs(v.x), ay = Math.abs(v.y), az = Math.abs(v.z);
+  if (ax >= ay && ax >= az) return [Math.sign(v.x)|0, 0, 0];
+  if (ay >= ax && ay >= az) return [0, Math.sign(v.y)|0, 0];
+  return [0, 0, Math.sign(v.z)|0];
+}
+
+function getCamRelDir(key) {
+  // Q/E 는 항상 Y축 절대
+  if (key === 'q') return [0, -1, 0];
+  if (key === 'e') return [0,  1, 0];
+
+  // 카메라 forward (XZ 평면 투영)
+  camera.getWorldDirection(_cf);
+  _cf.y = 0;
+  if (_cf.lengthSq() < 0.001) _cf.set(0, 0, -1);
+  _cf.normalize();
+
+  // 카메라 right
+  _cr.crossVectors(_cf, new THREE.Vector3(0, 1, 0)).normalize();
+
+  const fwd  = snapAxis(_cf);           // W 방향
+  const rgt  = snapAxis(_cr);           // D 방향
+  const back = fwd.map(v => -v);        // S
+  const left = rgt.map(v => -v);        // A
+
+  switch(key) {
+    case 'w': case 'arrowup':    return fwd;
+    case 's': case 'arrowdown':  return back;
+    case 'd': case 'arrowright': return rgt;
+    case 'a': case 'arrowleft':  return left;
+  }
+  return null;
+}
+
+// 기존 호환용 — 버튼/스와이프에서 key 문자열로 dir 얻을 때 사용
+function getDirFromKey(key) {
+  return getCamRelDir(key);
+}
+
+// ★ 이동 처리 통합 함수 — Y축 이동 시 팩맨 회전 유지
+function applyMove(dir, key) {
+  if (state !== 'playing') return;
+  if (moveQueue.length >= 1 || playerProgress < 0.5) return;
+
+  const {x,y,z} = nodeCoord(playerTarget);
+  const nx = x+dir[0], ny = y+dir[1], nz = z+dir[2];
+  if (!inBounds(nx,ny,nz)) return;
+
+  moveQueue.push(nodeId(nx,ny,nz));
+  activeKey = (key && key.length===1) ? key : null;
+
+  // Y축 이동이면 수평 방향 유지, XZ 이동이면 얼굴 방향 회전
+  const isVertical = dir[1] !== 0 && dir[0] === 0 && dir[2] === 0;
+  if (!isVertical) {
+    const fromPos = gridToWorld(x, y, z);
+    const toPos   = gridToWorld(nx, y, nz);
+    PAC_DIR_TMP.subVectors(toPos, fromPos).normalize();
+    if (PAC_DIR_TMP.lengthSq() > 0.0001)
+      pacTargetQuat.setFromUnitVectors(PAC_FORWARD, PAC_DIR_TMP);
+  }
+
+  updateKeyHud();
+  startPlayerMove();
+}
+
+window.addEventListener('keydown', ev => {
+  const key = ev.key.toLowerCase();
+  if (ev.repeat) return;
+  const dir = getCamRelDir(key);
+  if (!dir) return;
+  ev.preventDefault();
+  if (inputLock.has(key)) return;
+  inputLock.add(key);
+  applyMove(dir, key);
+});
+
+window.addEventListener('keyup', ev => {
+  inputLock.delete(ev.key.toLowerCase());
+  activeKey = null;
+  updateKeyHud();
+});
+
+// ── 카메라 조작 키 ──
+window.addEventListener('keydown', ev => {
+  const k = ev.key.toLowerCase();
+  if (k === 'z' && !ev.repeat) { rotateCamLeft();  showMsg('◀ ROTATE', 0.4); }
+  if (k === 'x' && !ev.repeat) { rotateCamRight(); showMsg('ROTATE ▶', 0.4); }
+  if ((k === '-' || k === '_') && !ev.repeat) zoomOut();
+  if ((k === '=' || k === '+') && !ev.repeat) zoomIn();
+});
+
+// 모바일 더블탭: 좌 90° 회전
+let lastTapTime = 0;
+renderer.domElement.addEventListener('touchend', e => {
+  if (e.touches.length > 0) return;
+  if (isTouchOnHud(e.changedTouches[0])) return;
+  const now = Date.now();
+  if (now - lastTapTime < 280) { rotateCamLeft(); showMsg('◀ ROTATE', 0.4); }
+  lastTapTime = now;
+}, { passive: true });
+
+// ══════════════════════════════════════════════════════
+//  TOUCH / MOBILE CONTROLS
+// ══════════════════════════════════════════════════════
+
+document.querySelectorAll('.khud-key').forEach(el => {
+  const k = el.dataset.k;
+  if (!k) return;
+
+  function onPress(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dir = getCamRelDir(k);
+    if (dir) applyMove(dir, k);
+  }
+  function onRelease(e) {
+    e.preventDefault();
+    activeKey = null;
+    updateKeyHud();
+  }
+
+  el.addEventListener('touchstart', onPress,  { passive: false });
+  el.addEventListener('touchend',   onRelease, { passive: false });
+  el.addEventListener('mousedown',  onPress);
+  el.addEventListener('mouseup',    onRelease);
+});
+
+// 스와이프 → 카메라 기준 방향
+let swipeStartX = 0, swipeStartY = 0, swipeActive = false;
+const SWIPE_THRESHOLD = 28;
+
+renderer.domElement.addEventListener('touchstart', e => {
+  if (isTouchOnHud(e.touches[0])) return;
+  swipeStartX = e.touches[0].clientX;
+  swipeStartY = e.touches[0].clientY;
+  swipeActive = true;
+}, { passive: true });
+
+renderer.domElement.addEventListener('touchend', e => {
+  if (!swipeActive) return;
+  swipeActive = false;
+  if (state !== 'playing') return;
+
+  const dx  = e.changedTouches[0].clientX - swipeStartX;
+  const dy  = e.changedTouches[0].clientY - swipeStartY;
+  const adx = Math.abs(dx), ady = Math.abs(dy);
+  if (adx < SWIPE_THRESHOLD && ady < SWIPE_THRESHOLD) return;
+
+  const swipeKey = adx > ady ? (dx > 0 ? 'd' : 'a') : (dy < 0 ? 'w' : 's');
+  const dir = getCamRelDir(swipeKey);
+  if (dir) {
+    applyMove(dir, swipeKey);
+    setTimeout(() => { activeKey = null; updateKeyHud(); }, 150);
+  }
+}, { passive: true });
+
+function startPlayerMove(){
+  if(playerProgress<1 || moveQueue.length===0) return;
+  playerNode   = playerTarget;
+  playerTarget = moveQueue.shift();
+  const {x,y,z} = nodeCoord(playerTarget);
+  const {x:fx, y:fy, z:fz} = nodeCoord(playerNode);
+  playerMoveFrom.copy(playerGroup.position);
+  playerMoveTo.copy(gridToWorld(x,y,z));
+  playerProgress = 0;
+
+  // ★ Y축 이동 여부 판단
+  isYMove = (fy !== y) && (fx === x) && (fz === z);
+}
+
+// ══════════════════════════════════════════════════════
+//  COLLISION
+// ══════════════════════════════════════════════════════
+function checkCollisions(){
+  const arrivedId = playerNode;
+  const pelletData = pelletMeshes.get(arrivedId);
+  if(pelletData){
+    pelletGroup.remove(pelletData.mesh);
+    pelletMeshes.delete(arrivedId);
+
+    if(pelletData.isPower){
+      score += SCORE_POWER;
+      activatePower();
+    } else {
+      score += SCORE_PELLET;
+    }
+
+    if(pelletMeshes.size===0){
+      // 펠렛 다 먹어도 계속 진행 (시간이 목표)
+      // 보너스 점수만 부여
+      score += 300;
+      showMsg('ALL CLEAR! +300', 1.0);
+      buildPellets(); // 펠렛 리필
+      return;
+    }
+  }
+
+  if(state!=='playing') return;
+
+  // 고스트 충돌은 checkImmediateGhostCollisions (거리 기반) 에서만 처리
+}
+
+function checkImmediateGhostCollisions(){
+  if(state !== 'playing') return;
+  if(invincTimer > 0) return;
+
+  // 순수 거리 판정 — 노드 판정 완전 제거
+  // CELL=1.4 기준, 반경 0.28 = 꼭지점 간 거리의 20% → 실제로 겹쳤을 때만 발동
+  const TIGHT_R = CELL * 0.20;
+
+  for(const g of ghosts){
+    if(g.dead || !g.group.visible || !g._active) continue;
+    const dist = playerGroup.position.distanceTo(g.group.position);
+    if(dist > TIGHT_R) continue;
+
+    if(scared){ eatGhost(g); }
+    else       { triggerPlayerDeath(g); }
+    return;
+  }
+}
+
+function activatePower(){
+  scared     = true;
+  powerTimer = POWER_DUR;
+  ghostCombo = 0;
+  ghosts.forEach(g=>{ if(!g.dead) g.setScared(true); });
+  scFlash.style.opacity='0.08';
+  showMsg('POWER UP!', 1.0);
+}
+
+function deactivatePower(){
+  scared = false;
+  ghosts.forEach(g=>g.setScared(false));
+  scFlash.style.opacity='0';
+}
+
+// ══════════════════════════════════════════════════════
+//  TRAIL
+// ══════════════════════════════════════════════════════
+const TRAIL_MAX=12;
+const trailPool=[];
+for(let i=0;i<TRAIL_MAX;i++){
+  const m=new THREE.Mesh(
+    new THREE.SphereGeometry(0.038,7,7),
+    new THREE.MeshBasicMaterial({color:0xffd66b,transparent:true,opacity:0})
+  );
+  scene.add(m);
+  trailPool.push({mesh:m,life:0,maxLife:0.3});
+}
+let tpIdx=0, lastTrail=0;
+
+function spawnTrail(pos){
+  const t=trailPool[tpIdx++%TRAIL_MAX];
+  t.mesh.position.copy(pos);
+  t.life=1; t.maxLife=0.28;
+}
+
+// ══════════════════════════════════════════════════════
+//  BURST PARTICLES
+// ══════════════════════════════════════════════════════
+const BURST_MAX = 96;
+const burstPool = [];
+const burstGeo = new THREE.SphereGeometry(0.035, 7, 7);
+for(let i=0;i<BURST_MAX;i++){
+  const mesh = new THREE.Mesh(
+    burstGeo,
+    new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0})
+  );
+  mesh.visible = false;
+  scene.add(mesh);
+  burstPool.push({mesh, vel:new THREE.Vector3(), life:0, maxLife:1});
+}
+let burstIdx = 0;
+
+function spawnBurst(pos, color=0xffd66b, count=28, power=1.0){
+  for(let i=0;i<count;i++){
+    const p = burstPool[burstIdx++ % BURST_MAX];
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(THREE.MathUtils.randFloatSpread(2));
+    const speed = THREE.MathUtils.randFloat(1.1, 2.8) * power;
+    p.mesh.position.copy(pos);
+    p.mesh.material.color.set(color);
+    p.mesh.material.opacity = 1;
+    p.mesh.visible = true;
+    p.mesh.scale.setScalar(THREE.MathUtils.randFloat(0.65, 1.45));
+    p.vel.set(
+      Math.sin(phi) * Math.cos(theta),
+      Math.cos(phi),
+      Math.sin(phi) * Math.sin(theta)
+    ).multiplyScalar(speed);
+    p.life = 1;
+    p.maxLife = THREE.MathUtils.randFloat(0.55, 1.05);
+  }
+}
+
+function updateBurstParticles(delta){
+  for(const p of burstPool){
+    if(p.life<=0) continue;
+    p.life = Math.max(0, p.life - delta / p.maxLife);
+    p.vel.multiplyScalar(0.965);
+    p.vel.y -= delta * 0.55;
+    p.mesh.position.addScaledVector(p.vel, delta);
+    p.mesh.material.opacity = p.life;
+    p.mesh.scale.multiplyScalar(0.985);
+    if(p.life<=0) p.mesh.visible = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  MINIMAP  (2D canvas — XZ 평면 투영, Y레이어별 밝기)
+// ══════════════════════════════════════════════════════
+const mmCanvas = document.getElementById('minimapCanvas');
+const mmCtx    = mmCanvas.getContext('2d');
+const MM_SIZE  = mmCanvas.width;   // 108px
+const MM_PAD   = 8;
+const MM_INNER = MM_SIZE - MM_PAD * 2;
+// 격자 꼭지점은 (N×N) = 4×4 grid
+// 각 꼭지점 → 캔버스 좌표
+function mmXZ(gx, gz) {
+  return [
+    MM_PAD + (gx / GRID) * MM_INNER,
+    MM_PAD + (gz / GRID) * MM_INNER
+  ];
+}
+
+// Y 레이어 높이 → 불투명도 — 크기 기반으로 대체됨 (미사용)
+
+function drawMinimap() {
+  mmCtx.clearRect(0, 0, MM_SIZE, MM_SIZE);
+
+  const { x: px, y: py, z: pz } = nodeCoord(playerNode);
+
+  // Y층 차이 → 크기 비율 (같은 층=1.0, 1층 차=0.55, 2층 차=0.30, 3층 차=0.15)
+  function sizeScale(gy) {
+    const diff = Math.abs(gy - py);
+    return diff === 0 ? 1.0 : diff === 1 ? 0.55 : diff === 2 ? 0.30 : 0.15;
+  }
+  // 크기에 비례해 알파도 조정 (멀수록 흐릿)
+  function layerAlpha(gy) {
+    const diff = Math.abs(gy - py);
+    return diff === 0 ? 1.0 : diff === 1 ? 0.55 : diff === 2 ? 0.28 : 0.12;
+  }
+
+  // ── 격자 선 (단일, 플레이어 현재 층 기준) ──
+  mmCtx.strokeStyle = 'rgba(26,58,110,0.7)';
+  mmCtx.lineWidth = 0.8;
+  for (let gz = 0; gz <= GRID; gz++) {
+    const [x0, y0] = mmXZ(0, gz); const [x1, y1] = mmXZ(GRID, gz);
+    mmCtx.beginPath(); mmCtx.moveTo(x0, y0); mmCtx.lineTo(x1, y1); mmCtx.stroke();
+  }
+  for (let gx = 0; gx <= GRID; gx++) {
+    const [x0, y0] = mmXZ(gx, 0); const [x1, y1] = mmXZ(gx, GRID);
+    mmCtx.beginPath(); mmCtx.moveTo(x0, y0); mmCtx.lineTo(x1, y1); mmCtx.stroke();
+  }
+
+  // ── 펠렛 (Y층별 크기로 원근 표현) ──
+  // 멀리 있는 층부터 먼저 그려서 가까운 층이 위에 오게
+  for (let drawY = GRID; drawY >= 0; drawY--) {
+    const sc = sizeScale(drawY);
+    const al = layerAlpha(drawY);
+
+    for (const [id, pd] of pelletMeshes) {
+      const { x: gx, y: gy, z: gz } = nodeCoord(id);
+      if (gy !== drawY) continue;
+      const [cx, cy] = mmXZ(gx, gz);
+
+      if (pd.isPower) {
+        // 글로우
+        mmCtx.beginPath();
+        mmCtx.arc(cx, cy, 7 * sc, 0, Math.PI * 2);
+        mmCtx.fillStyle = `rgba(255,0,170,${al * 0.22})`;
+        mmCtx.fill();
+        // 본체
+        mmCtx.beginPath();
+        mmCtx.arc(cx, cy, 4.2 * sc, 0, Math.PI * 2);
+        mmCtx.fillStyle = `rgba(255,107,206,${al})`;
+        mmCtx.fill();
+      } else {
+        mmCtx.beginPath();
+        mmCtx.arc(cx, cy, 2.2 * sc, 0, Math.PI * 2);
+        mmCtx.fillStyle = `rgba(255,229,102,${al * 0.9})`;
+        mmCtx.fill();
+      }
+    }
+  }
+
+  // ── 고스트 (Y층별 크기) ──
+  // 멀리 있는 층부터
+  for (let drawY = GRID; drawY >= 0; drawY--) {
+    const sc = sizeScale(drawY);
+    const al = Math.max(layerAlpha(drawY), 0.15); // 최소 가시성 유지
+
+    ghosts.forEach(g => {
+      if (g.dead) return;
+      const { y: gy, x: gx, z: gz } = nodeCoord(g.nodeId);
+      if (gy !== drawY) return;
+      const [cx, cy] = mmXZ(gx, gz);
+      const col = new THREE.Color(g.scared ? 0x3a7cff : g.color);
+
+      // 같은 층이면 위험 글로우 추가
+      if (drawY === py) {
+        mmCtx.beginPath();
+        mmCtx.arc(cx, cy, 8 * sc, 0, Math.PI * 2);
+        mmCtx.fillStyle = `rgba(${col.r*255|0},${col.g*255|0},${col.b*255|0},0.15)`;
+        mmCtx.fill();
+      }
+
+      // 본체
+      mmCtx.beginPath();
+      mmCtx.arc(cx, cy, 5 * sc, 0, Math.PI * 2);
+      mmCtx.fillStyle = `rgba(${col.r*255|0},${col.g*255|0},${col.b*255|0},${al})`;
+      mmCtx.fill();
+
+      // 테두리
+      mmCtx.strokeStyle = `rgba(255,255,255,${al * 0.55})`;
+      mmCtx.lineWidth = 0.8 * sc;
+      mmCtx.stroke();
+
+      // 다른 층이면 층 차이 숫자 표시 (▲2, ▼1 등)
+      if (drawY !== py) {
+        const diff = drawY - py;
+        const arrow = diff > 0 ? '▲' : '▼';
+        mmCtx.font = `${Math.max(5, 7 * sc)}px monospace`;
+        mmCtx.fillStyle = `rgba(255,255,255,${al * 0.8})`;
+        mmCtx.textAlign = 'center';
+        mmCtx.fillText(`${arrow}${Math.abs(diff)}`, cx, cy + 1.5);
+      }
+    });
+  }
+
+  // ── 플레이어 (항상 최상단) ──
+  const [pcx, pcy] = mmXZ(px, pz);
+  // 글로우
+  mmCtx.beginPath();
+  mmCtx.arc(pcx, pcy, 9, 0, Math.PI * 2);
+  mmCtx.fillStyle = 'rgba(255,216,70,0.15)';
+  mmCtx.fill();
+  // 본체
+  mmCtx.beginPath();
+  mmCtx.arc(pcx, pcy, 6, 0, Math.PI * 2);
+  mmCtx.fillStyle = '#ffd846';
+  mmCtx.fill();
+  mmCtx.strokeStyle = 'rgba(255,255,255,0.8)';
+  mmCtx.lineWidth = 1.2;
+  mmCtx.stroke();
+
+  // ── 층 인디케이터: 우측에 세로 막대 ──
+  const barX  = MM_SIZE - 5;
+  const barH  = MM_INNER;
+  const barY0 = MM_PAD;
+  const segH  = barH / (GRID + 1);  // 0~GRID = 4칸
+  for (let gy = 0; gy <= GRID; gy++) {
+    // 아래층(0)이 막대 하단, 위층(GRID)이 상단
+    const segY = barY0 + (GRID - gy) * segH;
+    const isCurrent = gy === py;
+    mmCtx.fillStyle = isCurrent ? '#ffd846' : 'rgba(26,58,110,0.7)';
+    mmCtx.fillRect(barX, segY + 1, 3, segH - 2);
+    if (isCurrent) {
+      // 현재 층 강조
+      mmCtx.shadowColor = '#ffd846';
+      mmCtx.shadowBlur = 4;
+      mmCtx.fillRect(barX, segY + 1, 3, segH - 2);
+      mmCtx.shadowBlur = 0;
+    }
+  }
+
+  // ── Y값 텍스트 ──
+  mmCtx.font = '7px monospace';
+  mmCtx.fillStyle = 'rgba(0,255,255,0.5)';
+  mmCtx.textAlign = 'left';
+  mmCtx.fillText(`Y${py}`, 3, MM_SIZE - 3);
+
+  // 무적 중 테두리 깜박임
+  if (invincTimer > 0) {
+    const blinkOn = Math.sin(Date.now() * 0.018) > 0;
+    mmCtx.strokeStyle = blinkOn ? 'rgba(255,255,255,0.6)' : 'rgba(0,255,255,0.15)';
+    mmCtx.lineWidth = 1.5;
+    mmCtx.strokeRect(1, 1, MM_SIZE - 2, MM_SIZE - 2);
+  }
+
+  // ── 레이블 ──
+  document.getElementById('minimapLabel').textContent = `MAP  · FLOOR ${py + 1}/${GRID + 1}`;
+}
+
+
+document.getElementById('startBtn').onclick   = startGame;
+document.getElementById('nextBtn').onclick    = nextLevel;
+document.getElementById('restartBtn').onclick = startGame;
+document.getElementById('camLeft').onclick    = () => { rotateCamLeft();  showMsg('◀ ROTATE', 0.4); };
+document.getElementById('camRight').onclick   = () => { rotateCamRight(); showMsg('ROTATE ▶', 0.4); };
+document.getElementById('camZoomIn').onclick  = zoomIn;
+document.getElementById('camZoomOut').onclick = zoomOut;
+
+// ══════════════════════════════════════════════════════
+//  ANIMATE
+// ══════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const delta   = Math.min(clock.getDelta(), 0.05);
+  const elapsed = clock.elapsedTime;
+
+  if(state==='playing'){
+    startPlayerMove();
+
+    // ── Player move ──
+    if(playerProgress<1){
+      playerProgress = Math.min(1, playerProgress+delta/MOVE_DUR);
+      const t = easeOutCubic(playerProgress);
+      playerGroup.position.lerpVectors(playerMoveFrom, playerMoveTo, t);
+
+      // ★ Y축 층 이동 시 포물선 arc 오프셋 (sin 곡선으로 살짝 튀었다 내려옴)
+      if(isYMove){
+        const arcY = Math.sin(playerProgress * Math.PI) * ARC_HEIGHT;
+        playerGroup.position.y += arcY;
+      }
+
+      if(elapsed-lastTrail>0.04){ spawnTrail(playerGroup.position); lastTrail=elapsed; }
+      if(playerProgress>=1){
+        playerNode = playerTarget;
+        bounceT=1;
+        checkCollisions();
+      }
+    }
+
+    // ── Ghosts ──
+    ghosts.forEach(g=>g.update(delta, playerNode, level));
+    checkImmediateGhostCollisions();
+
+    // ── 라운드 타이머 ──
+    if(roundActive){
+      roundTimer -= delta;
+      if(roundTimer <= 10 && roundTimer > 9.9){
+        showMsg('10초!', 0.8);
+      }
+      if(roundTimer <= 0){
+        roundTimer = 0;
+        roundActive = false;
+        roundClear();
+      }
+    }
+
+    // ── Power timer ──
+    if(scared){
+      powerTimer -= delta;
+      if(powerTimer<=2){
+        const blink = Math.sin(elapsed*14)>0;
+        ghosts.forEach(g=>{ if(!g.dead) g._mat.emissiveIntensity = blink?0.8:0.1; });
+      }
+      if(powerTimer<=0) deactivatePower();
+    }
+
+    // ── 무적 타이머 ──
+    if(invincTimer > 0){
+      invincTimer -= delta;
+      // 깜박임 효과로 무적 상태 시각화
+      const blinkOn = Math.sin(elapsed * 18) > 0;
+      playerGroup.visible = blinkOn;
+      if(invincTimer <= 0){
+        invincTimer = 0;
+        playerGroup.visible = true;
+      }
+    }
+
+    // 매 프레임 1회만 체크
+    checkImmediateGhostCollisions();
+  }
+
+  updateBurstParticles(delta);
+
+  // ── Pacman visuals ──
+  if(bounceT>0) bounceT=Math.max(0,bounceT-delta*6);
+
+  // 팩맨 입 개폐 애니메이션
+  if(state==='playing'){
+    mouthAngle += delta * MOUTH_SPEED * mouthDir;
+    if(mouthAngle >= MOUTH_MAX){ mouthAngle=MOUTH_MAX; mouthDir=-1; }
+    if(mouthAngle <= 0.01)     { mouthAngle=0.01;       mouthDir= 1; }
+  }
+  rebuildPacMouth(mouthAngle);
+
+  // 팩맨 이동 방향으로 부드럽게 회전
+  pacCurrentQuat.slerp(pacTargetQuat, 0.18);
+  playerGroup.quaternion.copy(pacCurrentQuat);
+
+  // 살짝 bobbing
+  const idleY = Math.sin(elapsed * 5.5) * 0.012;
+  playerGroup.position.y += idleY * 0.3;
+
+  // 팩맨 스쿼시 (도착 바운스)
+  const bv = bounceT>0 ? Math.sin(bounceT*Math.PI)*0.1 : 0;
+  pacTop.scale.set(1+bv, 1-bv*0.3, 1+bv);
+  pacBot.scale.set(1+bv, 1-bv*0.3, 1+bv);
+
+  // ── Ghost visuals ──
+  ghosts.forEach((g, i) => {
+    if(g.dead) return;
+    const floatY = Math.sin(elapsed * 2.4 + i * 1.7) * 0.012;
+    g.bodyMesh.position.y   = 0.035 + floatY;
+    g.lowerMesh.position.y  = -0.055 + floatY;
+    g.skirtPieces.forEach((skirt, si) => {
+      skirt.position.y = -0.14 + floatY + Math.sin(elapsed * 4.2 + i + si) * 0.004;
+    });
+    g.eyeWhites.forEach(eye => eye.position.y = 0.043 + floatY * 0.45);
+    g.eyeDots.forEach(dot   => dot.position.y = 0.039 + floatY * 0.45);
+    g.baseRing.material.opacity = (g.scared ? 0.22 : 0.32) + Math.sin(elapsed * 3 + i) * 0.03;
+  });
+
+  // ── Trail ──
+  for(const t of trailPool){
+    if(t.life<=0) continue;
+    t.life=Math.max(0,t.life-delta/t.maxLife);
+    t.mesh.material.opacity=t.life*0.45;
+    t.mesh.scale.setScalar(0.3+t.life*0.7);
+  }
+
+  // ── Power pellet pulse ──
+  for(const [,pd] of pelletMeshes){
+    if(pd.isPower){
+      pd.mesh.position.y += Math.sin(elapsed*3+pd.mesh.id)*0.0008;
+      pd.mesh.scale.setScalar(0.92+Math.sin(elapsed*4)*0.08);
+    }
+  }
+
+  // ── Msg timer ──
+  if(msgTimer>0){
+    msgTimer-=delta;
+    if(msgTimer<=0) msgEl.classList.remove('show');
+  }
+
+  // ── World wobble ──
+  world.rotation.y=Math.sin(elapsed*0.13)*0.005;
+  world.rotation.x=Math.sin(elapsed*0.09)*0.003;
+
+  updateHudUI();
+  updateKeyHud();
+  drawMinimap();
+  updateCamera();
+  renderer.render(scene,camera);
+}
+
+animate();
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+renderer.render(scene,camera);
+</script>
+</body>
+</html>

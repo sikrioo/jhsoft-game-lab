@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>5x5x5 Cube Grid Walker</title>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+    }
+  }
+  </script>
+
+  <style>
+    html, body {
+      margin: 0;
+      height: 100%;
+      overflow: hidden;
+      background: radial-gradient(circle at center, #202836 0%, #11151d 55%, #080a0f 100%);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: white;
+    }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      position: relative;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    .panel {
+      position: absolute;
+      left: 24px;
+      top: 24px;
+      padding: 14px 16px;
+      border: 1px solid rgba(255,255,255,0.12);
+      background: rgba(8, 12, 18, 0.72);
+      backdrop-filter: blur(12px);
+      border-radius: 16px;
+      box-shadow: 0 16px 40px rgba(0,0,0,0.28);
+      max-width: 410px;
+      z-index: 10;
+    }
+
+    .title {
+      font-weight: 700;
+      font-size: 15px;
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+    }
+
+    .desc {
+      font-size: 13px;
+      line-height: 1.55;
+      opacity: 0.78;
+    }
+
+    .keys {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: repeat(3, max-content);
+      gap: 5px;
+      align-items: center;
+      font-size: 12px;
+      opacity: 0.86;
+    }
+
+    .key {
+      padding: 3px 7px;
+      min-width: 18px;
+      text-align: center;
+      border: 1px solid rgba(255,255,255,0.22);
+      border-radius: 7px;
+      background: rgba(255,255,255,0.08);
+    }
+
+    .hint {
+      position: absolute;
+      right: 24px;
+      bottom: 24px;
+      font-size: 12px;
+      opacity: 0.6;
+      z-index: 10;
+    }
+
+    .test-status {
+      margin-top: 10px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(255,255,255,0.12);
+      font-size: 11px;
+      line-height: 1.5;
+      opacity: 0.72;
+    }
+
+    .error-box {
+      position: absolute;
+      inset: 24px;
+      display: none;
+      place-items: center;
+      text-align: center;
+      padding: 24px;
+      border: 1px solid rgba(255, 120, 120, 0.35);
+      background: rgba(30, 8, 8, 0.72);
+      border-radius: 18px;
+      z-index: 50;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="panel">
+    <div class="title">5×5×5 Cube Grid Walker</div>
+    <div class="desc">
+      5×5×5 큐브 격자 구조입니다.<br />
+      각 입력마다 정확히 한 꼭지점씩 이동하고, 도착하면 반드시 멈춥니다.
+    </div>
+    <div class="keys">
+      <span class="key">A</span><span>왼쪽</span><span></span>
+      <span class="key">D</span><span>오른쪽</span><span></span>
+      <span class="key">W</span><span>위쪽</span><span></span>
+      <span class="key">S</span><span>아래쪽</span><span></span>
+      <span class="key">Q</span><span>뒤쪽</span><span></span>
+      <span class="key">E</span><span>앞쪽</span><span></span>
+    </div>
+    <div id="testStatus" class="test-status">Runtime tests: 준비 중...</div>
+  </div>
+  <div class="hint">Press key once: move to next vertex · Drag: view rotate · Wheel: zoom</div>
+  <div id="errorBox" class="error-box"></div>
+</div>
+
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+  const app = document.getElementById('app');
+  const testStatus = document.getElementById('testStatus');
+  const errorBox = document.getElementById('errorBox');
+
+  function assert(condition, message) {
+    if (!condition) throw new Error(message);
+  }
+
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.Fog(0x080a0f, 9, 22);
+
+  const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(5.8, 4.8, 7.2);
+
+  const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    alpha: true,
+    powerPreference: 'high-performance'
+  });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+  renderer.shadowMap.enabled = false;
+  app.appendChild(renderer.domElement);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.autoRotate = false;
+  controls.minDistance = 5;
+  controls.maxDistance = 14;
+  controls.target.set(0, 0, 0);
+
+  scene.add(new THREE.AmbientLight(0xffffff, 1.35));
+
+  const keyLight = new THREE.DirectionalLight(0xffffff, 2.1);
+  keyLight.position.set(5, 7, 6);
+  scene.add(keyLight);
+
+  const fillLight = new THREE.PointLight(0x6ea8ff, 2.1, 14);
+  fillLight.position.set(-5, -1, 4);
+  scene.add(fillLight);
+
+  const world = new THREE.Group();
+  scene.add(world);
+
+  const gridCount = 5;
+  const cellSize = 0.82;
+  const totalSize = gridCount * cellSize;
+  const half = totalSize / 2;
+  const minIndex = 0;
+  const maxIndex = gridCount;
+  const cubeletCount = gridCount * gridCount * gridCount;
+  const nodeCount = (gridCount + 1) * (gridCount + 1) * (gridCount + 1);
+
+  const tempMatrix = new THREE.Matrix4();
+  const tempPosition = new THREE.Vector3();
+
+  function gridToWorld(ix, iy, iz) {
+    return new THREE.Vector3(
+      ix * cellSize - half,
+      iy * cellSize - half,
+      iz * cellSize - half
+    );
+  }
+
+  function writeGridToVector(target, ix, iy, iz) {
+    target.set(ix * cellSize - half, iy * cellSize - half, iz * cellSize - half);
+    return target;
+  }
+
+  function cubeletCenter(ix, iy, iz) {
+    return new THREE.Vector3(
+      (ix + 0.5) * cellSize - half,
+      (iy + 0.5) * cellSize - half,
+      (iz + 0.5) * cellSize - half
+    );
+  }
+
+  // 27개 큐브를 개별 Mesh가 아니라 InstancedMesh 1개로 렌더링합니다.
+  const cubeletMesh = new THREE.InstancedMesh(
+    new THREE.BoxGeometry(cellSize * 0.98, cellSize * 0.98, cellSize * 0.98),
+    new THREE.MeshBasicMaterial({
+      color: 0x2e73ff,
+      transparent: true,
+      opacity: 0.055,
+      depthWrite: false
+    }),
+    cubeletCount
+  );
+  cubeletMesh.frustumCulled = false;
+  world.add(cubeletMesh);
+
+  let cubeletIndex = 0;
+  for (let x = 0; x < gridCount; x++) {
+    for (let y = 0; y < gridCount; y++) {
+      for (let z = 0; z < gridCount; z++) {
+        tempPosition.copy(cubeletCenter(x, y, z));
+        tempMatrix.makeTranslation(tempPosition.x, tempPosition.y, tempPosition.z);
+        cubeletMesh.setMatrixAt(cubeletIndex++, tempMatrix);
+      }
+    }
+  }
+  cubeletMesh.instanceMatrix.needsUpdate = true;
+
+  // 모든 격자 선을 하나의 BufferGeometry + LineSegments로 만듭니다.
+  const edgePositions = [];
+  function pushLine(a, b) {
+    edgePositions.push(a.x, a.y, a.z, b.x, b.y, b.z);
+  }
+
+  for (let x = 0; x <= gridCount; x++) {
+    for (let y = 0; y <= gridCount; y++) {
+      for (let z = 0; z < gridCount; z++) {
+        pushLine(gridToWorld(x, y, z), gridToWorld(x, y, z + 1));
+      }
+    }
+  }
+  for (let x = 0; x <= gridCount; x++) {
+    for (let z = 0; z <= gridCount; z++) {
+      for (let y = 0; y < gridCount; y++) {
+        pushLine(gridToWorld(x, y, z), gridToWorld(x, y + 1, z));
+      }
+    }
+  }
+  for (let y = 0; y <= gridCount; y++) {
+    for (let z = 0; z <= gridCount; z++) {
+      for (let x = 0; x < gridCount; x++) {
+        pushLine(gridToWorld(x, y, z), gridToWorld(x + 1, y, z));
+      }
+    }
+  }
+
+  const edgeGeometry = new THREE.BufferGeometry();
+  edgeGeometry.setAttribute('position', new THREE.Float32BufferAttribute(edgePositions, 3));
+
+  const edgeLines = new THREE.LineSegments(
+    edgeGeometry,
+    new THREE.LineBasicMaterial({ color: 0xaed0ff, transparent: true, opacity: 0.7 })
+  );
+  edgeLines.frustumCulled = false;
+  world.add(edgeLines);
+
+  // 64개 꼭지점도 InstancedMesh 1개로 처리합니다.
+  const nodeMesh = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(0.045, 10, 10),
+    new THREE.MeshBasicMaterial({ color: 0xeaf3ff }),
+    nodeCount
+  );
+  nodeMesh.frustumCulled = false;
+  world.add(nodeMesh);
+
+  let nodeIndex = 0;
+  for (let x = minIndex; x <= maxIndex; x++) {
+    for (let y = minIndex; y <= maxIndex; y++) {
+      for (let z = minIndex; z <= maxIndex; z++) {
+        writeGridToVector(tempPosition, x, y, z);
+        tempMatrix.makeTranslation(tempPosition.x, tempPosition.y, tempPosition.z);
+        nodeMesh.setMatrixAt(nodeIndex++, tempMatrix);
+      }
+    }
+  }
+  nodeMesh.instanceMatrix.needsUpdate = true;
+
+  const character = new THREE.Group();
+  scene.add(character);
+
+  const characterBody = new THREE.Mesh(
+    new THREE.SphereGeometry(0.16, 20, 20),
+    new THREE.MeshStandardMaterial({
+      color: 0xffd66b,
+      emissive: 0xffa600,
+      emissiveIntensity: 0.85,
+      roughness: 0.2,
+      metalness: 0.1
+    })
+  );
+  character.add(characterBody);
+
+  const characterHead = new THREE.Mesh(
+    new THREE.SphereGeometry(0.075, 14, 14),
+    new THREE.MeshStandardMaterial({
+      color: 0xfff2b0,
+      emissive: 0xffbb3d,
+      emissiveIntensity: 0.35,
+      roughness: 0.24
+    })
+  );
+  characterHead.position.set(0, 0.18, 0);
+  character.add(characterHead);
+
+  const characterGlow = new THREE.PointLight(0xffbf4d, 1.8, 2.6);
+  scene.add(characterGlow);
+
+  const targetMarker = new THREE.Mesh(
+    new THREE.SphereGeometry(0.075, 14, 14),
+    new THREE.MeshBasicMaterial({
+      color: 0x78ffcf,
+      transparent: true,
+      opacity: 0.82
+    })
+  );
+  scene.add(targetMarker);
+
+  let currentNode = { x: 0, y: 0, z: 0 };
+  let targetNode = { x: 0, y: 0, z: 0 };
+  let moveStart = gridToWorld(0, 0, 0);
+  let moveEnd = gridToWorld(0, 0, 0);
+  let moveProgress = 1;
+  const moveDuration = 0.075;
+  const maxQueuedMoves = 1;
+
+  character.position.copy(moveEnd);
+  characterGlow.position.copy(moveEnd);
+  targetMarker.position.copy(moveEnd);
+
+  const moveQueue = [];
+  const inputLockedKeys = new Set();
+
+  function isInsideNodeBounds(node) {
+    return (
+      node.x >= minIndex && node.x <= maxIndex &&
+      node.y >= minIndex && node.y <= maxIndex &&
+      node.z >= minIndex && node.z <= maxIndex
+    );
+  }
+
+  function enqueueMove(dx, dy, dz) {
+    // 핵심 규칙: 캐릭터는 꼭지점에서 멈춘 상태일 때만 다음 이동을 받습니다.
+    // 이동 중 입력을 쌓아두지 않기 때문에, 꼭지점을 지나쳐 연속 이동하지 않습니다.
+    if (moveProgress < 1) return;
+    if (moveQueue.length > 0) return;
+
+    const next = { x: targetNode.x + dx, y: targetNode.y + dy, z: targetNode.z + dz };
+    if (!isInsideNodeBounds(next)) return;
+    moveQueue.push(next);
+  }
+
+  function directionFromKey(key) {
+    if (key === 'a' || key === 'arrowleft') return [-1, 0, 0];
+    if (key === 'd' || key === 'arrowright') return [1, 0, 0];
+    if (key === 'w' || key === 'arrowup') return [0, 1, 0];
+    if (key === 's' || key === 'arrowdown') return [0, -1, 0];
+    if (key === 'q') return [0, 0, -1];
+    if (key === 'e') return [0, 0, 1];
+    return null;
+  }
+
+  function startNextMove() {
+    if (moveProgress < 1 || moveQueue.length === 0) return;
+    currentNode = { ...targetNode };
+    targetNode = moveQueue.shift();
+    moveStart = gridToWorld(currentNode.x, currentNode.y, currentNode.z);
+    moveEnd = gridToWorld(targetNode.x, targetNode.y, targetNode.z);
+    targetMarker.position.copy(moveEnd);
+    moveProgress = 0;
+  }
+
+  window.addEventListener('keydown', (event) => {
+    const key = event.key.toLowerCase();
+    const dir = directionFromKey(key);
+    if (!dir) return;
+    event.preventDefault();
+
+    // 브라우저의 keydown 반복 입력을 막습니다.
+    // 키를 계속 누르고 있어도 다음 꼭지점까지 한 번만 이동합니다.
+    if (event.repeat || inputLockedKeys.has(key)) return;
+
+    inputLockedKeys.add(key);
+    enqueueMove(dir[0], dir[1], dir[2]);
+    startNextMove();
+  });
+
+  window.addEventListener('keyup', (event) => {
+    inputLockedKeys.delete(event.key.toLowerCase());
+  });
+
+  function runTests() {
+    assert(typeof THREE.Scene === 'function', 'Three.js import 실패');
+    assert(typeof OrbitControls === 'function', 'OrbitControls import 실패');
+    assert(cubeletMesh.count === 125, '5×5×5 큐브는 작은 큐브 125개여야 합니다');
+    assert(nodeMesh.count === 216, '5×5×5 큐브 격자의 꼭지점은 216개여야 합니다');
+    assert(edgeGeometry.getAttribute('position').count === 1080, '격자 선분 좌표 수가 예상과 다릅니다');
+    assert(isInsideNodeBounds({ x: 0, y: 0, z: 0 }), '시작 노드가 범위 밖입니다');
+    assert(isInsideNodeBounds({ x: 5, y: 5, z: 5 }), '끝 노드가 범위 밖입니다');
+    assert(!isInsideNodeBounds({ x: 6, y: 0, z: 0 }), '범위 밖 노드 판정 실패');
+    assert(moveDuration <= 0.08, '이동 속도 최적화가 적용되지 않았습니다');
+    assert(maxQueuedMoves === 1, '꼭지점 정지 이동은 입력 큐를 1개로 제한해야 합니다');
+    assert(renderer.domElement instanceof HTMLCanvasElement, '렌더러 canvas 생성 실패');
+
+    testStatus.textContent = 'Runtime tests: 통과 ✓ · Vertex stop movement';
+  }
+
+  try {
+    runTests();
+  } catch (error) {
+    testStatus.textContent = `Runtime tests: 실패 - ${error.message}`;
+    console.error(error);
+  }
+
+  const clock = new THREE.Clock();
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const delta = Math.min(clock.getDelta(), 0.033);
+    const elapsed = clock.elapsedTime;
+
+    startNextMove();
+
+    if (moveProgress < 1) {
+      moveProgress = Math.min(1, moveProgress + delta / moveDuration);
+      const t = moveProgress * moveProgress * (3 - 2 * moveProgress);
+      character.position.lerpVectors(moveStart, moveEnd, t);
+    }
+
+    const pulse = Math.sin(elapsed * 8) * 0.02;
+    characterBody.scale.setScalar(1 + pulse);
+    characterHead.position.y = 0.18 + Math.sin(elapsed * 5) * 0.012;
+    characterGlow.position.copy(character.position);
+
+    world.rotation.y = Math.sin(elapsed * 0.16) * 0.012;
+    world.rotation.x = Math.sin(elapsed * 0.12) * 0.008;
+
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  animate();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+</script>
+
+<script>
+  window.addEventListener('error', (event) => {
+    const box = document.getElementById('errorBox');
+    if (!box) return;
+    box.style.display = 'grid';
+    box.innerHTML = `<div><strong>실행 오류</strong><br><br>${event.message}</div>`;
+  });
+</script>
+</body>
+</html>

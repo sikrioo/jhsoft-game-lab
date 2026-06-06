@@ -1,0 +1,1289 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CUBE PAC — 3D Grid Walker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet"/>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.164.1/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.164.1/examples/jsm/"
+  }
+}
+</script>
+
+<style>
+:root {
+  --c-bg:       #04060c;
+  --c-grid:     #1a3a6e;
+  --c-pellet:   #ffe566;
+  --c-power:    #ff6bce;
+  --c-player:   #ffe566;
+  --c-ghost0:   #ff4d6a;
+  --c-ghost1:   #4de8ff;
+  --c-ghost2:   #a06bff;
+  --c-scared:   #3a7cff;
+  --c-ui:       #0ff;
+  --font-game:  'Press Start 2P', monospace;
+  --font-hud:   'Orbitron', sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  width: 100%; height: 100%; overflow: hidden;
+  background: var(--c-bg);
+  color: #fff;
+  font-family: var(--font-hud);
+}
+
+#app { width: 100vw; height: 100vh; position: relative; }
+canvas { display: block; width: 100%; height: 100%; }
+
+/* ── TOP HUD ── */
+#hud {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  padding: 10px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.72) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 20;
+  gap: 16px;
+}
+
+.hud-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.hud-label {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  opacity: 0.55;
+  font-family: var(--font-hud);
+  text-transform: uppercase;
+}
+
+.hud-value {
+  font-family: var(--font-game);
+  font-size: 13px;
+  color: var(--c-ui);
+  text-shadow: 0 0 8px rgba(0,255,255,0.6);
+  letter-spacing: 0.05em;
+}
+
+#livesDisplay {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.life-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--c-player);
+  box-shadow: 0 0 6px var(--c-player);
+  transition: all 0.2s;
+}
+
+.life-dot.lost {
+  background: rgba(255,255,255,0.1);
+  box-shadow: none;
+}
+
+#levelDisplay { color: #ff9f43; text-shadow: 0 0 8px rgba(255,150,50,0.7); }
+
+/* ── BOTTOM KEY HUD ── */
+#keyHud {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: grid;
+  grid-template-areas:
+    ". w ."
+    "a s d"
+    "q . e";
+  gap: 5px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+.khud-key {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.06);
+  font-family: var(--font-hud);
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255,255,255,0.35);
+  transition: all 80ms;
+}
+
+.khud-key.avail {
+  color: #78ffcf;
+  border-color: rgba(120,255,207,0.5);
+  background: rgba(120,255,207,0.10);
+  box-shadow: 0 0 10px rgba(120,255,207,0.18);
+}
+
+.khud-key.active {
+  color: #ffd66b;
+  border-color: rgba(255,214,107,0.9);
+  background: rgba(255,214,107,0.20);
+  box-shadow: 0 0 14px rgba(255,214,107,0.35);
+}
+
+[data-k="w"] { grid-area: w; }
+[data-k="a"] { grid-area: a; }
+[data-k="s"] { grid-area: s; }
+[data-k="d"] { grid-area: d; }
+[data-k="q"] { grid-area: q; }
+[data-k="e"] { grid-area: e; }
+
+/* ── OVERLAY SCREENS ── */
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  z-index: 50;
+  background: rgba(4, 6, 12, 0.82);
+  backdrop-filter: blur(6px);
+  transition: opacity 0.3s;
+}
+
+.overlay.hidden { display: none; }
+
+.overlay-title {
+  font-family: var(--font-game);
+  font-size: clamp(18px, 3vw, 28px);
+  letter-spacing: 0.06em;
+  text-align: center;
+  line-height: 1.6;
+}
+
+.overlay-sub {
+  font-family: var(--font-hud);
+  font-size: 13px;
+  opacity: 0.65;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.overlay-btn {
+  margin-top: 8px;
+  padding: 10px 28px;
+  font-family: var(--font-game);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  border: 1px solid rgba(0,255,255,0.5);
+  background: rgba(0,255,255,0.08);
+  color: var(--c-ui);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 120ms;
+}
+
+.overlay-btn:hover {
+  background: rgba(0,255,255,0.2);
+  box-shadow: 0 0 18px rgba(0,255,255,0.3);
+}
+
+/* ── SCARED FLASH ── */
+#scaredFlash {
+  position: absolute;
+  inset: 0;
+  background: var(--c-scared);
+  opacity: 0;
+  pointer-events: none;
+  z-index: 5;
+  transition: opacity 0.12s;
+}
+
+/* ── MESSAGE POPUP ── */
+#msgPopup {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-family: var(--font-game);
+  font-size: clamp(14px, 2.5vw, 22px);
+  color: #fff;
+  text-shadow: 0 0 20px #fff;
+  letter-spacing: 0.06em;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 40;
+  transition: opacity 0.2s;
+  text-align: center;
+}
+
+#msgPopup.show { opacity: 1; }
+
+/* ── POWER TIMER BAR ── */
+#powerBar {
+  position: absolute;
+  bottom: 70px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 160px;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255,255,255,0.1);
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.2s;
+  z-index: 20;
+}
+
+#powerBarFill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, var(--c-scared), var(--c-power));
+  transform-origin: left;
+  transition: transform 0.1s linear;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- TOP HUD -->
+  <div id="hud">
+    <div class="hud-block">
+      <span class="hud-label">SCORE</span>
+      <span class="hud-value" id="scoreDisplay">00000</span>
+    </div>
+    <div class="hud-block">
+      <span class="hud-label">LIVES</span>
+      <div id="livesDisplay"></div>
+    </div>
+    <div class="hud-block">
+      <span class="hud-label">LEVEL</span>
+      <span class="hud-value" id="levelDisplay">01</span>
+    </div>
+    <div class="hud-block">
+      <span class="hud-label">PELLETS</span>
+      <span class="hud-value" id="pelletDisplay">--</span>
+    </div>
+  </div>
+
+  <!-- KEY HUD -->
+  <div id="keyHud">
+    <div class="khud-key" data-k="w">W</div>
+    <div class="khud-key" data-k="a">A</div>
+    <div class="khud-key" data-k="s">S</div>
+    <div class="khud-key" data-k="d">D</div>
+    <div class="khud-key" data-k="q">Q</div>
+    <div class="khud-key" data-k="e">E</div>
+  </div>
+
+  <!-- POWER BAR -->
+  <div id="powerBar"><div id="powerBarFill"></div></div>
+
+  <!-- SCARED FLASH -->
+  <div id="scaredFlash"></div>
+
+  <!-- MESSAGE POPUP -->
+  <div id="msgPopup"></div>
+
+  <!-- START SCREEN -->
+  <div class="overlay" id="startScreen">
+    <div class="overlay-title" style="color:#ffe566;">CUBE<br/>PAC</div>
+    <div class="overlay-sub">3D 큐브 격자에서 팩맨을<br/>플레이하세요</div>
+    <div class="overlay-sub" style="opacity:0.45; font-size:11px; margin-top:-8px;">
+      W/S: 상하 · A/D: 좌우 · Q/E: 앞뒤
+    </div>
+    <button class="overlay-btn" id="startBtn">PRESS START</button>
+  </div>
+
+  <!-- LEVEL CLEAR -->
+  <div class="overlay hidden" id="clearScreen">
+    <div class="overlay-title" style="color:#78ffcf;">STAGE<br/>CLEAR!</div>
+    <div class="overlay-sub" id="clearSub"></div>
+    <button class="overlay-btn" id="nextBtn">NEXT STAGE</button>
+  </div>
+
+  <!-- GAME OVER -->
+  <div class="overlay hidden" id="gameOverScreen">
+    <div class="overlay-title" style="color:#ff4d6a;">GAME<br/>OVER</div>
+    <div class="overlay-sub" id="finalScore"></div>
+    <button class="overlay-btn" id="restartBtn">PLAY AGAIN</button>
+  </div>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+// ══════════════════════════════════════════════════════
+//  CONSTANTS
+// ══════════════════════════════════════════════════════
+const GRID   = 3;
+const CELL   = 1.4;
+const HALF   = (GRID * CELL) / 2;
+const N      = GRID + 1;           // 4  (꼭지점 한 축 개수)
+const TOTAL_NODES = N * N * N;     // 64
+
+const MOVE_DUR  = 0.17;            // player 이동 시간 (초)
+const GHOST_MOVE_DUR = 0.72;       // ghost 한 칸 이동 시간 (초) - 플레이어보다 훨씬 느리게
+const GHOST_LEVEL_SPEEDUP = 0.04;  // 레벨당 가속 폭 - 너무 빨라지지 않게 제한
+const POWER_DUR = 7.0;             // 파워 지속 시간 (초)
+const HIT_RADIUS = 0.34;           // 화면상 닿는 즉시 반응하는 충돌 반경
+const DEATH_EFFECT_DUR = 1.15;      // 플레이어 파괴 연출 후 판정까지 대기
+
+const GHOST_COLORS = [0xff4d6a, 0x4de8ff, 0xa06bff];
+const GHOST_NAMES  = ['BLINKY', 'INKY', 'CLYDE'];
+
+// 8개 모서리 꼭지점 (파워 펠렛 위치)
+const POWER_NODES = new Set();
+[[0,0,0],[0,0,3],[0,3,0],[0,3,3],[3,0,0],[3,0,3],[3,3,0],[3,3,3]]
+  .forEach(([x,y,z]) => POWER_NODES.add(nodeId(x,y,z)));
+
+// ══════════════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════════════
+function nodeId(x, y, z) { return x * N * N + y * N + z; }
+function nodeCoord(id) {
+  const z = id % N;
+  const y = Math.floor(id / N) % N;
+  const x = Math.floor(id / (N * N));
+  return { x, y, z };
+}
+function gridToWorld(x, y, z) {
+  return new THREE.Vector3(x*CELL-HALF, y*CELL-HALF, z*CELL-HALF);
+}
+function inBounds(x, y, z) {
+  return x>=0 && x<=GRID && y>=0 && y<=GRID && z>=0 && z<=GRID;
+}
+
+// 인접 꼭지점 목록
+const DIRS6 = [[-1,0,0],[1,0,0],[0,-1,0],[0,1,0],[0,0,-1],[0,0,1]];
+function neighbors(id) {
+  const {x,y,z} = nodeCoord(id);
+  const result = [];
+  for (const [dx,dy,dz] of DIRS6) {
+    if (inBounds(x+dx, y+dy, z+dz)) result.push(nodeId(x+dx,y+dy,z+dz));
+  }
+  return result;
+}
+
+// BFS 최단 경로
+function bfsNext(fromId, toId) {
+  if (fromId === toId) return fromId;
+  const visited = new Uint8Array(TOTAL_NODES);
+  const prev    = new Int16Array(TOTAL_NODES).fill(-1);
+  const queue   = [fromId];
+  visited[fromId] = 1;
+  while (queue.length) {
+    const cur = queue.shift();
+    if (cur === toId) {
+      // 역추적
+      let n = toId;
+      while (prev[n] !== fromId) n = prev[n];
+      return n;
+    }
+    for (const nb of neighbors(cur)) {
+      if (!visited[nb]) { visited[nb]=1; prev[nb]=cur; queue.push(nb); }
+    }
+  }
+  return fromId;
+}
+
+// BFS 가장 먼 노드 (도망 모드)
+function bfsFarthest(fromId, avoidId) {
+  const dist = new Int16Array(TOTAL_NODES).fill(-1);
+  const queue = [fromId];
+  dist[fromId] = 0;
+  let best = fromId, bestD = 0;
+  while (queue.length) {
+    const cur = queue.shift();
+    for (const nb of neighbors(cur)) {
+      if (dist[nb]===-1) {
+        dist[nb] = dist[cur]+1;
+        queue.push(nb);
+        if (dist[nb]>bestD && nb!==avoidId) { best=nb; bestD=dist[nb]; }
+      }
+    }
+  }
+  return best;
+}
+
+// easing
+function easeOutCubic(t) { return 1-Math.pow(1-t,3); }
+function easeOutBack(t,s=1.1) { return 1+(s+1)*Math.pow(t-1,3)+s*Math.pow(t-1,2); }
+
+// ══════════════════════════════════════════════════════
+//  THREE.JS SETUP
+// ══════════════════════════════════════════════════════
+const app      = document.getElementById('app');
+const scene    = new THREE.Scene();
+scene.fog      = new THREE.FogExp2(0x04060c, 0.048);
+
+const camera   = new THREE.PerspectiveCamera(44, innerWidth/innerHeight, 0.1, 60);
+camera.position.set(6.5, 5.2, 8.0);
+
+const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true, powerPreference:'high-performance' });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio||1, 1.5));
+app.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true; controls.dampingFactor = 0.07;
+controls.minDistance=5; controls.maxDistance=16;
+controls.target.set(0,0,0);
+
+scene.add(new THREE.AmbientLight(0xffffff, 1.1));
+const keyL = new THREE.DirectionalLight(0xffffff, 1.8);
+keyL.position.set(5,8,6); scene.add(keyL);
+const fillL = new THREE.PointLight(0x4090ff, 1.8, 16);
+fillL.position.set(-5,-1,4); scene.add(fillL);
+
+// ══════════════════════════════════════════════════════
+//  GRID GEOMETRY
+// ══════════════════════════════════════════════════════
+const world = new THREE.Group(); scene.add(world);
+
+// cubelets
+const cubeGeo = new THREE.BoxGeometry(CELL*.95,CELL*.95,CELL*.95);
+const cubeMat = new THREE.MeshBasicMaterial({color:0x1a3a6e,transparent:true,opacity:0.04,depthWrite:false});
+const cubeletMesh = new THREE.InstancedMesh(cubeGeo, cubeMat, GRID*GRID*GRID);
+cubeletMesh.frustumCulled = false; world.add(cubeletMesh);
+const _m4 = new THREE.Matrix4(); const _v3 = new THREE.Vector3();
+let ci=0;
+for(let x=0;x<GRID;x++) for(let y=0;y<GRID;y++) for(let z=0;z<GRID;z++){
+  _v3.set((x+.5)*CELL-HALF,(y+.5)*CELL-HALF,(z+.5)*CELL-HALF);
+  cubeletMesh.setMatrixAt(ci++,_m4.makeTranslation(_v3.x,_v3.y,_v3.z));
+}
+cubeletMesh.instanceMatrix.needsUpdate=true;
+
+// edges
+const ep=[]; function pl(a,b){ep.push(a.x,a.y,a.z,b.x,b.y,b.z);}
+for(let x=0;x<=GRID;x++) for(let y=0;y<=GRID;y++) for(let z=0;z<GRID;z++) pl(gridToWorld(x,y,z),gridToWorld(x,y,z+1));
+for(let x=0;x<=GRID;x++) for(let z=0;z<=GRID;z++) for(let y=0;y<GRID;y++) pl(gridToWorld(x,y,z),gridToWorld(x,y+1,z));
+for(let y=0;y<=GRID;y++) for(let z=0;z<=GRID;z++) for(let x=0;x<GRID;x++) pl(gridToWorld(x,y,z),gridToWorld(x+1,y,z));
+const edgeGeo=new THREE.BufferGeometry();
+edgeGeo.setAttribute('position',new THREE.Float32BufferAttribute(ep,3));
+const edgeLines=new THREE.LineSegments(edgeGeo,new THREE.LineBasicMaterial({color:0x1a3a6e,transparent:true,opacity:0.55}));
+edgeLines.frustumCulled=false; world.add(edgeLines);
+
+// ══════════════════════════════════════════════════════
+//  PELLETS
+// ══════════════════════════════════════════════════════
+const pelletMeshes = new Map(); // nodeId → {mesh, isPower}
+const pelletGroup  = new THREE.Group(); scene.add(pelletGroup);
+
+function buildPellets() {
+  // 기존 펠렛 제거
+  while(pelletGroup.children.length) pelletGroup.remove(pelletGroup.children[0]);
+  pelletMeshes.clear();
+
+  for(let x=0;x<=GRID;x++) for(let y=0;y<=GRID;y++) for(let z=0;z<=GRID;z++){
+    const id  = nodeId(x,y,z);
+    const pos = gridToWorld(x,y,z);
+    const isPower = POWER_NODES.has(id);
+
+    if(isPower){
+      const geo  = new THREE.SphereGeometry(0.11,14,14);
+      const mat  = new THREE.MeshStandardMaterial({
+        color:0xff6bce, emissive:0xff00aa, emissiveIntensity:1.2,
+        roughness:0.1,metalness:0
+      });
+      const mesh = new THREE.Mesh(geo,mat);
+      mesh.position.copy(pos);
+      // power pellet 후광
+      const glow = new THREE.PointLight(0xff00aa, 1.2, 1.6);
+      mesh.add(glow);
+      pelletGroup.add(mesh);
+      pelletMeshes.set(id, {mesh, isPower:true});
+    } else {
+      const geo  = new THREE.SphereGeometry(0.04,8,8);
+      const mat  = new THREE.MeshStandardMaterial({
+        color:0xffe566, emissive:0xffaa00, emissiveIntensity:0.7
+      });
+      const mesh = new THREE.Mesh(geo,mat);
+      mesh.position.copy(pos);
+      pelletGroup.add(mesh);
+      pelletMeshes.set(id, {mesh, isPower:false});
+    }
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  PLAYER - refined minimal 3D icon
+// ══════════════════════════════════════════════════════
+const playerGroup = new THREE.Group(); scene.add(playerGroup);
+
+const playerMat = new THREE.MeshStandardMaterial({
+  color:0xffd84d,
+  emissive:0xffa000,
+  emissiveIntensity:0.85,
+  roughness:0.22,
+  metalness:0.04
+});
+
+const playerBody  = new THREE.Mesh(
+  new THREE.SphereGeometry(0.17,32,24),
+  playerMat
+);
+playerGroup.add(playerBody);
+
+// 얇은 외곽 링: 작은 3D 아이콘처럼 보이게 함
+const playerRing = new THREE.Mesh(
+  new THREE.TorusGeometry(0.185, 0.012, 8, 36),
+  new THREE.MeshBasicMaterial({ color:0xfff2a3, transparent:true, opacity:0.78 })
+);
+playerRing.rotation.x = Math.PI / 2;
+playerGroup.add(playerRing);
+
+// 입은 튀어나온 모델 대신 납작한 어두운 컷으로 표현
+const mouthShape = new THREE.Shape();
+mouthShape.moveTo(0, 0);
+mouthShape.lineTo(0.12, 0.07);
+mouthShape.lineTo(0.12,-0.07);
+mouthShape.lineTo(0, 0);
+const playerMouth = new THREE.Mesh(
+  new THREE.ShapeGeometry(mouthShape),
+  new THREE.MeshBasicMaterial({ color:0x080a12, transparent:true, opacity:0.78, side:THREE.DoubleSide })
+);
+playerMouth.position.set(0.015, 0, 0.172);
+playerGroup.add(playerMouth);
+
+const playerGlow  = new THREE.PointLight(0xffcc44,1.8,2.8);
+playerGroup.add(playerGlow);
+
+// ══════════════════════════════════════════════════════
+//  GHOSTS - simple ghost silhouettes
+// ══════════════════════════════════════════════════════
+const GHOST_COUNT = 3;
+
+// 고스트의 눈은 기본적으로 로컬 +Z 방향을 바라보도록 배치되어 있음.
+// 이동할 때 현재 위치 → 다음 노드 방향으로 이 벡터를 맞춰서 몸 전체를 회전시킨다.
+const GHOST_FORWARD = new THREE.Vector3(0, 0, 1);
+const GHOST_DIR_TMP = new THREE.Vector3();
+
+class Ghost {
+  constructor(idx) {
+    this.idx   = idx;
+    this.color = GHOST_COLORS[idx];
+    this.group = new THREE.Group();
+    scene.add(this.group);
+
+    // body: 단순한 유령 실루엣. 위는 둥글고 아래는 물결 모양.
+    const ghostMat = new THREE.MeshStandardMaterial({
+      color:this.color,
+      emissive:new THREE.Color(this.color),
+      emissiveIntensity:0.62,
+      roughness:0.32,
+      metalness:0.02
+    });
+
+    this.bodyMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(0.145, 24, 18, 0, Math.PI * 2, 0, Math.PI * 0.78),
+      ghostMat
+    );
+    this.bodyMesh.scale.set(1.0, 1.08, 0.94);
+    this.bodyMesh.position.y = 0.035;
+    this.group.add(this.bodyMesh);
+
+    this.lowerMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.145, 0.145, 0.16, 28, 1, true),
+      ghostMat
+    );
+    this.lowerMesh.position.y = -0.055;
+    this.group.add(this.lowerMesh);
+
+    // 아래쪽 물결. 작고 둥근 3개의 방울로 고전 유령 느낌을 냄.
+    this.skirtPieces = [];
+    for (const sx of [-0.088, 0, 0.088]) {
+      const skirt = new THREE.Mesh(
+        new THREE.SphereGeometry(0.056, 14, 10),
+        ghostMat
+      );
+      skirt.scale.set(1.05, 0.62, 0.82);
+      skirt.position.set(sx, -0.14, 0);
+      this.group.add(skirt);
+      this.skirtPieces.push(skirt);
+    }
+
+    // 눈: 튀어나오지 않는 납작한 흰 눈 + 작은 동공
+    this.eyeWhites = [];
+    this.eyeDots = [];
+    for(const sx of [-0.048, 0.048]){
+      const eye = new THREE.Mesh(
+        new THREE.CircleGeometry(0.027, 18),
+        new THREE.MeshBasicMaterial({ color:0xf6fbff, transparent:true, opacity:0.95, side:THREE.DoubleSide })
+      );
+      eye.scale.set(0.82, 1.18, 1);
+      eye.position.set(sx, 0.043, 0.132);
+      this.group.add(eye);
+      this.eyeWhites.push(eye);
+
+      const dot = new THREE.Mesh(
+        new THREE.CircleGeometry(0.009, 10),
+        new THREE.MeshBasicMaterial({ color:0x07101c, transparent:true, opacity:0.9, side:THREE.DoubleSide })
+      );
+      dot.position.set(sx + 0.006, 0.039, 0.135);
+      this.group.add(dot);
+      this.eyeDots.push(dot);
+    }
+
+    // 아주 얇은 하단 그림자 링
+    this.baseRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.15, 0.006, 6, 32),
+      new THREE.MeshBasicMaterial({ color:this.color, transparent:true, opacity:0.34 })
+    );
+    this.baseRing.rotation.x = Math.PI / 2;
+    this.baseRing.position.y = -0.17;
+    this.group.add(this.baseRing);
+
+    this.glow = new THREE.PointLight(this.color, 1.15, 2.2);
+    this.group.add(this.glow);
+
+    this.nodeId    = 0;
+    this.targetId  = 0;
+    this.moveFrom  = new THREE.Vector3();
+    this.moveTo    = new THREE.Vector3();
+    this.rotFrom   = new THREE.Quaternion();
+    this.rotTo     = new THREE.Quaternion();
+    this.progress  = 1.0;
+    this.speed     = 1.0;   // multiplier
+    this.scared    = false;
+    this.dead      = false;  // eaten 후 respawn 대기
+    this.respawnT  = 0;
+  }
+
+  setNode(id){
+    this.nodeId   = id;
+    this.targetId = id;
+    const {x,y,z} = nodeCoord(id);
+    this.group.position.copy(gridToWorld(x,y,z));
+    this.moveFrom.copy(this.group.position);
+    this.moveTo.copy(this.group.position);
+    this.rotFrom.copy(this.group.quaternion);
+    this.rotTo.copy(this.group.quaternion);
+    this.progress = 1.0;
+  }
+
+  setScared(on){
+    this.scared = on;
+    const col = on ? new THREE.Color(0x3a7cff) : new THREE.Color(this.color);
+    this.bodyMesh.material.color.set(col);
+    this.bodyMesh.material.emissive.set(on ? 0x1a40aa : this.color);
+    this.bodyMesh.material.emissiveIntensity = on ? 0.48 : 0.62;
+    this.faceMesh.material.opacity = on ? 0.58 : 0.82;
+    this.eyeDots.forEach(dot => dot.material.opacity = on ? 0.45 : 0.88);
+    this.baseRing.material.color.set(on ? 0x3a7cff : this.color);
+    this.baseRing.material.opacity = on ? 0.30 : 0.42;
+    this.glow.color.set(on ? 0x3a7cff : this.color);
+  }
+
+  update(delta, playerNode, level) {
+    if(this.dead){
+      this.respawnT -= delta;
+      if(this.respawnT<=0){ this.dead=false; this.group.visible=true; }
+      return;
+    }
+
+    // 고스트 이동 속도 조정:
+    // 기존에는 MOVE_DUR(플레이어 이동 시간)을 기준으로 해서 적이 너무 빠르게 움직였음.
+    // 이제 고스트 전용 이동 시간을 사용하고, 레벨 가속도 아주 약하게만 적용.
+    const levelSpeed = Math.min(1.22, 1 + (level - 1) * GHOST_LEVEL_SPEEDUP);
+    const dur = GHOST_MOVE_DUR / (this.speed * levelSpeed);
+
+    if(this.progress < 1){
+      this.progress = Math.min(1, this.progress + delta/dur);
+      const t = easeOutCubic(this.progress);
+      this.group.position.lerpVectors(this.moveFrom, this.moveTo, t);
+
+      // 이동 방향으로 몸/눈이 자연스럽게 돌아가도록 회전 보간
+      const rt = easeOutCubic(Math.min(1, this.progress * 1.35));
+      this.group.quaternion.slerpQuaternions(this.rotFrom, this.rotTo, rt);
+      return;
+    }
+
+    // 다음 목표 선택
+    this.nodeId = this.targetId;
+    const nbs   = neighbors(this.nodeId);
+
+    let nextId;
+    if(this.scared){
+      // 도망: BFS로 플레이어에서 최대한 멀리
+      const target = bfsFarthest(this.nodeId, playerNode);
+      nextId = bfsNext(this.nodeId, target);
+    } else {
+      // 추격: idx별 개성
+      if(this.idx===0){
+        // Blinky: 직접 추격
+        nextId = bfsNext(this.nodeId, playerNode);
+      } else if(this.idx===1){
+        // Inky: 50% 확률 추격, 나머지 랜덤
+        nextId = Math.random()<0.5
+          ? bfsNext(this.nodeId, playerNode)
+          : nbs[Math.floor(Math.random()*nbs.length)];
+      } else {
+        // Clyde: 가까우면 도망, 멀면 추격
+        const {x:gx,y:gy,z:gz} = nodeCoord(this.nodeId);
+        const {x:px,y:py,z:pz} = nodeCoord(playerNode);
+        const dist = Math.abs(gx-px)+Math.abs(gy-py)+Math.abs(gz-pz);
+        nextId = dist <= 3
+          ? nbs[Math.floor(Math.random()*nbs.length)]
+          : bfsNext(this.nodeId, playerNode);
+      }
+    }
+
+    if(nextId === this.nodeId) nextId = nbs[Math.floor(Math.random()*nbs.length)];
+
+    this.targetId = nextId;
+    const {x,y,z} = nodeCoord(nextId);
+    this.moveFrom.copy(this.group.position);
+    this.moveTo.copy(gridToWorld(x,y,z));
+
+    // 다음 노드로 이동하는 방향을 바라보게 한다.
+    // 눈/얼굴은 로컬 +Z에 있으므로 +Z를 이동 방향으로 맞춤.
+    GHOST_DIR_TMP.subVectors(this.moveTo, this.moveFrom);
+    if (GHOST_DIR_TMP.lengthSq() > 0.000001) {
+      GHOST_DIR_TMP.normalize();
+      this.rotFrom.copy(this.group.quaternion);
+      this.rotTo.setFromUnitVectors(GHOST_FORWARD, GHOST_DIR_TMP);
+    } else {
+      this.rotFrom.copy(this.group.quaternion);
+      this.rotTo.copy(this.group.quaternion);
+    }
+
+    this.progress = 0;
+  }
+}
+
+const ghosts = Array.from({length:GHOST_COUNT}, (_,i) => new Ghost(i));
+
+// ══════════════════════════════════════════════════════
+//  GAME STATE
+// ══════════════════════════════════════════════════════
+let state       = 'start';   // start|playing|clear|gameover|dying
+let score       = 0;
+let lives       = 3;
+let level       = 1;
+let powerTimer  = 0;
+let scared      = false;
+
+let playerNode  = 0;         // 현재 꼭지점 nodeId
+let playerTarget= 0;
+let playerMoveFrom = new THREE.Vector3();
+let playerMoveTo   = new THREE.Vector3();
+let playerProgress = 1.0;
+
+const moveQueue  = [];
+const inputLock  = new Set();
+let   activeKey  = null;
+let   bounceT    = 0;
+
+// ghost eat combo
+let ghostCombo   = 0;
+
+// 점수
+const SCORE_PELLET  = 10;
+const SCORE_POWER   = 50;
+const SCORE_GHOST   = [200,400,800,1600];
+
+// ══════════════════════════════════════════════════════
+//  UI ELEMENTS
+// ══════════════════════════════════════════════════════
+const scoreEl   = document.getElementById('scoreDisplay');
+const livesEl   = document.getElementById('livesDisplay');
+const levelEl   = document.getElementById('levelDisplay');
+const pelletEl  = document.getElementById('pelletDisplay');
+const msgEl     = document.getElementById('msgPopup');
+const scFlash   = document.getElementById('scaredFlash');
+const pwBar     = document.getElementById('powerBar');
+const pwFill    = document.getElementById('powerBarFill');
+
+const startScreen   = document.getElementById('startScreen');
+const clearScreen   = document.getElementById('clearScreen');
+const gameOverScreen= document.getElementById('gameOverScreen');
+
+const khudKeys = {};
+document.querySelectorAll('.khud-key').forEach(el=>khudKeys[el.dataset.k]=el);
+
+let msgTimer = 0;
+
+function showMsg(text, duration=1.5){
+  msgEl.textContent = text;
+  msgEl.classList.add('show');
+  msgTimer = duration;
+}
+
+function updateHudUI(){
+  scoreEl.textContent  = String(score).padStart(5,'0');
+  levelEl.textContent  = String(level).padStart(2,'0');
+  pelletEl.textContent = `${pelletMeshes.size}`;
+
+  // lives dots
+  livesEl.innerHTML = '';
+  for(let i=0;i<3;i++){
+    const d=document.createElement('div');
+    d.className='life-dot'+(i>=lives?' lost':'');
+    livesEl.appendChild(d);
+  }
+
+  // power bar
+  if(scared && powerTimer>0){
+    pwBar.style.opacity='1';
+    pwFill.style.transform=`scaleX(${powerTimer/POWER_DUR})`;
+  } else {
+    pwBar.style.opacity='0';
+  }
+}
+
+// Key HUD
+function updateKeyHud(){
+  const {x,y,z} = nodeCoord(playerProgress<1 ? playerTarget : playerNode);
+  const KEY_DIR = {a:[-1,0,0],d:[1,0,0],w:[0,1,0],s:[0,-1,0],q:[0,0,-1],e:[0,0,1]};
+  for(const [k,dir] of Object.entries(KEY_DIR)){
+    const el = khudKeys[k];
+    const avail = inBounds(x+dir[0],y+dir[1],z+dir[2]);
+    el.classList.toggle('avail', avail);
+    el.classList.toggle('active', activeKey===k);
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  GHOST SPAWN POSITIONS (4개 면 중앙부)
+// ══════════════════════════════════════════════════════
+const GHOST_SPAWNS = [nodeId(3,3,3), nodeId(0,3,3), nodeId(3,0,3)];
+
+function resetPositions(){
+  // player at origin corner
+  playerNode     = nodeId(0,0,0);
+  playerTarget   = nodeId(0,0,0);
+  const startPos = gridToWorld(0,0,0);
+  playerMoveFrom.copy(startPos);
+  playerMoveTo.copy(startPos);
+  playerProgress = 1.0;
+  playerGroup.position.copy(startPos);
+  playerGroup.visible = true;
+
+  ghosts.forEach((g,i)=>{
+    g.setNode(GHOST_SPAWNS[i]);
+    g.speed  = 1.0;
+    g.scared = false;
+    g.dead   = false;
+    g.group.visible = true;
+    g.setScared(false);
+  });
+}
+
+function startLevel(){
+  buildPellets();
+  resetPositions();
+  scared     = false;
+  powerTimer = 0;
+  ghostCombo = 0;
+  scFlash.style.opacity = '0';
+  updateHudUI();
+}
+
+function startGame(){
+  score = 0; lives = 3; level = 1;
+  startScreen.classList.add('hidden');
+  clearScreen.classList.add('hidden');
+  gameOverScreen.classList.add('hidden');
+  state = 'playing';
+  startLevel();
+}
+
+function nextLevel(){
+  level++;
+  clearScreen.classList.add('hidden');
+  state = 'playing';
+  startLevel();
+  showMsg(`LEVEL ${String(level).padStart(2,'0')}`, 1.5);
+}
+
+function gameOver(){
+  state = 'gameover';
+  document.getElementById('finalScore').textContent =
+    `FINAL SCORE: ${String(score).padStart(5,'0')}`;
+  gameOverScreen.classList.remove('hidden');
+}
+
+function finishLoseLife(){
+  lives--;
+  updateHudUI();
+  if(lives<=0){ gameOver(); return; }
+
+  state='playing';
+  resetPositions();
+  playerGroup.visible = true;
+  scared=false; powerTimer=0; ghostCombo=0;
+  scFlash.style.opacity='0';
+  ghosts.forEach(g=>{g.setScared(false);g.dead=false;g.group.visible=true;});
+}
+
+function triggerPlayerDeath(hitGhost=null){
+  if(state!=='playing') return;
+  state = 'dying';
+  moveQueue.length = 0;
+  activeKey = null;
+  const hitPos = playerGroup.position.clone();
+  spawnBurst(hitPos, 0xffd66b, 42, 1.25);
+  spawnBurst(hitPos, 0xff4d6a, 24, 0.9);
+  if(hitGhost) spawnBurst(hitGhost.group.position, hitGhost.color, 18, 0.75);
+  playerGroup.visible = false;
+  showMsg('CRASH!', DEATH_EFFECT_DUR);
+  setTimeout(()=>{
+    if(state==='dying') finishLoseLife();
+  }, DEATH_EFFECT_DUR * 1000);
+}
+
+function eatGhost(g){
+  if(g.dead) return;
+  const pts = SCORE_GHOST[Math.min(ghostCombo, SCORE_GHOST.length-1)];
+  ghostCombo++;
+  score += pts;
+  spawnBurst(g.group.position, g.color, 34, 1.05);
+  spawnBurst(g.group.position, 0xffffff, 14, 0.75);
+  showMsg(`+${pts}`, 0.8);
+  g.dead = true;
+  g.respawnT = 3.5;
+  g.group.visible = false;
+}
+
+// ══════════════════════════════════════════════════════
+//  INPUT
+// ══════════════════════════════════════════════════════
+const KEY_TO_DIR = {
+  a:[-1,0,0], arrowleft:[-1,0,0],
+  d:[1,0,0],  arrowright:[1,0,0],
+  w:[0,1,0],  arrowup:[0,1,0],
+  s:[0,-1,0], arrowdown:[0,-1,0],
+  q:[0,0,-1], e:[0,0,1]
+};
+
+window.addEventListener('keydown', ev=>{
+  const key = ev.key.toLowerCase();
+  const dir = KEY_TO_DIR[key];
+  if(!dir){ return; }
+  ev.preventDefault();
+  if(ev.repeat || inputLock.has(key)) return;
+  inputLock.add(key);
+  if(state!=='playing') return;
+
+  if(moveQueue.length<1 && playerProgress>=0.5){
+    const {x,y,z} = nodeCoord(playerTarget);
+    const nx=x+dir[0], ny=y+dir[1], nz=z+dir[2];
+    if(inBounds(nx,ny,nz)){
+      moveQueue.push(nodeId(nx,ny,nz));
+      activeKey = key.length===1?key:null;
+    }
+  }
+  updateKeyHud();
+  if(state==='playing') startPlayerMove();
+});
+
+window.addEventListener('keyup', ev=>{
+  inputLock.delete(ev.key.toLowerCase());
+  activeKey=null;
+  updateKeyHud();
+});
+
+function startPlayerMove(){
+  if(playerProgress<1 || moveQueue.length===0) return;
+  playerNode   = playerTarget;
+  playerTarget = moveQueue.shift();
+  const {x,y,z} = nodeCoord(playerTarget);
+  playerMoveFrom.copy(playerGroup.position);
+  playerMoveTo.copy(gridToWorld(x,y,z));
+  playerProgress = 0;
+}
+
+// ══════════════════════════════════════════════════════
+//  COLLISION
+// ══════════════════════════════════════════════════════
+function checkCollisions(){
+  // pellet eat
+  const arrivedId = playerNode;
+  const pelletData = pelletMeshes.get(arrivedId);
+  if(pelletData){
+    pelletGroup.remove(pelletData.mesh);
+    pelletMeshes.delete(arrivedId);
+
+    if(pelletData.isPower){
+      score += SCORE_POWER;
+      activatePower();
+    } else {
+      score += SCORE_PELLET;
+    }
+
+    // all eaten?
+    if(pelletMeshes.size===0){
+      state='clear';
+      document.getElementById('clearSub').textContent =
+        `SCORE: ${String(score).padStart(5,'0')}  LEVEL ${level} CLEAR`;
+      clearScreen.classList.remove('hidden');
+      return;
+    }
+  }
+
+  // ghost collision (꼭지점 기준 같은 노드)
+  if(state!=='playing') return;
+  for(const g of ghosts){
+    if(g.dead) continue;
+    const sameNode = g.nodeId===arrivedId || g.targetId===arrivedId;
+    if(!sameNode) continue;
+
+    if(scared){
+      eatGhost(g);
+    } else {
+      triggerPlayerDeath(g);
+      return;
+    }
+  }
+}
+
+
+
+// 화면상으로 닿는 순간 바로 반응하는 거리 기반 충돌 판정.
+// 기존 노드 판정만 쓰면 목적지 도착 전까지 반응이 늦게 느껴질 수 있다.
+function checkImmediateGhostCollisions(){
+  if(state !== 'playing') return;
+  for(const g of ghosts){
+    if(g.dead || !g.group.visible) continue;
+    const dist = playerGroup.position.distanceTo(g.group.position);
+    if(dist > HIT_RADIUS) continue;
+
+    if(scared){
+      eatGhost(g);
+    } else {
+      triggerPlayerDeath(g);
+    }
+    return;
+  }
+}
+
+function activatePower(){
+  scared     = true;
+  powerTimer = POWER_DUR;
+  ghostCombo = 0;
+  ghosts.forEach(g=>{ if(!g.dead) g.setScared(true); });
+  scFlash.style.opacity='0.08';
+  showMsg('POWER UP!', 1.0);
+}
+
+function deactivatePower(){
+  scared = false;
+  ghosts.forEach(g=>g.setScared(false));
+  scFlash.style.opacity='0';
+}
+
+// ══════════════════════════════════════════════════════
+//  TRAIL
+// ══════════════════════════════════════════════════════
+const TRAIL_MAX=12;
+const trailPool=[];
+for(let i=0;i<TRAIL_MAX;i++){
+  const m=new THREE.Mesh(
+    new THREE.SphereGeometry(0.038,7,7),
+    new THREE.MeshBasicMaterial({color:0xffd66b,transparent:true,opacity:0})
+  );
+  scene.add(m);
+  trailPool.push({mesh:m,life:0,maxLife:0.3});
+}
+let tpIdx=0, lastTrail=0;
+
+function spawnTrail(pos){
+  const t=trailPool[tpIdx++%TRAIL_MAX];
+  t.mesh.position.copy(pos);
+  t.life=1; t.maxLife=0.28;
+}
+
+// ══════════════════════════════════════════════════════
+//  HIT / EAT PARTICLE BURSTS
+// ══════════════════════════════════════════════════════
+const BURST_MAX = 96;
+const burstPool = [];
+const burstGeo = new THREE.SphereGeometry(0.035, 7, 7);
+for(let i=0;i<BURST_MAX;i++){
+  const mesh = new THREE.Mesh(
+    burstGeo,
+    new THREE.MeshBasicMaterial({color:0xffffff, transparent:true, opacity:0})
+  );
+  mesh.visible = false;
+  scene.add(mesh);
+  burstPool.push({mesh, vel:new THREE.Vector3(), life:0, maxLife:1});
+}
+let burstIdx = 0;
+
+function spawnBurst(pos, color=0xffd66b, count=28, power=1.0){
+  for(let i=0;i<count;i++){
+    const p = burstPool[burstIdx++ % BURST_MAX];
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(THREE.MathUtils.randFloatSpread(2));
+    const speed = THREE.MathUtils.randFloat(1.1, 2.8) * power;
+    p.mesh.position.copy(pos);
+    p.mesh.material.color.set(color);
+    p.mesh.material.opacity = 1;
+    p.mesh.visible = true;
+    p.mesh.scale.setScalar(THREE.MathUtils.randFloat(0.65, 1.45));
+    p.vel.set(
+      Math.sin(phi) * Math.cos(theta),
+      Math.cos(phi),
+      Math.sin(phi) * Math.sin(theta)
+    ).multiplyScalar(speed);
+    p.life = 1;
+    p.maxLife = THREE.MathUtils.randFloat(0.55, 1.05);
+  }
+}
+
+function updateBurstParticles(delta){
+  for(const p of burstPool){
+    if(p.life<=0) continue;
+    p.life = Math.max(0, p.life - delta / p.maxLife);
+    p.vel.multiplyScalar(0.965);
+    p.vel.y -= delta * 0.55;
+    p.mesh.position.addScaledVector(p.vel, delta);
+    p.mesh.material.opacity = p.life;
+    p.mesh.scale.multiplyScalar(0.985);
+    if(p.life<=0) p.mesh.visible = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════
+//  BUTTONS
+// ══════════════════════════════════════════════════════
+document.getElementById('startBtn').onclick   = startGame;
+document.getElementById('nextBtn').onclick    = nextLevel;
+document.getElementById('restartBtn').onclick = startGame;
+
+// ══════════════════════════════════════════════════════
+//  ANIMATE
+// ══════════════════════════════════════════════════════
+const clock = new THREE.Clock();
+
+function animate(){
+  requestAnimationFrame(animate);
+  const delta   = Math.min(clock.getDelta(), 0.05);
+  const elapsed = clock.elapsedTime;
+
+  if(state==='playing'){
+    // ── Player ────────────────────────────────────────
+    startPlayerMove();
+
+    if(playerProgress<1){
+      playerProgress = Math.min(1, playerProgress+delta/MOVE_DUR);
+      const t=easeOutCubic(playerProgress);
+      playerGroup.position.lerpVectors(playerMoveFrom, playerMoveTo, t);
+
+      if(elapsed-lastTrail>0.04){ spawnTrail(playerGroup.position); lastTrail=elapsed; }
+      if(playerProgress>=1){
+        playerNode = playerTarget;   // 도착 즉시 현재 노드를 갱신
+        bounceT=1;
+        checkCollisions();
+      }
+    }
+
+    // ── Ghosts ────────────────────────────────────────
+    ghosts.forEach(g=>g.update(delta, playerNode, level));
+
+    // 화면상으로 플레이어와 적이 닿은 바로 그 프레임에 처리
+    checkImmediateGhostCollisions();
+
+    // ── Power timer ───────────────────────────────────
+    if(scared){
+      powerTimer -= delta;
+      // 마지막 2초: 고스트 깜박임
+      if(powerTimer<=2){
+        const blink = Math.sin(elapsed*14)>0;
+        ghosts.forEach(g=>{ if(!g.dead) g.bodyMesh.material.emissiveIntensity = blink?0.8:0.1; });
+      }
+      if(powerTimer<=0) deactivatePower();
+    }
+
+    // ── Collision 보강 ───────────────────────────────
+    // 거리 판정이 주 판정이고, 노드 판정은 도착 프레임 보조용으로 유지
+    checkImmediateGhostCollisions();
+  }
+
+  updateBurstParticles(delta);
+
+  // ── Player visuals ────────────────────────────────
+  if(bounceT>0) bounceT=Math.max(0,bounceT-delta*6);
+  const bv   = bounceT>0?Math.sin(bounceT*Math.PI)*0.11:0;
+  const idle = Math.sin(elapsed*7.2)*0.016;
+  playerBody.scale.set(1+bv+idle, 1-bv*0.4+idle, 1+bv+idle);
+  playerRing.scale.setScalar(1 + bv * 0.35 + idle * 0.5);
+  playerMouth.rotation.z = Math.sin(elapsed * 8.5) * 0.08;
+
+  // 고스트는 아주 약한 부유감만 주어 세련되고 차분하게 표현
+  ghosts.forEach((g, i) => {
+    if(g.dead) return;
+    const floatY = Math.sin(elapsed * 2.4 + i * 1.7) * 0.012;
+    g.bodyMesh.position.y = 0.035 + floatY;
+    g.lowerMesh.position.y = -0.055 + floatY;
+    g.skirtPieces.forEach((skirt, si) => {
+      skirt.position.y = -0.14 + floatY + Math.sin(elapsed * 4.2 + i + si) * 0.004;
+    });
+    g.eyeWhites.forEach(eye => eye.position.y = 0.043 + floatY * 0.45);
+    g.eyeDots.forEach(dot => dot.position.y = 0.039 + floatY * 0.45);
+    g.baseRing.material.opacity = (g.scared ? 0.22 : 0.32) + Math.sin(elapsed * 3 + i) * 0.03;
+  });
+
+  // ── Trail ─────────────────────────────────────────
+  for(const t of trailPool){
+    if(t.life<=0) continue;
+    t.life=Math.max(0,t.life-delta/t.maxLife);
+    t.mesh.material.opacity=t.life*0.45;
+    t.mesh.scale.setScalar(0.3+t.life*0.7);
+  }
+
+  // ── Power pellet float/pulse ──────────────────────
+  for(const [,pd] of pelletMeshes){
+    if(pd.isPower){
+      pd.mesh.position.y += Math.sin(elapsed*3+pd.mesh.id)*0.0008;
+      pd.mesh.scale.setScalar(0.92+Math.sin(elapsed*4)*0.08);
+    }
+  }
+
+  // ── Msg timer ─────────────────────────────────────
+  if(msgTimer>0){
+    msgTimer-=delta;
+    if(msgTimer<=0) msgEl.classList.remove('show');
+  }
+
+  // ── World micro-wobble ────────────────────────────
+  world.rotation.y=Math.sin(elapsed*0.13)*0.005;
+  world.rotation.x=Math.sin(elapsed*0.09)*0.003;
+
+  updateHudUI();
+  updateKeyHud();
+  controls.update();
+  renderer.render(scene,camera);
+}
+
+animate();
+
+window.addEventListener('resize',()=>{
+  camera.aspect=innerWidth/innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth,innerHeight);
+});
+
+// 초기 화면에 격자만 보이게 렌더
+renderer.render(scene,camera);
+</script>
+</body>
+</html>
