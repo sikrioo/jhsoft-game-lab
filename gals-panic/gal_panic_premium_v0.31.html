@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>NEON PANIC — Territory Reveal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;font-family:'Rajdhani',sans-serif}
+
+#root{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:#000}
+
+#wrapper{
+  position:relative;
+  width:min(100vw, calc(100vh * 16/9));
+  height:min(100vh, calc(100vw * 9/16));
+  overflow:hidden;
+  border:1px solid rgba(0,200,255,0.15);
+  box-shadow:0 0 80px rgba(0,200,255,0.08), 0 0 200px rgba(0,0,0,0.9);
+}
+
+canvas{display:block;width:100%;height:100%}
+
+/* ── HUD ── */
+#hud{
+  position:absolute;inset:0;pointer-events:none;
+  font-family:'Orbitron',monospace;
+}
+
+/* 좌측 상단 점수 패널 */
+#panel-left{
+  position:absolute;top:0;left:0;
+  padding:18px 24px 16px 20px;
+  background:linear-gradient(135deg,rgba(0,0,0,0.9) 70%,transparent);
+  border-right:1px solid rgba(0,200,255,0.12);
+  border-bottom:1px solid rgba(0,200,255,0.12);
+  border-bottom-right-radius:16px;
+  min-width:200px;
+}
+.hud-label{font-size:9px;letter-spacing:3px;color:rgba(0,200,255,0.5);text-transform:uppercase;margin-bottom:3px}
+.hud-value{font-size:26px;font-weight:900;color:#fff;text-shadow:0 0 20px rgba(0,200,255,0.7);line-height:1}
+#score-val{font-size:32px;color:#00c8ff}
+
+/* 우측 상단 스테이지/라이프 */
+#panel-right{
+  position:absolute;top:0;right:0;
+  padding:18px 20px 16px 24px;
+  background:linear-gradient(225deg,rgba(0,0,0,0.9) 70%,transparent);
+  border-left:1px solid rgba(0,200,255,0.12);
+  border-bottom:1px solid rgba(0,200,255,0.12);
+  border-bottom-left-radius:16px;
+  text-align:right;
+  min-width:200px;
+  display:flex;flex-direction:column;align-items:flex-end;gap:10px;
+}
+#lives-display{display:flex;gap:7px;align-items:center;justify-content:flex-end}
+.life-icon{width:14px;height:14px;clip-path:polygon(50% 0%,100% 38%,82% 100%,18% 100%,0% 38%);background:#ff4e8a;box-shadow:0 0 8px #ff4e8a;transition:all .3s}
+.life-icon.dead{background:rgba(255,78,138,0.15);box-shadow:none}
+
+/* 하단 진행바 */
+#panel-bottom{
+  position:absolute;bottom:0;left:50%;transform:translateX(-50%);
+  width:min(700px,80%);
+  padding:10px 20px 14px;
+  background:linear-gradient(180deg,transparent,rgba(0,0,0,0.85));
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+}
+#progress-wrap{width:100%;display:flex;align-items:center;gap:12px}
+#progress-track{
+  flex:1;height:6px;
+  background:rgba(255,255,255,0.08);
+  border-radius:99px;
+  overflow:hidden;
+  border:1px solid rgba(0,200,255,0.15);
+}
+#progress-fill{
+  height:100%;width:0%;border-radius:99px;
+  background:linear-gradient(90deg,#00c8ff,#00ffaa,#ffe234);
+  box-shadow:0 0 12px rgba(0,200,255,0.6);
+  transition:width .2s ease-out;
+}
+#area-pct{font-size:13px;font-weight:700;color:rgba(255,255,255,0.7);width:44px;text-align:right}
+#hint{font-family:'Rajdhani',sans-serif;font-size:12px;color:rgba(255,255,255,0.3);letter-spacing:1px}
+
+/* ── 오버레이 화면들 ── */
+.screen{
+  position:absolute;inset:0;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:rgba(0,0,10,0.88);
+  backdrop-filter:blur(2px);
+  opacity:0;pointer-events:none;
+  transition:opacity .4s ease;
+  z-index:10;
+}
+.screen.visible{opacity:1;pointer-events:auto}
+
+/* 타이틀 */
+#title-screen{background:radial-gradient(ellipse at 50% 40%, rgba(0,60,120,0.5), rgba(0,0,10,0.95))}
+.game-logo{text-align:center;margin-bottom:48px;animation:logoFloat 3s ease-in-out infinite}
+.logo-eyebrow{font-size:12px;letter-spacing:8px;color:rgba(0,200,255,0.6);text-transform:uppercase;margin-bottom:8px;font-family:'Rajdhani',sans-serif}
+.logo-title{font-family:'Orbitron',monospace;font-size:clamp(48px,7vw,88px);font-weight:900;line-height:.95;color:#fff;text-shadow:0 0 40px rgba(0,200,255,0.5),0 0 80px rgba(0,200,255,0.25)}
+.logo-title span{color:#00c8ff;display:block}
+.logo-sub{font-size:14px;letter-spacing:4px;color:rgba(255,255,255,0.4);margin-top:12px;font-family:'Rajdhani',sans-serif}
+.press-start{
+  font-family:'Orbitron',monospace;font-size:16px;letter-spacing:3px;
+  color:#00c8ff;
+  animation:blink 1.2s ease-in-out infinite;
+  padding:14px 36px;
+  border:1px solid rgba(0,200,255,0.4);
+  border-radius:4px;
+  background:rgba(0,200,255,0.05);
+}
+.title-controls{
+  margin-top:36px;
+  display:grid;grid-template-columns:auto auto;gap:8px 24px;
+  font-size:13px;color:rgba(255,255,255,0.45);
+  font-family:'Rajdhani',sans-serif;
+}
+.title-controls .key{color:rgba(0,200,255,0.8);font-weight:700}
+.title-deco{
+  position:absolute;inset:0;pointer-events:none;overflow:hidden;
+}
+.deco-line{
+  position:absolute;
+  background:linear-gradient(90deg,transparent,rgba(0,200,255,0.15),transparent);
+  height:1px;width:100%;animation:scanline 4s linear infinite;
+}
+
+/* 스테이지 클리어 */
+#clear-screen{background:radial-gradient(ellipse at 50% 40%, rgba(0,80,40,0.5), rgba(0,0,10,0.95))}
+.clear-title{font-family:'Orbitron',monospace;font-size:clamp(32px,5vw,64px);font-weight:900;color:#00ffaa;text-shadow:0 0 40px rgba(0,255,160,0.6);margin-bottom:8px}
+.clear-sub{font-size:16px;color:rgba(255,255,255,0.5);letter-spacing:2px}
+.clear-bonus{font-family:'Orbitron',monospace;font-size:28px;color:#ffe234;margin:24px 0;text-shadow:0 0 20px rgba(255,226,52,0.5)}
+
+/* 게임 오버 */
+#over-screen{background:radial-gradient(ellipse at 50% 40%, rgba(80,0,20,0.5), rgba(0,0,10,0.95))}
+.over-title{font-family:'Orbitron',monospace;font-size:clamp(32px,5vw,64px);font-weight:900;color:#ff4e8a;text-shadow:0 0 40px rgba(255,78,138,0.6);margin-bottom:8px}
+.final-score{font-family:'Orbitron',monospace;font-size:32px;color:#fff;margin:20px 0}
+
+/* STAGE 알림 */
+#stage-announce{
+  position:absolute;
+  left:50%;top:50%;transform:translate(-50%,-50%) scale(0.8);
+  font-family:'Orbitron',monospace;
+  text-align:center;
+  pointer-events:none;
+  opacity:0;
+  transition:opacity .25s, transform .25s;
+  z-index:8;
+}
+#stage-announce.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#stage-announce .st-num{font-size:clamp(24px,4vw,48px);color:rgba(0,200,255,0.5);letter-spacing:6px}
+#stage-announce .st-title{font-size:clamp(40px,7vw,80px);font-weight:900;color:#fff;text-shadow:0 0 40px rgba(0,200,255,0.5);line-height:1}
+
+/* 연출 텍스트 */
+#combo-popup{
+  position:absolute;left:50%;top:38%;transform:translateX(-50%) scale(0.5);
+  font-family:'Orbitron',monospace;font-weight:900;
+  color:#ffe234;text-shadow:0 0 30px rgba(255,226,52,0.8);
+  pointer-events:none;opacity:0;transition:opacity .15s,transform .15s;
+  z-index:9;text-align:center;
+}
+#combo-popup.show{opacity:1;transform:translateX(-50%) scale(1)}
+
+@keyframes logoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.2}}
+@keyframes scanline{0%{top:-1px}100%{top:100%}}
+@keyframes pulseGlow{0%,100%{text-shadow:0 0 40px rgba(0,200,255,0.5)}50%{text-shadow:0 0 80px rgba(0,200,255,0.9),0 0 120px rgba(0,200,255,0.4)}}
+</style>
+</head>
+<body>
+<div id="root">
+<div id="wrapper">
+  <canvas id="game" width="1280" height="720"></canvas>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="panel-left">
+      <div class="hud-label">SCORE</div>
+      <div class="hud-value" id="score-val">0</div>
+      <div style="margin-top:10px">
+        <div class="hud-label">HIGH SCORE</div>
+        <div class="hud-value" style="font-size:16px;color:rgba(0,200,255,0.6)" id="hi-val">0</div>
+      </div>
+    </div>
+    <div id="panel-right">
+      <div>
+        <div class="hud-label" style="text-align:right">STAGE</div>
+        <div class="hud-value" id="stage-val">1</div>
+      </div>
+      <div>
+        <div class="hud-label">LIVES</div>
+        <div id="lives-display">
+          <div class="life-icon" id="l1"></div>
+          <div class="life-icon" id="l2"></div>
+          <div class="life-icon" id="l3"></div>
+        </div>
+      </div>
+    </div>
+    <div id="panel-bottom">
+      <div id="progress-wrap">
+        <div id="progress-track"><div id="progress-fill"></div></div>
+        <div id="area-pct">0%</div>
+      </div>
+      <div id="hint">ARROW KEYS / WASD · Claim 78% to advance · R to restart</div>
+    </div>
+  </div>
+
+  <!-- Stage Announce -->
+  <div id="stage-announce">
+    <div class="st-num">STAGE</div>
+    <div class="st-title" id="st-title-num">01</div>
+  </div>
+
+  <!-- Combo Popup -->
+  <div id="combo-popup" id="combo-popup"></div>
+
+  <!-- Screens -->
+  <div class="screen visible" id="title-screen">
+    <div class="title-deco">
+      <div class="deco-line" style="animation-delay:0s;animation-duration:5s"></div>
+      <div class="deco-line" style="animation-delay:1.7s;animation-duration:7s"></div>
+      <div class="deco-line" style="animation-delay:3.1s;animation-duration:4.5s"></div>
+    </div>
+    <div class="game-logo">
+      <div class="logo-eyebrow">ARCADE · TERRITORY REVEAL</div>
+      <div class="logo-title">NEON<span>PANIC</span></div>
+      <div class="logo-sub">GAL PANIC STYLE · 2025</div>
+    </div>
+    <div class="press-start">PRESS SPACE OR ENTER</div>
+    <div class="title-controls">
+      <span class="key">↑↓←→ / WASD</span><span>이동</span>
+      <span class="key">영역 진입</span><span>선을 그어 영역 획득</span>
+      <span class="key">78% 점령</span><span>스테이지 클리어</span>
+      <span class="key">R</span><span>재시작</span>
+    </div>
+  </div>
+
+  <div class="screen" id="clear-screen">
+    <div class="clear-title">STAGE CLEAR</div>
+    <div class="clear-sub">NEXT STAGE IN 2 SECONDS</div>
+    <div class="clear-bonus" id="clear-bonus">+5,000 PTS</div>
+  </div>
+
+  <div class="screen" id="over-screen">
+    <div class="over-title">GAME OVER</div>
+    <div class="final-score" id="final-score">SCORE: 0</div>
+    <div class="press-start" style="margin-top:16px">PRESS SPACE TO RETRY</div>
+  </div>
+</div>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ── Canvas & Context ──────────────────────────────────────────────
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d', { alpha: false });
+const W = canvas.width, H = canvas.height;
+
+// ── Grid ──────────────────────────────────────────────────────────
+const CELL = 8;
+const GW = Math.floor(W / CELL);
+const GH = Math.floor(H / CELL);
+const FREE = 0, SAFE = 1, TRAIL = 2;
+const idx = (x, y) => y * GW + x;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const cellAt = (px, py) => [clamp(Math.floor(px / CELL), 0, GW - 1), clamp(Math.floor(py / CELL), 0, GH - 1)];
+const rnd = (a, b) => a + Math.random() * (b - a);
+
+// ── State ─────────────────────────────────────────────────────────
+let grid, player, enemies, particles, waves, trailPath;
+let keys = Object.create(null);
+let state = 'title'; // title | ready | play | clear | over
+let stage = 1, score = 0, hiScore = 0, lives = 3, claimedPct = 0;
+let shake = 0, time = 0, last = performance.now();
+
+// ── Off-screen canvases ───────────────────────────────────────────
+let artCvs, artCtx2, coverCvs, coverCtx2, maskCvs, maskCtx2;
+function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+
+// ── UI refs ───────────────────────────────────────────────────────
+const $score    = document.getElementById('score-val');
+const $hi       = document.getElementById('hi-val');
+const $stage    = document.getElementById('stage-val');
+const $progress = document.getElementById('progress-fill');
+const $areaPct  = document.getElementById('area-pct');
+const $l1       = document.getElementById('l1');
+const $l2       = document.getElementById('l2');
+const $l3       = document.getElementById('l3');
+const $stAnn    = document.getElementById('stage-announce');
+const $stNum    = document.getElementById('st-title-num');
+const $combo    = document.getElementById('combo-popup');
+
+const screens = {
+  title: document.getElementById('title-screen'),
+  clear: document.getElementById('clear-screen'),
+  over:  document.getElementById('over-screen'),
+};
+
+function showScreen(name) {
+  Object.values(screens).forEach(s => s.classList.remove('visible'));
+  if (name && screens[name]) screens[name].classList.add('visible');
+}
+
+function showStageAnnounce(n) {
+  $stNum.textContent = String(n).padStart(2, '0');
+  $stAnn.classList.add('show');
+  setTimeout(() => $stAnn.classList.remove('show'), 1400);
+}
+
+let comboTimer = null;
+function showCombo(text, color='#ffe234') {
+  $combo.textContent = text;
+  $combo.style.color = color;
+  $combo.style.fontSize = text.length > 8 ? 'clamp(22px,3vw,42px)' : 'clamp(30px,4vw,56px)';
+  $combo.classList.add('show');
+  if (comboTimer) clearTimeout(comboTimer);
+  comboTimer = setTimeout(() => $combo.classList.remove('show'), 1100);
+}
+
+function updateUI() {
+  $score.textContent  = score.toLocaleString();
+  $hi.textContent     = hiScore.toLocaleString();
+  $stage.textContent  = stage;
+  $progress.style.width = clamp(claimedPct, 0, 100) + '%';
+  $areaPct.textContent  = Math.floor(claimedPct) + '%';
+  [$l1, $l2, $l3].forEach((el, i) => {
+    el.classList.toggle('dead', i >= lives);
+  });
+}
+
+// ── Art Generation ────────────────────────────────────────────────
+const STAGE_PALETTES = [
+  { a:'#1a0a3e', b:'#0d3366', c:'#2d1248' },
+  { a:'#0a2a1a', b:'#003322', c:'#1a2d0a' },
+  { a:'#2a0a0a', b:'#330d1a', c:'#2d0e00' },
+  { a:'#0a1a2a', b:'#001433', c:'#0a0f2d' },
+];
+
+function buildStageArt(seed) {
+  const pal = STAGE_PALETTES[(seed - 1) % STAGE_PALETTES.length];
+
+  artCvs = makeCanvas(W, H); artCtx2 = artCvs.getContext('2d');
+  const g = artCtx2.createLinearGradient(0, 0, W, H);
+  g.addColorStop(0, pal.a); g.addColorStop(0.5, pal.b); g.addColorStop(1, pal.c);
+  artCtx2.fillStyle = g; artCtx2.fillRect(0, 0, W, H);
+
+  // Background glow orbs
+  for (let i = 0; i < 80; i++) {
+    const x = rnd(0, W), y = rnd(0, H), r = rnd(30, 180);
+    const cg = artCtx2.createRadialGradient(x, y, 0, x, y, r);
+    const h = (seed * 53 + i * 23) % 360;
+    cg.addColorStop(0, `hsla(${h},90%,65%,${rnd(0.06, 0.18)})`);
+    cg.addColorStop(1, 'transparent');
+    artCtx2.fillStyle = cg;
+    artCtx2.beginPath(); artCtx2.arc(x, y, r, 0, Math.PI * 2); artCtx2.fill();
+  }
+
+  // Grid lines (subtle)
+  artCtx2.globalAlpha = 0.06;
+  artCtx2.strokeStyle = '#00c8ff'; artCtx2.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
+    artCtx2.beginPath(); artCtx2.moveTo(x, 0); artCtx2.lineTo(x, H); artCtx2.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    artCtx2.beginPath(); artCtx2.moveTo(0, y); artCtx2.lineTo(W, y); artCtx2.stroke();
+  }
+  artCtx2.globalAlpha = 1;
+
+  // Mascot character — original design, non-copyrighted
+  const mx = W * 0.65, my = H * 0.52;
+  artCtx2.save();
+  artCtx2.translate(mx, my);
+  artCtx2.shadowColor = 'rgba(0,200,255,0.4)'; artCtx2.shadowBlur = 40;
+
+  // Body glow aura
+  const aura = artCtx2.createRadialGradient(0, 0, 40, 0, 0, 200);
+  aura.addColorStop(0, `hsla(${200 + seed * 30},100%,70%,0.12)`);
+  aura.addColorStop(1, 'transparent');
+  artCtx2.fillStyle = aura;
+  artCtx2.beginPath(); artCtx2.arc(0, 0, 200, 0, Math.PI * 2); artCtx2.fill();
+  artCtx2.shadowBlur = 0;
+
+  // Suit body
+  const bodyGrad = artCtx2.createLinearGradient(-70, -60, 70, 180);
+  bodyGrad.addColorStop(0, `hsl(${190 + seed * 40},90%,55%)`);
+  bodyGrad.addColorStop(0.5, `hsl(${220 + seed * 30},80%,40%)`);
+  bodyGrad.addColorStop(1, `hsl(${250 + seed * 20},70%,30%)`);
+  artCtx2.fillStyle = bodyGrad;
+  artCtx2.beginPath(); artCtx2.roundRect(-72, -30, 144, 210, 36); artCtx2.fill();
+
+  // Suit highlight stripe
+  artCtx2.fillStyle = 'rgba(255,255,255,0.15)';
+  artCtx2.beginPath(); artCtx2.roundRect(-40, -12, 80, 16, 8); artCtx2.fill();
+
+  // Chest emblem
+  artCtx2.strokeStyle = 'rgba(255,255,255,0.5)'; artCtx2.lineWidth = 2;
+  artCtx2.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 - Math.PI / 2;
+    const r = 22; const x2 = Math.cos(a) * r, y2 = Math.sin(a) * r + 60;
+    if (i === 0) artCtx2.moveTo(x2, y2); else artCtx2.lineTo(x2, y2);
+  }
+  artCtx2.closePath(); artCtx2.stroke();
+  artCtx2.fillStyle = `hsl(${180 + seed * 50},100%,60%)`;
+  artCtx2.beginPath(); artCtx2.arc(0, 60, 8, 0, Math.PI * 2); artCtx2.fill();
+
+  // Head
+  artCtx2.fillStyle = `hsl(${30 + seed * 5},60%,78%)`;
+  artCtx2.shadowColor = 'rgba(255,200,160,0.3)'; artCtx2.shadowBlur = 20;
+  artCtx2.beginPath(); artCtx2.ellipse(0, -105, 58, 68, 0, 0, Math.PI * 2); artCtx2.fill();
+  artCtx2.shadowBlur = 0;
+
+  // Hair
+  artCtx2.fillStyle = `hsl(${20 + seed * 15},50%,20%)`;
+  artCtx2.beginPath();
+  artCtx2.moveTo(-60, -120);
+  artCtx2.bezierCurveTo(-50, -210, 50, -215, 68, -118);
+  artCtx2.bezierCurveTo(40, -155, -30, -158, -60, -120);
+  artCtx2.fill();
+
+  // Eyes
+  artCtx2.fillStyle = '#fff'; artCtx2.shadowColor = 'rgba(0,200,255,0.6)'; artCtx2.shadowBlur = 10;
+  artCtx2.beginPath(); artCtx2.ellipse(-20, -108, 11, 14, 0, 0, Math.PI * 2); artCtx2.fill();
+  artCtx2.beginPath(); artCtx2.ellipse(20, -108, 11, 14, 0, 0, Math.PI * 2); artCtx2.fill();
+  artCtx2.shadowBlur = 0;
+  artCtx2.fillStyle = `hsl(${200 + seed * 40},80%,30%)`;
+  artCtx2.beginPath(); artCtx2.ellipse(-20, -108, 7, 9, 0, 0, Math.PI * 2); artCtx2.fill();
+  artCtx2.beginPath(); artCtx2.ellipse(20, -108, 7, 9, 0, 0, Math.PI * 2); artCtx2.fill();
+  artCtx2.fillStyle = '#fff';
+  artCtx2.beginPath(); artCtx2.arc(-17, -112, 3, 0, Math.PI * 2); artCtx2.fill();
+  artCtx2.beginPath(); artCtx2.arc(23, -112, 3, 0, Math.PI * 2); artCtx2.fill();
+
+  // Mouth — small smile
+  artCtx2.strokeStyle = 'rgba(180,80,100,0.8)'; artCtx2.lineWidth = 3;
+  artCtx2.lineCap = 'round';
+  artCtx2.beginPath(); artCtx2.arc(0, -88, 12, 0.2, Math.PI - 0.2); artCtx2.stroke();
+
+  // Legs
+  artCtx2.fillStyle = bodyGrad;
+  artCtx2.beginPath(); artCtx2.roundRect(-50, 170, 40, 80, [8, 8, 4, 4]); artCtx2.fill();
+  artCtx2.beginPath(); artCtx2.roundRect(10, 170, 40, 80, [8, 8, 4, 4]); artCtx2.fill();
+  // Boots
+  artCtx2.fillStyle = '#1a1a2e';
+  artCtx2.beginPath(); artCtx2.roundRect(-55, 238, 50, 24, 8); artCtx2.fill();
+  artCtx2.beginPath(); artCtx2.roundRect(5, 238, 50, 24, 8); artCtx2.fill();
+
+  artCtx2.restore();
+
+  // Big title watermark
+  artCtx2.save();
+  artCtx2.globalAlpha = 0.07;
+  artCtx2.font = '900 140px Orbitron,monospace';
+  artCtx2.fillStyle = '#fff'; artCtx2.textAlign = 'left';
+  artCtx2.fillText('NEON', 40, 170);
+  artCtx2.fillText('PANIC', 40, 300);
+  artCtx2.font = '700 48px Orbitron,monospace';
+  artCtx2.fillText('TERRITORY REVEAL', 40, 370);
+  artCtx2.restore();
+
+  // Cover layer (hidden grid)
+  coverCvs = makeCanvas(W, H); coverCtx2 = coverCvs.getContext('2d');
+  const bg2 = coverCtx2.createLinearGradient(0, 0, W, H);
+  bg2.addColorStop(0, '#04080f'); bg2.addColorStop(0.5, '#060d1a'); bg2.addColorStop(1, '#030509');
+  coverCtx2.fillStyle = bg2; coverCtx2.fillRect(0, 0, W, H);
+
+  // Hex grid pattern on cover
+  coverCtx2.strokeStyle = 'rgba(0,200,255,0.04)'; coverCtx2.lineWidth = 1;
+  const S = 28;
+  for (let row = 0; row < H / S + 2; row++) {
+    for (let col = 0; col < W / S + 2; col++) {
+      const ox = col * S * 1.5, oy = row * S * 1.73 + (col % 2) * S * 0.865;
+      coverCtx2.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const x = ox + Math.cos(a) * S * 0.9, y = oy + Math.sin(a) * S * 0.9;
+        if (i === 0) coverCtx2.moveTo(x, y); else coverCtx2.lineTo(x, y);
+      }
+      coverCtx2.closePath(); coverCtx2.stroke();
+    }
+  }
+
+  // Scanline effect on cover
+  coverCtx2.fillStyle = 'rgba(0,0,0,0.35)';
+  for (let y = 0; y < H; y += 3) coverCtx2.fillRect(0, y, W, 1);
+
+  maskCvs = makeCanvas(W, H); maskCtx2 = maskCvs.getContext('2d');
+}
+
+// ── Game Init ─────────────────────────────────────────────────────
+function resetStage(keepLives = true) {
+  grid = new Uint8Array(GW * GH);
+  trailPath = []; particles = []; waves = [];
+  claimedPct = 0; shake = 0;
+  buildStageArt(stage);
+
+  const border = 5;
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      if (x < border || y < border || x >= GW - border || y >= GH - border) {
+        grid[idx(x, y)] = SAFE;
+      }
+    }
+  }
+
+  const startCX = border - 1;
+  const startCY = Math.floor(H / 2 / CELL);
+  player = {
+    x: startCX * CELL + CELL / 2,
+    y: H / 2,
+    r: 9,
+    speed: 265,
+    inv: 1.4,
+    onSafe: true,
+    dirX: 1, dirY: 0,
+    alive: true,
+    drawTime: 0,
+    lastCellX: startCX,
+    lastCellY: startCY,
+    lastSafeCellX: startCX,
+    lastSafeCellY: startCY,
+  };
+
+  enemies = [];
+  const count = Math.min(8, 2 + stage);
+  for (let i = 0; i < count; i++) enemies.push(makeEnemy(i));
+
+  if (!keepLives) { lives = 3; score = 0; stage = 1; }
+
+  showScreen(null);
+  showStageAnnounce(stage);
+  state = 'ready';
+  setTimeout(() => { if (state === 'ready') state = 'play'; }, 500);
+  updateUI();
+}
+
+function makeEnemy(i) {
+  const a = rnd(0, Math.PI * 2);
+  const sp = rnd(100, 170) + stage * 14;
+  const types = ['orb', 'spike', 'diamond'];
+  return {
+    x: rnd(W * 0.25, W * 0.8),
+    y: rnd(H * 0.2, H * 0.8),
+    vx: Math.cos(a) * sp, vy: Math.sin(a) * sp,
+    r: rnd(13, 22),
+    phase: rnd(0, Math.PI * 2),
+    type: types[i % 3],
+    hit: 0,
+    trail: [],
+  };
+}
+
+// ── Input ─────────────────────────────────────────────────────────
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (e.code === 'KeyR') { lives = 3; score = 0; stage = 1; resetStage(false); }
+  if ((e.code === 'Space' || e.code === 'Enter') && (state === 'title' || state === 'over' || state === 'clear')) {
+    lives = 3; score = 0; stage = 1; resetStage(false);
+  }
+});
+addEventListener('keyup', e => keys[e.code] = false);
+
+// ── Grid helpers ──────────────────────────────────────────────────
+const isSafeCell = (cx, cy) => grid[idx(cx, cy)] === SAFE;
+const isTrailCell = (cx, cy) => grid[idx(cx, cy)] === TRAIL;
+const isSafePx = (x, y) => { const [cx, cy] = cellAt(x, y); return isSafeCell(cx, cy); };
+
+// ── Particles ─────────────────────────────────────────────────────
+function addParticles(x, y, n, color = '#fff', power = 1, type = 'spark') {
+  for (let i = 0; i < n; i++) {
+    const a = rnd(0, Math.PI * 2), s = rnd(50, 320) * power;
+    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: rnd(0.25, 0.75), max: rnd(0.5, 0.9), r: rnd(1.5, 4.5), color, type });
+  }
+}
+function addWave(x, y, color, life = 0.38, scale = 1) {
+  waves.push({ x, y, color, life, max: life, scale });
+}
+
+// ── Damage ────────────────────────────────────────────────────────
+function damagePlayer(reason = 'hit') {
+  if (player.inv > 0 || state !== 'play') return;
+  if (trailPath.length === 0 || isSafePx(player.x, player.y)) return;
+
+  lives--;
+  player.inv = 1.4;
+  shake = Math.max(shake, 22);
+  addParticles(player.x, player.y, 100, '#ff4e8a', 1.3);
+  addWave(player.x, player.y, '#ff4e8a', 0.55, 2);
+  showCombo('DANGER!', '#ff4e8a');
+
+  for (const p of trailPath) grid[idx(p.x, p.y)] = FREE;
+  trailPath = [];
+
+  const border = 4;
+  player.x = border * CELL + CELL / 2;
+  player.y = H / 2;
+  player.onSafe = true;
+  player.drawTime = 0;
+  player.dirX = 1; player.dirY = 0;
+  player.lastCellX = border;
+  player.lastCellY = Math.floor(H / 2 / CELL);
+  player.lastSafeCellX = border;
+  player.lastSafeCellY = player.lastCellY;
+
+  if (lives <= 0) {
+    state = 'over';
+    hiScore = Math.max(hiScore, score);
+    document.getElementById('final-score').textContent = 'SCORE: ' + score.toLocaleString();
+    showScreen('over');
+  }
+  updateUI();
+}
+
+// ── Update ────────────────────────────────────────────────────────
+function update(dt) {
+  time += dt;
+  if (state !== 'play' && state !== 'ready') return;
+  player.inv = Math.max(0, player.inv - dt);
+  if (state === 'play') updatePlayer(dt);
+  updateEnemies(dt);
+  updateParticles(dt);
+  shake *= Math.pow(0.04, dt);
+}
+
+function updatePlayer(dt) {
+  let dx = (keys.ArrowRight || keys.KeyD ? 1 : 0) - (keys.ArrowLeft || keys.KeyA ? 1 : 0);
+  let dy = (keys.ArrowDown  || keys.KeyS ? 1 : 0) - (keys.ArrowUp   || keys.KeyW ? 1 : 0);
+
+  // 4-direction only for stable flood fill
+  if (dx && dy) {
+    if (Math.abs(player.dirX) > 0) dy = 0;
+    else if (Math.abs(player.dirY) > 0) dx = 0;
+    else dy = 0;
+  }
+  if (dx || dy) { player.dirX = dx; player.dirY = dy; }
+
+  const sp = player.speed;
+  if (dx || dy) {
+    player.x = clamp(player.x + dx * sp * dt, CELL * 3, W - CELL * 3);
+    player.y = clamp(player.y + dy * sp * dt, CELL * 3, H - CELL * 3);
+  }
+
+  const [cx, cy] = cellAt(player.x, player.y);
+  const current = grid[idx(cx, cy)];
+  const nowSafe = current === SAFE;
+  const cellChanged = cx !== player.lastCellX || cy !== player.lastCellY;
+
+  if (nowSafe) {
+    if (!player.onSafe && trailPath.length > 2) {
+      claimArea();
+      player.lastCellX = cx; player.lastCellY = cy;
+      player.lastSafeCellX = cx; player.lastSafeCellY = cy;
+      return;
+    }
+    player.drawTime = 0;
+    player.lastSafeCellX = cx; player.lastSafeCellY = cy;
+  } else {
+    player.drawTime += dt;
+    if (cellChanged) {
+      const added = appendTrailSegment(player.lastCellX, player.lastCellY, cx, cy);
+      if (added && trailPath.length % 3 === 0) addParticles(player.x, player.y, 2, '#00c8ff', 0.3);
+    }
+  }
+
+  player.onSafe = nowSafe;
+  player.lastCellX = cx;
+  player.lastCellY = cy;
+}
+
+function appendTrailSegment(x0, y0, x1, y1) {
+  let added = false;
+  let x = x0, y = y0;
+  const sx = Math.sign(x1 - x0), sy = Math.sign(y1 - y0);
+  while (x !== x1) { x += sx; if (addTrailCell(x, y)) added = true; }
+  while (y !== y1) { y += sy; if (addTrailCell(x, y)) added = true; }
+  return added;
+}
+
+function addTrailCell(cx, cy) {
+  if (cx < 0 || cy < 0 || cx >= GW || cy >= GH) return false;
+  const k = idx(cx, cy);
+  const v = grid[k];
+  if (v === SAFE) return false;
+  const lastT = trailPath[trailPath.length - 1];
+  const isHead = lastT && lastT.x === cx && lastT.y === cy;
+  if (v === TRAIL && !isHead) { damagePlayer('self trail'); return false; }
+  if (v !== TRAIL) { grid[k] = TRAIL; trailPath.push({ x: cx, y: cy }); return true; }
+  return false;
+}
+
+function updateEnemies(dt) {
+  for (const e of enemies) {
+    if (e.hit > 0) e.hit -= dt;
+    e.phase += dt * (1.2 + stage * 0.1);
+
+    // Enemy trail (visual only)
+    e.trail.push({ x: e.x, y: e.y, life: 0.3 });
+    if (e.trail.length > 18) e.trail.shift();
+    for (const t of e.trail) t.life -= dt;
+    e.trail = e.trail.filter(t => t.life > 0);
+
+    e.x += e.vx * dt; e.y += e.vy * dt;
+    if (e.x < 16 + e.r || e.x > W - 16 - e.r) {
+      e.vx *= -1; e.x = clamp(e.x, 16 + e.r, W - 16 - e.r);
+      addWave(e.x, e.y, '#ff4e8a', 0.18, 0.7);
+    }
+    if (e.y < 16 + e.r || e.y > H - 16 - e.r) {
+      e.vy *= -1; e.y = clamp(e.y, 16 + e.r, H - 16 - e.r);
+      addWave(e.x, e.y, '#ff4e8a', 0.18, 0.7);
+    }
+
+    // Bounce away from safe land
+    if (isSafePx(e.x, e.y)) {
+      e.vx *= -1; e.vy *= -1;
+      e.x += e.vx * dt * 5; e.y += e.vy * dt * 5;
+      e.x = clamp(e.x, 16 + e.r, W - 16 - e.r);
+      e.y = clamp(e.y, 16 + e.r, H - 16 - e.r);
+      e.hit = 0.12;
+    }
+
+    const vulnerable = trailPath.length > 3 && player.drawTime > 0.2 && !isSafePx(player.x, player.y);
+    if (vulnerable && Math.hypot(e.x - player.x, e.y - player.y) < e.r + player.r * 0.6) {
+      damagePlayer('enemy');
+    }
+
+    if (trailPath.length > 8 && player.drawTime > 0.25) {
+      if (enemyTouchesTrail(e)) damagePlayer('trail cut');
+    }
+  }
+}
+
+function enemyTouchesTrail(e) {
+  const [pcx, pcy] = cellAt(player.x, player.y);
+  const skip = (cx, cy) => Math.abs(cx - pcx) + Math.abs(cy - pcy) <= 2;
+  const samples = [
+    [e.x, e.y],
+    [e.x + e.r * 0.45, e.y], [e.x - e.r * 0.45, e.y],
+    [e.x, e.y + e.r * 0.45], [e.x, e.y - e.r * 0.45],
+  ];
+  for (const [sx, sy] of samples) {
+    const [cx, cy] = cellAt(sx, sy);
+    if (skip(cx, cy)) continue;
+    if (grid[idx(cx, cy)] === TRAIL) return true;
+  }
+  return false;
+}
+
+function claimArea() {
+  const trailCells = trailPath.slice();
+  for (const t of trailCells) grid[idx(t.x, t.y)] = SAFE;
+
+  // Flood fill from enemies
+  const mark = new Uint8Array(GW * GH);
+  const qx = new Int16Array(GW * GH), qy = new Int16Array(GW * GH);
+  let head = 0, tail = 0;
+  const push = (x, y) => {
+    if (x < 0 || y < 0 || x >= GW || y >= GH) return;
+    const k = idx(x, y);
+    if (mark[k] || grid[k] === SAFE) return;
+    mark[k] = 1; qx[tail] = x; qy[tail] = y; tail++;
+  };
+  for (const e of enemies) { const [ex, ey] = cellAt(e.x, e.y); push(ex, ey); }
+  while (head < tail) {
+    const x = qx[head], y = qy[head]; head++;
+    push(x + 1, y); push(x - 1, y); push(x, y + 1); push(x, y - 1);
+  }
+
+  let captured = 0;
+  const sample = [];
+  for (let y = 0; y < GH; y++) {
+    for (let x = 0; x < GW; x++) {
+      const k = idx(x, y);
+      if (grid[k] !== SAFE && !mark[k]) {
+        grid[k] = SAFE; captured++;
+        if (sample.length < 800 && Math.random() < 0.18) sample.push({ x, y });
+      }
+    }
+  }
+
+  trailPath = [];
+  const safeCount = countSafe();
+  claimedPct = safeCount / (GW * GH) * 100;
+  const gain = Math.max(0, captured + trailCells.length);
+  const bonus = Math.floor(gain * 14 + gain * gain * 0.03);
+  score += bonus;
+  hiScore = Math.max(hiScore, score);
+
+  shake = Math.max(shake, Math.min(18, 4 + gain / 80));
+  addParticles(player.x, player.y, Math.min(130, 30 + gain / 8), '#ffe234', 1.0);
+  addWave(player.x, player.y, '#00c8ff', 0.6, 1.6);
+
+  for (const c of sample) {
+    particles.push({
+      x: (c.x + 0.5) * CELL, y: (c.y + 0.5) * CELL,
+      vx: rnd(-40, 40), vy: rnd(-40, 40),
+      life: rnd(0.2, 0.6), max: 0.6, r: rnd(1, 3.5), color: '#00ffaa', type: 'spark',
+    });
+  }
+
+  // Feedback text
+  if (gain > 200) showCombo('PERFECT!', '#ffe234');
+  else if (gain > 80) showCombo('GREAT!', '#00ffaa');
+  else if (gain > 30) showCombo('GOOD', '#00c8ff');
+
+  if (claimedPct >= 78) {
+    state = 'clear';
+    hiScore = Math.max(hiScore, score);
+    score += 5000;
+    document.getElementById('clear-bonus').textContent = '+5,000 PTS STAGE BONUS';
+    showScreen('clear');
+    addParticles(W / 2, H / 2, 240, '#ffe234', 1.5);
+    setTimeout(() => { if (state === 'clear') { stage++; resetStage(true); } }, 2200);
+  }
+  updateUI();
+}
+
+function countSafe() {
+  let n = 0;
+  for (let i = 0; i < grid.length; i++) if (grid[i] === SAFE) n++;
+  return n;
+}
+
+function updateParticles(dt) {
+  for (const p of particles) {
+    p.life -= dt;
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    p.vx *= Math.pow(0.06, dt); p.vy *= Math.pow(0.06, dt);
+  }
+  particles = particles.filter(p => p.life > 0);
+  for (const w of waves) w.life -= dt;
+  waves = waves.filter(w => w.life > 0);
+}
+
+// ── Render ────────────────────────────────────────────────────────
+function drawRevealMask() {
+  maskCtx2.clearRect(0, 0, W, H);
+  maskCtx2.drawImage(coverCvs, 0, 0);
+  maskCtx2.save();
+  maskCtx2.globalCompositeOperation = 'destination-out';
+  for (let y = 0; y < GH; y++) {
+    let run = -1;
+    for (let x = 0; x <= GW; x++) {
+      const safe = x < GW && grid[idx(x, y)] === SAFE;
+      if (safe && run < 0) run = x;
+      if ((!safe || x === GW) && run >= 0) {
+        maskCtx2.fillRect(run * CELL - 1, y * CELL - 1, (x - run) * CELL + 2, CELL + 2);
+        run = -1;
+      }
+    }
+  }
+  maskCtx2.restore();
+}
+
+function render() {
+  const sx = shake ? rnd(-shake, shake) : 0;
+  const sy = shake ? rnd(-shake, shake) : 0;
+  ctx.save();
+  ctx.translate(sx, sy);
+  ctx.fillStyle = '#030509';
+  ctx.fillRect(-40, -40, W + 80, H + 80);
+
+  // Art layer
+  ctx.drawImage(artCvs, 0, 0);
+
+  // Reveal mask
+  drawRevealMask();
+  ctx.drawImage(maskCvs, 0, 0);
+
+  // Safe land tint
+  drawClaimedTint();
+  // Safe edge glow
+  drawSafeEdges();
+  // Trail
+  drawTrail();
+  // Enemies
+  drawEnemies();
+  // Player
+  drawPlayer();
+  // Particles
+  drawParticles();
+  // Vignette
+  drawVignette();
+
+  ctx.restore();
+}
+
+function drawClaimedTint() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = 'rgba(0,200,255,0.09)';
+  for (let y = 0; y < GH; y++) {
+    let run = -1;
+    for (let x = 0; x <= GW; x++) {
+      const safe = x < GW && grid[idx(x, y)] === SAFE;
+      if (safe && run < 0) run = x;
+      if ((!safe || x === GW) && run >= 0) {
+        ctx.fillRect(run * CELL, y * CELL, (x - run) * CELL, CELL);
+        run = -1;
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawSafeEdges() {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(0,200,255,0.5)';
+  ctx.lineWidth = 2;
+  ctx.shadowColor = '#00c8ff';
+  ctx.shadowBlur = 10;
+  for (let y = 1; y < GH - 1; y++) {
+    for (let x = 1; x < GW - 1; x++) {
+      if (grid[idx(x, y)] === SAFE) {
+        const px = x * CELL, py = y * CELL;
+        if (grid[idx(x + 1, y)] !== SAFE) { ctx.beginPath(); ctx.moveTo(px + CELL, py); ctx.lineTo(px + CELL, py + CELL); ctx.stroke(); }
+        if (grid[idx(x, y + 1)] !== SAFE) { ctx.beginPath(); ctx.moveTo(px, py + CELL); ctx.lineTo(px + CELL, py + CELL); ctx.stroke(); }
+      }
+    }
+  }
+  ctx.restore();
+}
+
+function drawTrail() {
+  if (!trailPath.length) return;
+  ctx.save();
+  ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // Outer glow
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = 'rgba(0,200,255,0.25)';
+  ctx.shadowColor = '#00c8ff'; ctx.shadowBlur = 30;
+  ctx.beginPath();
+  for (let i = 0; i < trailPath.length; i++) {
+    const p = trailPath[i], x = (p.x + 0.5) * CELL, y = (p.y + 0.5) * CELL;
+    if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y);
+  }
+  ctx.lineTo(player.x, player.y);
+  ctx.stroke();
+  // Core
+  ctx.lineWidth = 5;
+  ctx.strokeStyle = '#00e5ff';
+  ctx.shadowBlur = 16;
+  ctx.stroke();
+  // Bright center
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = '#fff';
+  ctx.shadowBlur = 0;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawEnemies() {
+  for (const e of enemies) {
+    // Motion trail
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let ti = 0; ti < e.trail.length; ti++) {
+      const t = e.trail[ti];
+      const alpha = (t.life / 0.3) * 0.15;
+      ctx.globalAlpha = alpha;
+      ctx.fillStyle = '#ff4e8a';
+      ctx.beginPath(); ctx.arc(t.x, t.y, e.r * 0.5, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(e.x, e.y);
+    ctx.rotate(e.phase * (e.type === 'orb' ? 0.8 : e.type === 'spike' ? 1.6 : -1.2));
+    ctx.shadowColor = '#ff4e8a';
+    ctx.shadowBlur = 20 + e.hit * 60;
+
+    if (e.type === 'orb') {
+      const g = ctx.createRadialGradient(0, 0, 2, 0, 0, e.r * 1.4);
+      g.addColorStop(0, '#fff');
+      g.addColorStop(0.25, '#ff88aa');
+      g.addColorStop(1, '#7c1234');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      for (let i = 0; i < 16; i++) {
+        const a = i * Math.PI / 8;
+        const r = i % 2 ? e.r * 0.55 : e.r * (1 + 0.1 * Math.sin(time * 5 + i));
+        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath(); ctx.fill();
+      // Eye
+      ctx.shadowBlur = 0; ctx.fillStyle = '#1a0210';
+      ctx.beginPath(); ctx.arc(0, 0, e.r * 0.28, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff4e8a';
+      ctx.beginPath(); ctx.arc(0, 0, e.r * 0.12, 0, Math.PI * 2); ctx.fill();
+
+    } else if (e.type === 'spike') {
+      const g = ctx.createRadialGradient(0, 0, 1, 0, 0, e.r * 1.5);
+      g.addColorStop(0, '#fff'); g.addColorStop(0.3, '#ffaa44'); g.addColorStop(1, '#aa4400');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        const r = i % 2 ? e.r * 0.4 : e.r * 1.1;
+        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#2a0a00';
+      ctx.beginPath(); ctx.arc(0, 0, e.r * 0.22, 0, Math.PI * 2); ctx.fill();
+
+    } else { // diamond
+      const g = ctx.createRadialGradient(0, 0, 1, 0, 0, e.r * 1.3);
+      g.addColorStop(0, '#fff'); g.addColorStop(0.3, '#aaffee'); g.addColorStop(1, '#008866');
+      ctx.fillStyle = g;
+      ctx.beginPath();
+      const pts = 5;
+      for (let i = 0; i < pts * 2; i++) {
+        const a = i * Math.PI / pts - Math.PI / 2;
+        const r = i % 2 ? e.r * 0.5 : e.r;
+        ctx.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+      }
+      ctx.closePath(); ctx.fill();
+      ctx.shadowBlur = 0; ctx.fillStyle = '#001a10';
+      ctx.beginPath(); ctx.arc(0, 0, e.r * 0.2, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Outline
+    ctx.shadowBlur = 0; ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.restore();
+  }
+}
+
+function drawPlayer() {
+  const blink = player.inv > 0 ? 0.4 + Math.sin(time * 40) * 0.3 : 1;
+  ctx.save();
+  ctx.globalAlpha = blink;
+  ctx.translate(player.x, player.y);
+  const ang = Math.atan2(player.dirY || 0, player.dirX || 1);
+  ctx.rotate(ang);
+
+  const danger = trailPath.length > 0;
+  const col = danger ? '#ffe234' : '#00c8ff';
+  ctx.shadowColor = col; ctx.shadowBlur = danger ? 28 : 18;
+
+  // Engine trail
+  if (danger && trailPath.length > 0) {
+    ctx.fillStyle = 'rgba(255,100,0,0.7)';
+    ctx.beginPath(); ctx.ellipse(-12, 0, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // Ship body
+  const shipGrad = ctx.createLinearGradient(-10, -10, 16, 10);
+  shipGrad.addColorStop(0, danger ? '#fff8a0' : '#a0f8ff');
+  shipGrad.addColorStop(1, danger ? col : '#0088aa');
+  ctx.fillStyle = shipGrad;
+  ctx.beginPath();
+  ctx.moveTo(17, 0);
+  ctx.lineTo(-10, -11);
+  ctx.quadraticCurveTo(-4, 0, -10, 11);
+  ctx.closePath();
+  ctx.fill();
+
+  // Cockpit
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#050d1a';
+  ctx.beginPath(); ctx.ellipse(4, -2, 4, 3, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)'; ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.ellipse(4, -2, 4, 3, 0, 0, Math.PI * 2); ctx.stroke();
+
+  // Wing accents
+  ctx.strokeStyle = col; ctx.lineWidth = 1.5; ctx.shadowColor = col; ctx.shadowBlur = 8;
+  ctx.beginPath(); ctx.moveTo(-2, -6); ctx.lineTo(10, -3); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(-2, 6); ctx.lineTo(10, 3); ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawParticles() {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const p of particles) {
+    const a = clamp(p.life / (p.max || 1), 0, 1);
+    ctx.globalAlpha = a * 0.9;
+    ctx.fillStyle = p.color;
+    ctx.shadowColor = p.color; ctx.shadowBlur = p.r * 3;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r * a, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+  for (const w of waves) {
+    const t = 1 - w.life / w.max;
+    ctx.globalAlpha = (1 - t) * 0.55;
+    ctx.strokeStyle = w.color;
+    ctx.lineWidth = (1 - t) * 5;
+    ctx.shadowColor = w.color; ctx.shadowBlur = 12;
+    ctx.beginPath(); ctx.arc(w.x, w.y, (20 + t * 80) * w.scale, 0, Math.PI * 2); ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawVignette() {
+  const g = ctx.createRadialGradient(W / 2, H / 2, W * 0.2, W / 2, H / 2, W * 0.75);
+  g.addColorStop(0, 'rgba(0,0,0,0)');
+  g.addColorStop(1, 'rgba(0,0,10,0.6)');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  // CRT scanline
+  ctx.fillStyle = 'rgba(0,0,0,0.025)';
+  for (let y = 0; y < H; y += 4) ctx.fillRect(0, y, W, 1);
+}
+
+// ── Main loop ─────────────────────────────────────────────────────
+function loop(t) {
+  const dt = Math.min(0.033, (t - last) / 1000 || 0.016);
+  last = t;
+  update(dt);
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ── Boot ──────────────────────────────────────────────────────────
+buildStageArt(1);
+resetStage(true);
+state = 'title';
+showScreen('title');
+updateUI();
+requestAnimationFrame(loop);
+
+})();
+</script>
+</body>
+</html>
