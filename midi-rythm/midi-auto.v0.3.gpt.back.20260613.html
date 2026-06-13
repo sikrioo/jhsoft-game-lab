@@ -1,0 +1,3118 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MIDI Auto Chart Rhythm Game</title>
+
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tone@15.0.4/build/Tone.min.js"></script>
+  <script type="module">
+    import { Midi } from "https://cdn.jsdelivr.net/npm/@tonejs/midi@2.0.28/+esm";
+    window.ToneMidiParser = Midi;
+  </script>
+
+  <style>
+    @import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=Rajdhani:wght@500;700&display=swap");
+
+    :root{
+      --bg0:#05060a;
+      --bg1:#10141c;
+      --bg2:#1b2230;
+      --glass:rgba(18,22,31,.84);
+      --line:rgba(255,194,75,.34);
+      --text:#f6f1dc;
+      --muted:rgba(246,241,220,.68);
+      --cyan:#35e7ff;
+      --pink:#ff4f6f;
+      --yellow:#ffc24b;
+      --green:#7dff75;
+      --purple:#6f86ff;
+      --orange:#ff8c33;
+      --steel:#8f9db1;
+      --cab-red:#c53b2f;
+      --bg-calm-cyan:rgba(53,231,255,.14);
+      --bg-calm-blue:rgba(111,134,255,.12);
+      --bg-calm-purple:rgba(255,79,111,.10);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin:0; width:100%; height:100%; overflow:hidden; background:#05060a; color:var(--text); }
+    body {
+      font-family:"Rajdhani", "Trebuchet MS", sans-serif;
+      letter-spacing:.01em;
+      background:
+        radial-gradient(circle at 50% -10%, rgba(255,194,75,.16), transparent 34%),
+        radial-gradient(circle at 16% 16%, rgba(53,231,255,.10), transparent 24%),
+        radial-gradient(circle at 84% 14%, rgba(255,79,111,.12), transparent 26%),
+        linear-gradient(180deg, #090b10 0%, #0d1118 24%, #08090d 100%);
+    }
+    body::before{
+      content:""; position:fixed; inset:0; z-index:1; pointer-events:none;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.06), transparent 11%, transparent 89%, rgba(0,0,0,.40)),
+        radial-gradient(circle at 50% 78%, var(--bg-calm-cyan), transparent 34%),
+        radial-gradient(circle at 22% 18%, var(--bg-calm-blue), transparent 26%),
+        radial-gradient(circle at 80% 12%, var(--bg-calm-purple), transparent 24%);
+      opacity:.92;
+    }
+    body::after{
+      content:""; position:fixed; inset:0; z-index:2; pointer-events:none; opacity:.16;
+      background-image:
+        linear-gradient(rgba(255,255,255,.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,194,75,.05) 1px, transparent 1px),
+        repeating-linear-gradient(180deg, rgba(255,255,255,.06) 0 1px, transparent 1px 4px);
+      background-size:64px 64px, 64px 64px, 100% 4px;
+      mix-blend-mode:screen;
+    }
+    #gameRoot { position:fixed; inset:0; z-index:0; }
+    .hud, .rightHud, .loader, #resultScreen, .judge { z-index:10; }
+
+    .hud {
+      position:fixed; inset:24px auto auto 24px; width:302px;
+      pointer-events:none;
+      padding:18px 18px 22px;
+      border:2px solid rgba(143,157,177,.34);
+      border-radius:18px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,0) 18%),
+        linear-gradient(180deg, rgba(28,34,46,.98), rgba(11,14,20,.94));
+      box-shadow:0 20px 0 rgba(0,0,0,.30), 0 30px 90px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.09);
+      backdrop-filter:blur(10px);
+    }
+    .hud::before{
+      content:""; position:absolute; inset:8px; border-radius:12px; pointer-events:none;
+      border:1px solid rgba(255,194,75,.16);
+      box-shadow:inset 0 0 0 1px rgba(0,0,0,.42);
+    }
+    .hud::after{
+      content:"SYSTEM READY"; position:absolute; left:18px; right:18px; top:-12px; height:24px;
+      display:flex; align-items:center; justify-content:center;
+      border:2px solid rgba(255,194,75,.42);
+      border-radius:999px;
+      background:linear-gradient(180deg, rgba(197,59,47,.96), rgba(130,34,25,.94));
+      color:#fff3ca;
+      font:900 10px/1 "Orbitron", sans-serif;
+      letter-spacing:.22em;
+      text-transform:uppercase;
+      box-shadow:0 10px 22px rgba(0,0,0,.36), inset 0 1px 0 rgba(255,255,255,.22);
+    }
+    .title {
+      font:900 28px/1 "Orbitron", sans-serif; letter-spacing:.08em; margin-bottom:4px;
+      text-transform:uppercase;
+      color:#fff3ca;
+      text-shadow:0 0 18px rgba(255,194,75,.22), 0 0 34px rgba(53,231,255,.12);
+    }
+    .sub {
+      font:700 12px/1.2 "Rajdhani", sans-serif; opacity:.82; margin-bottom:18px; color:var(--muted);
+      letter-spacing:.10em;
+      text-transform:uppercase;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .bar {
+      width:100%; height:12px; background:rgba(0,0,0,.42); border-radius:999px; overflow:hidden; margin-bottom:10px;
+      border:2px solid rgba(143,157,177,.24);
+      box-shadow:inset 0 3px 8px rgba(0,0,0,.40);
+    }
+    .bar > div {
+      width:0%; height:100%;
+      background:linear-gradient(90deg, var(--yellow), var(--orange), var(--pink), var(--cyan));
+      box-shadow:0 0 18px rgba(255,194,75,.54);
+      transition:width .08s linear;
+    }
+    .time { font:700 12px/1 "Orbitron", ui-monospace, monospace; opacity:.74; margin-bottom:20px; color:var(--muted); letter-spacing:.08em; }
+    .label { font: 900 10px/1 "Orbitron", ui-monospace, monospace; opacity:.76; letter-spacing:.22em; margin-top:14px; color:#ffd978; }
+    .num { font: 800 34px/1.03 "Orbitron", sans-serif; letter-spacing:.02em; color:#f8f4e5; }
+    .rank {
+      font: 900 62px/0.92 "Orbitron", sans-serif; letter-spacing:.03em;
+      color:#fff3ca;
+      text-shadow:0 0 26px rgba(255,194,75,.26);
+    }
+    .rightHud {
+      position:fixed; right:24px; top:24px; width:292px; text-align:right;
+      font:700 12px/1.55 "Orbitron", ui-monospace, monospace; color:rgba(246,241,220,.78);
+      pointer-events:none; padding:16px 18px;
+      border:2px solid rgba(143,157,177,.26); border-radius:16px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 20%),
+        linear-gradient(180deg, rgba(25,30,40,.94), rgba(10,12,17,.90));
+      box-shadow:0 18px 0 rgba(0,0,0,.28), 0 24px 68px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.06);
+      backdrop-filter:blur(10px);
+    }
+    .rightHud div { margin-bottom:2px; }
+    .loader {
+      position:fixed; inset:0; display:grid; place-items:center;
+      background:
+        radial-gradient(circle at 50% 70%, rgba(255,194,75,.18), transparent 34%),
+        radial-gradient(circle at 58% 34%, rgba(53,231,255,.10), transparent 30%),
+        rgba(4,5,9,.84);
+      backdrop-filter:blur(8px);
+    }
+    .panel {
+      width:min(670px, calc(100vw - 36px)); padding:38px 36px 34px;
+      border:2px solid rgba(143,157,177,.30);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,0) 18%),
+        linear-gradient(180deg, rgba(31,36,49,.96), rgba(11,14,20,.94));
+      border-radius:22px; text-align:center;
+      box-shadow:0 22px 0 rgba(0,0,0,.34), 0 34px 150px rgba(0,0,0,.78), inset 0 1px 0 rgba(255,255,255,.08);
+      position:relative; overflow:hidden;
+    }
+    .panel::before{
+      content:""; position:absolute; inset:-1px; pointer-events:none; opacity:.95;
+      background:
+        linear-gradient(90deg, var(--cab-red), transparent 16%, transparent 84%, var(--yellow)) top/100% 4px no-repeat,
+        linear-gradient(90deg, var(--cyan), transparent 22%, transparent 78%, var(--orange)) bottom/100% 4px no-repeat;
+    }
+    .panel h1 {
+      margin:0 0 10px; font:900 34px/1 "Orbitron", sans-serif; letter-spacing:.08em;
+      text-transform:uppercase;
+      color:#fff3ca;
+      text-shadow:0 0 24px rgba(255,194,75,.20), 0 0 42px rgba(53,231,255,.10);
+    }
+    .panel p { margin:0 0 22px; font:700 15px/1.6 "Rajdhani", sans-serif; color:var(--muted); }
+    .row { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+    button, label.fileBtn {
+      border:2px solid rgba(255,236,188,.20);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 28%),
+        linear-gradient(180deg, rgba(255,164,76,.98), rgba(201,71,47,.98));
+      color:#fff8e4; border-radius:14px;
+      padding:12px 19px; font:900 13px "Orbitron", sans-serif; cursor:pointer;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      transition: opacity .15s, transform .1s, box-shadow .15s, border-color .15s;
+      box-shadow:0 6px 0 rgba(83,24,16,.92), 0 14px 28px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.28);
+    }
+    button:hover, label.fileBtn:hover:not(.disabled) { opacity:.95; border-color:rgba(255,236,188,.38); box-shadow:0 6px 0 rgba(83,24,16,.92), 0 16px 34px rgba(255,140,51,.20), inset 0 1px 0 rgba(255,255,255,.32); }
+    button:active, label.fileBtn:active { transform:translateY(3px); box-shadow:0 3px 0 rgba(83,24,16,.92), 0 10px 18px rgba(0,0,0,.20), inset 0 1px 0 rgba(255,255,255,.22); }
+    button:disabled { opacity:.35; cursor:not-allowed; }
+    button.secondary {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 28%),
+        linear-gradient(180deg, rgba(57,66,82,.96), rgba(21,25,34,.96));
+      color:#f6f1dc;
+      border-color:rgba(143,157,177,.30);
+      box-shadow:0 6px 0 rgba(4,6,9,.92), 0 14px 26px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.06);
+    }
+    .mode-btn.active {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.18), rgba(255,255,255,0) 26%),
+        linear-gradient(180deg, rgba(255,213,79,.98), rgba(236,111,48,.98));
+      color:#23160c;
+      border-color:rgba(255,249,214,.46);
+    }
+    input[type=file] { display:none; }
+    label.fileBtn.disabled { opacity:.35; pointer-events:none; }
+    .judge {
+      position:fixed; left:50%; bottom:82px; transform:translateX(-50%);
+      font:900 40px/1 "Orbitron", sans-serif; letter-spacing:.28em; opacity:0; pointer-events:none;
+      color:#fff4c8;
+      text-shadow:0 0 22px currentColor, 0 0 46px rgba(255,194,75,.28);
+    }
+    #resultScreen {
+      position:fixed; inset:0; display:none; place-items:center;
+      background:rgba(4,5,9,.90); backdrop-filter:blur(10px);
+    }
+    #resultScreen.active { display:grid; }
+    .result-panel {
+      width:min(540px, calc(100vw - 36px)); padding:46px 40px 38px;
+      border:2px solid rgba(143,157,177,.28);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 18%),
+        linear-gradient(180deg, rgba(31,36,49,.98), rgba(11,14,20,.96));
+      border-radius:22px; text-align:center;
+      box-shadow:0 22px 0 rgba(0,0,0,.34), 0 32px 150px rgba(0,0,0,.84), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .result-rank { font:900 100px/0.9 "Orbitron", sans-serif; margin:0 0 8px; letter-spacing:.06em; text-shadow:0 0 34px currentColor; }
+    .result-title { font:900 11px/1 "Orbitron", ui-monospace, monospace; opacity:.66; letter-spacing:.28em; margin-bottom:28px; color:#ffd978; }
+    .result-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:32px; }
+    .stat-box { padding:16px 10px; border:1px solid rgba(143,157,177,.18); border-radius:14px; background:rgba(255,255,255,.04); box-shadow:inset 0 1px 0 rgba(255,255,255,.05); }
+    .stat-label { font:900 10px "Orbitron", ui-monospace, monospace; opacity:.62; letter-spacing:.18em; margin-bottom:7px; color:#ffd978; }
+    .stat-val { font:800 26px/1 "Orbitron", sans-serif; letter-spacing:.02em; }
+    .result-song { font:700 14px "Rajdhani", sans-serif; opacity:.68; margin-bottom:28px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+    .chart-toggle {
+      position:fixed; right:24px; top:134px; z-index:12;
+      border:2px solid rgba(255,235,187,.18);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0) 30%),
+        linear-gradient(180deg, rgba(255,170,79,.98), rgba(199,68,46,.98));
+      color:#fff7de;
+      border-radius:14px;
+      padding:10px 14px;
+      font:900 12px/1 "Orbitron", sans-serif;
+      letter-spacing:.08em;
+      cursor:pointer;
+      box-shadow:0 6px 0 rgba(83,24,16,.92), 0 12px 34px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.16);
+      backdrop-filter:blur(10px);
+      transition:transform .12s, opacity .15s, border-color .15s;
+    }
+    .chart-toggle:hover { opacity:.95; border-color:rgba(255,235,187,.34); }
+    .chart-toggle:active { transform:translateY(3px); box-shadow:0 3px 0 rgba(83,24,16,.92), 0 8px 22px rgba(0,0,0,.24), inset 0 1px 0 rgba(255,255,255,.12); }
+
+    .chart-panel {
+      position:fixed; right:24px; top:178px; bottom:24px; z-index:40;
+      width:min(520px, calc(100vw - 48px));
+      display:none;
+      grid-template-rows:auto auto minmax(0, 1fr) auto auto;
+      gap:12px;
+      padding:18px;
+      border:2px solid rgba(143,157,177,.24);
+      border-radius:20px;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 18%),
+        linear-gradient(180deg, rgba(27,33,45,.97), rgba(10,13,19,.96));
+      box-shadow:0 18px 0 rgba(0,0,0,.30), 0 30px 120px rgba(0,0,0,.72), inset 0 1px 0 rgba(255,255,255,.08);
+      backdrop-filter:blur(14px);
+    }
+    .chart-panel.active { display:grid; }
+    .chart-panel-head {
+      display:flex;
+      justify-content:space-between;
+      gap:12px;
+      align-items:flex-start;
+    }
+    .chart-panel-title {
+      font:900 18px/1.1 "Orbitron", sans-serif;
+      letter-spacing:.08em;
+      text-transform:uppercase;
+      color:#fff3ca;
+      text-shadow:0 0 18px rgba(255,194,75,.18);
+    }
+    .chart-panel-sub {
+      margin-top:5px;
+      font:700 12px/1.35 "Rajdhani", ui-monospace, monospace;
+      color:rgba(246,241,220,.60);
+      word-break:break-all;
+    }
+    .chart-close {
+      border:1px solid rgba(143,157,177,.20);
+      background:rgba(255,255,255,.06);
+      color:#f6f1dc;
+      border-radius:12px;
+      padding:8px 10px;
+      font:900 11px/1 "Orbitron", sans-serif;
+      cursor:pointer;
+      box-shadow:none;
+    }
+    .chart-summary {
+      display:grid;
+      grid-template-columns:repeat(4, 1fr);
+      gap:8px;
+    }
+    .chart-summary-box {
+      min-width:0;
+      padding:10px 8px;
+      border:1px solid rgba(143,157,177,.12);
+      border-radius:12px;
+      background:rgba(255,255,255,.04);
+    }
+    .chart-summary-label {
+      font:900 9px/1 "Orbitron", ui-monospace, monospace;
+      opacity:.64;
+      letter-spacing:.14em;
+      margin-bottom:6px;
+      white-space:nowrap;
+      color:#ffd978;
+    }
+    .chart-summary-value {
+      font:800 18px/1 "Orbitron", sans-serif;
+      letter-spacing:.04em;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .chart-textarea {
+      width:100%;
+      min-height:0;
+      resize:none;
+      border:1px solid rgba(143,157,177,.16);
+      border-radius:14px;
+      padding:14px;
+      background:rgba(0,0,0,.38);
+      color:#f7f1dd;
+      outline:none;
+      font:700 12px/1.48 "Rajdhani", ui-monospace, monospace;
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.04), inset 0 0 0 1px rgba(255,194,75,.05);
+    }
+    .chart-actions {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .chart-actions-left, .chart-actions-right {
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .chart-action-btn {
+      border:1px solid rgba(143,157,177,.20);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,0) 30%),
+        linear-gradient(180deg, rgba(53,60,74,.96), rgba(17,21,28,.96));
+      color:#f6f1dc;
+      border-radius:12px;
+      padding:10px 13px;
+      font:900 11px/1 "Orbitron", sans-serif;
+      letter-spacing:.06em;
+      cursor:pointer;
+      box-shadow:none;
+    }
+    .chart-action-btn.primary {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.16), rgba(255,255,255,0) 28%),
+        linear-gradient(180deg, rgba(255,174,79,.98), rgba(202,70,46,.98));
+      color:#fff8e4;
+      border-color:rgba(255,248,214,.28);
+    }
+    .chart-copy-status {
+      font:700 11px/1.3 "Rajdhani", ui-monospace, monospace;
+      color:rgba(246,241,220,.64);
+      min-height:14px;
+    }
+    .editor-panel {
+      display:grid;
+      gap:10px;
+      padding:12px;
+      border:1px solid rgba(143,157,177,.12);
+      border-radius:16px;
+      background:rgba(255,255,255,.04);
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.04), inset 0 0 0 1px rgba(255,194,75,.04);
+    }
+    .editor-toolbar {
+      display:flex;
+      justify-content:space-between;
+      align-items:flex-start;
+      gap:10px;
+      flex-wrap:wrap;
+    }
+    .editor-status {
+      font:700 11px/1.35 "Rajdhani", ui-monospace, monospace;
+      color:rgba(246,241,220,.76);
+      min-height:28px;
+      flex:1 1 220px;
+    }
+    .editor-tools {
+      display:flex;
+      gap:8px;
+      flex-wrap:wrap;
+    }
+    .editor-btn {
+      border:1px solid rgba(143,157,177,.20);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,0) 30%),
+        linear-gradient(180deg, rgba(53,60,74,.96), rgba(17,21,28,.96));
+      color:#f6f1dc;
+      border-radius:11px;
+      padding:8px 11px;
+      font:900 10px/1 "Orbitron", sans-serif;
+      letter-spacing:.05em;
+      cursor:pointer;
+      box-shadow:none;
+    }
+    .editor-btn:disabled {
+      opacity:.34;
+      cursor:not-allowed;
+    }
+    .editor-help {
+      font:700 11px/1.45 "Rajdhani", ui-monospace, monospace;
+      color:rgba(246,241,220,.58);
+    }
+    .editor-stage {
+      display:grid;
+      grid-template-columns:26px 1fr;
+      gap:8px;
+      align-items:stretch;
+    }
+    .editor-lanes {
+      display:grid;
+      gap:2px;
+    }
+    .editor-lane {
+      display:grid;
+      place-items:center;
+      border-radius:7px;
+      background:rgba(255,255,255,.05);
+      color:rgba(246,241,220,.82);
+      font:900 10px/1 "Orbitron", ui-monospace, monospace;
+      letter-spacing:.06em;
+    }
+    .editor-viewport {
+      position:relative;
+      height:236px;
+      overflow:hidden;
+      border:1px solid rgba(143,157,177,.18);
+      border-radius:14px;
+      background:
+        radial-gradient(circle at 50% 18%, rgba(255,194,75,.10), transparent 26%),
+        linear-gradient(180deg, rgba(10,12,17,.98), rgba(20,25,34,.94));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.05), inset 0 0 0 1px rgba(255,194,75,.04);
+      touch-action:none;
+      cursor:crosshair;
+    }
+    .editor-viewport.disabled {
+      opacity:.56;
+      cursor:not-allowed;
+    }
+    .editor-surface {
+      position:absolute;
+      inset:0;
+      --lane-count:8;
+      --beat-step:12.5%;
+      --measure-step:50%;
+      background-image:
+        repeating-linear-gradient(
+          to bottom,
+          rgba(255,255,255,.08) 0,
+          rgba(255,255,255,.08) 1px,
+          transparent 1px,
+          transparent calc(100% / var(--lane-count))
+        ),
+        repeating-linear-gradient(
+          to right,
+          rgba(255,194,75,.09) 0,
+          rgba(255,194,75,.09) 1px,
+          transparent 1px,
+          transparent var(--beat-step)
+        ),
+        repeating-linear-gradient(
+          to right,
+          rgba(53,231,255,.18) 0,
+          rgba(53,231,255,.18) 1px,
+          transparent 1px,
+          transparent var(--measure-step)
+        );
+      background-blend-mode:screen;
+      user-select:none;
+    }
+    .editor-now {
+      position:absolute;
+      top:0;
+      bottom:0;
+      width:2px;
+      background:linear-gradient(180deg, rgba(255,194,75,.18), rgba(255,194,75,.96), rgba(255,194,75,.18));
+      box-shadow:0 0 16px rgba(255,194,75,.52);
+      pointer-events:none;
+    }
+    .editor-tick {
+      position:absolute;
+      bottom:0;
+      width:1px;
+      height:10px;
+      background:rgba(255,255,255,.42);
+      pointer-events:none;
+    }
+    .editor-tick-label {
+      position:absolute;
+      top:8px;
+      transform:translateX(-50%);
+      color:rgba(246,241,220,.50);
+      font:900 10px/1 "Orbitron", ui-monospace, monospace;
+      pointer-events:none;
+    }
+    .editor-note {
+      position:absolute;
+      min-width:12px;
+      border-radius:8px;
+      border:1px solid rgba(255,244,213,.42);
+      box-shadow:0 6px 0 rgba(0,0,0,.26), 0 10px 18px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.22);
+      cursor:grab;
+    }
+    .editor-note::before {
+      content:"";
+      position:absolute;
+      inset:2px;
+      border-radius:6px;
+      background:linear-gradient(180deg, rgba(255,255,255,.24), rgba(255,255,255,.03));
+      pointer-events:none;
+    }
+    .editor-note.selected {
+      outline:2px solid rgba(255,194,75,.92);
+      outline-offset:1px;
+      box-shadow:0 0 0 2px rgba(255,194,75,.15), 0 8px 0 rgba(0,0,0,.28), 0 10px 22px rgba(0,0,0,.34);
+    }
+    .editor-note.is-hold {
+      border-radius:12px;
+    }
+    .editor-note.is-disabled {
+      opacity:.34;
+      cursor:not-allowed;
+      filter:saturate(.45);
+    }
+    .editor-note-handle {
+      position:absolute;
+      top:2px;
+      bottom:2px;
+      right:1px;
+      width:10px;
+      border-radius:999px;
+      background:rgba(255,244,213,.88);
+      box-shadow:0 0 10px rgba(255,194,75,.24);
+      cursor:ew-resize;
+    }
+    .editor-note-label {
+      position:absolute;
+      left:8px;
+      top:50%;
+      transform:translateY(-50%);
+      font:900 9px/1 "Orbitron", ui-monospace, monospace;
+      color:#1b1308;
+      pointer-events:none;
+      text-shadow:none;
+    }
+    @media (max-width:760px){
+      .chart-toggle{ right:14px; top:auto; bottom:14px; }
+      .chart-panel{ right:14px; left:14px; top:88px; bottom:68px; width:auto; }
+      .chart-summary{ grid-template-columns:repeat(2, 1fr); }
+      .editor-stage{ grid-template-columns:22px 1fr; }
+    }
+
+    @media (max-width:760px){
+      .hud{ width:230px; inset:14px auto auto 14px; padding:14px; }
+      .rightHud{ display:none; }
+      .title{font-size:22px}.num{font-size:28px}.rank{font-size:52px}
+      .panel h1{font-size:28px}.panel{padding:30px 20px}
+    }
+  </style>
+</head>
+<body>
+  <div id="gameRoot"></div>
+
+  <div class="hud">
+    <div class="title">MIDI ARCADE</div>
+    <div class="sub" id="meta">Arcade Auto Chart / Stage Mix</div>
+    <div class="bar"><div id="progress"></div></div>
+    <div class="time"><span id="curTime">00:00</span> / <span id="totalTime">00:00</span></div>
+    <div class="label">SCORE</div><div class="num" id="score">0</div>
+    <div class="label">COMBO</div><div class="num" id="combo">0</div>
+    <div class="label">ACCURACY</div><div class="num" id="acc">100%</div>
+    <div class="label">RANK</div><div class="rank" id="rank">-</div>
+  </div>
+
+  <div class="rightHud">
+    <div>SPACE : PAUSE / EDIT</div>
+    <div id="autoPlayHint">F2 : AUTOPLAY OFF</div>
+    <div id="keyHint">A S D F J K L ;</div>
+    <div>Pause, open CHART DATA, then drag notes.</div>
+    <div id="bpmText">BPM -</div>
+  </div>
+
+  <button class="chart-toggle" id="chartToggleBtn" type="button">CHART + EDIT</button>
+
+  <div class="chart-panel" id="chartPanel">
+    <div class="chart-panel-head">
+      <div>
+        <div class="chart-panel-title">Arcade Chart Editor</div>
+        <div class="chart-panel-sub" id="chartPanelSub">아직 생성된 채보가 없습니다.</div>
+      </div>
+      <button class="chart-close" id="chartCloseBtn" type="button">닫기</button>
+    </div>
+
+    <div class="chart-summary">
+      <div class="chart-summary-box">
+        <div class="chart-summary-label">BPM</div>
+        <div class="chart-summary-value" id="chartSummaryBpm">-</div>
+      </div>
+      <div class="chart-summary-box">
+        <div class="chart-summary-label">NOTES</div>
+        <div class="chart-summary-value" id="chartSummaryNotes">-</div>
+      </div>
+      <div class="chart-summary-box">
+        <div class="chart-summary-label">HOLDS</div>
+        <div class="chart-summary-value" id="chartSummaryHolds">-</div>
+      </div>
+      <div class="chart-summary-box">
+        <div class="chart-summary-label">NPS</div>
+        <div class="chart-summary-value" id="chartSummaryNps">-</div>
+      </div>
+    </div>
+
+    <textarea class="chart-textarea" id="chartDataText" readonly spellcheck="false">아직 생성된 채보가 없습니다.</textarea>
+
+    <div class="editor-panel">
+      <div class="editor-toolbar">
+        <div class="editor-status" id="chartEditorStatus">Pause the game to edit notes. Drag notes to move them, drag the bright handle to stretch into holds, and click empty space to add a note.</div>
+        <div class="editor-tools">
+          <button class="editor-btn" id="editorPrevBtn" type="button">-4s</button>
+          <button class="editor-btn" id="editorCenterBtn" type="button">Center</button>
+          <button class="editor-btn" id="editorNextBtn" type="button">+4s</button>
+          <button class="editor-btn" id="editorHoldBtn" type="button">Toggle Hold</button>
+          <button class="editor-btn" id="editorDeleteBtn" type="button">Delete</button>
+        </div>
+      </div>
+      <div class="editor-help" id="chartEditorHelp">Only upcoming notes can be edited while paused. Clicking an empty lane/time cell adds a chord note on that beat.</div>
+      <div class="editor-stage">
+        <div class="editor-lanes" id="chartEditorLanes"></div>
+        <div class="editor-viewport" id="chartEditorViewport">
+          <div class="editor-surface" id="chartEditorSurface"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-actions">
+      <div class="chart-actions-left">
+        <button class="chart-action-btn primary" id="copyChartBtn" type="button">복사</button>
+        <button class="chart-action-btn" id="refreshChartBtn" type="button">새로고침</button>
+      </div>
+      <div class="chart-actions-right">
+        <button class="chart-action-btn" id="copyNotesOnlyBtn" type="button">노트만 복사</button>
+      </div>
+      <div class="chart-copy-status" id="chartCopyStatus"></div>
+    </div>
+  </div>
+
+
+  <div class="loader" id="loader">
+    <div class="panel">
+      <h1>MIDI → BPM → Auto Chart</h1>
+      <p>
+        MIDI 파일에서 BPM과 Note On 이벤트를 분석해 자동 채보를 만들고,<br />
+        Tone.Sampler 피아노 샘플로 MIDI를 함께 재생합니다.
+      </p>
+      <div class="row" style="margin-bottom:14px;">
+        <button class="secondary mode-btn active" id="modeNormalBtn">보통 (8키)</button>
+        <button class="secondary mode-btn" id="modeEasyBtn">이지 (4키)</button>
+        <button class="secondary mode-btn" id="modeSimpleBtn">초간단 (2키)</button>
+      </div>
+      <div class="row">
+        <label class="fileBtn" id="fileBtnLabel">MIDI 파일 선택<input id="midiInput" type="file" accept=".mid,.midi" /></label>
+        <button class="secondary" id="demoBtn">내장 데모</button>
+      </div>
+      <p id="loadingText" style="margin-top:16px;margin-bottom:0;font-size:12px;opacity:.62;">첫 실행 시 피아노 샘플을 다운로드합니다.</p>
+    </div>
+  </div>
+
+  <!-- 결과 화면 -->
+  <div id="resultScreen">
+    <div class="result-panel">
+      <div class="result-rank" id="resultRank">S+</div>
+      <div class="result-title">RESULT</div>
+      <div class="result-song" id="resultSong">—</div>
+      <div class="result-stats">
+        <div class="stat-box"><div class="stat-label">SCORE</div><div class="stat-val" id="resultScore">0</div></div>
+        <div class="stat-box"><div class="stat-label">ACCURACY</div><div class="stat-val" id="resultAcc">100%</div></div>
+        <div class="stat-box"><div class="stat-label">MAX COMBO</div><div class="stat-val" id="resultCombo">0</div></div>
+      </div>
+      <div class="row">
+        <button id="retryBtn">다시 하기</button>
+        <button class="secondary" id="backBtn">처음으로</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="judge" id="judgeMsg">PERFECT</div>
+
+<script>
+(() => {
+  const MODE_KEYS = {
+    normal: ['a','s','d','f','j','k','l',';'],
+    easy:   ['d','f','j','k'],
+    simple: ['j','k']
+  };
+  const HIT_RATIO = 0.79;
+  const FALL_TIME = 2.0;
+  const PERFECT = 0.055, GOOD = 0.105, BAD = 0.17;
+  const HOLD_MIN_DURATION = 0.6;  // 이 이상이면 롱노트로 분류 (캐논류 긴 음 과다 방지)
+  const HOLD_MAX_DURATION = 1.0;  // 롱노트 최대 길이 (꼬리가 화면 밖으로 과도하게 길어지지 않도록)
+  const TETRIS_COLORS = [0x35e7ff, 0x4f8dff, 0xffa03c, 0xffd24f, 0x7dff75, 0x9d6dff, 0xff5678, 0xfff0a8];
+  const TETRIS_SHAPES = [
+    [[0,0],[1,0],[2,0],[3,0]], [[0,0],[1,0],[0,1],[1,1]], [[1,0],[0,1],[1,1],[2,1]],
+    [[0,0],[1,0],[1,1],[2,1]], [[1,0],[2,0],[0,1],[1,1]], [[0,0],[0,1],[1,1],[2,1]], [[2,0],[0,1],[1,1],[2,1]]
+  ];
+  const DEMO_MIDI_URL = 'assets/mid/sPIU_Beethoven_Virus.mid';
+  const DEMO_CHART_URL = 'assets/chart/sPIU_Beethoven_Virus.chart.json';
+  const MAX_BG_BLOCKS = 24;
+  const MAX_FX_CHILDREN = 240;
+  function laneColor(lane){ return TETRIS_COLORS[lane % TETRIS_COLORS.length]; }
+
+  const state = {
+    app:null, w:0, h:0, laneW:0, totalW:0, startX:0, hitY:0, speed:0,
+    mode:'normal', LANES:8, KEYS:MODE_KEYS.normal, KEY_TO_LANE:Object.fromEntries(MODE_KEYS.normal.map((k,i)=>[k,i])),
+    notes:[], sprites:new Map(), started:false, paused:false, startAt:0, pauseAt:0, pausedSum:0,
+    score:0, combo:0, maxCombo:0, judged:0, hits:0, bpm:120, duration:0,
+    sampler:null, samplerReady:false, samplerLoading:false, playbackNotes:[],
+    bg:null, lanes:null, notesLayer:null, fx:null, keyLayer:null, bgBlocks:[], keyButtons:[],
+    lastChart:null, lastBpm:120, lastName:'', lastPlayback:[],
+    gameOver:false, heldLanes:new Map(), pressedKeys:new Set(),
+    keyGlowTime:0,
+    autoplay:false,
+    chartExport:null, chartExportText:'',
+    chartDebug:null,
+    nextNoteUid:1,
+    editor:{
+      windowSpan:8,
+      windowStart:0,
+      selectedUid:null,
+      drag:null
+    }
+  };
+  const $ = id => document.getElementById(id);
+
+  // ─────────────────────────────────────────
+  // INIT
+  // ─────────────────────────────────────────
+  async function init(){
+    const app = new PIXI.Application();
+    await app.init({
+      resizeTo:window, backgroundAlpha:0, antialias:false,
+      resolution:Math.min(devicePixelRatio||1,2), autoDensity:true
+    });
+    state.app = app;
+    app.ticker.maxFPS = 60;
+    if(app.renderer) app.renderer.roundPixels = true;
+    $('gameRoot').appendChild(app.canvas);
+    state.bg = new PIXI.Container();
+    state.lanes = new PIXI.Container();
+    state.notesLayer = new PIXI.Container();
+    state.keyLayer = new PIXI.Container();
+    state.fx = new PIXI.Container();
+    app.stage.addChild(state.bg, state.lanes, state.notesLayer, state.keyLayer, state.fx);
+    const loaderPanel = document.querySelector('.loader .panel');
+    const loaderDesc = loaderPanel?.querySelector('p');
+    if(loaderPanel?.querySelector('h1')) loaderPanel.querySelector('h1').textContent = 'MIDI BPM Auto Chart';
+    if(loaderDesc) loaderDesc.innerHTML = 'Analyze BPM and note-on events from a MIDI file to build an auto chart.<br />Tone.Sampler also plays the MIDI back inside the demo.';
+    if($('modeNormalBtn')) $('modeNormalBtn').textContent = 'Normal (8K)';
+    if($('modeEasyBtn')) $('modeEasyBtn').textContent = 'Easy (4K)';
+    if($('modeSimpleBtn')) $('modeSimpleBtn').textContent = 'Simple (2K)';
+    if($('fileBtnLabel')) $('fileBtnLabel').childNodes[0].nodeValue = 'Choose MIDI File';
+    if($('demoBtn')) $('demoBtn').textContent = 'Demo Song';
+    if($('loadingText')) $('loadingText').textContent = 'The first run downloads the sampler.';
+    if($('chartPanelSub')) $('chartPanelSub').textContent = 'No generated chart yet.';
+    if($('chartCloseBtn')) $('chartCloseBtn').textContent = 'Close';
+    if($('chartDataText')) $('chartDataText').value = 'No generated chart yet.';
+    if($('copyChartBtn')) $('copyChartBtn').textContent = 'Copy All';
+    if($('refreshChartBtn')) $('refreshChartBtn').textContent = 'Refresh';
+    if($('copyNotesOnlyBtn')) $('copyNotesOnlyBtn').textContent = 'Copy Notes';
+    if($('retryBtn')) $('retryBtn').textContent = 'Retry';
+    if($('backBtn')) $('backBtn').textContent = 'Back';
+    if($('resultSong')) $('resultSong').textContent = '-';
+    refreshAutoplayUi();
+    resize(); window.addEventListener('resize', resize);
+    app.ticker.add(tick);
+
+    $('midiInput').addEventListener('change', async e => {
+      const f = e.target.files?.[0];
+      if(f) await loadMidi(f);
+      e.target.value = ''; // 같은 파일 재선택 가능하도록
+    });
+    $('demoBtn').addEventListener('click', () => {
+      if(state.samplerLoading) return;
+      startDemo();
+    });
+    $('modeNormalBtn').addEventListener('click', () => setMode('normal'));
+    $('modeEasyBtn').addEventListener('click', () => setMode('easy'));
+    $('modeSimpleBtn').addEventListener('click', () => setMode('simple'));
+    $('retryBtn').addEventListener('click', retryGame);
+    $('backBtn').addEventListener('click', backToMenu);
+    window.addEventListener('keydown', onKeyDown);
+    window.addEventListener('keyup', onKeyUp);
+    window.addEventListener('blur', releaseAllKeyGlows);
+    $('chartToggleBtn')?.addEventListener('click', toggleChartPanel);
+    $('chartCloseBtn')?.addEventListener('click', () => $('chartPanel')?.classList.remove('active'));
+    $('copyChartBtn')?.addEventListener('click', () => copyChartData('full'));
+    $('copyNotesOnlyBtn')?.addEventListener('click', () => copyChartData('notes'));
+    $('refreshChartBtn')?.addEventListener('click', refreshChartPanel);
+    $('editorPrevBtn')?.addEventListener('click', () => panEditorWindow(-4));
+    $('editorCenterBtn')?.addEventListener('click', () => centerEditorWindow(songTime()));
+    $('editorNextBtn')?.addEventListener('click', () => panEditorWindow(4));
+    $('editorHoldBtn')?.addEventListener('click', toggleSelectedEditorHold);
+    $('editorDeleteBtn')?.addEventListener('click', deleteSelectedEditorNote);
+    $('chartEditorViewport')?.addEventListener('pointerdown', onEditorPointerDown);
+    window.addEventListener('pointermove', onEditorPointerMove);
+    window.addEventListener('pointerup', onEditorPointerUp);
+  }
+
+  function setMode(mode){
+    if(state.started) return; // 게임 중에는 변경 불가
+    state.mode = mode;
+    state.KEYS = MODE_KEYS[mode];
+    state.LANES = state.KEYS.length;
+    state.KEY_TO_LANE = Object.fromEntries(state.KEYS.map((k,i)=>[k,i]));
+    $('modeNormalBtn').classList.toggle('active', mode==='normal');
+    $('modeEasyBtn').classList.toggle('active', mode==='easy');
+    $('modeSimpleBtn').classList.toggle('active', mode==='simple');
+    $('keyHint').textContent = state.KEYS.map(k=>k===';'?';':k.toUpperCase()).join(' ');
+    resize();
+  }
+
+  // ─────────────────────────────────────────
+  // RESIZE / DRAW
+  // ─────────────────────────────────────────
+  function resize(){
+    state.w = innerWidth; state.h = innerHeight;
+    state.laneW = Math.max(62, Math.min(104, state.w * 0.078) * (8/state.LANES) );
+    state.laneW = Math.min(state.laneW, state.w * 0.78 / state.LANES);
+    state.totalW = state.laneW * state.LANES;
+    state.startX = (state.w - state.totalW) / 2;
+    state.hitY = state.h * HIT_RATIO;
+    state.speed = state.hitY / FALL_TIME; // px per second
+    drawBg(); drawLanes(); drawKeys();
+  }
+
+  function drawBg(){
+    state.bg.removeChildren();
+    state.bgBlocks = [];
+
+    const base = new PIXI.Graphics();
+    base.rect(0,0,state.w,state.h).fill({color:0x04050a, alpha:1});
+    base.rect(0,0,state.w,state.h*0.22).fill({color:0x13090a, alpha:0.52});
+    base.circle(state.w*.5, state.h*.08, Math.max(state.w,state.h)*.34).fill({color:0xffc24b, alpha:0.06});
+    base.circle(state.w*.5, state.h*.86, Math.max(state.w,state.h)*.34).fill({color:0x35e7ff, alpha:0.042});
+    base.circle(state.w*.16, state.h*.22, Math.max(state.w,state.h)*.18).fill({color:0xff4f6f, alpha:0.034});
+    base.circle(state.w*.84, state.h*.18, Math.max(state.w,state.h)*.20).fill({color:0x6f86ff, alpha:0.028});
+
+    const towerW = Math.max(44, state.w*0.08);
+    const towerInset = Math.max(16, state.w*0.05);
+    for(const side of [towerInset, state.w - towerInset - towerW]){
+      base.roundRect(side, 56, towerW, state.h - 124, 22).fill({color:0x0f131c, alpha:0.78});
+      base.roundRect(side+6, 64, towerW-12, state.h - 140, 18).fill({color:0x1b2230, alpha:0.94});
+      base.roundRect(side+10, 78, towerW-20, 34, 10).fill({color:0x2a3040, alpha:0.98});
+      base.roundRect(side+10, 78, towerW-20, 34, 10).stroke({color:0xffc24b, alpha:0.24, width:2});
+      const speakerTop = state.h*.34;
+      const speakerBottom = state.h*.62;
+      base.circle(side+towerW/2, speakerTop, towerW*.26).fill({color:0x0a0c11, alpha:1});
+      base.circle(side+towerW/2, speakerTop, towerW*.18).fill({color:0x35e7ff, alpha:0.22});
+      base.circle(side+towerW/2, speakerBottom, towerW*.30).fill({color:0x0a0c11, alpha:1});
+      base.circle(side+towerW/2, speakerBottom, towerW*.21).fill({color:0xff8c33, alpha:0.18});
+    }
+
+    const marqueeW = Math.min(state.w*0.74, state.totalW + 220);
+    const marqueeX = state.w/2 - marqueeW/2;
+    base.roundRect(marqueeX, 22, marqueeW, 44, 18).fill({color:0x20150f, alpha:0.92});
+    base.roundRect(marqueeX, 22, marqueeW, 44, 18).stroke({color:0xffc24b, alpha:0.34, width:2});
+    base.roundRect(marqueeX+8, 30, marqueeW-16, 10, 8).fill({color:0xc53b2f, alpha:0.78});
+    base.roundRect(marqueeX+8, 44, marqueeW-16, 14, 8).fill({color:0x2a3040, alpha:0.98});
+
+    const floorStart = state.hitY + 24;
+    const floorLines = 8;
+    for(let i=0;i<floorLines;i++){
+      const t = i / floorLines;
+      const y = floorStart + t * (state.h - floorStart);
+      const inset = 24 + t * state.w * 0.18;
+      base.moveTo(inset, y).lineTo(state.w - inset, y).stroke({color:0xffc24b, alpha:0.10 - t*0.05, width:1});
+    }
+    const rayCount = 9;
+    for(let i=0;i<rayCount;i++){
+      const t = i / (rayCount - 1 || 1);
+      const x = state.w * (0.24 + t * 0.52);
+      base.moveTo(state.w/2, floorStart).lineTo(x, state.h).stroke({color:0x35e7ff, alpha:0.05, width:1});
+    }
+
+    for(let i=0;i<72;i++){
+      const x=Math.random()*state.w, y=Math.random()*state.h;
+      const r=Math.random()*1.0+0.2;
+      const a=Math.random()*0.08+0.015;
+      base.circle(x,y,r).fill({color:i%3===0?0xfff0a8:0xbfefff, alpha:a});
+    }
+    state.bg.addChild(base);
+
+    for(let i=0;i<MAX_BG_BLOCKS;i++){
+      const node = createBgTetromino(i);
+      node.x = Math.random()*state.w;
+      node.y = Math.random()*state.h;
+      node.rotation = (Math.random()-.5)*0.25;
+      state.bg.addChild(node);
+      state.bgBlocks.push({
+        node,
+        speed: 0.05 + Math.random()*0.16,
+        drift: (Math.random()-.5)*0.05,
+        rot: (Math.random()-.5)*0.0007,
+        phase: Math.random()*Math.PI*2,
+        baseAlpha: node.alpha
+      });
+    }
+  }
+
+  function createBgTetromino(i){
+    const c = new PIXI.Container();
+    const shape = TETRIS_SHAPES[i % TETRIS_SHAPES.length];
+    const cell = 12 + Math.random()*14;
+    const bgPalette = [0x35e7ff, 0xffc24b, 0xff4f6f, 0x8ea7ff];
+    const col = bgPalette[i % bgPalette.length];
+    const alpha = 0.030 + Math.random()*0.045;
+    const g = new PIXI.Graphics();
+    for(const [sx,sy] of shape){
+      const x = (sx-1.5)*cell;
+      const y = (sy-0.8)*cell;
+      g.roundRect(x-2, y+2, cell*.92+4, cell*.92+4, Math.max(2, cell*.18)).fill({color:0x000000, alpha:alpha*.55});
+      g.roundRect(x, y, cell*.92, cell*.92, Math.max(2, cell*.16)).fill({color:col, alpha});
+      g.roundRect(x+2, y+2, cell*.92-4, cell*.24, Math.max(1, cell*.10)).fill({color:0xffffff, alpha:alpha*.64});
+      g.roundRect(x+1, y+1, cell*.92-2, cell*.92-2, Math.max(2, cell*.12)).stroke({color:0xffffff, alpha:alpha*.38, width:1});
+    }
+    c.addChild(g);
+    c.alpha = 0.42 + Math.random()*0.20;
+    c.scale.set(0.76 + Math.random()*0.96);
+    return c;
+  }
+
+  function tickBackground(){
+    if(!state.bgBlocks?.length) return;
+    const dt = Math.min(2.0, (state.app?.ticker?.deltaMS || 16.67) / 16.67);
+    for(const b of state.bgBlocks){
+      const n = b.node;
+      b.phase += 0.004 * dt;
+      n.y += b.speed * dt;
+      n.x += Math.sin(b.phase) * b.drift * dt;
+      n.rotation += b.rot * dt;
+      n.alpha = b.baseAlpha * (0.84 + Math.sin(b.phase)*0.08);
+      if(n.y > state.h + 90){
+        n.y = -90;
+        n.x = Math.random()*state.w;
+      }
+    }
+  }
+
+  function laneCenter(lane){ return state.startX + lane*state.laneW + state.laneW/2; }
+
+  function drawLanes(){
+    state.lanes.removeChildren();
+    const g = new PIXI.Graphics();
+    const panelX = state.startX - 30;
+    const panelW = state.totalW + 60;
+    g.roundRect(panelX-16, -28, panelW+32, state.h + 110, 28).fill({color:0x05060a, alpha:0.54});
+    g.roundRect(panelX, -18, panelW, state.h + 92, 24).fill({color:0x151a25, alpha:0.98});
+    g.roundRect(panelX, -18, panelW, state.h + 92, 24).stroke({color:0x8f9db1, alpha:0.24, width:2});
+    g.roundRect(panelX+8, -10, panelW-16, state.h + 76, 18).fill({color:0x080b10, alpha:1});
+    g.roundRect(panelX+8, -10, panelW-16, state.h + 76, 18).stroke({color:0xffc24b, alpha:0.18, width:2});
+    g.roundRect(panelX+18, -2, panelW-36, 18, 9).fill({color:0x232a39, alpha:0.98});
+    g.roundRect(panelX+18, -2, panelW-36, 8, 6).fill({color:0xc53b2f, alpha:0.64});
+
+    const cellH = 72;
+    for(let i=0;i<state.LANES;i++){
+      const x = state.startX + i*state.laneW;
+      const col = laneColor(i);
+      g.rect(x+2,0,state.laneW-4,state.h).fill({color:0x121722, alpha:0.98});
+      g.rect(x+4,0,state.laneW-8,state.h).fill({color:col, alpha:i%2?0.050:0.085});
+      g.rect(x+10,0,state.laneW-20,state.h).fill({color:0xffffff, alpha:0.02});
+      g.moveTo(x,0).lineTo(x,state.h).stroke({color:0x05060a, alpha:0.72, width:3});
+      g.moveTo(x+1,0).lineTo(x+1,state.h).stroke({color:col, alpha:0.16, width:1});
+      for(let y=((i*19)%cellH); y<state.h; y+=cellH){
+        g.moveTo(x+8,y).lineTo(x+state.laneW-8,y).stroke({color:0xffffff, alpha:0.028, width:1});
+      }
+      for(let y=12; y<state.h; y+=118){
+        g.roundRect(x+9, y, state.laneW-18, 14, 6).fill({color:col, alpha:0.04});
+      }
+    }
+    const endX = state.startX + state.totalW;
+    g.moveTo(endX,0).lineTo(endX,state.h).stroke({color:0x05060a, alpha:0.72, width:3});
+    g.moveTo(endX+1,0).lineTo(endX+1,state.h).stroke({color:0xfff0a8, alpha:0.12, width:1});
+
+    // 판정선: 필터 없이 여러 선을 겹쳐 네온 글로우 표현
+    g.roundRect(panelX+12, state.hitY+18, panelW-24, 32, 14).fill({color:0x1d1210, alpha:0.96});
+    g.roundRect(panelX+12, state.hitY+18, panelW-24, 32, 14).stroke({color:0xff8c33, alpha:0.28, width:2});
+    g.moveTo(state.startX-44,state.hitY+10).lineTo(state.startX+state.totalW+44,state.hitY+10).stroke({color:0x000000, alpha:0.42, width:22});
+    g.moveTo(state.startX-44,state.hitY+2).lineTo(state.startX+state.totalW+44,state.hitY+2).stroke({color:0xffc24b, alpha:0.16, width:18});
+    g.moveTo(state.startX-56,state.hitY).lineTo(state.startX+state.totalW+56,state.hitY).stroke({color:0xff8c33, alpha:0.34, width:10});
+    g.moveTo(state.startX-64,state.hitY).lineTo(state.startX+state.totalW+64,state.hitY).stroke({color:0xffffff, alpha:0.98, width:3});
+    g.moveTo(state.startX-34,state.hitY+6).lineTo(state.startX+state.totalW+34,state.hitY+6).stroke({color:0xfff0a8, alpha:0.18, width:5});
+    state.lanes.addChild(g);
+  }
+
+  function drawKeys(){
+    state.keyLayer.removeChildren();
+    state.keyButtons = [];
+    state.pressedKeys?.clear?.();
+
+    const keyY = state.hitY + 18;
+    const kh = 62;
+
+    for(let i=0;i<state.LANES;i++){
+      const col = laneColor(i);
+      const w = state.laneW * 0.76;
+      const x = laneCenter(i) - w/2;
+
+      const wrap = new PIXI.Container();
+      wrap.x = x + w/2;
+      wrap.y = keyY + kh/2;
+
+      const shadow = new PIXI.Graphics();
+      shadow.roundRect(-w/2-10,-kh/2+12,w+20,kh+18,16).fill({color:0x000000, alpha:0.34});
+
+      const basePlate = new PIXI.Graphics();
+      basePlate.roundRect(-w/2-8,-kh/2-8,w+16,kh+16,16).fill({color:0x171c26, alpha:0.98});
+      basePlate.roundRect(-w/2-8,-kh/2-8,w+16,kh+16,16).stroke({color:0x8f9db1, alpha:0.22, width:2});
+
+      const bed = new PIXI.Graphics();
+      bed.roundRect(-w/2-4,-kh/2-4,w+8,kh+8,12).fill({color:col, alpha:0.14});
+
+      // 누르는 동안 "계속 보이는" 발광 레이어들.
+      // 애니메이션 tween에만 의존하지 않고 updateKeyGlowFrame에서 매 프레임 alpha를 유지한다.
+      const holdHalo3 = new PIXI.Graphics();
+      holdHalo3.roundRect(-w/2-34, -kh/2-28, w+68, kh+56, 26).fill({color:col, alpha:1});
+      holdHalo3.alpha = 0;
+
+      const holdHalo2 = new PIXI.Graphics();
+      holdHalo2.roundRect(-w/2-22, -kh/2-20, w+44, kh+40, 22).fill({color:col, alpha:1});
+      holdHalo2.alpha = 0;
+
+      const holdHalo1 = new PIXI.Graphics();
+      holdHalo1.roundRect(-w/2-12, -kh/2-8, w+24, kh+16, 16).fill({color:col, alpha:1});
+      holdHalo1.alpha = 0;
+
+      const face = new PIXI.Graphics();
+      face.roundRect(-w/2,-kh/2,w,kh,12).fill({color:0x0f141d, alpha:1});
+      face.roundRect(-w/2,-kh/2,w,kh,12).stroke({color:0x05060a, alpha:0.82, width:2});
+      face.roundRect(-w/2+2,-kh/2+2,w-4,kh-4,10).stroke({color:col, alpha:0.38, width:2});
+      face.roundRect(-w/2+5,-kh/2+5,w-10,12,5).fill({color:0xffffff, alpha:0.20});
+      face.roundRect(-w/2+6,kh/2-18,w-12,12,5).fill({color:0x05060a, alpha:0.40});
+
+      const innerFace = new PIXI.Graphics();
+      innerFace.roundRect(-w/2+6,-kh/2+10,w-12,kh-24,10).fill({color:col, alpha:0.24});
+
+      const activeFill = new PIXI.Graphics();
+      activeFill.roundRect(-w/2+3,-kh/2+3,w-6,kh-6,10).fill({color:col, alpha:1});
+      activeFill.alpha = 0;
+
+      const activeCore = new PIXI.Graphics();
+      activeCore.roundRect(-w/2+8,-kh/2+8,w-16,kh-30,8).fill({color:0xffffff, alpha:1});
+      activeCore.alpha = 0;
+
+      const activeStroke = new PIXI.Graphics();
+      activeStroke.roundRect(-w/2-2,-kh/2-2,w+4,kh+4,13).stroke({color:0xffffff, alpha:1, width:2});
+      activeStroke.roundRect(-w/2-8,-kh/2-8,w+16,kh+16,17).stroke({color:col, alpha:1, width:3});
+      activeStroke.alpha = 0;
+
+      const accent = new PIXI.Graphics();
+      accent.roundRect(-w/2+8,kh/2-15,w-16,8,4).fill({color:0xfff0a8, alpha:1});
+      accent.alpha = 0.42;
+
+      const label = new PIXI.Text({
+        text:state.KEYS[i].toUpperCase(),
+        style:{
+          fill:0xfff7dd,
+          fontSize:24,
+          fontFamily:'Orbitron, Arial',
+          fontWeight:'900',
+          stroke:0x000000,
+          strokeThickness:3
+        }
+      });
+      label.anchor.set(0.5);
+      label.y = -2;
+
+      wrap.addChild(shadow, basePlate, bed, holdHalo3, holdHalo2, holdHalo1, face, innerFace, activeFill, activeCore, activeStroke, accent, label);
+      state.keyLayer.addChild(wrap);
+
+      state.keyButtons[i] = {
+        wrap, holdHalo1, holdHalo2, holdHalo3,
+        activeFill, activeCore, activeStroke, accent, label,
+        baseY:wrap.y, color:col, down:false, glow:0, targetGlow:0, pulse:Math.random()*Math.PI*2
+      };
+    }
+  }
+
+  function setKeyGlow(lane, isDown){
+    const key = state.keyButtons?.[lane];
+    if(!key) return;
+
+    if(isDown){
+      state.pressedKeys.add(lane);
+      key.down = true;
+      key.targetGlow = 1;
+      key.wrap.y = key.baseY + 1;
+      key.wrap.scale.set(0.978);
+      key.label.tint = 0xffffff;
+    } else {
+      state.pressedKeys.delete(lane);
+      key.down = false;
+      key.targetGlow = 0;
+      key.wrap.y = key.baseY;
+      key.wrap.scale.set(1);
+      key.label.tint = 0xfff7dd;
+    }
+
+    applyKeyGlowVisual(key);
+  }
+
+  function applyKeyGlowVisual(key){
+    const g = key.glow || 0;
+    const pulse = key.down ? (0.92 + Math.sin(state.keyGlowTime*8 + key.pulse)*0.08) : 1;
+
+    key.holdHalo3.alpha = 0.16 * g * pulse;
+    key.holdHalo2.alpha = 0.28 * g * pulse;
+    key.holdHalo1.alpha = 0.48 * g * pulse;
+
+    key.activeFill.alpha = 0.84 * g;
+    key.activeCore.alpha = 0.24 * g * pulse;
+    key.activeStroke.alpha = 0.92 * g;
+    key.accent.alpha = 0.42 + 0.46 * g;
+
+    // Pixi Text의 dropShadow 스타일은 브라우저/버전에 따라 비용과 반영이 다르므로
+    // 버튼 자체 발광으로 확실하게 보이도록 처리한다.
+    key.label.alpha = 0.86 + 0.14 * g;
+  }
+
+  function updateKeyGlowFrame(){
+    if(!state.keyButtons?.length) return;
+
+    const dt = Math.min(0.05, (state.app?.ticker?.deltaMS || 16.67) / 1000);
+    state.keyGlowTime += dt;
+
+    for(const key of state.keyButtons){
+      if(!key) continue;
+
+      // keydown 상태는 set으로도 보존한다. tween이 끊겨도 targetGlow가 유지된다.
+      const diff = key.targetGlow - key.glow;
+      const speed = key.targetGlow > key.glow ? 20 : 10;
+      key.glow += diff * Math.min(1, dt * speed);
+
+      if(Math.abs(diff) < 0.002) key.glow = key.targetGlow;
+      applyKeyGlowVisual(key);
+    }
+  }
+
+  function releaseAllKeyGlows(){
+    if(!state.keyButtons?.length) return;
+    state.pressedKeys?.clear?.();
+    for(let i=0;i<state.keyButtons.length;i++){
+      const key = state.keyButtons[i];
+      if(!key) continue;
+      key.down = false;
+      key.targetGlow = 0;
+      key.glow = 0;
+      key.wrap.y = key.baseY;
+      key.wrap.scale.set(1);
+      key.label.tint = 0xf4fbff;
+      applyKeyGlowVisual(key);
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // MIDI LOAD
+  // ─────────────────────────────────────────
+  async function loadMidi(file){
+    if(!window.ToneMidiParser){ alert('MIDI 파서 로딩 중입니다. 잠시 후 다시 시도해주세요.'); return; }
+    setLoadingUI(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const midi = new window.ToneMidiParser(buffer);
+      const bpm = extractBpm(midi);
+      const playback = extractPlaybackNotes(midi);
+      let chart;
+      if(state.mode === 'simple'){
+        const totalDur = Math.max(...playback.map(n=>n.time+n.duration), 4);
+        chart = generateSimplePatternChart(bpm, totalDur);
+      } else {
+        chart = generateAutoChart(midi, bpm);
+      }
+      if(chart.length < 1){ alert('채보를 만들 노트를 찾지 못했습니다.'); setLoadingUI(false); return; }
+      await startGame(chart, bpm, file.name, playback);
+    } catch(err) {
+      console.error(err);
+      alert('MIDI 파일 처리 중 오류: ' + err.message);
+      setLoadingUI(false);
+    }
+  }
+
+  function setLoadingUI(loading){
+    state.samplerLoading = loading;
+    $('demoBtn').disabled = loading;
+    const label = $('fileBtnLabel');
+    if(loading) label.classList.add('disabled'); else label.classList.remove('disabled');
+    $('loadingText').textContent = loading
+      ? '로딩 중... 잠시만 기다려주세요.'
+      : '첫 실행 시 피아노 샘플을 다운로드합니다.';
+  }
+
+  function extractBpm(midi){
+    const tempos = midi.header?.tempos || [];
+    if(tempos.length) return Math.round(tempos[0].bpm || 120);
+    return 120;
+  }
+
+  function extractPlaybackNotes(midi){
+    const raw = midi.tracks.flatMap((track, trackIndex) =>
+      track.notes.map(n => ({
+        time:n.time,
+        duration:Math.min(Math.max(n.duration, 0.04), 1.4),
+        midi:n.midi,
+        velocity:Math.max(0.08, Math.min(0.9, n.velocity ?? 0.55)),
+        trackIndex
+      }))
+    ).filter(n => n.duration > 0.02 && n.velocity > 0.05)
+     .sort((a,b)=>a.time-b.time || b.velocity-a.velocity);
+
+    const byBucket = new Map();
+    for(const n of raw){
+      const t = Math.round(n.time * 100) / 100;
+      if(!byBucket.has(t)) byBucket.set(t, []);
+      byBucket.get(t).push(n);
+    }
+    const out = [];
+    for(const group of byBucket.values()){
+      group.sort((a,b)=>b.velocity-a.velocity);
+      out.push(...group.slice(0, 8));
+    }
+    return out.slice(0, 5000);
+  }
+
+  // ─────────────────────────────────────────
+  // SAMPLER
+  // ─────────────────────────────────────────
+  async function ensureSampler(){
+    if(state.samplerReady) return;
+    $('loadingText').textContent = '피아노 샘플 로딩 중... 잠시만 기다려주세요.';
+    if(!window.Tone){ throw new Error('Tone.js 로딩 실패'); }
+
+    state.sampler = new Tone.Sampler({
+      urls: {
+        A0:'A0.mp3', C1:'C1.mp3', 'D#1':'Ds1.mp3', 'F#1':'Fs1.mp3', A1:'A1.mp3',
+        C2:'C2.mp3', 'D#2':'Ds2.mp3', 'F#2':'Fs2.mp3', A2:'A2.mp3',
+        C3:'C3.mp3', 'D#3':'Ds3.mp3', 'F#3':'Fs3.mp3', A3:'A3.mp3',
+        C4:'C4.mp3', 'D#4':'Ds4.mp3', 'F#4':'Fs4.mp3', A4:'A4.mp3',
+        C5:'C5.mp3', 'D#5':'Ds5.mp3', 'F#5':'Fs5.mp3', A5:'A5.mp3',
+        C6:'C6.mp3', 'D#6':'Ds6.mp3', 'F#6':'Fs6.mp3', A6:'A6.mp3',
+        C7:'C7.mp3', 'D#7':'Ds7.mp3', 'F#7':'Fs7.mp3', A7:'A7.mp3', C8:'C8.mp3'
+      },
+      release: 0.9,
+      baseUrl: 'https://tonejs.github.io/audio/salamander/'
+    }).toDestination();
+
+    const compressor = new Tone.Compressor(-18, 3).toDestination();
+    state.sampler.disconnect();
+    state.sampler.connect(compressor);
+    await Tone.loaded();
+    state.sampler.volume.value = -7;
+    state.samplerReady = true;
+    $('loadingText').textContent = '샘플 로딩 완료!';
+  }
+
+  function scheduleSamplerPlayback(notes){
+    Tone.Transport.stop();
+    Tone.Transport.cancel(0);
+    for(const n of notes){
+      Tone.Transport.schedule((time) => {
+        const noteName = Tone.Frequency(n.midi, 'midi').toNote();
+        state.sampler.triggerAttackRelease(noteName, n.duration, time, n.velocity);
+      }, n.time);
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // SIMPLE PATTERN CHART (2키) — "딴다다 딴다다 딴다다다다다다" 리듬을
+  // BPM 그리드에 맞춰 곡 끝까지 반복. MIDI 멜로디 추출 없이 박자만 사용.
+  // ─────────────────────────────────────────
+  function generateSimplePatternChart(bpm, totalDur){
+    const beat = 60 / bpm;
+    const grid = beat / 2; // 8분음표
+    // 딴(강, lane0) 다(약, lane1) — 3+3+6 = 12 unit 패턴
+    const pattern = [0,1,1, 0,1,1, 0,1,1,1,1,1];
+    const chart = [];
+    let t = 1.0, i = 0;
+    while(t < totalDur){
+      const lane = pattern[i % pattern.length];
+      chart.push({
+        id:chart.length, time:t, lane,
+        duration: grid * 0.6,
+        hold:false, holdEnd: t + grid*0.6, holding:false,
+        hit:false, missed:false
+      });
+      t += grid; i++;
+    }
+    return chart;
+  }
+
+  // ─────────────────────────────────────────
+  // AUTO CHART — Melody Focus
+  // 핵심 변경점:
+  // 1) 드럼/퍼커션 트랙 제외
+  // 2) 전체 노트를 섞지 않고, 가장 멜로디다운 트랙을 먼저 선택
+  // 3) 같은 시간대의 화음/반주음은 1개 대표 노트로 압축
+  // 4) 목표 NPS(notes per second)를 제한해 “거의 모든 음을 치는” 문제 방지
+  // ─────────────────────────────────────────
+  const LEAD_TRACK_COUNT = 4;
+  const TARGET_NPS = { normal:2.85, easy:1.85, simple:1.1 };
+
+  function generateAutoChart(midi, bpm){
+    const beat = 60 / bpm;
+    const measure = getMeasureDuration(midi, beat);
+    const grid = beat / 4;
+    const minGap = Math.max(beat * (state.mode === 'normal' ? 0.5 : 0.8), 1 / (TARGET_NPS[state.mode] || 2.4));
+
+    const tracks = analyzeMidiTracks(midi, beat, measure);
+    let leadTracks = selectLeadTracks(tracks, LEAD_TRACK_COUNT);
+    if(!leadTracks.length){
+      leadTracks = tracks.filter(t => !t.isDrum && t.notes.length >= 8).sort((a,b)=>b.score-a.score).slice(0, Math.min(3, tracks.length));
+    }
+
+    const sourceNotes = collectLeadCandidates(leadTracks, tracks, beat, measure);
+    state.chartDebug = {
+      leadTracks: leadTracks.map(t => ({
+        trackIndex:t.trackIndex,
+        name:t.name,
+        score:+t.score.toFixed(2),
+        notes:t.notes.length,
+        density:+t.density.toFixed(2)
+      })),
+      trackScores: tracks.map(t => ({
+        trackIndex:t.trackIndex,
+        name:t.name,
+        family:t.family,
+        score:+t.score.toFixed(2),
+        notes:t.notes.length,
+        density:+t.density.toFixed(2),
+        avgPitch:+t.avgPitch.toFixed(2),
+        isDrum:t.isDrum
+      })),
+      candidateCount: sourceNotes.length
+    };
+    console.table(state.chartDebug.trackScores);
+    console.log('Selected lead tracks:', state.chartDebug.leadTracks);
+
+    if(!sourceNotes.length) return [];
+
+    const buckets = bucketSourceNotes(sourceNotes, grid);
+    const skeleton = buildSkeletonChart(buckets, beat, measure, minGap);
+    const densified = smoothChartDensity(skeleton, sourceNotes, beat, grid, minGap, measure);
+    const withLanes = assignChartLanes(densified);
+    return reindexChartNotes(withLanes, { preserveState:false });
+  }
+
+  function analyzeMidiTracks(midi, beat, measure){
+    return midi.tracks.map((track, trackIndex) => {
+      const isDrum = isLikelyDrumTrack(track);
+      const name = (track.name || track.instrument?.name || `Track ${trackIndex}`).trim() || `Track ${trackIndex}`;
+      const family = track.instrument?.family || '';
+      const notes = (track.notes || [])
+        .map(n => ({
+          time:n.time,
+          duration:Math.min(Math.max(n.duration || 0, 0.03), 1.8),
+          midi:n.midi,
+          velocity:Math.max(0.05, Math.min(1, n.velocity ?? 0.55)),
+          trackIndex,
+          name,
+          family
+        }))
+        .filter(n => Number.isFinite(n.time) && Number.isFinite(n.midi) && n.duration >= 0.025)
+        .sort((a,b)=>a.time-b.time || b.midi-a.midi);
+
+      if(!notes.length){
+        return {trackIndex, name, family, notes, isDrum, score:-999, density:0, avgPitch:0};
+      }
+
+      const pitches = notes.map(n=>n.midi);
+      const velocities = notes.map(n=>n.velocity);
+      const durations = notes.map(n=>n.duration);
+      const first = Math.min(...notes.map(n=>n.time));
+      const last = Math.max(...notes.map(n=>n.time+n.duration));
+      const active = Math.max(1, last-first);
+      const density = notes.length / active;
+      const avgPitch = avg(pitches);
+      const p85 = percentile(pitches, .85);
+      const avgVel = avg(velocities);
+      const medDur = median(durations);
+      const velStd = stddev(velocities);
+      const durStd = stddev(durations);
+      const pitchSpan = percentile(pitches, .9) - percentile(pitches, .1);
+      const poly = estimatePolyphony(notes);
+      const intervalMed = estimateMedianInterval(notes);
+      const repetition = estimateRepetition(notes, beat);
+
+      annotateTrackNotes(notes, beat, measure, {avgVel, velStd});
+      const accentRatio = avg(notes.map(n => (n.beatStrength >= 0.95 || n.trackVelocityLift > 0.55 || n.duration >= beat * 0.85) ? 1 : 0));
+      const phraseRatio = avg(notes.map(n => (n.phraseStart || n.phraseEnd) ? 1 : 0));
+
+      const pitchScore = clamp((p85 - 58) / 20, 0, 1.3) * 1.45 + clamp((avgPitch - 54) / 24, 0, 1.2) * 0.9;
+      const densityTarget = state.mode === 'normal' ? 3.3 : 2.2;
+      const densityScore = (1 - clamp(Math.abs(density - densityTarget) / 4.6, 0, 1)) * 1.2;
+      const phraseScore = phraseRatio * 1.15;
+      const accentScore = accentRatio * 1.1;
+      const expressiveScore = clamp(velStd / 0.12, 0, 1) * 0.5 + clamp(durStd / 0.18, 0, 1) * 0.45;
+      const motionScore = clamp(pitchSpan / 18, 0, 1.15) * 0.55 + clamp(intervalMed / 9, 0, 1.0) * 0.25;
+      const monoScore = (1 - clamp((poly.avgSimul - 1.2) / 2.6, 0, 1)) * 0.95;
+      const bassPenalty = avgPitch < 50 ? 1.0 : 0;
+      const ostinatoPenalty = repetition.ostinato * 1.35;
+      const densePenalty = density > 9 ? (density - 9) * 0.15 : 0;
+      const drumPenalty = isDrum ? 999 : 0;
+      const score = pitchScore + densityScore + phraseScore + accentScore + expressiveScore + motionScore + monoScore
+        - bassPenalty - ostinatoPenalty - densePenalty - drumPenalty;
+
+      return {
+        trackIndex, name, family, notes, isDrum, score, density, avgPitch, avgVel, medDur,
+        velStd, durStd, pitchSpan, poly, intervalMed, repetition
+      };
+    });
+  }
+
+  function isLikelyDrumTrack(track){
+    const name = `${track.name || ''} ${track.instrument?.name || ''}`.toLowerCase();
+    return track.channel === 9 || track.instrument?.percussion === true ||
+      name.includes('drum') || name.includes('percussion') || name.includes('kit');
+  }
+
+  function getMeasureDuration(midi, beat){
+    const sig = midi.header?.timeSignatures?.[0]?.timeSignature || [4,4];
+    const numerator = sig[0] || 4;
+    const denominator = sig[1] || 4;
+    return beat * numerator * (4 / denominator);
+  }
+
+  function selectLeadTracks(tracks, count){
+    const ranked = tracks
+      .filter(t => !t.isDrum && t.notes.length >= 16 && t.density <= 10.5 && percentile(t.notes.map(n=>n.midi), .75) >= 52)
+      .sort((a,b)=>b.score-a.score);
+
+    const selected = [];
+    for(const track of ranked){
+      const tooSimilar = selected.some(prev =>
+        Math.abs(prev.avgPitch - track.avgPitch) < 3 &&
+        Math.abs(prev.density - track.density) < 0.85 &&
+        prev.family === track.family &&
+        track.score < prev.score + 0.55
+      );
+      if(tooSimilar) continue;
+      selected.push(track);
+      if(selected.length >= count) break;
+    }
+    return selected.length ? selected : ranked.slice(0, count);
+  }
+
+  function annotateTrackNotes(notes, beat, measure, meta){
+    const byBucket = new Map();
+    for(const note of notes){
+      const key = Math.round(note.time * 1000) / 1000;
+      if(!byBucket.has(key)) byBucket.set(key, []);
+      byBucket.get(key).push(note);
+    }
+    for(const group of byBucket.values()){
+      const sorted = [...group].sort((a,b)=>b.midi-a.midi || b.velocity-a.velocity);
+      const spread = sorted.length > 1 ? sorted[0].midi - sorted[sorted.length-1].midi : 0;
+      sorted.forEach((note, index) => {
+        note.voiceRank = index;
+        note.voiceCount = sorted.length;
+        note.voiceSpread = spread;
+      });
+    }
+
+    const ordered = [...notes].sort((a,b)=>a.time-b.time || b.midi-a.midi);
+    for(let i=0;i<ordered.length;i++){
+      const note = ordered[i];
+      let prev = null;
+      for(let p=i-1; p>=0; p--){
+        if(ordered[p].time < note.time - 0.02){ prev = ordered[p]; break; }
+      }
+      let next = null;
+      for(let n=i+1; n<ordered.length; n++){
+        if(ordered[n].time > note.time + 0.02){ next = ordered[n]; break; }
+      }
+
+      note.prevGap = prev ? note.time - prev.time : 999;
+      note.nextGap = next ? next.time - note.time : 999;
+      note.intervalFromPrev = prev ? note.midi - prev.midi : 0;
+      note.intervalToNext = next ? next.midi - note.midi : 0;
+      note.beatStrength = beatStrengthAt(note.time, beat, measure);
+      note.phraseStart = note.prevGap > beat * 0.45 ? 1 : 0;
+      note.phraseEnd = note.nextGap > beat * 0.45 ? 1 : 0;
+      const velLift = meta.velStd > 0.0001 ? (note.velocity - meta.avgVel) / meta.velStd : (note.velocity - meta.avgVel) * 4;
+      note.trackVelocityLift = clamp(velLift, -1.2, 1.8);
+      note.repetitionPenalty = prev && note.prevGap < beat * 0.55 && Math.abs(note.intervalFromPrev) <= 2 && note.duration < beat * 0.45
+        ? (Math.abs(note.intervalFromPrev) === 0 ? 0.62 : 0.35)
+        : 0;
+      if(note.voiceCount > 2 && note.voiceRank > 1) note.repetitionPenalty += 0.15;
+    }
+  }
+
+  function collectLeadCandidates(leadTracks, tracks, beat, measure){
+    const bucketSize = Math.max(beat / 8, 0.06);
+    const ensemble = new Map();
+    for(const track of tracks.filter(t => !t.isDrum)){
+      for(const note of track.notes){
+        const key = Math.round(note.time / bucketSize);
+        if(!ensemble.has(key)) ensemble.set(key, []);
+        ensemble.get(key).push(note);
+      }
+    }
+    for(const group of ensemble.values()){
+      group.sort((a,b)=>b.midi-a.midi || b.velocity-a.velocity);
+    }
+
+    const out = [];
+    for(const track of leadTracks){
+      for(const note of track.notes){
+        if(note.velocity < 0.13 || note.duration < 0.03) continue;
+        if(note.voiceCount > 2 && note.voiceRank > 1) continue;
+
+        const key = Math.round(note.time / bucketSize);
+        const group = ensemble.get(key) || [];
+        const globalRank = group.indexOf(note);
+        const globalTopBonus = globalRank === 0 ? 0.62 : globalRank === 1 ? 0.34 : globalRank === 2 ? 0.12 : -0.08;
+        const topVoiceBonus = note.voiceRank === 0 ? 0.42 : note.voiceRank === 1 ? 0.14 : -0.18;
+        const highRegister = clamp((note.midi - track.avgPitch) / 12, -0.25, 0.75);
+        const lowRegisterPenalty = note.midi < track.avgPitch - 7
+          ? clamp((track.avgPitch - 7 - note.midi) / 6, 0, 1.2) * 0.9
+          : 0;
+        const durScore = clamp(note.duration / Math.max(beat * 0.9, 0.42), 0, 1.25) * 0.55;
+        const accentScore = note.beatStrength * 0.48
+          + note.phraseStart * 0.38
+          + note.phraseEnd * 0.16
+          + clamp(note.trackVelocityLift * 0.18, -0.15, 0.45);
+        const priority = track.score * 0.34 + globalTopBonus + topVoiceBonus + highRegister * 0.34 + durScore + accentScore
+          - note.repetitionPenalty * 0.95
+          - lowRegisterPenalty;
+
+        out.push({
+          ...note,
+          trackScore:track.score,
+          trackAvgPitch:track.avgPitch,
+          trackIndex:track.trackIndex,
+          name:track.name,
+          family:track.family,
+          globalRank,
+          accentScore,
+          priority
+        });
+      }
+    }
+    return out.sort((a,b)=>a.time-b.time || b.priority-a.priority || b.midi-a.midi);
+  }
+
+  function bucketSourceNotes(sourceNotes, grid){
+    const buckets = new Map();
+    for(const note of sourceNotes){
+      const t = roundTo(Math.round(note.time / grid) * grid, 4);
+      if(!buckets.has(t)) buckets.set(t, []);
+      buckets.get(t).push({...note, time:t});
+    }
+    for(const group of buckets.values()){
+      group.sort((a,b)=>b.priority-a.priority || b.midi-a.midi);
+    }
+    return buckets;
+  }
+
+  function buildSkeletonChart(buckets, beat, measure, minGap){
+    const times = [...buckets.keys()].sort((a,b)=>a-b);
+    const chart = [];
+    const context = { lastTime:-999, lastPitch:null, flowDir:0, chordStreak:0, lastChordTime:-999 };
+
+    for(const t of times){
+      const group = buckets.get(t);
+      const chosen = chooseMelodyNote(group, context, beat, measure);
+      if(!chosen) continue;
+
+      const strongAccent = chosen.accentScore >= 0.95 || chosen.beatStrength >= 0.95;
+      const lowSupport = chosen.midi < (chosen.trackAvgPitch ?? chosen.midi) - 7;
+      const lowSupportRun = lowSupport && chosen.prevGap < beat * 0.7 && chosen.nextGap < beat * 0.7;
+      const gapFactor = strongAccent ? 0.56 : lowSupportRun ? 1.8 : lowSupport ? 1.55 : chosen.repetitionPenalty > 0.45 ? 1.18 : chosen.priority > 2.35 ? 0.78 : 1;
+      if(t - context.lastTime < minGap * gapFactor && !strongAccent) continue;
+      if(lowSupportRun && chosen.accentScore < 1.25) continue;
+      if(lowSupport && chosen.accentScore < 1.18 && chosen.repetitionPenalty > 0.2) continue;
+      if(chosen.repetitionPenalty > 0.55 && !strongAccent && chosen.globalRank > 1) continue;
+
+      const notesAtTime = [createChartNoteFromSource(chosen, t, beat)];
+      const chordSize = computeChordSize(group, chosen, context, beat, measure);
+      if(chordSize > 1){
+        const supports = pickChordSupportNotes(group, chosen, chordSize - 1);
+        for(const extra of supports){
+          notesAtTime.push(createChartNoteFromSource(extra, t, beat));
+        }
+      }
+
+      chart.push(...notesAtTime);
+      if(context.lastPitch != null){
+        const diff = chosen.midi - context.lastPitch;
+        if(diff !== 0) context.flowDir = Math.sign(diff);
+      }
+      context.lastPitch = chosen.midi;
+      context.lastTime = t;
+      if(notesAtTime.length > 1){
+        context.chordStreak = Math.min(2, context.chordStreak + 1);
+        context.lastChordTime = t;
+      } else {
+        context.chordStreak = 0;
+      }
+    }
+    return chart;
+  }
+
+  function chooseMelodyNote(group, context, beat, measure){
+    if(!group?.length) return null;
+    return group
+      .map(note => {
+        const lastPitch = context.lastPitch;
+        const gap = lastPitch == null ? 0 : Math.abs(note.midi - lastPitch);
+        const continuity = lastPitch == null ? 0 : (gap <= 7 ? 0.45 : gap <= 12 ? 0.18 : -Math.min((gap - 12) * 0.05, 0.6));
+        const direction = lastPitch == null || context.flowDir === 0 || note.midi === lastPitch
+          ? 0
+          : (Math.sign(note.midi - lastPitch) === context.flowDir ? 0.1 : -0.04);
+        const beatBias = isStrongBeat(note.time, beat, measure) ? 0.18 : 0;
+        return {note, score:note.priority + continuity + direction + beatBias};
+      })
+      .sort((a,b)=>b.score-a.score)[0].note;
+  }
+
+  function createChartNoteFromSource(source, time, beat){
+    const tapCap = Math.max(0.34, beat * 0.95);
+    const holdCap = Math.max(HOLD_MAX_DURATION * 2.2, beat * 2.6);
+    const rawDur = clamp(source.duration || 0.12, 0.08, holdCap);
+    const holdBias = source.accentScore > 0.9 || source.phraseEnd || source.nextGap > beat * 0.75;
+    const hold = rawDur >= HOLD_MIN_DURATION * 0.82 && holdBias;
+    const duration = hold ? rawDur : Math.min(rawDur, tapCap);
+    return {
+      id:0,
+      uid:allocNoteUid(),
+      time:roundTo(time, 4),
+      lane:0,
+      midi:source.midi,
+      duration:roundTo(duration, 4),
+      hold,
+      holdEnd:roundTo(time + duration, 4),
+      manualLane:false,
+      sourceTrack:source.trackIndex,
+      sourceTrackName:source.name,
+      accent:source.accentScore,
+      priority:source.priority,
+      holding:false,
+      hit:false,
+      missed:false
+    };
+  }
+
+  function computeChordSize(group, chosen, context, beat, measure){
+    if(group.length < 2) return 1;
+    if(context.chordStreak >= 2 || chosen.time - context.lastChordTime < beat * 0.8) return 1;
+    const strongAccent = chosen.accentScore >= 1.2 || chosen.velocity >= 0.82 || beatStrengthAt(chosen.time, beat, measure) >= 1.2;
+    if(!strongAccent) return 1;
+    const pitchSpread = Math.max(...group.map(n=>n.midi)) - Math.min(...group.map(n=>n.midi));
+    if(pitchSpread < 5) return 1;
+    const supports = group.filter(n => n !== chosen && Math.abs(n.midi - chosen.midi) >= 4 && (n.voiceRank ?? 0) <= 1);
+    if(!supports.length) return 1;
+    if(supports.length >= 2 && (chosen.accentScore >= 1.45 || chosen.velocity >= 0.88) && pitchSpread >= 10) return 3;
+    return 2;
+  }
+
+  function pickChordSupportNotes(group, chosen, count){
+    return group
+      .filter(n => n !== chosen && Math.abs(n.midi - chosen.midi) >= 4 && (n.voiceRank ?? 0) <= 1)
+      .map(note => {
+        const distance = Math.abs(note.midi - chosen.midi);
+        const spacing = distance >= 4 && distance <= 14 ? 0.55 : distance > 14 ? 0.32 : -0.2;
+        const lowerAnchor = note.midi < chosen.midi ? 0.18 : 0.08;
+        return {note, score:note.priority * 0.62 + spacing + lowerAnchor - note.repetitionPenalty * 0.8};
+      })
+      .sort((a,b)=>b.score-a.score)
+      .slice(0, count)
+      .map(entry => entry.note);
+  }
+
+  function smoothChartDensity(chart, sourceNotes, beat, grid, minGap, measure){
+    if(chart.length < 2 || !sourceNotes.length) return chart;
+    const maxGap = Math.max(beat * 2.25, minGap * 2.1);
+    const additions = [];
+    const existingTimes = new Set(chart.map(n => roundTo(n.time, 4)));
+    const grouped = groupNotesByTime(chart);
+    const times = [...grouped.keys()].sort((a,b)=>a-b);
+
+    for(let i=0;i<times.length-1;i++){
+      const a = times[i];
+      const b = times[i+1];
+      if(b - a <= maxGap) continue;
+
+      const midStart = a + minGap * 0.8;
+      const midEnd = b - minGap * 0.8;
+      const candidate = sourceNotes
+        .filter(n => n.time >= midStart && n.time <= midEnd)
+        .map(n => {
+          const t = roundTo(Math.round(n.time / grid) * grid, 4);
+          return {note:n, t, score:n.priority + n.accentScore * 0.45 + (isStrongBeat(n.time, beat, measure) ? 0.18 : 0)};
+        })
+        .filter(entry => !existingTimes.has(entry.t))
+        .sort((x,y)=>y.score-x.score)[0];
+
+        if(candidate && (candidate.note.accentScore > 0.55 || isStrongBeat(candidate.note.time, beat, measure))){
+          additions.push(createChartNoteFromSource(candidate.note, candidate.t, beat));
+          existingTimes.add(candidate.t);
+        }
+    }
+
+    const merged = [...chart, ...additions].sort((a,b)=>a.time-b.time || (b.priority ?? 0)-(a.priority ?? 0) || b.midi-a.midi);
+    const mergedGroups = groupNotesByTime(merged);
+    const final = [];
+    let lastTime = -999;
+
+    for(const time of [...mergedGroups.keys()].sort((a,b)=>a-b)){
+      const group = mergedGroups.get(time).sort((a,b)=>a.midi-b.midi);
+      const strongGroup = group.length > 1 || Math.max(...group.map(n=>n.accent || 0)) >= 1.1;
+      if(time - lastTime < minGap * 0.68 && !strongGroup) continue;
+      final.push(...group);
+      lastTime = time;
+    }
+
+    return final;
+  }
+
+  function assignChartLanes(chart){
+    if(!chart.length) return [];
+    const pitches = chart.map(n=>n.midi).filter(Number.isFinite);
+    const pitchMin = percentile(pitches, 0.12);
+    const pitchMax = percentile(pitches, 0.88);
+    const groups = groupNotesByTime(chart);
+    const context = {
+      lastLane:Math.floor((state.LANES-1) / 2),
+      lastPitch:null,
+      lastTime:-999,
+      flowDir:0,
+      laneLastTimes:Array(state.LANES).fill(-999)
+    };
+    const out = [];
+
+    for(const time of [...groups.keys()].sort((a,b)=>a-b)){
+      const group = [...groups.get(time)];
+      if(group.length > 3){
+        group.sort((a,b)=>(b.priority ?? 0)-(a.priority ?? 0) || b.midi-a.midi);
+        group.length = 3;
+      }
+      group.sort((a,b)=>a.midi-b.midi);
+
+      if(group.length === 1){
+        const note = group[0];
+        note.lane = note.manualLane ? clamp(Math.round(note.lane || 0), 0, state.LANES-1) : smartLane(note, context, pitchMin, pitchMax, new Set());
+        touchLaneContext(context, note);
+        out.push(note);
+        continue;
+      }
+
+      assignChordLanes(group, context, pitchMin, pitchMax);
+      const lead = [...group].sort((a,b)=>(b.priority ?? 0)-(a.priority ?? 0) || b.midi-a.midi)[0];
+      touchLaneContext(context, lead);
+      for(const note of group){
+        context.laneLastTimes[note.lane] = note.time;
+        out.push(note);
+      }
+    }
+
+    return out.sort((a,b)=>a.time-b.time || a.lane-b.lane || b.midi-a.midi);
+  }
+
+  function assignChordLanes(group, context, pitchMin, pitchMax){
+    const lead = [...group].sort((a,b)=>(b.priority ?? 0)-(a.priority ?? 0) || b.midi-a.midi)[0];
+    const anchorLane = smartLane(lead, context, pitchMin, pitchMax, new Set());
+    const lanes = chordLaneWindow(group.length, anchorLane);
+    const sorted = [...group].sort((a,b)=>a.midi-b.midi);
+    sorted.forEach((note, index) => {
+      note.lane = lanes[Math.min(index, lanes.length-1)];
+      note.manualLane = false;
+    });
+  }
+
+  function chordLaneWindow(count, anchorLane){
+    if(count <= 1) return [clamp(anchorLane, 0, state.LANES-1)];
+    if(count === 2){
+      const low = clamp(anchorLane - 1, 0, state.LANES - 2);
+      const high = Math.min(state.LANES - 1, low + 2);
+      return high - low >= 2 ? [low, high] : [low, low + 1];
+    }
+    const start = clamp(anchorLane - 1, 0, state.LANES - 3);
+    return [start, start + 1, start + 2];
+  }
+
+  function touchLaneContext(context, note){
+    context.lastLane = note.lane;
+    context.lastPitch = note.midi;
+    context.lastTime = note.time;
+    context.laneLastTimes[note.lane] = note.time;
+  }
+
+  function smartLane(note, context, pitchMin, pitchMax, occupied){
+    let lane = Math.round(pitchToLane(note.midi, pitchMin, pitchMax));
+    const timeGap = note.time - context.lastTime;
+
+    if(context.lastPitch != null){
+      const diff = note.midi - context.lastPitch;
+      const absDiff = Math.abs(diff);
+      if(absDiff >= 2){
+        const step = absDiff >= 7 ? 2 : 1;
+        if(diff > 0) lane = Math.max(lane, context.lastLane + step);
+        else if(diff < 0) lane = Math.min(lane, context.lastLane - step);
+      }
+
+      if(timeGap < 0.24){
+        lane = alternateHandLane(lane, context.lastLane, diff);
+      } else if(timeGap < 0.34 && lane === context.lastLane){
+        lane += diff >= 0 ? 1 : -1;
+      }
+    }
+
+    lane = resolveLaneReuse(lane, context, note.time, occupied, note.midi - (context.lastPitch ?? note.midi));
+    return lane;
+  }
+
+  function pitchToLane(midi, pitchMin, pitchMax){
+    const span = Math.max(8, pitchMax - pitchMin);
+    const normalized = clamp((midi - pitchMin) / span, 0, 1);
+    return normalized * (state.LANES - 1);
+  }
+
+  function alternateHandLane(lane, lastLane, diff){
+    const mid = state.LANES / 2;
+    const lastWasLeft = lastLane < mid;
+    const currentLeft = lane < mid;
+    if(lastWasLeft === currentLeft){
+      lane = lastWasLeft
+        ? Math.max(Math.floor(mid), lane + Math.ceil(mid * 0.75))
+        : Math.min(Math.ceil(mid) - 1, lane - Math.ceil(mid * 0.75));
+    }
+    if(diff > 0 && lane <= lastLane) lane = lastLane + 1;
+    if(diff < 0 && lane >= lastLane) lane = lastLane - 1;
+    return clamp(lane, 0, state.LANES-1);
+  }
+
+  function resolveLaneReuse(lane, context, time, occupied, pitchDiff=0){
+    lane = clamp(lane, 0, state.LANES-1);
+    const direction = pitchDiff >= 0 ? 1 : -1;
+    const candidates = [];
+    const push = cand => {
+      if(Number.isFinite(cand) && cand >= 0 && cand < state.LANES && !candidates.includes(cand)) candidates.push(cand);
+    };
+
+    push(lane);
+    push(lane + direction);
+    push(lane - direction);
+    push(lane + direction * 2);
+    push(lane - direction * 2);
+    push(context.lastLane + direction);
+    push(context.lastLane - direction);
+
+    for(const cand of candidates){
+      if(occupied.has(cand)) continue;
+      const sameLaneFast = time - (context.laneLastTimes[cand] ?? -999) < 0.28;
+      const sameAsPrevFast = cand === context.lastLane && time - context.lastTime < 0.32;
+      if(sameLaneFast || sameAsPrevFast) continue;
+      return cand;
+    }
+    for(const cand of candidates){
+      if(!occupied.has(cand)) return cand;
+    }
+    return lane;
+  }
+
+  function beatStrengthAt(time, beat, measure){
+    const pos = ((time % measure) + measure) % measure;
+    if(distanceToGrid(pos, measure) <= beat * 0.08) return 1.35;
+    if(distanceToGrid(pos, beat) <= beat * 0.08) return 0.95;
+    if(distanceToGrid(pos, beat / 2) <= beat * 0.055) return 0.42;
+    return 0;
+  }
+
+  function isStrongBeat(time, beat, measure){
+    return beatStrengthAt(time, beat, measure) >= 0.95;
+  }
+
+  function distanceToGrid(value, grid){
+    const mod = ((value % grid) + grid) % grid;
+    return Math.min(mod, grid - mod);
+  }
+
+  function estimatePolyphony(notes){
+    const buckets = new Map();
+    for(const note of notes){
+      const t = Math.round(note.time * 20) / 20;
+      buckets.set(t, (buckets.get(t) || 0) + 1);
+    }
+    const values = [...buckets.values()];
+    return {avgSimul:avg(values), maxSimul:values.length ? Math.max(...values) : 1};
+  }
+
+  function estimateMedianInterval(notes){
+    const sorted = [...notes].sort((a,b)=>a.time-b.time || b.midi-a.midi);
+    const intervals = [];
+    let prev = null;
+    for(const note of sorted){
+      if(prev != null && note.time > prev.time + 0.025) intervals.push(Math.abs(note.midi - prev.midi));
+      prev = note;
+    }
+    return median(intervals);
+  }
+
+  function estimateRepetition(notes, beat){
+    const sorted = [...notes].sort((a,b)=>a.time-b.time || b.midi-a.midi);
+    let same = 0, close = 0, pulse = 0, count = 0;
+    let prev = null;
+    for(const note of sorted){
+      if(prev != null && note.time > prev.time + 0.025){
+        const gap = note.time - prev.time;
+        const diff = Math.abs(note.midi - prev.midi);
+        if(diff === 0) same++;
+        if(diff <= 2 && gap < beat * 0.6) close++;
+        if(gap <= beat * 0.55) pulse++;
+        count++;
+      }
+      prev = note;
+    }
+    const sameRatio = same / Math.max(1, count);
+    const closeRatio = close / Math.max(1, count);
+    const pulseRatio = pulse / Math.max(1, count);
+    return {
+      sameRatio,
+      closeRatio,
+      pulseRatio,
+      ostinato: clamp(sameRatio * 1.2 + closeRatio * 0.45 + pulseRatio * 0.25, 0, 1.6)
+    };
+  }
+
+  function groupNotesByTime(notes){
+    const groups = new Map();
+    for(const note of notes){
+      const key = roundTo(note.time, 4);
+      if(!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(note);
+    }
+    return groups;
+  }
+
+  function allocNoteUid(){
+    const uid = state.nextNoteUid;
+    state.nextNoteUid += 1;
+    return uid;
+  }
+
+  function reindexChartNotes(notes, {preserveState=true} = {}){
+    const tapCap = Math.max(0.36, (60 / Math.max(1, state.bpm || 120)) * 0.95);
+    const holdCap = Math.max(HOLD_MAX_DURATION * 2.4, tapCap * 3.2);
+
+    notes.sort((a,b)=>a.time-b.time || (a.lane ?? 0) - (b.lane ?? 0) || (b.midi ?? 0) - (a.midi ?? 0));
+    notes.forEach((note, index) => {
+      if(!note.uid) note.uid = allocNoteUid();
+      note.id = index;
+      note.time = roundTo(Math.max(0, note.time || 0), 4);
+      note.duration = roundTo(clamp(Number.isFinite(note.duration) ? note.duration : 0.12, 0.08, holdCap), 4);
+      note.lane = clamp(Math.round(note.lane || 0), 0, state.LANES-1);
+      if(note.hold || note.duration >= HOLD_MIN_DURATION * 0.7){
+        note.hold = note.duration >= Math.max(0.18, HOLD_MIN_DURATION * 0.65);
+      } else {
+        note.hold = false;
+      }
+      if(!note.hold) note.duration = roundTo(Math.min(note.duration, tapCap), 4);
+      note.holdEnd = roundTo(note.time + note.duration, 4);
+      note.manualLane = !!note.manualLane;
+      note.holding = false;
+      if(!preserveState){
+        note.hit = false;
+        note.missed = false;
+      } else {
+        note.hit = !!note.hit;
+        note.missed = !!note.missed;
+      }
+    });
+    return notes;
+  }
+
+  function avg(arr){ return arr.length ? arr.reduce((a,b)=>a+b,0)/arr.length : 0; }
+  function median(arr){
+    if(!arr.length) return 0;
+    const sorted = [...arr].sort((a,b)=>a-b);
+    const mid = sorted.length >> 1;
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid-1] + sorted[mid]) / 2;
+  }
+  function percentile(arr, p){
+    if(!arr.length) return 0;
+    const sorted = [...arr].sort((a,b)=>a-b);
+    const idx = Math.min(sorted.length-1, Math.max(0, Math.floor((sorted.length-1) * p)));
+    return sorted[idx];
+  }
+  function stddev(arr){
+    if(arr.length < 2) return 0;
+    const mean = avg(arr);
+    return Math.sqrt(avg(arr.map(v => (v-mean) ** 2)));
+  }
+  function clamp(v,min,max){ return Math.max(min, Math.min(max, v)); }
+  function roundTo(value, digits=4){
+    const factor = 10 ** digits;
+    return Math.round(value * factor) / factor;
+  }
+  function refreshAutoplayUi(){
+    const el = $('autoPlayHint');
+    if(!el) return;
+    el.textContent = `F2 : AUTOPLAY ${state.autoplay ? 'ON' : 'OFF'}`;
+    el.style.color = state.autoplay ? '#ffd978' : 'rgba(246,241,220,.78)';
+  }
+
+  function setAutoplay(enabled){
+    state.autoplay = !!enabled;
+    if(!state.autoplay) releaseAllKeyGlows();
+    refreshAutoplayUi();
+  }
+
+  function toggleAutoplay(){
+    setAutoplay(!state.autoplay);
+  }
+
+  function modeForLaneCount(lanes){
+    if(lanes === 2) return 'simple';
+    if(lanes === 4) return 'easy';
+    if(lanes === 8) return 'normal';
+    return null;
+  }
+
+  function preferredImportedDifficulty(mode=state.mode){
+    return mode === 'normal' ? 'normal' : 'easy';
+  }
+
+  function convertImportedChartData(data, preferredDifficulty=preferredImportedDifficulty()){
+    if(!data || typeof data !== 'object' || !data.difficulties || typeof data.difficulties !== 'object'){
+      return null;
+    }
+
+    const difficultyOrder = [preferredDifficulty, 'normal', 'hard', 'easy']
+      .filter((value, index, arr) => value && arr.indexOf(value) === index);
+    const difficultyName = difficultyOrder.find(name => Array.isArray(data.difficulties?.[name]?.notes) && data.difficulties[name].notes.length)
+      || Object.keys(data.difficulties).find(name => Array.isArray(data.difficulties?.[name]?.notes) && data.difficulties[name].notes.length);
+
+    if(!difficultyName) throw new Error('Imported chart data has no playable difficulty.');
+
+    const sourceNotes = data.difficulties[difficultyName].notes;
+    const laneCount = Number(data.lanes) || (Math.max(0, ...sourceNotes.map(note => Number(note.lane) || 0)) + 1);
+    if(!modeForLaneCount(laneCount)){
+      throw new Error(`Unsupported imported lane count: ${laneCount}.`);
+    }
+
+    const chart = sourceNotes.map((note, index) => {
+      const time = Math.max(0, Number(note.time) || 0);
+      const rawDuration = Math.max(0.04, Number(note.duration) || 0.12);
+      const hold = note.type === 'hold';
+      const duration = hold ? rawDuration : Math.min(rawDuration, 0.16);
+      const lane = clamp(Math.round(Number(note.lane) || 0), 0, laneCount - 1);
+      const midi = Math.round(Number(note.pitch) || 60);
+      return {
+        id:index,
+        time:roundTo(time, 4),
+        lane,
+        midi,
+        sourcePitch:midi,
+        duration:roundTo(duration, 4),
+        hold,
+        holdEnd:roundTo(time + duration, 4),
+        holding:false,
+        hit:false,
+        missed:false
+      };
+    }).sort((a,b) => a.time - b.time || a.lane - b.lane || a.id - b.id);
+
+    chart.forEach((note, index) => { note.id = index; });
+    return {
+      chart,
+      difficultyName,
+      laneCount,
+      bpm:Number(data.bpm) || null,
+      sourceTracks:Array.isArray(data.source_tracks) ? [...data.source_tracks] : []
+    };
+  }
+  async function startLegacyPatternDemo(){
+    const bpm = 160, beat = 60/bpm;
+    const notes=[]; let t=1.0;
+    const pattern=[0,1,2,3,4,5,6,7,6,5,4,3,2,1].map(p=>p % state.LANES);
+    for(let r=0;r<18;r++){
+      for(let pi=0; pi<pattern.length; pi++){
+        const p = pattern[pi];
+        const lane = (p+r)%state.LANES;
+        // 각 라운드의 첫 노트는 길게 눌러야 하는 롱노트로 데모
+        const isHold = (pi===0 && r % 3 === 1);
+        const dur = isHold ? (beat*1.5) : 0.12;
+        notes.push({
+          id:notes.length, time:t, lane,
+          duration:dur, hold:isHold, holdEnd:t+dur, holding:false,
+          hit:false, missed:false
+        });
+        t += (r>10 ? beat/2 : beat);
+      }
+    }
+    const playback = notes.map(n => ({time:n.time, duration:Math.min(n.duration,0.5), midi:60+n.lane, velocity:0.65}));
+    startGame(notes, bpm, 'Built-in Demo', playback);
+  }
+
+  // ─────────────────────────────────────────
+  // GAME START / RETRY / BACK
+  // ─────────────────────────────────────────
+  async function startDemo(){
+    if(!window.ToneMidiParser){ alert('MIDI parser is still loading. Please try again in a moment.'); return; }
+    setAutoplay(true);
+    setLoadingUI(true);
+    try{
+      const preferredDifficulty = preferredImportedDifficulty();
+      const [midiRes, chartRes] = await Promise.all([
+        fetch(DEMO_MIDI_URL),
+        fetch(DEMO_CHART_URL)
+      ]);
+      if(!midiRes.ok) throw new Error(`Demo MIDI load failed (${midiRes.status}).`);
+      if(!chartRes.ok) throw new Error(`Demo chart load failed (${chartRes.status}).`);
+
+      const [buffer, importedData] = await Promise.all([
+        midiRes.arrayBuffer(),
+        chartRes.json()
+      ]);
+      const imported = convertImportedChartData(importedData, preferredDifficulty);
+      if(!imported) throw new Error('Demo chart format is not supported.');
+
+      const targetMode = modeForLaneCount(imported.laneCount);
+      if(targetMode && !state.started && state.mode !== targetMode){
+        setMode(targetMode);
+      }
+
+      const midi = new window.ToneMidiParser(buffer);
+      const bpm = imported.bpm || extractBpm(midi);
+      const playback = extractPlaybackNotes(midi);
+      state.chartDebug = {
+        imported:true,
+        format:'external-difficulty-chart',
+        difficulty:imported.difficultyName,
+        sourceTracks:imported.sourceTracks
+      };
+      await startGame(imported.chart, bpm, `sPIU_Beethoven_Virus.mid [${imported.difficultyName}]`, playback);
+    }catch(err){
+      console.error(err);
+      alert('Built-in demo load failed: ' + err.message);
+      setLoadingUI(false);
+    }
+  }
+
+  async function startGame(chart, bpm, name, playbackNotes=[]){
+    if(!Array.isArray(chart)){
+      const imported = convertImportedChartData(chart, preferredImportedDifficulty());
+      if(!imported) throw new Error('Unsupported chart format.');
+      const targetMode = modeForLaneCount(imported.laneCount);
+      if(targetMode && !state.started && state.mode !== targetMode){
+        setMode(targetMode);
+      }
+      state.chartDebug = {
+        imported:true,
+        format:'external-difficulty-chart',
+        difficulty:imported.difficultyName,
+        sourceTracks:imported.sourceTracks
+      };
+      chart = imported.chart;
+      bpm = bpm || imported.bpm || 120;
+      name = name || `Imported Chart [${imported.difficultyName}]`;
+    }
+
+    state.started = false;
+    setLoadingUI(true);
+    try{
+      await Tone.start();
+      await ensureSampler();
+    }catch(err){
+      console.error(err);
+      alert('오디오 샘플 로딩에 실패했습니다. 인터넷 연결을 확인해주세요.');
+      setLoadingUI(false);
+      return;
+    }
+
+    // 재시도용 저장 (원본 보존)
+    state.lastChart = chart.map(n=>({...n}));
+    state.lastBpm = bpm;
+    state.lastName = name;
+    state.lastPlayback = playbackNotes;
+
+    _startGameInternal(chart, bpm, name, playbackNotes);
+    setLoadingUI(false);
+  }
+
+  function _startGameInternal(chart, bpm, name, playbackNotes){
+    state.notes = reindexChartNotes(chart.map(n=>({...n, hit:false, missed:false, holding:false})), { preserveState:false });
+    state.playbackNotes = playbackNotes;
+    state.sprites.forEach(s=>{ gsap.killTweensOf(s); gsap.killTweensOf(s.scale); s.destroy(); });
+    state.sprites.clear();
+    state.notesLayer.removeChildren(); state.fx.removeChildren();
+    state.heldLanes.clear();
+    state.editor.selectedUid = null;
+    state.editor.drag = null;
+    state.editor.windowStart = 0;
+    releaseAllKeyGlows();
+    state.score=0; state.combo=0; state.maxCombo=0; state.judged=0; state.hits=0; state.bpm=bpm;
+    state.duration = Math.max(
+      ...chart.map(n=> n.hold ? n.holdEnd : n.time),
+      ...playbackNotes.map(n=>n.time+n.duration),
+      0
+    ) + 2;
+    state.gameOver = false;
+
+    scheduleSamplerPlayback(playbackNotes);
+    state.startAt = performance.now()/1000 + 0.35;
+    state.paused = false; state.pausedSum = 0; state.started = true;
+
+    $('loader').style.display = 'none';
+    $('resultScreen').classList.remove('active');
+    $('meta').textContent = name;
+    $('bpmText').textContent = `BPM ${bpm} / ${chart.length} notes`;
+    $('totalTime').textContent = fmt(state.duration);
+    buildChartExport();
+    centerEditorWindow(0);
+    refreshChartPanel();
+    updateHud();
+
+    Tone.Transport.seconds = 0;
+    Tone.Transport.start('+0.35');
+  }
+
+  function retryGame(){
+    if(!state.lastChart) return;
+    $('resultScreen').classList.remove('active');
+    _startGameInternal(state.lastChart, state.lastBpm, state.lastName, state.lastPlayback);
+  }
+
+  function backToMenu(){
+    $('resultScreen').classList.remove('active');
+    state.started = false; state.gameOver = false;
+    Tone.Transport.stop(); Tone.Transport.cancel(0);
+    state.heldLanes.clear();
+    state.editor.selectedUid = null;
+    state.editor.drag = null;
+    releaseAllKeyGlows();
+    $('score').textContent='0'; $('combo').textContent='0';
+    $('acc').textContent='100%'; $('rank').textContent='-';
+    $('progress').style.width='0%'; $('curTime').textContent='00:00';
+    $('chartPanel')?.classList.remove('active');
+    $('loader').style.display = 'grid';
+    setLoadingUI(false);
+  }
+
+  // ─────────────────────────────────────────
+  // GAME LOOP
+  // ─────────────────────────────────────────
+  function songTime(){
+    if(!state.started) return 0;
+    if(state.paused) return state.pauseAt - state.startAt - state.pausedSum;
+    return performance.now()/1000 - state.startAt - state.pausedSum;
+  }
+
+  function tick(){
+    tickBackground();
+    updateKeyGlowFrame();
+
+    if(!state.started || state.paused || state.gameOver) return;
+    const now = songTime();
+    renderNotes(now);
+    processAutoplay(now);
+    checkAutoCompleteHolds(now);
+    checkMiss(now);
+    updateHud();
+
+    if(now >= state.duration){
+      const allDone = state.notes.every(n => n.hit || n.missed);
+      if(allDone) showResult();
+    }
+  }
+
+  function processAutoplay(now){
+    if(!state.autoplay) return;
+
+    for(const n of state.notes){
+      if(n.hit || n.missed || n.holding) continue;
+      if(now < n.time) continue;
+
+      setKeyGlow(n.lane, true);
+      pulseKey(n.lane);
+
+      if(n.hold){
+        n.holding = true;
+        state.heldLanes.set(n.lane, n.id);
+      } else {
+        n.hit = true;
+        removeSprite(n.id);
+        gsap.delayedCall(0.05, () => {
+          if(state.autoplay && !state.heldLanes.has(n.lane)) setKeyGlow(n.lane, false);
+        });
+      }
+      judge('PERFECT', 1000, n.lane);
+    }
+  }
+
+  // ─────────────────────────────────────────
+  // NOTE RENDER
+  // 일반 노트: 하단이 판정선(hitY)에 닿을 때 progress=1
+  //   → 하단 y = progress*hitY, 중심 y = 하단y - blockH/2
+  // 홀드 노트: 머리(head)는 일반 노트처럼 떨어지고, 꼬리(tail)가 위로 이어짐
+  //   - 누르고 있는 동안: 머리는 판정선에 고정, 꼬리가 위에서부터 줄어듦
+  // ─────────────────────────────────────────
+  function renderNotes(now){
+    for(const n of state.notes){
+      if(n.hit){ removeSprite(n.id); continue; }
+      if(n.missed) continue; // 페이드 애니메이션이 별도 처리 후 제거
+
+      const blockH = Math.max(28, Math.min(112, 30 + Math.min(n.duration,0.5)*120));
+
+      if(n.holding){
+        // 판정선에 고정, 꼬리만 줄어든다
+        let s = state.sprites.get(n.id);
+        if(!s){ s=createNote(n, blockH); state.sprites.set(n.id,s); state.notesLayer.addChild(s); }
+        s.x = laneCenter(n.lane);
+        s.y = state.hitY - blockH/2;
+        s.alpha = 1;
+        if(s.tailGraphic){
+          const remaining = Math.max(0, n.holdEnd - now);
+          drawTail(s.tailGraphic, state.laneW*0.66, blockH, remaining*state.speed, true, n.lane);
+        }
+        continue;
+      }
+
+      const appear = n.time - FALL_TIME;
+      const past = n.time + BAD + 0.05;
+      if(now < appear || now > past){ removeSprite(n.id); continue; }
+
+      let s = state.sprites.get(n.id);
+      if(!s){ s=createNote(n, blockH); state.sprites.set(n.id,s); state.notesLayer.addChild(s); }
+
+      const progress = (now - appear) / FALL_TIME;
+      s.x = laneCenter(n.lane);
+      s.y = progress * state.hitY - blockH / 2;
+      s.alpha = Math.max(0.20, Math.min(1, 0.18 + progress * 1.5));
+
+      if(s.tailGraphic){
+        const tailLen = n.duration * state.speed;
+        drawTail(s.tailGraphic, state.laneW*0.66, blockH, tailLen, false, n.lane);
+      }
+    }
+  }
+
+  function checkAutoCompleteHolds(now){
+    for(const n of state.notes){
+      if(n.holding && now >= n.holdEnd){
+        n.holding = false; n.hit = true;
+        state.heldLanes.delete(n.lane);
+        if(state.autoplay) setKeyGlow(n.lane, false);
+        removeSprite(n.id);
+        state.score += 300; // 홀드 완수 보너스 (콤보는 헤드 판정 시 이미 반영됨)
+      }
+    }
+  }
+
+  function createNote(n, blockH){
+    const w = state.laneW * 0.72;
+    const h = Math.max(blockH, 24);
+    const col = laneColor(n.lane);
+    const c = new PIXI.Container();
+    const g = new PIXI.Graphics();
+
+    // 네온 아우라: 바깥 광 -> 본체 -> 내부 광택 순으로, 필터 없이 처리
+    g.roundRect(-w/2-16, -h/2-8, w+32, h+24, 16).fill({color:0x000000, alpha:0.22});
+    g.roundRect(-w/2-10, -h/2-4, w+20, h+16, 14).fill({color:col, alpha:0.16});
+    g.roundRect(-w/2, -h/2, w, h, 10).fill({color:0x10151e, alpha:1});
+    g.roundRect(-w/2, -h/2, w, h, 10).stroke({color:0x05060a, alpha:0.84, width:2});
+    g.roundRect(-w/2+3, -h/2+3, w-6, h-6, 8).fill({color:col, alpha:0.90});
+    g.roundRect(-w/2+6, -h/2+6, w-12, 10, 5).fill({color:0xffffff, alpha:0.34});
+    g.roundRect(-w/2+8, -h/2+18, w-16, Math.max(10, h*0.18), 5).fill({color:0xffffff, alpha:0.10});
+    g.roundRect(-w/2+5, h/2-18, w-10, 14, 4).fill({color:0x05060a, alpha:0.34});
+    g.roundRect(-w/2+4, h/2-12, w-8, 10, 4).fill({color:0xfff0a8, alpha:0.14});
+
+    const rows = Math.max(1, Math.min(5, Math.floor(h / 23)));
+    const innerX = -w/2 + 7;
+    const innerW = w - 14;
+    const cellH = (h - 16) / rows;
+    for(let r=1; r<rows; r++){
+      const yy = -h/2 + 8 + r*cellH;
+      g.moveTo(innerX, yy).lineTo(innerX+innerW, yy).stroke({color:0xffffff, alpha:0.16, width:1});
+    }
+    g.moveTo(0, -h/2+9).lineTo(0, h/2-9).stroke({color:0x04050a, alpha:0.18, width:1});
+
+    c.addChild(g);
+    c.headGraphic = g;
+    c._laneColor = col;
+
+    if(n.hold){
+      const tail = new PIXI.Graphics();
+      c.addChildAt(tail, 0);
+      c.tailGraphic = tail;
+    }
+    return c;
+  }
+
+  // 홀드 꼬리 그리기: 헤드와 동일한 너비로, 길이는 화면 내로 제한
+  function drawTail(tail, w, headH, tailLen, isHolding, lane=0){
+    tail.clear();
+    const maxLen = state.hitY * 0.85;
+    tailLen = Math.min(tailLen, maxLen);
+    if(tailLen <= 1) return;
+    const col = laneColor(lane);
+    const alpha = isHolding ? 0.70 : 0.44;
+    tail.roundRect(-w/2-12, -headH/2 - tailLen - 6, w+24, tailLen+10, 10).fill({color:0x000000, alpha:0.18});
+    tail.roundRect(-w/2-7, -headH/2 - tailLen - 2, w+14, tailLen+4, 8).fill({color:col, alpha:alpha*0.22});
+    tail.roundRect(-w/2, -headH/2 - tailLen, w, tailLen, 6).fill({color:0x121722, alpha:0.98});
+    tail.roundRect(-w/2+3, -headH/2 - tailLen + 3, w-6, Math.max(0, tailLen-6), 5).fill({color:col, alpha});
+    tail.roundRect(-w/2+8, -headH/2 - tailLen + 6, w-16, Math.max(0, tailLen-12), 4).fill({color:0xffffff, alpha:isHolding?0.18:0.10});
+
+    const segments = Math.min(16, Math.floor(tailLen / 28));
+    for(let i=1;i<=segments;i++){
+      const y = -headH/2 - i*(tailLen/(segments+1));
+      tail.moveTo(-w/2+4, y).lineTo(w/2-4, y).stroke({color:0x05060a, alpha:0.24, width:2});
+      tail.moveTo(-w/2+5, y-1).lineTo(w/2-5, y-1).stroke({color:0xffffff, alpha:isHolding?0.22:0.12, width:1});
+    }
+    tail.roundRect(-w/2+2, -headH/2 - tailLen - 2, w-4, 8, 4).fill({color:0xfff0a8, alpha:isHolding?0.92:0.62});
+  }
+
+  function removeSprite(id){
+    const s=state.sprites.get(id); if(!s) return;
+    gsap.killTweensOf(s); gsap.killTweensOf(s.scale);
+    s.destroy({children:true}); state.sprites.delete(id);
+  }
+
+  // 미스 시 단조롭게 사라지는 대신 페이드+낙하+흔들림 효과
+  function fadeOutMiss(n){
+    const s = state.sprites.get(n.id);
+    if(!s){ return; }
+    gsap.killTweensOf(s); gsap.killTweensOf(s.scale);
+    if(s.headGraphic) s.headGraphic.tint = 0x34404f;
+    if(s.tailGraphic) s.tailGraphic.tint = 0x34404f;
+    const startX = s.x;
+    gsap.to(s, { y: s.y + 36, alpha: 0, duration: 0.34, ease: 'power1.in' });
+    gsap.to(s.scale, { x: 0.82, y: 0.82, duration: 0.34, ease: 'power1.in' });
+    gsap.to(s, { x: startX - 6, duration: 0.05, repeat: 5, yoyo: true, ease:'none',
+      onComplete: () => removeSprite(n.id) });
+  }
+
+  // ─────────────────────────────────────────
+  // INPUT
+  // ─────────────────────────────────────────
+  function onKeyDown(e){
+    const k=e.key.toLowerCase();
+    if(k===' '){ togglePause(); return; }
+    if(k==='f2'){ e.preventDefault(); toggleAutoplay(); return; }
+    const lane = state.KEY_TO_LANE[k]; if(lane===undefined) return;
+    if(state.autoplay){ e.preventDefault(); return; }
+    if(e.repeat) return; // 키 반복(autorepeat) 무시
+    e.preventDefault();
+    setKeyGlow(lane, true);
+    pulseKey(lane);
+    if(!state.started || state.paused || state.gameOver) return;
+
+    const now=songTime();
+    const target = state.notes
+      .filter(n=>!n.hit && !n.missed && !n.holding && n.lane===lane)
+      .map(n=>({n,diff:Math.abs(n.time-now)}))
+      .filter(x=>x.diff<=BAD)
+      .sort((a,b)=>a.diff-b.diff)[0];
+
+    if(!target){ judge('MISS',0,lane); return; }
+    const n = target.n;
+
+    if(n.hold){
+      // 롱노트: 헤드 판정 후 holding 상태로 전환 (제거하지 않음)
+      n.holding = true;
+      state.heldLanes.set(lane, n.id);
+      if(target.diff<=PERFECT) judge('PERFECT',1000,lane);
+      else if(target.diff<=GOOD) judge('GOOD',650,lane);
+      else judge('BAD',250,lane);
+    } else {
+      n.hit=true; removeSprite(n.id);
+      if(target.diff<=PERFECT) judge('PERFECT',1000,lane);
+      else if(target.diff<=GOOD) judge('GOOD',650,lane);
+      else judge('BAD',250,lane);
+    }
+  }
+
+  function onKeyUp(e){
+    const k=e.key.toLowerCase();
+    const lane = state.KEY_TO_LANE[k]; if(lane===undefined) return;
+    if(state.autoplay) return;
+    setKeyGlow(lane, false);
+    const noteId = state.heldLanes.get(lane);
+    if(noteId===undefined) return;
+    state.heldLanes.delete(lane);
+
+    const n = state.notes.find(x=>x.id===noteId);
+    if(!n || n.hit || n.missed) return;
+
+    const now = songTime();
+    if(now >= n.holdEnd - GOOD){
+      // 충분히 오래 눌렀음 → 정상 완료 (자동완성 로직과 중복 방지)
+      if(!n.hit){
+        n.holding = false; n.hit = true;
+        removeSprite(n.id);
+        state.score += 300;
+      }
+    } else {
+      // 너무 빨리 뗌 → BREAK (콤보 초기화)
+      n.holding = false; n.missed = true;
+      fadeOutMiss(n);
+      state.judged++; state.combo = 0;
+      showJudge('BREAK');
+    }
+  }
+
+  function togglePause(){
+    if(!state.started || state.gameOver) return;
+    if(!state.paused){
+      state.paused=true; state.pauseAt=performance.now()/1000;
+      if(window.Tone) Tone.Transport.pause();
+      centerEditorWindow(songTime());
+    } else {
+      state.paused=false; state.pausedSum += performance.now()/1000 - state.pauseAt;
+      if(window.Tone) Tone.Transport.start();
+    }
+    refreshChartPanel();
+  }
+
+  // ─────────────────────────────────────────
+  // JUDGE — 자동 miss는 항상 silent (텍스트 도배 방지) + 페이드 효과
+  // ─────────────────────────────────────────
+  function checkMiss(now){
+    for(const n of state.notes){
+      if(!n.hit && !n.missed && !n.holding && now > n.time + BAD){
+        n.missed=true;
+        fadeOutMiss(n);
+        judge('MISS', 0, n.lane, true);
+      }
+    }
+  }
+
+  function judge(type, point, lane, silent=false){
+    state.judged++;
+    if(type==='MISS'){
+      state.combo=0;
+    } else {
+      state.hits++; state.combo++; state.score += point + state.combo*10;
+      if(state.combo > state.maxCombo) state.maxCombo = state.combo;
+      smokeBurst(lane, type);
+    }
+    if(!silent) showJudge(type);
+  }
+
+  // ─────────────────────────────────────────
+  // VISUAL FX
+  // ─────────────────────────────────────────
+  function showJudge(type){
+    const el=$('judgeMsg'); el.textContent=type;
+    el.style.color = type==='PERFECT'?'#24f6ff'
+      : type==='GOOD'?'#64ff7a'
+      : type==='BAD'?'#ffe45e'
+      : type==='BREAK'?'#ff8a2b'
+      : '#8a92a6';
+    gsap.killTweensOf(el);
+    gsap.fromTo(el,{opacity:0,y:12,scale:.88,letterSpacing:'.28em'},{opacity:1,y:0,scale:1,duration:.055,ease:'power2.out',
+      onComplete:()=>gsap.to(el,{opacity:0,y:-18,scale:1.08,letterSpacing:'.34em',duration:.38,delay:.055,ease:'power2.out'})});
+  }
+
+  function cleanupFx(){
+    while(state.fx.children.length > MAX_FX_CHILDREN){
+      const old = state.fx.children[0];
+      old.destroy({children:true});
+    }
+  }
+
+  function smokeBurst(lane,type){
+    const x=laneCenter(lane), y=state.hitY;
+    const base = laneColor(lane);
+    const alt = type==='PERFECT' ? 0xffc24b : 0x7dff75;
+    cleanupFx();
+
+    // 히트 라인 광폭 플래시: 큰 효과지만 오브젝트 1개라 가볍다.
+    const line = new PIXI.Graphics();
+    line.rect(state.startX-40, y-8, state.totalW+80, 18).fill({color:base, alpha:type==='PERFECT'?0.26:0.18});
+    line.rect(state.startX-24, y-2, state.totalW+48, 4).fill({color:0xffffff, alpha:.92});
+    state.fx.addChild(line);
+    gsap.to(line,{alpha:0,duration:.20,ease:'power2.out',onComplete:()=>line.destroy()});
+
+    const ring = new PIXI.Graphics();
+    ring.circle(0,0,18).stroke({color:base, alpha:.78, width:3});
+    ring.circle(0,0,34).stroke({color:alt, alpha:.32, width:2});
+    ring.x=x; ring.y=y; state.fx.addChild(ring);
+    gsap.to(ring.scale,{x:2.15,y:2.15,duration:.42,ease:'power3.out'});
+    gsap.to(ring,{alpha:0,duration:.42,ease:'power2.out',onComplete:()=>ring.destroy()});
+
+    // 원형 연기 대신 '미노' 조각. 개수 제한으로 빠르게 유지.
+    const count = type==='PERFECT' ? 22 : 15;
+    for(let i=0;i<count;i++){
+      const p=new PIXI.Graphics();
+      const size=5 + Math.random()*8;
+      const col = i%3===0 ? 0xffffff : (i%3===1 ? base : alt);
+      p.roundRect(-size/2,-size/2,size,size,Math.max(1,size*.16)).fill({color:col, alpha:.88});
+      p.roundRect(-size/2,-size/2,size,size,Math.max(1,size*.16)).stroke({color:0xffffff, alpha:.22, width:1});
+      p.x=x+(Math.random()-.5)*state.laneW*.35;
+      p.y=y+(Math.random()-.5)*10;
+      p.rotation=Math.random()*Math.PI;
+      state.fx.addChild(p);
+      const angle = (-Math.PI/2) + (Math.random()-.5)*1.9;
+      const dist = 58 + Math.random()*118;
+      gsap.to(p,{x:p.x+Math.cos(angle)*dist,y:p.y+Math.sin(angle)*dist,rotation:p.rotation+(Math.random()-.5)*5.8,alpha:0,duration:.48+Math.random()*.32,ease:'power3.out',onComplete:()=>p.destroy()});
+      gsap.to(p.scale,{x:.35,y:.35,duration:.52,ease:'power2.in'});
+    }
+
+    // 수직 빛기둥. 레인마다 한 개만 생성해 비용 대비 임팩트가 큼.
+    const beam = new PIXI.Graphics();
+    const bw = state.laneW * .82;
+    beam.roundRect(-bw/2, -state.hitY*.72, bw, state.hitY*.72, 8).fill({color:base, alpha:type==='PERFECT'?0.22:0.12});
+    beam.x=x; beam.y=y; state.fx.addChild(beam);
+    gsap.to(beam,{alpha:0,y:y-24,duration:.28,ease:'power2.out',onComplete:()=>beam.destroy()});
+  }
+
+  function pulseKey(lane){
+    const x=laneCenter(lane), y=state.hitY+18;
+    const kh=62;
+    const col = laneColor(lane);
+    const g=new PIXI.Graphics();
+    g.roundRect(x-state.laneW*.46, y-10, state.laneW*.92, kh+22, 16).fill({color:col, alpha:.18});
+    g.roundRect(x-state.laneW*.40, y-2, state.laneW*.80, kh+6, 12).stroke({color:0xffffff, alpha:.72, width:2});
+    state.fx.addChild(g);
+    gsap.to(g,{alpha:0,duration:.20,ease:'power2.out',onComplete:()=>g.destroy()});
+  }
+
+
+  // ─────────────────────────────────────────
+  function canEditChart(){
+    return state.started && state.paused && !state.gameOver;
+  }
+
+  function isEditableNote(note){
+    return !!note && !note.hit && !note.missed;
+  }
+
+  function findNoteByUid(uid){
+    return state.notes.find(note => note.uid === uid);
+  }
+
+  function centerEditorWindow(time=0){
+    const span = state.editor.windowSpan;
+    const maxStart = Math.max(0, state.duration - span);
+    state.editor.windowStart = clamp((time || 0) - span * 0.35, 0, maxStart);
+    refreshEditorPanel();
+  }
+
+  function panEditorWindow(delta){
+    const span = state.editor.windowSpan;
+    const maxStart = Math.max(0, state.duration - span);
+    state.editor.windowStart = clamp((state.editor.windowStart || 0) + delta, 0, maxStart);
+    refreshEditorPanel();
+  }
+
+  function refreshEditorPanel(){
+    const status = $('chartEditorStatus');
+    const help = $('chartEditorHelp');
+    const viewport = $('chartEditorViewport');
+    const holdBtn = $('editorHoldBtn');
+    const deleteBtn = $('editorDeleteBtn');
+    const note = findNoteByUid(state.editor.selectedUid);
+    const editable = canEditChart();
+
+    if(viewport) viewport.classList.toggle('disabled', !editable);
+    if(holdBtn) holdBtn.disabled = !editable || !isEditableNote(note);
+    if(deleteBtn) deleteBtn.disabled = !editable || !isEditableNote(note);
+    if($('editorPrevBtn')) $('editorPrevBtn').disabled = !state.notes.length;
+    if($('editorCenterBtn')) $('editorCenterBtn').disabled = !state.notes.length;
+    if($('editorNextBtn')) $('editorNextBtn').disabled = !state.notes.length;
+
+    if(status){
+      if(!state.started) status.textContent = 'Load a chart, then pause the game to edit.';
+      else if(!state.paused) status.textContent = 'Press SPACE to pause. Editing is enabled only while the song is paused.';
+      else if(state.gameOver) status.textContent = 'Result screen is open. Retry or return before editing.';
+      else if(note && isEditableNote(note)) status.textContent = `Editing note #${note.id + 1} at ${note.time.toFixed(3)}s on lane ${state.KEYS[note.lane] === ';' ? ';' : state.KEYS[note.lane].toUpperCase()}.`;
+      else status.textContent = `Paused at ${songTime().toFixed(3)}s. Drag notes to move, drag the bright handle to stretch, click empty space to add.`;
+    }
+    if(help){
+      help.textContent = editable
+        ? 'Only unhit notes can be changed. Added notes snap to the beat grid and update CHART DATA on release.'
+        : 'Timeline stays visible for inspection, but edits are locked until the game is paused.';
+    }
+
+    renderEditorLaneLabels();
+    renderEditorTimeline();
+  }
+
+  function renderEditorLaneLabels(){
+    const lanes = $('chartEditorLanes');
+    if(!lanes) return;
+    const rowH = 236 / Math.max(1, state.LANES);
+    lanes.innerHTML = state.KEYS.map(key => `<div class="editor-lane" style="height:${Math.max(20, rowH - 2)}px">${key === ';' ? ';' : key.toUpperCase()}</div>`).join('');
+  }
+
+  function renderEditorTimeline(){
+    const surface = $('chartEditorSurface');
+    const viewport = $('chartEditorViewport');
+    if(!surface || !viewport) return;
+
+    if(!state.notes.length){
+      surface.innerHTML = '';
+      return;
+    }
+
+    const span = state.editor.windowSpan;
+    const maxStart = Math.max(0, state.duration - span);
+    const start = clamp(state.editor.windowStart || 0, 0, maxStart);
+    state.editor.windowStart = start;
+    const end = start + span;
+    const beat = 60 / Math.max(1, state.bpm || 120);
+    const measure = beat * 4;
+    const rowH = 236 / Math.max(1, state.LANES);
+    surface.style.setProperty('--lane-count', String(state.LANES));
+    surface.style.setProperty('--beat-step', `${Math.max(3, (beat / span) * 100)}%`);
+    surface.style.setProperty('--measure-step', `${Math.max(6, (measure / span) * 100)}%`);
+
+    const parts = [];
+    if(state.started){
+      const now = clamp(songTime(), start, end);
+      const nowLeft = ((now - start) / span) * 100;
+      parts.push(`<div class="editor-now" style="left:${nowLeft}%"></div>`);
+    }
+
+    for(let sec=Math.floor(start); sec<=Math.ceil(end); sec++){
+      const left = ((sec - start) / span) * 100;
+      if(left < 0 || left > 100) continue;
+      parts.push(`<div class="editor-tick" style="left:${left}%"></div>`);
+      parts.push(`<div class="editor-tick-label" style="left:${left}%">${sec}s</div>`);
+    }
+
+    const visibleNotes = state.notes.filter(note => {
+      const noteEnd = note.hold ? (note.holdEnd || (note.time + note.duration)) : note.time + Math.max(note.duration || 0.12, beat * 0.18);
+      return note.time <= end + 0.02 && noteEnd >= start - 0.02;
+    });
+
+    for(const note of visibleNotes){
+      const noteEnd = note.hold ? (note.holdEnd || (note.time + note.duration)) : note.time + Math.max(note.duration || 0.12, beat * 0.18);
+      const left = ((Math.max(note.time, start) - start) / span) * 100;
+      const width = Math.max(1.1, ((Math.min(noteEnd, end) - Math.max(note.time, start)) / span) * 100);
+      const top = note.lane * rowH + rowH * 0.15;
+      const height = Math.max(18, rowH * 0.7);
+      const color = hexColor(laneColor(note.lane));
+      const selected = note.uid === state.editor.selectedUid ? ' selected' : '';
+      const hold = note.hold ? ' is-hold' : '';
+      const disabled = isEditableNote(note) ? '' : ' is-disabled';
+      const handle = note.uid === state.editor.selectedUid && isEditableNote(note)
+        ? '<div class="editor-note-handle"></div>'
+        : '';
+      const label = note.hold || note.uid === state.editor.selectedUid
+        ? `<div class="editor-note-label">${state.KEYS[note.lane] === ';' ? ';' : state.KEYS[note.lane].toUpperCase()}</div>`
+        : '';
+      parts.push(`<div class="editor-note${selected}${hold}${disabled}" data-uid="${note.uid}" style="left:${left}%;top:${top}px;height:${height}px;width:${width}%;background:${color};">${label}${handle}</div>`);
+    }
+
+    surface.innerHTML = parts.join('');
+  }
+
+  function editorPointerInfo(e){
+    const viewport = $('chartEditorViewport');
+    if(!viewport) return null;
+    const rect = viewport.getBoundingClientRect();
+    const x = clamp(e.clientX - rect.left, 0, rect.width);
+    const y = clamp(e.clientY - rect.top, 0, rect.height);
+    const lane = clamp(Math.floor(y / Math.max(1, rect.height / state.LANES)), 0, state.LANES-1);
+    const time = (state.editor.windowStart || 0) + (x / Math.max(1, rect.width)) * state.editor.windowSpan;
+    return {x, y, width:rect.width, height:rect.height, lane, time};
+  }
+
+  function onEditorPointerDown(e){
+    const info = editorPointerInfo(e);
+    if(!info) return;
+
+    const noteEl = e.target.closest('.editor-note');
+    const handleEl = e.target.closest('.editor-note-handle');
+    if(noteEl){
+      const uid = Number(noteEl.dataset.uid);
+      state.editor.selectedUid = uid;
+      const note = findNoteByUid(uid);
+      if(!note || !isEditableNote(note) || !canEditChart()){
+        refreshEditorPanel();
+        return;
+      }
+      if(handleEl) state.editor.drag = { type:'resize', uid, startDuration:note.duration, startX:info.x };
+      else state.editor.drag = { type:'move', uid, startTime:note.time, startLane:note.lane, startX:info.x, startY:info.y };
+      refreshEditorPanel();
+      e.preventDefault();
+      return;
+    }
+
+    if(!canEditChart()) return;
+    const created = addEditorNoteAt(info.time, info.lane);
+    state.editor.selectedUid = created.uid;
+    state.editor.drag = { type:'move', uid:created.uid, startTime:created.time, startLane:created.lane, startX:info.x, startY:info.y };
+    applyEditorPreview();
+    refreshEditorPanel();
+    e.preventDefault();
+  }
+
+  function onEditorPointerMove(e){
+    const drag = state.editor.drag;
+    if(!drag) return;
+    const note = findNoteByUid(drag.uid);
+    const info = editorPointerInfo(e);
+    if(!note || !info) return;
+
+    const beat = 60 / Math.max(1, state.bpm || 120);
+    const snap = Math.max(beat / 4, 0.05);
+    const maxDuration = Math.max(HOLD_MAX_DURATION * 2.4, beat * 3.5);
+
+    if(drag.type === 'move'){
+      const deltaTime = ((info.x - drag.startX) / Math.max(1, info.width)) * state.editor.windowSpan;
+      const laneDelta = Math.round((info.y - drag.startY) / Math.max(1, info.height / state.LANES));
+      note.time = clamp(snapValue(drag.startTime + deltaTime, snap), 0, Math.max(0, state.duration - 0.05));
+      note.lane = clamp(drag.startLane + laneDelta, 0, state.LANES-1);
+      note.manualLane = true;
+    } else {
+      note.duration = clamp(snapValue(drag.startDuration + ((info.x - drag.startX) / Math.max(1, info.width)) * state.editor.windowSpan, snap), Math.max(0.12, beat / 4), maxDuration);
+      note.hold = note.duration >= HOLD_MIN_DURATION * 0.65;
+    }
+
+    note.holdEnd = roundTo(note.time + note.duration, 4);
+    applyEditorPreview();
+    renderEditorTimeline();
+    e.preventDefault();
+  }
+
+  function onEditorPointerUp(){
+    if(!state.editor.drag) return;
+    state.editor.drag = null;
+    commitEditorEdit();
+  }
+
+  function addEditorNoteAt(time, lane){
+    const beat = 60 / Math.max(1, state.bpm || 120);
+    const snap = Math.max(beat / 4, 0.05);
+    const noteTime = clamp(snapValue(time, snap), 0, Math.max(0, state.duration - 0.05));
+    const duration = roundTo(Math.max(0.12, beat * 0.35), 4);
+    const note = {
+      id:state.notes.length,
+      uid:allocNoteUid(),
+      time:noteTime,
+      lane,
+      midi:inferMidiForNewNote(noteTime, lane),
+      duration,
+      hold:false,
+      holdEnd:roundTo(noteTime + duration, 4),
+      manualLane:true,
+      holding:false,
+      hit:false,
+      missed:false
+    };
+    state.notes.push(note);
+    return note;
+  }
+
+  function inferMidiForNewNote(time, lane){
+    const nearby = state.notes
+      .filter(note => Number.isFinite(note.midi))
+      .sort((a,b)=>Math.abs(a.time-time)-Math.abs(b.time-time));
+    const sameBeat = nearby.filter(note => Math.abs(note.time - time) < 0.18);
+    if(sameBeat.length){
+      const baseMidi = avg(sameBeat.map(note => note.midi));
+      const baseLane = avg(sameBeat.map(note => note.lane));
+      return Math.round(clamp(baseMidi + (lane - baseLane) * 2, 36, 96));
+    }
+    if(nearby.length){
+      const ref = nearby[0];
+      return Math.round(clamp((ref.midi ?? 60) + (lane - ref.lane) * 2, 36, 96));
+    }
+    return 60 + lane * 2;
+  }
+
+  function toggleSelectedEditorHold(){
+    if(!canEditChart()) return;
+    const note = findNoteByUid(state.editor.selectedUid);
+    if(!isEditableNote(note)) return;
+    const beat = 60 / Math.max(1, state.bpm || 120);
+    if(note.hold){
+      note.duration = roundTo(Math.max(0.12, beat * 0.35), 4);
+      note.hold = false;
+    } else {
+      note.duration = roundTo(Math.max(note.duration, HOLD_MIN_DURATION * 0.9, beat * 1.1), 4);
+      note.hold = true;
+    }
+    note.holdEnd = roundTo(note.time + note.duration, 4);
+    commitEditorEdit();
+  }
+
+  function deleteSelectedEditorNote(){
+    if(!canEditChart()) return;
+    const note = findNoteByUid(state.editor.selectedUid);
+    if(!isEditableNote(note)) return;
+    removeSprite(note.id);
+    state.notes = state.notes.filter(item => item.uid !== note.uid);
+    state.editor.selectedUid = null;
+    commitEditorEdit();
+  }
+
+  function applyEditorPreview(){
+    if(!state.started) return;
+    refreshVisibleNotes();
+  }
+
+  function commitEditorEdit(){
+    state.notes = reindexChartNotes(state.notes, { preserveState:true });
+    state.lastChart = state.notes.map(note => ({...note}));
+    buildChartExport();
+    refreshEditorPanel();
+    refreshChartPanel();
+    refreshVisibleNotes();
+  }
+
+  function refreshVisibleNotes(){
+    const ids = [...state.sprites.keys()];
+    for(const id of ids) removeSprite(id);
+    state.notesLayer.removeChildren();
+    state.sprites.clear();
+    renderNotes(songTime());
+  }
+
+  function snapValue(value, step){
+    return roundTo(Math.round(value / step) * step, 4);
+  }
+
+  function hexColor(color){
+    return `#${color.toString(16).padStart(6, '0')}`;
+  }
+
+  // CHART DATA VIEW / COPY
+  // ─────────────────────────────────────────
+  function buildChartExport(){
+    const notes = state.notes.map(n => ({
+      id:n.id,
+      time:+n.time.toFixed(4),
+      lane:n.lane,
+      key:state.KEYS[n.lane] || String(n.lane),
+      midi:n.midi ?? null,
+      duration:+(n.duration || 0).toFixed(4),
+      hold:!!n.hold,
+      holdEnd:n.hold ? +(n.holdEnd || (n.time+n.duration)).toFixed(4) : null
+    }));
+
+    const laneCounts = Array.from({length:state.LANES}, (_, lane) => ({
+      lane,
+      key:state.KEYS[lane] || String(lane),
+      count:notes.filter(n => n.lane === lane).length
+    }));
+
+    const holdCount = notes.filter(n => n.hold).length;
+    const firstTime = notes.length ? notes[0].time : 0;
+    const lastTime = notes.length ? Math.max(...notes.map(n => n.holdEnd ?? n.time)) : 0;
+    const playLength = Math.max(0.001, lastTime - firstTime);
+    const nps = notes.length ? +(notes.length / playLength).toFixed(3) : 0;
+
+    state.chartExport = {
+      format:'midi-auto-chart-v1',
+      song:state.lastName || '',
+      generatedAt:new Date().toISOString(),
+      mode:state.mode,
+      bpm:state.bpm,
+      lanes:state.LANES,
+      keys:[...state.KEYS],
+      duration:+state.duration.toFixed(4),
+      noteCount:notes.length,
+      holdCount,
+      nps,
+      laneCounts,
+      debug:state.chartDebug || null,
+      notes
+    };
+
+    state.chartExportText = JSON.stringify(state.chartExport, null, 2);
+    return state.chartExport;
+  }
+
+  function refreshChartPanel(){
+    if(!state.chartExport) buildChartExport();
+
+    const data = state.chartExport;
+    if(!data){
+      $('chartPanelSub').textContent = '아직 생성된 채보가 없습니다.';
+      $('chartDataText').value = '아직 생성된 채보가 없습니다.';
+      return;
+    }
+
+    $('chartPanelSub').textContent = `${data.song || 'Untitled'} / ${data.mode} / ${data.lanes} lanes / ${data.keys.join(' ')}`;
+    $('chartSummaryBpm').textContent = data.bpm ?? '-';
+    $('chartSummaryNotes').textContent = data.noteCount ?? '-';
+    $('chartSummaryHolds').textContent = data.holdCount ?? '-';
+    $('chartSummaryNps').textContent = data.nps ?? '-';
+    $('chartDataText').value = state.chartExportText || JSON.stringify(data, null, 2);
+    refreshEditorPanel();
+  }
+
+  function toggleChartPanel(){
+    refreshChartPanel();
+    const panel = $('chartPanel');
+    if(!panel) return;
+    panel.classList.toggle('active');
+    if(panel.classList.contains('active')){
+      gsap.fromTo(panel,{opacity:0,y:10,scale:.985},{opacity:1,y:0,scale:1,duration:.18,ease:'power2.out'});
+    }
+  }
+
+  async function copyTextToClipboard(text){
+    if(!text) return false;
+
+    try{
+      if(navigator.clipboard && window.isSecureContext){
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    }catch(err){}
+
+    const area = $('chartDataText');
+    if(!area) return false;
+    area.value = text;
+    area.focus();
+    area.select();
+    area.setSelectionRange(0, area.value.length);
+
+    try{
+      return document.execCommand('copy');
+    }catch(err){
+      return false;
+    }
+  }
+
+  async function copyChartData(kind='full'){
+    if(!state.chartExport) buildChartExport();
+    const text = kind === 'notes'
+      ? JSON.stringify(state.chartExport?.notes || [], null, 2)
+      : (state.chartExportText || JSON.stringify(state.chartExport, null, 2));
+
+    const ok = await copyTextToClipboard(text);
+    const status = $('chartCopyStatus');
+    if(status){
+      status.textContent = ok ? '복사 완료' : '복사 실패: 텍스트를 직접 선택해서 복사해주세요.';
+      gsap.killTweensOf(status);
+      gsap.fromTo(status,{opacity:1},{opacity:.55,duration:.6,delay:.9});
+    }
+  }
+
+
+  // ─────────────────────────────────────────
+  // HUD
+  // ─────────────────────────────────────────
+  function updateHud(){
+    const now=Math.max(0,Math.min(state.duration,songTime()));
+    $('score').textContent=Math.floor(state.score).toLocaleString();
+    $('combo').textContent=state.combo;
+    const acc=state.judged?Math.round(state.hits/state.judged*100):100;
+    $('acc').textContent=acc+'%';
+    $('rank').textContent=acc>=96?'S+':acc>=90?'S':acc>=80?'A':acc>=70?'B':'C';
+    $('curTime').textContent=fmt(now);
+    $('progress').style.width=(state.duration?now/state.duration*100:0)+'%';
+  }
+
+  // ─────────────────────────────────────────
+  // RESULT SCREEN
+  // ─────────────────────────────────────────
+  function showResult(){
+    state.gameOver = true;
+    state.started = false;
+    Tone.Transport.stop();
+    releaseAllKeyGlows();
+
+    const acc = state.judged ? Math.round(state.hits/state.judged*100) : 100;
+    const rankStr = acc>=96?'S+':acc>=90?'S':acc>=80?'A':acc>=70?'B':'C';
+    const rankColor = acc>=96?'#24f6ff':acc>=90?'#ff2bd6':acc>=80?'#ffe45e':'#8a92a6';
+
+    $('resultRank').textContent = rankStr;
+    $('resultRank').style.color = rankColor;
+    $('resultScore').textContent = Math.floor(state.score).toLocaleString();
+    $('resultAcc').textContent = acc + '%';
+    $('resultCombo').textContent = state.maxCombo;
+    $('resultSong').textContent = state.lastName || '-';
+
+    const rs = $('resultScreen');
+    rs.classList.add('active');
+    const panel = rs.querySelector('.result-panel');
+    gsap.fromTo(panel,{opacity:0,y:32,scale:.95},{opacity:1,y:0,scale:1,duration:.45,ease:'back.out(1.3)'});
+    gsap.fromTo($('resultRank'),{scale:.5,opacity:0},{scale:1,opacity:1,duration:.55,delay:.18,ease:'back.out(1.6)'});
+  }
+
+  function fmt(sec){
+    sec=Math.max(0,sec|0);
+    const m=String((sec/60)|0).padStart(2,'0'), s=String(sec%60).padStart(2,'0');
+    return `${m}:${s}`;
+  }
+
+  init();
+})();
+</script>
+</body>
+</html>

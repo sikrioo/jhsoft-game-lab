@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MIDI Auto Chart Rhythm Game</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23252d38'/%3E%3Crect x='12' y='10' width='12' height='44' rx='4' fill='%23f8f8fa'/%3E%3Crect x='26' y='10' width='12' height='44' rx='4' fill='%23ef8cab'/%3E%3Crect x='40' y='10' width='12' height='44' rx='4' fill='%2374d9ff'/%3E%3C/svg%3E" />
+
+  <script src="https://cdn.jsdelivr.net/npm/pixi.js@8.6.6/dist/pixi.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/tone@15.0.4/build/Tone.min.js"></script>
+  <script type="module">
+    import { Midi } from "https://cdn.jsdelivr.net/npm/@tonejs/midi@2.0.28/+esm";
+    window.ToneMidiParser = Midi;
+  </script>
+
+  <link rel="stylesheet" href="styles/base.css" />
+  <link rel="stylesheet" href="styles/layout.css" />
+  <link rel="stylesheet" href="styles/game.css" />
+  <link rel="stylesheet" href="styles/editor.css" />
+</head>
+<body>
+  <div id="gameRoot"></div>
+
+  <div class="hud">
+    <div class="title">MIDI MUSE</div>
+    <div class="sub" id="meta">beat x music x sequence</div>
+    <div class="bar"><div id="progress"></div></div>
+    <div class="time"><span id="curTime">00:00</span> / <span id="totalTime">00:00</span></div>
+    <div class="label">SCORE</div><div class="num" id="score">0</div>
+    <div class="label">COMBO</div><div class="num" id="combo">0</div>
+    <div class="label">ACCURACY</div><div class="num" id="acc">100%</div>
+    <div class="label">RANK</div><div class="rank" id="rank">-</div>
+    <div class="comboHud" id="comboHud">
+      <div class="comboLabel">COMBO</div>
+      <div class="comboCount" id="comboBurst">0</div>
+      <div class="comboStatus" id="comboStatus">Build a streak</div>
+      <div class="feverStrip"><div id="feverFill"></div></div>
+      <div class="feverMeta">
+        <span id="feverState">READY 0 / 20</span>
+        <strong id="feverBonus">x1.00</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="rightHud">
+    <div>SPACE : PAUSE / EDIT</div>
+    <div>F1 : PLAY DEMO</div>
+    <div>F3 : WATCH DEMO</div>
+    <div id="autoPlayHint">F2 : AUTOPLAY OFF</div>
+    <div id="feverHint">FEVER 0 / 20</div>
+    <div id="keyHint">A S D F J K L ;</div>
+    <div>Pause, open chart panel, then drag notes.</div>
+    <div id="bpmText">BPM -</div>
+  </div>
+
+  <button class="chart-toggle" id="chartToggleBtn" type="button">CHART + EDIT</button>
+
+  <div class="chart-panel" id="chartPanel">
+    <div class="chart-panel-head">
+      <div>
+        <div class="chart-panel-title">Arcade Chart Editor</div>
+        <div class="chart-panel-sub" id="chartPanelSub">아직 생성된 채보가 없습니다.</div>
+      </div>
+      <button class="chart-close" id="chartCloseBtn" type="button">닫기</button>
+    </div>
+
+    <div class="chart-summary">
+      <div class="chart-summary-box">
+        <div class="chart-summary-label">BPM</div>
+        <div class="chart-summary-value" id="chartSummaryBpm">-</div>
+      </div>
+      <div class="chart-summary-box">
+        <div class="chart-summary-label">NOTES</div>
+        <div class="chart-summary-value" id="chartSummaryNotes">-</div>
+      </div>
+      <div class="chart-summary-box">
+        <div class="chart-summary-label">HOLDS</div>
+        <div class="chart-summary-value" id="chartSummaryHolds">-</div>
+      </div>
+      <div class="chart-summary-box">
+        <div class="chart-summary-label">NPS</div>
+        <div class="chart-summary-value" id="chartSummaryNps">-</div>
+      </div>
+    </div>
+
+    <textarea class="chart-textarea" id="chartDataText" readonly spellcheck="false">아직 생성된 채보가 없습니다.</textarea>
+
+    <div class="editor-panel">
+      <div class="editor-toolbar">
+        <div class="editor-status" id="chartEditorStatus">Pause the game to edit notes. Drag notes to move them, drag the bright handle to stretch into holds, and click empty space to add a note.</div>
+        <div class="editor-tools">
+          <button class="editor-btn" id="editorPrevBtn" type="button">-4s</button>
+          <button class="editor-btn" id="editorCenterBtn" type="button">Center</button>
+          <button class="editor-btn" id="editorNextBtn" type="button">+4s</button>
+          <button class="editor-btn" id="editorHoldBtn" type="button">Toggle Hold</button>
+          <button class="editor-btn" id="editorDeleteBtn" type="button">Delete</button>
+        </div>
+      </div>
+      <div class="editor-help" id="chartEditorHelp">Only upcoming notes can be edited while paused. Clicking an empty lane/time cell adds a chord note on that beat.</div>
+      <div class="editor-stage">
+        <div class="editor-lanes" id="chartEditorLanes"></div>
+        <div class="editor-viewport" id="chartEditorViewport">
+          <div class="editor-surface" id="chartEditorSurface"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="chart-actions">
+      <div class="chart-actions-left">
+        <button class="chart-action-btn primary" id="copyChartBtn" type="button">복사</button>
+        <button class="chart-action-btn" id="refreshChartBtn" type="button">새로고침</button>
+      </div>
+      <div class="chart-actions-right">
+        <button class="chart-action-btn" id="copyNotesOnlyBtn" type="button">노트만 복사</button>
+      </div>
+      <div class="chart-copy-status" id="chartCopyStatus"></div>
+    </div>
+  </div>
+
+
+  <div class="loader" id="loader">
+    <div class="panel">
+      <h1>MIDI → BPM → Auto Chart</h1>
+      <p>
+        MIDI 파일에서 BPM과 Note On 이벤트를 분석해 자동 채보를 만들고,<br />
+        Tone.Sampler 피아노 샘플로 MIDI를 함께 재생합니다.
+      </p>
+      <div class="row" style="margin-bottom:14px;">
+        <button class="secondary mode-btn active" id="modeNormalBtn">보통 (8키)</button>
+        <button class="secondary mode-btn" id="modeEasyBtn">이지 (4키)</button>
+        <button class="secondary mode-btn" id="modeSimpleBtn">초간단 (2키)</button>
+      </div>
+      <div class="row">
+        <label class="fileBtn" id="fileBtnLabel">MIDI 파일 선택<input id="midiInput" type="file" accept=".mid,.midi" /></label>
+        <button class="secondary" id="demoBtn">Play Demo</button>
+        <button class="secondary" id="watchDemoBtn">Watch Demo</button>
+      </div>
+      <p id="loadingText" style="margin-top:16px;margin-bottom:0;font-size:12px;opacity:.62;">첫 실행 시 피아노 샘플을 다운로드합니다.</p>
+    </div>
+  </div>
+
+  <!-- 결과 화면 -->
+  <div id="resultScreen">
+    <div class="result-panel">
+      <div class="result-rank" id="resultRank">S+</div>
+      <div class="result-title">RESULT</div>
+      <div class="result-song" id="resultSong">—</div>
+      <div class="result-stats">
+        <div class="stat-box"><div class="stat-label">SCORE</div><div class="stat-val" id="resultScore">0</div></div>
+        <div class="stat-box"><div class="stat-label">ACCURACY</div><div class="stat-val" id="resultAcc">100%</div></div>
+        <div class="stat-box"><div class="stat-label">MAX COMBO</div><div class="stat-val" id="resultCombo">0</div></div>
+      </div>
+      <div class="row">
+        <button id="retryBtn">다시 하기</button>
+        <button class="secondary" id="backBtn">처음으로</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="judge" id="judgeMsg">PERFECT</div>
+  <div class="feverOverlay" id="feverOverlay"></div>
+
+  <script defer src="scripts/core.js"></script>
+  <script defer src="scripts/render.js"></script>
+  <script defer src="scripts/charting.js"></script>
+  <script defer src="scripts/sources.js"></script>
+  <script defer src="scripts/gameplay.js"></script>
+  <script defer src="scripts/editor-ui.js"></script>
+  <script defer src="scripts/boot.js"></script>
+</body>
+</html>

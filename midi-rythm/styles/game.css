@@ -1,0 +1,185 @@
+.judge {
+      position:fixed; left:50%; bottom:82px; transform:translateX(-50%);
+      font:900 34px/1 "Space Grotesk", sans-serif; font-style:italic; letter-spacing:-.03em; opacity:0; pointer-events:none;
+      color:#fff;
+      text-shadow:0 3px 16px rgba(0,0,0,.35);
+    }
+    .comboHud {
+      position:absolute;
+      right:14px;
+      top:154px;
+      width:154px;
+      min-width:0;
+      max-width:154px;
+      padding:14px 14px 14px;
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:16px;
+      background:linear-gradient(180deg, rgba(88,98,112,.78), rgba(42,49,60,.74));
+      box-shadow:0 18px 44px rgba(5,9,16,.30), inset 0 1px 0 rgba(255,255,255,.08);
+      text-align:center;
+      pointer-events:none;
+      opacity:0;
+      transform:translateY(8px) scale(.96);
+      transform-origin:right top;
+      backdrop-filter:blur(10px);
+      transition:opacity .15s ease, transform .15s ease, border-color .2s ease, box-shadow .2s ease;
+    }
+    .comboHud.active {
+      opacity:1;
+      transform:translateY(0) scale(1);
+    }
+    .comboLabel {
+      font:700 10px/1 "Space Grotesk", ui-monospace, monospace;
+      letter-spacing:.28em;
+      color:rgba(255,255,255,.68);
+      margin-bottom:6px;
+    }
+    .comboCount {
+      font:900 54px/.88 "Space Grotesk", sans-serif;
+      letter-spacing:-.06em;
+      color:#fff;
+      text-shadow:0 10px 24px rgba(0,0,0,.26);
+    }
+    .comboStatus {
+      margin-top:5px;
+      font:600 12px/1.2 "Space Grotesk", sans-serif;
+      color:rgba(255,255,255,.84);
+      min-height:14px;
+    }
+    .feverStrip {
+      margin-top:12px;
+      height:7px;
+      border-radius:999px;
+      overflow:hidden;
+      background:rgba(11,14,20,.42);
+      border:1px solid rgba(255,255,255,.10);
+    }
+    .feverStrip > div {
+      width:0%;
+      height:100%;
+      background:linear-gradient(90deg, #ffffff, #ffd56f 45%, #ff9b68 100%);
+      transition:width .1s linear;
+    }
+    .feverMeta {
+      display:flex;
+      justify-content:space-between;
+      gap:10px;
+      margin-top:8px;
+      font:700 11px/1 "Space Grotesk", ui-monospace, monospace;
+      color:rgba(255,255,255,.72);
+    }
+    .feverMeta strong {
+      color:#fff;
+      font-weight:700;
+    }
+    .feverOverlay {
+      position:fixed;
+      inset:0;
+      z-index:3;
+      pointer-events:none;
+      opacity:0;
+      transition:opacity .22s ease;
+      background:
+        radial-gradient(circle at 50% 76%, rgba(255,214,111,.20), transparent 28%),
+        radial-gradient(circle at 50% 28%, rgba(255,255,255,.12), transparent 20%),
+        linear-gradient(180deg, rgba(255,219,128,.06), rgba(255,142,86,.12));
+    }
+    body.fever .feverOverlay { opacity:1; }
+    body.fever .comboCount { color:#fff6d1; }
+    body.fever .hud,
+    body.fever .rightHud {
+      box-shadow:0 16px 40px rgba(255,176,95,.18), inset 0 1px 0 rgba(255,255,255,.10);
+    }
+    body.fever-1 .feverOverlay {
+      background:
+        radial-gradient(circle at 50% 76%, rgba(255,214,111,.18), transparent 30%),
+        radial-gradient(circle at 50% 28%, rgba(255,255,255,.10), transparent 22%),
+        linear-gradient(180deg, rgba(255,219,128,.05), rgba(255,162,96,.10));
+    }
+    body.fever-1 .comboHud {
+      border-color:rgba(255,219,128,.34);
+      box-shadow:0 20px 56px rgba(255,176,95,.16), inset 0 1px 0 rgba(255,255,255,.16);
+      background:linear-gradient(180deg, rgba(114,101,76,.82), rgba(58,48,40,.80));
+    }
+    body.fever-1 .hud,
+    body.fever-1 .rightHud {
+      border-color:rgba(255,219,128,.26);
+    }
+    body.fever-2 .feverOverlay {
+      background:
+        radial-gradient(circle at 50% 76%, rgba(255,166,99,.24), transparent 32%),
+        radial-gradient(circle at 50% 30%, rgba(255,241,191,.14), transparent 22%),
+        linear-gradient(180deg, rgba(255,194,109,.08), rgba(255,118,89,.16));
+    }
+    body.fever-2 .comboHud {
+      border-color:rgba(255,178,112,.42);
+      box-shadow:0 22px 60px rgba(255,130,79,.22), inset 0 1px 0 rgba(255,255,255,.20);
+      background:linear-gradient(180deg, rgba(138,88,58,.86), rgba(72,43,33,.82));
+    }
+    body.fever-2 .comboCount { color:#fff0c8; }
+    body.fever-2 .hud,
+    body.fever-2 .rightHud {
+      border-color:rgba(255,178,112,.32);
+      box-shadow:0 18px 46px rgba(255,130,79,.20), inset 0 1px 0 rgba(255,255,255,.10);
+    }
+    body.fever-3 .feverOverlay {
+      background:
+        radial-gradient(circle at 50% 74%, rgba(255,106,106,.24), transparent 34%),
+        radial-gradient(circle at 50% 26%, rgba(255,252,228,.18), transparent 24%),
+        linear-gradient(180deg, rgba(255,208,128,.10), rgba(255,88,120,.18));
+    }
+    body.fever-3 .comboHud {
+      border-color:rgba(255,222,158,.52);
+      box-shadow:0 24px 66px rgba(255,96,124,.24), inset 0 1px 0 rgba(255,255,255,.24);
+      background:linear-gradient(180deg, rgba(158,74,79,.90), rgba(74,33,43,.84));
+    }
+    body.fever-3 .comboCount { color:#fff8dc; }
+    body.fever-3 .hud,
+    body.fever-3 .rightHud {
+      border-color:rgba(255,214,144,.38);
+      box-shadow:0 20px 52px rgba(255,96,124,.22), inset 0 1px 0 rgba(255,255,255,.12);
+    }
+    body.fever-1 .feverStrip > div {
+      background:linear-gradient(90deg, #ffffff, #ffd56f 55%, #ffad6a 100%);
+    }
+    body.fever-2 .feverStrip > div {
+      background:linear-gradient(90deg, #fff4d7, #ffbf6f 45%, #ff7d6c 100%);
+    }
+    body.fever-3 .feverStrip > div {
+      background:linear-gradient(90deg, #fff8ea, #ffd98f 35%, #ff7a8e 100%);
+    }
+    #feverHint { color:#ffd56f; font-weight:700; }
+    body.fever-2 #feverHint { color:#ffbe78; }
+    body.fever-3 #feverHint { color:#ffd9a6; }
+    #resultScreen {
+      position:fixed; inset:0; display:none; place-items:center;
+      background:rgba(28,34,43,.82); backdrop-filter:blur(10px);
+    }
+    #resultScreen.active { display:grid; }
+    .result-panel {
+      width:min(540px, calc(100vw - 36px)); padding:46px 40px 38px;
+      border:1px solid rgba(255,255,255,.18);
+      background:
+        linear-gradient(180deg, rgba(84,94,108,.94), rgba(56,65,77,.94));
+      border-radius:14px; text-align:center;
+      box-shadow:0 24px 80px rgba(7,10,16,.40), inset 0 1px 0 rgba(255,255,255,.08);
+    }
+    .result-rank { font:900 96px/.88 "Space Grotesk", sans-serif; margin:0 0 8px; letter-spacing:-.06em; color:var(--pink); }
+    .result-title { font:700 13px/1 "Space Grotesk", ui-monospace, monospace; opacity:.82; letter-spacing:.02em; margin-bottom:28px; color:#fff; }
+    .result-stats { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:32px; }
+    .stat-box { padding:16px 10px; border:1px solid rgba(255,255,255,.12); border-radius:10px; background:rgba(255,255,255,.05); box-shadow:none; }
+    .stat-label { font:700 10px "Space Grotesk", ui-monospace, monospace; opacity:.72; letter-spacing:.04em; margin-bottom:7px; color:#fff; }
+    .stat-val { font:700 26px/1 "Space Grotesk", sans-serif; letter-spacing:-.03em; }
+    .result-song { font:500 14px "Noto Sans KR", sans-serif; opacity:.72; margin-bottom:28px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+@media (max-width:760px){
+      .hud{ width:230px; left:14px; bottom:14px; padding:12px; }
+      .rightHud{ display:none; }
+      .comboHud{ right:10px; top:126px; width:92px; max-width:92px; min-width:0; padding:10px 8px 10px; }
+      .comboLabel{ font-size:8px; margin-bottom:4px; letter-spacing:.18em; }
+      .comboCount{ font-size:34px; }
+      .comboStatus{ font-size:9px; }
+      .feverMeta{ font-size:9px; gap:4px; }
+      .title{font-size:24px}.num{font-size:26px}.rank{font-size:42px}
+      .panel h1{font-size:48px}.panel{padding:30px 20px}
+    }

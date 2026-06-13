@@ -1,0 +1,109 @@
+.hud {
+      position:fixed; left:20px; bottom:20px; width:364px;
+      pointer-events:none;
+      padding:14px 16px 16px;
+      border:1px solid rgba(255,255,255,.16);
+      border-radius:10px;
+      background:linear-gradient(180deg, rgba(82,93,108,.84), rgba(58,67,80,.82));
+      box-shadow:0 16px 40px var(--shadow), inset 0 1px 0 rgba(255,255,255,.10);
+      backdrop-filter:blur(8px);
+    }
+    .hud::before{
+      content:""; position:absolute; inset:0; border-radius:10px; pointer-events:none;
+      border:1px solid rgba(255,255,255,.06);
+    }
+    .hud::after{
+      content:""; display:none;
+    }
+    .title {
+      font:900 34px/.94 "Space Grotesk", sans-serif; letter-spacing:-.04em; margin-bottom:4px;
+      color:var(--pink);
+    }
+    .sub {
+      font:500 12px/1.2 "Space Grotesk", sans-serif; opacity:.86; margin-bottom:12px; color:rgba(255,255,255,.72);
+      letter-spacing:.02em;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    }
+    .bar {
+      width:100%; height:8px; background:rgba(17,21,29,.38); border-radius:999px; overflow:hidden; margin-bottom:10px;
+      border:1px solid rgba(255,255,255,.12);
+      box-shadow:none;
+    }
+    .bar > div {
+      width:0%; height:100%;
+      background:linear-gradient(90deg, #ffffff, var(--pink));
+      box-shadow:none;
+      transition:width .08s linear;
+    }
+    .time { font:600 11px/1 "Space Grotesk", ui-monospace, monospace; opacity:.82; margin-bottom:14px; color:rgba(255,255,255,.82); letter-spacing:.02em; }
+    .label { font:700 10px/1 "Space Grotesk", ui-monospace, monospace; opacity:.72; letter-spacing:.08em; margin-top:10px; color:rgba(255,255,255,.72); }
+    .num { font:700 30px/1 "Space Grotesk", sans-serif; letter-spacing:-.04em; color:#fff; }
+    .rank {
+      font: 700 52px/.92 "Space Grotesk", sans-serif; letter-spacing:-.06em;
+      color:#fff;
+    }
+    .rightHud {
+      position:fixed; right:20px; bottom:20px; width:344px; text-align:left;
+      font:600 12px/1.45 "Space Grotesk", ui-monospace, monospace; color:rgba(255,255,255,.84);
+      pointer-events:none; padding:16px 18px;
+      border:1px solid rgba(255,255,255,.14); border-radius:10px;
+      background:linear-gradient(180deg, rgba(82,93,108,.82), rgba(58,67,80,.80));
+      box-shadow:0 16px 40px var(--shadow), inset 0 1px 0 rgba(255,255,255,.08);
+      backdrop-filter:blur(8px);
+    }
+    .rightHud div { margin-bottom:3px; }
+    #autoPlayHint { color:var(--pink); font-weight:700; }
+    #keyHint { font-size:15px; color:#fff; letter-spacing:.08em; }
+    .loader {
+      position:fixed; inset:0; display:grid; place-items:center;
+      background:
+        linear-gradient(180deg, rgba(30,37,48,.32), rgba(17,21,28,.74)),
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,.08), transparent 36%),
+        rgba(25,31,40,.88);
+      backdrop-filter:blur(6px);
+    }
+    .panel {
+      width:min(670px, calc(100vw - 36px)); padding:38px 36px 34px;
+      border:1px solid rgba(255,255,255,.18);
+      background:
+        linear-gradient(180deg, rgba(69,79,93,.56), rgba(39,47,58,.68)),
+        linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,0) 22%);
+      border-radius:14px; text-align:center;
+      box-shadow:0 24px 80px rgba(6,10,16,.45), inset 0 1px 0 rgba(255,255,255,.10);
+      position:relative; overflow:hidden;
+    }
+    .panel::before{
+      content:""; position:absolute; inset:18px; pointer-events:none; opacity:.7;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.14), rgba(255,255,255,0) 18%);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:10px;
+    }
+    .panel h1 {
+      margin:0 0 8px; font:900 72px/.92 "Space Grotesk", sans-serif; letter-spacing:-.06em;
+      color:var(--pink);
+    }
+    .panel p { margin:0 0 22px; font:500 16px/1.6 "Noto Sans KR", sans-serif; color:rgba(255,255,255,.84); }
+    .row { display:flex; justify-content:center; gap:10px; flex-wrap:wrap; }
+    button, label.fileBtn {
+      border:1px solid rgba(255,255,255,.18);
+      background:var(--paper);
+      color:var(--ink); border-radius:999px;
+      padding:12px 22px; font:700 16px/1 "Space Grotesk", sans-serif; cursor:pointer;
+      letter-spacing:-.01em;
+      transition: opacity .15s, transform .1s, box-shadow .15s, border-color .15s;
+      box-shadow:0 10px 28px rgba(0,0,0,.18);
+    }
+    button:hover, label.fileBtn:hover:not(.disabled) { opacity:.95; box-shadow:0 14px 32px rgba(0,0,0,.22); }
+    button:active, label.fileBtn:active { transform:scale(.98); box-shadow:0 8px 18px rgba(0,0,0,.18); }
+    button:disabled { opacity:.35; cursor:not-allowed; }
+    button.secondary {
+      background:rgba(68,77,90,.9); color:#fff;
+      border-color:rgba(255,255,255,.14); box-shadow:0 10px 28px rgba(0,0,0,.16);
+    }
+    .mode-btn.active {
+      background:var(--pink); color:#fff;
+      border-color:rgba(255,255,255,.24);
+    }
+    input[type=file] { display:none; }
+    label.fileBtn.disabled { opacity:.35; pointer-events:none; }
