@@ -1,28 +1,35 @@
 .judge {
       position:fixed; left:50%; bottom:82px; transform:translateX(-50%);
-      font:900 34px/1 "Space Grotesk", sans-serif; font-style:italic; letter-spacing:-.03em; opacity:0; pointer-events:none;
+      font:900 44px/.92 "Rajdhani", "Space Grotesk", sans-serif; font-style:italic; letter-spacing:.04em; opacity:0; pointer-events:none;
       color:#fff;
-      text-shadow:0 3px 16px rgba(0,0,0,.35);
+      text-shadow:0 0 18px rgba(94,214,255,.30), 0 4px 16px rgba(0,0,0,.42);
     }
     .comboHud {
-      position:absolute;
-      right:14px;
-      top:154px;
+      position:fixed;
+      left:20px;
+      top:96px;
       width:154px;
       min-width:0;
       max-width:154px;
       padding:14px 14px 14px;
-      border:1px solid rgba(255,255,255,.14);
-      border-radius:16px;
-      background:linear-gradient(180deg, rgba(88,98,112,.78), rgba(42,49,60,.74));
-      box-shadow:0 18px 44px rgba(5,9,16,.30), inset 0 1px 0 rgba(255,255,255,.08);
+      border:1px solid rgba(255,255,255,.10);
+      border-radius:18px;
+      background:linear-gradient(180deg, rgba(26,45,83,.88), rgba(11,20,39,.84));
+      box-shadow:0 20px 48px rgba(4,10,22,.42), inset 0 1px 0 rgba(255,255,255,.10);
       text-align:center;
       pointer-events:none;
       opacity:0;
       transform:translateY(8px) scale(.96);
-      transform-origin:right top;
+      transform-origin:left top;
       backdrop-filter:blur(10px);
       transition:opacity .15s ease, transform .15s ease, border-color .2s ease, box-shadow .2s ease;
+    }
+    .songInfoHud {
+      position:fixed;
+      left:20px;
+      top:20px;
+      z-index:11;
+      pointer-events:none;
     }
     .comboHud.active {
       opacity:1;
@@ -78,24 +85,62 @@
       z-index:3;
       pointer-events:none;
       opacity:0;
+      display:none;
       transition:opacity .22s ease;
-      background:
-        radial-gradient(circle at 50% 76%, rgba(255,214,111,.20), transparent 28%),
-        radial-gradient(circle at 50% 28%, rgba(255,255,255,.12), transparent 20%),
-        linear-gradient(180deg, rgba(255,219,128,.06), rgba(255,142,86,.12));
+      transform-origin:50% 50%;
+      will-change:opacity, transform, filter;
+      overflow:hidden;
+      background:none;
     }
-    body.fever .feverOverlay { opacity:1; }
+    .feverOverlay::before,
+    .feverOverlay::after {
+      content:none;
+      position:absolute;
+      inset:-14%;
+      pointer-events:none;
+      opacity:0;
+      will-change:transform, opacity;
+    }
+    .feverOverlay::before {
+      background:
+        linear-gradient(90deg, transparent 0%, rgba(255,255,255,.10) 46%, rgba(255,244,211,.28) 50%, rgba(255,255,255,.10) 54%, transparent 100%),
+        repeating-linear-gradient(180deg, rgba(255,255,255,.03) 0 2px, transparent 2px 18px);
+      mix-blend-mode:screen;
+      transform:translateX(-24%) skewX(-14deg);
+    }
+    .feverOverlay::after {
+      background:
+        radial-gradient(circle at 50% 50%, rgba(255,255,255,.10), transparent 40%),
+        repeating-linear-gradient(135deg, rgba(255,255,255,.025) 0 10px, transparent 10px 24px);
+      mix-blend-mode:screen;
+      transform:scale(1.08);
+    }
+    body.fever .feverOverlay { opacity:0; }
+    body.fever .feverOverlay::before,
+    body.fever .feverOverlay::after {
+      opacity:0;
+      animation:none;
+    }
+    body.autoplay-on .feverOverlay::before,
+    body.autoplay-on .feverOverlay::after {
+      animation:none;
+    }
+    body.autoplay-on .feverOverlay::before { opacity:.10; }
+    body.autoplay-on .feverOverlay::after { opacity:.06; }
+    body.autoplay-on.fever .feverOverlay {
+      transition:opacity .16s ease;
+    }
+    body.autoplay-on.fever .hud,
+    body.autoplay-on.fever .rightHud,
+    body.autoplay-on.fever .comboHud {
+      box-shadow:0 12px 28px rgba(255,176,95,.12), inset 0 1px 0 rgba(255,255,255,.08);
+    }
     body.fever .comboCount { color:#fff6d1; }
     body.fever .hud,
     body.fever .rightHud {
       box-shadow:0 16px 40px rgba(255,176,95,.18), inset 0 1px 0 rgba(255,255,255,.10);
     }
-    body.fever-1 .feverOverlay {
-      background:
-        radial-gradient(circle at 50% 76%, rgba(255,214,111,.18), transparent 30%),
-        radial-gradient(circle at 50% 28%, rgba(255,255,255,.10), transparent 22%),
-        linear-gradient(180deg, rgba(255,219,128,.05), rgba(255,162,96,.10));
-    }
+    body.fever-1 .feverOverlay { background:none; }
     body.fever-1 .comboHud {
       border-color:rgba(255,219,128,.34);
       box-shadow:0 20px 56px rgba(255,176,95,.16), inset 0 1px 0 rgba(255,255,255,.16);
@@ -105,12 +150,7 @@
     body.fever-1 .rightHud {
       border-color:rgba(255,219,128,.26);
     }
-    body.fever-2 .feverOverlay {
-      background:
-        radial-gradient(circle at 50% 76%, rgba(255,166,99,.24), transparent 32%),
-        radial-gradient(circle at 50% 30%, rgba(255,241,191,.14), transparent 22%),
-        linear-gradient(180deg, rgba(255,194,109,.08), rgba(255,118,89,.16));
-    }
+    body.fever-2 .feverOverlay { background:none; }
     body.fever-2 .comboHud {
       border-color:rgba(255,178,112,.42);
       box-shadow:0 22px 60px rgba(255,130,79,.22), inset 0 1px 0 rgba(255,255,255,.20);
@@ -122,12 +162,7 @@
       border-color:rgba(255,178,112,.32);
       box-shadow:0 18px 46px rgba(255,130,79,.20), inset 0 1px 0 rgba(255,255,255,.10);
     }
-    body.fever-3 .feverOverlay {
-      background:
-        radial-gradient(circle at 50% 74%, rgba(255,106,106,.24), transparent 34%),
-        radial-gradient(circle at 50% 26%, rgba(255,252,228,.18), transparent 24%),
-        linear-gradient(180deg, rgba(255,208,128,.10), rgba(255,88,120,.18));
-    }
+    body.fever-3 .feverOverlay { background:none; }
     body.fever-3 .comboHud {
       border-color:rgba(255,222,158,.52);
       box-shadow:0 24px 66px rgba(255,96,124,.24), inset 0 1px 0 rgba(255,255,255,.24);
@@ -139,6 +174,23 @@
       border-color:rgba(255,214,144,.38);
       box-shadow:0 20px 52px rgba(255,96,124,.22), inset 0 1px 0 rgba(255,255,255,.12);
     }
+    body.fever-4 .comboHud {
+      border-color:rgba(255,233,178,.58);
+      box-shadow:0 26px 70px rgba(255,118,157,.28), inset 0 1px 0 rgba(255,255,255,.26);
+      background:linear-gradient(180deg, rgba(168,78,96,.94), rgba(88,34,48,.88));
+    }
+    body.fever-4 .comboCount { color:#fff9e4; }
+    body.fever-4 .hud,
+    body.fever-4 .rightHud {
+      border-color:rgba(255,226,166,.42);
+      box-shadow:0 22px 56px rgba(255,118,157,.24), inset 0 1px 0 rgba(255,255,255,.13);
+    }
+    body.fever-2 .feverOverlay::before,
+    body.fever-2 .feverOverlay::after,
+    body.fever-3 .feverOverlay::before,
+    body.fever-3 .feverOverlay::after { opacity:0; animation:none; }
+    body.fever-4 .feverOverlay::before,
+    body.fever-4 .feverOverlay::after { opacity:0; animation:none; }
     body.fever-1 .feverStrip > div {
       background:linear-gradient(90deg, #ffffff, #ffd56f 55%, #ffad6a 100%);
     }
@@ -148,9 +200,21 @@
     body.fever-3 .feverStrip > div {
       background:linear-gradient(90deg, #fff8ea, #ffd98f 35%, #ff7a8e 100%);
     }
+    body.fever-4 .feverStrip > div {
+      background:linear-gradient(90deg, #fffbf0, #ffdca0 28%, #ff799a 100%);
+    }
     #feverHint { color:#ffd56f; font-weight:700; }
     body.fever-2 #feverHint { color:#ffbe78; }
     body.fever-3 #feverHint { color:#ffd9a6; }
+    body.fever-4 #feverHint { color:#ffe0b0; }
+    @keyframes feverSweep {
+      0% { transform:translateX(-26%) skewX(-14deg); }
+      100% { transform:translateX(26%) skewX(-14deg); }
+    }
+    @keyframes feverPulse {
+      0%, 100% { transform:scale(1.02); }
+      50% { transform:scale(1.08); }
+    }
     #resultScreen {
       position:fixed; inset:0; display:none; place-items:center;
       background:rgba(28,34,43,.82); backdrop-filter:blur(10px);
@@ -175,11 +239,215 @@
 @media (max-width:760px){
       .hud{ width:230px; left:14px; bottom:14px; padding:12px; }
       .rightHud{ display:none; }
-      .comboHud{ right:10px; top:126px; width:92px; max-width:92px; min-width:0; padding:10px 8px 10px; }
+      .comboHud{ left:14px; top:74px; width:112px; max-width:112px; min-width:0; padding:10px 8px 10px; }
       .comboLabel{ font-size:8px; margin-bottom:4px; letter-spacing:.18em; }
       .comboCount{ font-size:34px; }
       .comboStatus{ font-size:9px; }
       .feverMeta{ font-size:9px; gap:4px; }
       .title{font-size:24px}.num{font-size:26px}.rank{font-size:42px}
+      .songInfoHud{ left:14px; top:14px; }
       .panel h1{font-size:48px}.panel{padding:30px 20px}
+    }
+
+    body.theme-bemuse {
+      --pink:#ff73ba;
+      --paper:#f5f8ff;
+      --ink:#12203a;
+      background:
+        radial-gradient(circle at 68% 14%, rgba(255,110,183,.22), transparent 26%),
+        radial-gradient(circle at 26% 22%, rgba(99,214,255,.20), transparent 24%),
+        linear-gradient(180deg, #16315f 0%, #0b1730 48%, #060c18 100%);
+    }
+    body.theme-bemuse::before{
+      opacity:1;
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.04), transparent 16%, transparent 84%, rgba(0,0,0,.26)),
+        linear-gradient(90deg, rgba(0,0,0,.22), transparent 18%, transparent 82%, rgba(0,0,0,.22));
+    }
+    body.theme-bemuse::after{
+      opacity:.05;
+      background-image:
+        radial-gradient(circle at 18% 22%, rgba(255,239,160,.85) 0 2px, transparent 3px),
+        radial-gradient(circle at 79% 18%, rgba(120,170,255,.75) 0 2px, transparent 3px),
+        radial-gradient(circle at 84% 70%, rgba(255,170,210,.75) 0 2px, transparent 3px),
+        radial-gradient(circle at 12% 64%, rgba(255,239,160,.65) 0 2px, transparent 3px);
+      background-size:auto;
+      background-repeat:no-repeat;
+    }
+    body.theme-bemuse .loader {
+      background:
+        linear-gradient(180deg, rgba(20,26,36,.12), rgba(11,16,24,.82)),
+        linear-gradient(180deg, rgba(35,49,69,.50), rgba(9,13,19,.92));
+    }
+    body.theme-bemuse .panel {
+      width:min(760px, calc(100vw - 40px));
+      border-radius:24px;
+      border:1px solid rgba(255,255,255,.16);
+      background:linear-gradient(180deg, rgba(24,45,84,.54), rgba(10,18,35,.80));
+      box-shadow:0 28px 80px rgba(2,6,18,.56), inset 0 1px 0 rgba(255,255,255,.12);
+    }
+    body.theme-bemuse .panel::before {
+      inset:20px;
+      border-radius:12px;
+      border-color:rgba(255,255,255,.07);
+      background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 20%);
+    }
+    body.theme-bemuse .panel h1 {
+      font:900 86px/.88 "Rajdhani", "Titillium Web", sans-serif;
+      color:#ffffff;
+      letter-spacing:.01em;
+      text-shadow:0 0 22px rgba(99,214,255,.24), 0 4px 20px rgba(0,0,0,.26);
+    }
+    body.theme-bemuse .panel p {
+      font:500 16px/1.55 "Titillium Web", "Noto Sans KR", sans-serif;
+      color:rgba(234,240,248,.84);
+    }
+    body.theme-bemuse button,
+    body.theme-bemuse label.fileBtn {
+      border-radius:999px;
+      background:linear-gradient(180deg, #f8fbff, #cfe6ff);
+      color:#10203b;
+      border:1px solid rgba(255,255,255,.28);
+      box-shadow:0 12px 28px rgba(0,0,0,.22);
+      font:800 15px/1 "Rajdhani", "Titillium Web", sans-serif;
+      letter-spacing:.01em;
+    }
+    body.theme-bemuse button.secondary {
+      background:linear-gradient(180deg, rgba(39,76,137,.98), rgba(18,35,67,.98));
+      color:#f6fbff;
+      border-color:rgba(138,223,255,.20);
+    }
+    body.theme-bemuse .mode-btn.active {
+      background:linear-gradient(180deg, #ff73ba, #ff5e9e);
+      color:#fff;
+    }
+    body.theme-bemuse .hud,
+    body.theme-bemuse .rightHud,
+    body.theme-bemuse .comboHud,
+    body.theme-bemuse .result-panel {
+      border-radius:18px;
+      border:1px solid rgba(255,255,255,.10);
+      background:linear-gradient(180deg, rgba(19,35,66,.92), rgba(9,17,33,.88));
+      box-shadow:0 16px 34px rgba(2,6,18,.42), inset 0 1px 0 rgba(255,255,255,.08);
+      backdrop-filter:blur(12px);
+    }
+    body.theme-bemuse .hud {
+      left:14px;
+      bottom:14px;
+      width:276px;
+      padding:12px 14px 14px;
+    }
+    body.theme-bemuse .hud::before,
+    body.theme-bemuse .comboHud::before,
+    body.theme-bemuse .panel::before {
+      box-shadow:none;
+    }
+    body.theme-bemuse .title,
+    body.theme-bemuse .bar,
+    body.theme-bemuse .time {
+      display:none;
+    }
+    body.theme-bemuse .sub {
+      margin-bottom:8px;
+      font:800 16px/1.2 "Rajdhani", "Titillium Web", "Noto Sans KR", sans-serif;
+      color:#f1f5fb;
+      opacity:1;
+    }
+    body.theme-bemuse .label,
+    body.theme-bemuse .comboLabel,
+    body.theme-bemuse .comboStatus,
+    body.theme-bemuse .feverMeta,
+    body.theme-bemuse .rightHud {
+      font-family:"Rajdhani", "Titillium Web", sans-serif;
+      color:rgba(236,241,248,.76);
+      letter-spacing:.08em;
+    }
+    body.theme-bemuse .label { margin-top:7px; font-size:11px; }
+    body.theme-bemuse .num { font:800 24px/1 "Rajdhani", "Titillium Web", sans-serif; }
+    body.theme-bemuse .rank { font:800 38px/.9 "Rajdhani", "Titillium Web", sans-serif; }
+    body.theme-bemuse .songInfoHud {
+      left:14px;
+      top:14px;
+    }
+    body.theme-bemuse .comboHud {
+      left:14px;
+      right:auto;
+      top:84px;
+      bottom:auto;
+      width:164px;
+      padding:12px 12px 12px;
+      transform-origin:left top;
+    }
+    body.theme-bemuse .comboCount {
+      font:900 48px/.84 "Rajdhani", "Titillium Web", sans-serif;
+      text-shadow:0 0 18px rgba(102,218,255,.18);
+    }
+    body.theme-bemuse .feverStrip {
+      height:5px;
+      border-radius:3px;
+      background:rgba(15,18,23,.42);
+      border-color:rgba(255,255,255,.08);
+    }
+    body.theme-bemuse .feverStrip > div {
+      background:linear-gradient(90deg, #fff8d2, #d4a13e 100%);
+      box-shadow:none;
+    }
+    body.theme-bemuse .rightHud {
+      right:14px;
+      bottom:14px;
+      width:284px;
+      padding:12px 14px 14px;
+      min-height:88px;
+    }
+    body.theme-bemuse #autoPlayHint,
+    body.theme-bemuse #feverHint {
+      color:#fff0bf;
+    }
+    body.theme-bemuse #keyHint {
+      color:#e8eef7;
+      font-size:13px;
+      letter-spacing:.18em;
+    }
+    body.theme-bemuse #bpmText {
+      position:relative;
+      left:auto;
+      bottom:auto;
+      top:auto;
+      transform:none;
+      margin:0;
+      padding:8px 12px 7px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.10);
+      background:linear-gradient(180deg, rgba(19,35,66,.92), rgba(9,17,33,.88));
+      box-shadow:0 16px 34px rgba(2,6,18,.42), inset 0 1px 0 rgba(255,255,255,.08);
+      font:900 24px/.92 "Rajdhani", "Titillium Web", sans-serif;
+      color:#f0f4fa;
+      letter-spacing:.06em;
+      text-shadow:0 0 18px rgba(99,214,255,.16), 0 4px 16px rgba(0,0,0,.24);
+      pointer-events:none;
+    }
+    body.theme-bemuse .judge {
+      bottom:120px;
+      font:900 italic 34px/1 "Rajdhani", "Titillium Web", sans-serif;
+      letter-spacing:.06em;
+      text-shadow:0 0 18px rgba(94,214,255,.22), 0 3px 14px rgba(0,0,0,.42);
+    }
+    body.theme-bemuse #resultScreen {
+      background:rgba(18,24,32,.80);
+    }
+    body.theme-bemuse .result-panel {
+      background:linear-gradient(180deg, rgba(76,87,101,.96), rgba(62,72,83,.94));
+      width:min(620px, calc(100vw - 36px));
+    }
+    body.theme-bemuse .result-rank,
+    body.theme-bemuse .result-title,
+    body.theme-bemuse .stat-val,
+    body.theme-bemuse .stat-label {
+      font-family:"Titillium Web", sans-serif;
+    }
+    @media (max-width:760px){
+      body.theme-bemuse .hud { width:210px; }
+      body.theme-bemuse .comboHud { left:14px; top:74px; width:112px; }
+      body.theme-bemuse .rightHud { width:208px; }
+      body.theme-bemuse #bpmText { font-size:18px; padding:7px 10px 6px; }
     }

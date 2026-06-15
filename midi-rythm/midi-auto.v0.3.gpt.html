@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="styles/game.css" />
   <link rel="stylesheet" href="styles/editor.css" />
 </head>
-<body>
+<body class="theme-bemuse">
   <div id="gameRoot"></div>
 
   <div class="hud">
@@ -31,15 +31,20 @@
     <div class="label">COMBO</div><div class="num" id="combo">0</div>
     <div class="label">ACCURACY</div><div class="num" id="acc">100%</div>
     <div class="label">RANK</div><div class="rank" id="rank">-</div>
-    <div class="comboHud" id="comboHud">
-      <div class="comboLabel">COMBO</div>
-      <div class="comboCount" id="comboBurst">0</div>
-      <div class="comboStatus" id="comboStatus">Build a streak</div>
-      <div class="feverStrip"><div id="feverFill"></div></div>
-      <div class="feverMeta">
-        <span id="feverState">READY 0 / 20</span>
-        <strong id="feverBonus">x1.00</strong>
-      </div>
+  </div>
+
+  <div class="songInfoHud">
+    <div id="bpmText">BPM -</div>
+  </div>
+
+  <div class="comboHud" id="comboHud">
+    <div class="comboLabel">COMBO</div>
+    <div class="comboCount" id="comboBurst">0</div>
+    <div class="comboStatus" id="comboStatus">Build a streak</div>
+    <div class="feverStrip"><div id="feverFill"></div></div>
+    <div class="feverMeta">
+      <span id="feverState">READY 0 / 20</span>
+      <strong id="feverBonus">x1.00</strong>
     </div>
   </div>
 
@@ -51,7 +56,6 @@
     <div id="feverHint">FEVER 0 / 20</div>
     <div id="keyHint">A S D F J K L ;</div>
     <div>Pause, open chart panel, then drag notes.</div>
-    <div id="bpmText">BPM -</div>
   </div>
 
   <button class="chart-toggle" id="chartToggleBtn" type="button">CHART + EDIT</button>
@@ -109,6 +113,8 @@
     <div class="chart-actions">
       <div class="chart-actions-left">
         <button class="chart-action-btn primary" id="copyChartBtn" type="button">복사</button>
+        <button class="chart-action-btn" id="editChartBtn" type="button">Edit</button>
+        <button class="chart-action-btn" id="applyChartBtn" type="button" disabled>Apply</button>
         <button class="chart-action-btn" id="refreshChartBtn" type="button">새로고침</button>
       </div>
       <div class="chart-actions-right">

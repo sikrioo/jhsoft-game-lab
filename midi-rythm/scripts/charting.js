@@ -158,8 +158,27 @@ async function loadMidi(file){
       leadTracks = tracks.filter(t => !t.isDrum && t.notes.length >= 8).sort((a,b)=>b.score-a.score).slice(0, Math.min(3, tracks.length));
     }
 
-    const sourceNotes = collectLeadCandidates(leadTracks, tracks, beat, measure);
+    const primaryTrack = choosePrimaryLeadTrack(leadTracks);
+    const fallbackTracks = chooseFallbackTracks(primaryTrack, leadTracks, tracks);
+    const primaryCandidates = primaryTrack ? collectLeadCandidates([primaryTrack], tracks, beat, measure) : [];
+    const fallbackCandidates = fallbackTracks.length ? collectLeadCandidates(fallbackTracks, tracks, beat, measure) : [];
+    const preparedNotes = prepareMelodyDrivenNotes(primaryCandidates, fallbackCandidates, beat, measure, grid, minGap);
+    const sourceNotes = preparedNotes.length ? preparedNotes : collectLeadCandidates(leadTracks, tracks, beat, measure);
     state.chartDebug = {
+      primaryTrack: primaryTrack ? {
+        trackIndex:primaryTrack.trackIndex,
+        name:primaryTrack.name,
+        score:+primaryTrack.score.toFixed(2),
+        notes:primaryTrack.notes.length,
+        density:+primaryTrack.density.toFixed(2)
+      } : null,
+      fallbackTracks: fallbackTracks.map(t => ({
+        trackIndex:t.trackIndex,
+        name:t.name,
+        score:+t.score.toFixed(2),
+        notes:t.notes.length,
+        density:+t.density.toFixed(2)
+      })),
       leadTracks: leadTracks.map(t => ({
         trackIndex:t.trackIndex,
         name:t.name,
@@ -177,17 +196,30 @@ async function loadMidi(file){
         avgPitch:+t.avgPitch.toFixed(2),
         isDrum:t.isDrum
       })),
-      candidateCount: sourceNotes.length
+      candidateCount: sourceNotes.length,
+      primaryCandidateCount: primaryCandidates.length,
+      fallbackCandidateCount: fallbackCandidates.length,
+      preparedCandidateCount: preparedNotes.length,
+      pipeline: preparedNotes.length ? 'primary+fallback-melody' : 'lead-candidate-fallback'
     };
     console.table(state.chartDebug.trackScores);
     console.log('Selected lead tracks:', state.chartDebug.leadTracks);
+    if(state.chartDebug.primaryTrack) console.log('Primary melody track:', state.chartDebug.primaryTrack);
+    if(state.chartDebug.fallbackTracks.length) console.log('Fallback melody tracks:', state.chartDebug.fallbackTracks);
 
     if(!sourceNotes.length) return [];
 
-    const buckets = bucketSourceNotes(sourceNotes, grid);
-    const skeleton = buildSkeletonChart(buckets, beat, measure, minGap);
-    const densified = smoothChartDensity(skeleton, sourceNotes, beat, grid, minGap, measure);
-    const withLanes = assignChartLanes(densified);
+    const chart = preparedNotes.length
+      ? buildMelodyDrivenChart(preparedNotes, beat, measure, minGap)
+      : smoothChartDensity(
+          buildSkeletonChart(bucketSourceNotes(sourceNotes, grid), beat, measure, minGap),
+          sourceNotes,
+          beat,
+          grid,
+          minGap,
+          measure
+        );
+    const withLanes = assignChartLanes(chart);
     return reindexChartNotes(withLanes, { preserveState:false });
   }
 
@@ -290,6 +322,44 @@ async function loadMidi(file){
     return selected.length ? selected : ranked.slice(0, count);
   }
 
+  function choosePrimaryLeadTrack(leadTracks){
+    if(!leadTracks.length) return null;
+    return [...leadTracks]
+      .map(track => {
+        const melodicBias =
+          clamp((track.avgPitch - 54) / 16, 0, 1) * 0.8 +
+          clamp((track.pitchSpan - 9) / 16, 0, 1) * 0.35 +
+          (1 - clamp(((track.poly?.avgSimul ?? 1) - 1.15) / 1.8, 0, 1)) * 0.75 +
+          (1 - clamp(Math.abs(track.density - (state.mode === 'normal' ? 3.2 : 2.3)) / 4.2, 0, 1)) * 0.45;
+        return { track, score:track.score + melodicBias };
+      })
+      .sort((a,b)=>b.score-a.score)[0]?.track || leadTracks[0];
+  }
+
+  function chooseFallbackTracks(primaryTrack, leadTracks, tracks){
+    const selected = [];
+    const pushTrack = track => {
+      if(!track || (primaryTrack && track.trackIndex === primaryTrack.trackIndex)) return;
+      if(selected.some(item => item.trackIndex === track.trackIndex)) return;
+      if(track.isDrum || track.notes.length < 8) return;
+      const tooSimilarToPrimary = primaryTrack &&
+        Math.abs(primaryTrack.avgPitch - track.avgPitch) < 3 &&
+        Math.abs(primaryTrack.density - track.density) < 0.75 &&
+        track.score < primaryTrack.score + 0.4;
+      if(tooSimilarToPrimary) return;
+      selected.push(track);
+    };
+
+    for(const track of leadTracks) pushTrack(track);
+
+    const ranked = tracks
+      .filter(track => !track.isDrum && track.notes.length >= 8 && track.trackIndex !== primaryTrack?.trackIndex)
+      .sort((a,b)=>b.score-a.score);
+    for(const track of ranked) pushTrack(track);
+
+    return selected.slice(0, state.mode === 'normal' ? 3 : 2);
+  }
+
   function annotateTrackNotes(notes, beat, measure, meta){
     const byBucket = new Map();
     for(const note of notes){
@@ -387,6 +457,221 @@ async function loadMidi(file){
       }
     }
     return out.sort((a,b)=>a.time-b.time || b.priority-a.priority || b.midi-a.midi);
+  }
+
+  function prepareMelodyDrivenNotes(primaryCandidates, fallbackCandidates, beat, measure, grid, minGap){
+    const primaryLine = snapPreparedMelodyNotes(compressCandidateChords(primaryCandidates, beat, 'primary'), grid);
+    const fallbackLine = snapPreparedMelodyNotes(compressCandidateChords(fallbackCandidates, beat, 'fallback'), grid);
+    const merged = fillMelodyGaps(primaryLine, fallbackLine, {
+      gapThreshold:Math.max(beat * 4, 1.15),
+      minSpacing:Math.max(minGap * 0.92, grid * 1.5)
+    });
+    return limitPreparedDensity(merged, TARGET_NPS[state.mode] || 2.4, beat, measure);
+  }
+
+  function compressCandidateChords(candidates, beat, role='primary', windowSec=0.03){
+    if(!candidates.length) return [];
+    const ordered = [...candidates].sort((a,b)=>a.time-b.time || b.priority-a.priority || b.midi-a.midi);
+    const groups = [];
+    let current = [ordered[0]];
+
+    for(const note of ordered.slice(1)){
+      if(note.time - current[0].time <= windowSec) current.push(note);
+      else {
+        groups.push(current);
+        current = [note];
+      }
+    }
+    groups.push(current);
+
+    return groups.map(group => {
+      const low = Math.min(...group.map(n=>n.midi));
+      const high = Math.max(...group.map(n=>n.midi));
+      const span = Math.max(1, high - low);
+      const ranked = group
+        .map(note => {
+          const registerBias = ((note.midi - low) / span) * (role === 'primary' ? 0.62 : 0.34);
+          const durationBias = clamp(note.duration / Math.max(beat * 0.95, 0.42), 0, 1.25) * 0.3;
+          const accentBias = (note.accentScore || 0) * 0.24 + ((note.phraseStart || note.phraseEnd) ? 0.18 : 0);
+          const fallbackPenalty = role === 'fallback' ? 0.18 : 0;
+          return { note, score:note.priority + registerBias + durationBias + accentBias - fallbackPenalty };
+        })
+        .sort((a,b)=>b.score-a.score || b.note.midi-a.note.midi);
+      const best = ranked[0].note;
+      const maxDuration = Math.max(...group.map(n => n.duration || 0.08));
+      const supportPool = group
+        .filter(note => note !== best)
+        .sort((a,b)=>Math.abs(b.midi - best.midi) - Math.abs(a.midi - best.midi) || b.priority-a.priority);
+
+      return {
+        ...best,
+        duration:Math.max(best.duration || 0.12, maxDuration),
+        time:roundTo(best.time, 4),
+        fromFallback:role === 'fallback',
+        sourceChordCount:group.length,
+        sourceChordSpread:high - low,
+        supportPool,
+        lineRole:role
+      };
+    });
+  }
+
+  function snapPreparedMelodyNotes(notes, grid){
+    if(!notes.length) return [];
+    const byTime = new Map();
+    for(const note of notes){
+      const snappedTime = roundTo(Math.round(note.time / grid) * grid, 4);
+      const existing = byTime.get(snappedTime);
+      const noteScore = (note.priority || 0) + (note.accentScore || 0) * 0.28 + (note.midi || 0) * 0.01;
+      const existingScore = existing ? (existing.priority || 0) + (existing.accentScore || 0) * 0.28 + (existing.midi || 0) * 0.01 : -999;
+      const mergedSupport = [
+        ...(existing?.supportPool || []),
+        ...((existing && existing !== note) ? [existing] : []),
+        ...(note.supportPool || [])
+      ];
+      if(!existing || noteScore > existingScore){
+        byTime.set(snappedTime, {
+          ...note,
+          time:snappedTime,
+          duration:Math.max(note.duration || 0.12, existing?.duration || 0.12),
+          supportPool:mergedSupport.filter(item => item !== note)
+        });
+      } else {
+        existing.duration = Math.max(existing.duration || 0.12, note.duration || 0.12);
+        existing.supportPool = [...(existing.supportPool || []), note, ...(note.supportPool || [])];
+      }
+    }
+    return [...byTime.values()].sort((a,b)=>a.time-b.time || b.priority-a.priority || b.midi-a.midi);
+  }
+
+  function fillMelodyGaps(primaryNotes, fallbackNotes, {gapThreshold=1.5, minSpacing=0.25} = {}){
+    if(!primaryNotes.length) return [...fallbackNotes];
+    if(!fallbackNotes.length) return [...primaryNotes];
+
+    const result = [...primaryNotes];
+    const usedTimes = new Set(primaryNotes.map(note => roundTo(note.time, 4)));
+    const primary = [...primaryNotes].sort((a,b)=>a.time-b.time);
+    const ranges = [];
+
+    if(primary[0].time >= gapThreshold){
+      ranges.push([0, primary[0].time]);
+    }
+    for(let i=0;i<primary.length-1;i++){
+      const gapStart = primary[i].time + Math.min(primary[i].duration || 0.12, minSpacing * 0.6);
+      const gapEnd = primary[i + 1].time;
+      if(gapEnd - gapStart >= gapThreshold){
+        ranges.push([gapStart, gapEnd]);
+      }
+    }
+
+    for(const [gapStart, gapEnd] of ranges){
+      const candidates = fallbackNotes
+        .filter(note => note.time >= gapStart && note.time < gapEnd && !usedTimes.has(roundTo(note.time, 4)))
+        .sort((a,b)=>a.time-b.time || b.priority-a.priority || b.midi-a.midi);
+      if(!candidates.length) continue;
+
+      let lastPlaced = gapStart - minSpacing;
+      let placed = 0;
+      const budget = Math.max(1, Math.min(3, Math.floor((gapEnd - gapStart) / Math.max(gapThreshold, minSpacing * 1.8))));
+
+      for(const note of candidates){
+        const key = roundTo(note.time, 4);
+        if(usedTimes.has(key) || note.time - lastPlaced < minSpacing) continue;
+        result.push({ ...note, fromFallback:true });
+        usedTimes.add(key);
+        lastPlaced = note.time;
+        placed += 1;
+        if(placed >= budget) break;
+      }
+    }
+
+    return result.sort((a,b)=>a.time-b.time || (a.fromFallback === b.fromFallback ? 0 : (a.fromFallback ? 1 : -1)) || b.priority-a.priority);
+  }
+
+  function limitPreparedDensity(notes, targetNps, beat, measure){
+    if(notes.length < 3) return notes;
+    const sorted = [...notes].sort((a,b)=>a.time-b.time || b.priority-a.priority || b.midi-a.midi);
+    const first = sorted[0].time;
+    const last = Math.max(...sorted.map(note => note.time + Math.max(note.duration || 0.12, 0.12)));
+    const playLength = Math.max(1, last - first);
+    const nps = sorted.length / playLength;
+    if(nps <= targetNps * 1.06) return sorted;
+
+    const keepRatio = clamp((targetNps * playLength) / sorted.length, state.mode === 'normal' ? 0.68 : 0.55, 0.96);
+    const keepCount = Math.max(1, Math.round(sorted.length * keepRatio));
+    const weighted = sorted.map((note, index) => ({
+      index,
+      note,
+      score:
+        (note.priority || 0) +
+        (note.accentScore || 0) * 0.6 +
+        clamp((note.duration || 0.12) / Math.max(beat * 0.9, 0.38), 0, 1.25) * 0.35 +
+        (isStrongBeat(note.time, beat, measure) ? 0.24 : 0) +
+        ((note.phraseStart || note.phraseEnd) ? 0.18 : 0) -
+        (note.fromFallback ? 0.3 : 0)
+    }));
+    const keepIndices = new Set(weighted.sort((a,b)=>b.score-a.score).slice(0, keepCount).map(entry => entry.index));
+    return sorted.filter((_, index) => keepIndices.has(index));
+  }
+
+  function buildMelodyDrivenChart(notes, beat, measure, minGap){
+    const chart = [];
+    const context = { lastTime:-999, lastPitch:null, flowDir:0, chordStreak:0, lastChordTime:-999 };
+
+    for(const note of [...notes].sort((a,b)=>a.time-b.time || b.priority-a.priority || b.midi-a.midi)){
+      const strongAccent = (note.accentScore || 0) >= 0.95 || note.beatStrength >= 0.95 || note.duration >= beat * 0.85 || note.phraseStart;
+      const gapFactor = strongAccent ? 0.56 : note.fromFallback ? 1.12 : (note.repetitionPenalty || 0) > 0.45 ? 1.18 : 1;
+      if(note.time - context.lastTime < minGap * gapFactor && !strongAccent) continue;
+
+      const notesAtTime = [createChartNoteFromSource(note, note.time, beat)];
+      const chordSize = computePreparedChordSize(note, context, beat, measure);
+      if(chordSize > 1){
+        const supports = pickPreparedChordSupports(note, chordSize - 1);
+        for(const extra of supports){
+          notesAtTime.push(createChartNoteFromSource(extra, note.time, beat));
+        }
+      }
+
+      chart.push(...notesAtTime);
+      if(context.lastPitch != null){
+        const diff = note.midi - context.lastPitch;
+        if(diff !== 0) context.flowDir = Math.sign(diff);
+      }
+      context.lastPitch = note.midi;
+      context.lastTime = note.time;
+      if(notesAtTime.length > 1){
+        context.chordStreak = Math.min(2, context.chordStreak + 1);
+        context.lastChordTime = note.time;
+      } else {
+        context.chordStreak = 0;
+      }
+    }
+
+    return chart;
+  }
+
+  function computePreparedChordSize(note, context, beat, measure){
+    const supports = (note.supportPool || []).filter(item => Math.abs(item.midi - note.midi) >= 4 && (item.voiceRank ?? 0) <= 1);
+    if(!supports.length) return 1;
+    if(context.chordStreak >= 2 || note.time - context.lastChordTime < beat * 0.8) return 1;
+    const strongAccent = (note.accentScore || 0) >= 1.1 || note.velocity >= 0.82 || beatStrengthAt(note.time, beat, measure) >= 1.2;
+    if(!strongAccent) return 1;
+    if(supports.length >= 2 && (note.sourceChordSpread || 0) >= 10 && ((note.accentScore || 0) >= 1.4 || note.velocity >= 0.88)) return 3;
+    return 2;
+  }
+
+  function pickPreparedChordSupports(note, count){
+    return (note.supportPool || [])
+      .filter(item => Math.abs(item.midi - note.midi) >= 4 && (item.voiceRank ?? 0) <= 1)
+      .map(item => {
+        const distance = Math.abs(item.midi - note.midi);
+        const spacing = distance >= 4 && distance <= 14 ? 0.55 : distance > 14 ? 0.28 : -0.2;
+        const lowerAnchor = item.midi < note.midi ? 0.16 : 0.06;
+        return { item, score:(item.priority || 0) * 0.58 + spacing + lowerAnchor - (item.repetitionPenalty || 0) * 0.8 };
+      })
+      .sort((a,b)=>b.score-a.score)
+      .slice(0, count)
+      .map(entry => entry.item);
   }
 
   function bucketSourceNotes(sourceNotes, grid){

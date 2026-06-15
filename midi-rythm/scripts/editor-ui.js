@@ -347,6 +347,107 @@ function canEditChart(){
     return state.chartExport;
   }
 
+  function syncChartTextEditUi(){
+    const area = $('chartDataText');
+    const editBtn = $('editChartBtn');
+    const applyBtn = $('applyChartBtn');
+    if(area){
+      area.readOnly = !state.chartTextEditing;
+      area.classList.toggle('editing', state.chartTextEditing);
+      area.spellcheck = false;
+    }
+    if(editBtn){
+      editBtn.classList.toggle('active', state.chartTextEditing);
+      editBtn.textContent = state.chartTextEditing ? 'Cancel' : 'Edit';
+    }
+    if(applyBtn) applyBtn.disabled = !state.chartTextEditing;
+  }
+
+  function toggleChartTextEditing(){
+    state.chartTextEditing = !state.chartTextEditing;
+    if(!state.chartTextEditing && state.chartExportText){
+      const area = $('chartDataText');
+      if(area) area.value = state.chartExportText;
+    }
+    syncChartTextEditUi();
+  }
+
+  function chartFromExportData(data){
+    if(!data || typeof data !== 'object' || !Array.isArray(data.notes)){
+      throw new Error('Chart JSON must include a notes array.');
+    }
+    const lanes = Number(data.lanes ?? state.LANES);
+    if(lanes !== state.LANES){
+      throw new Error(`Edited chart lanes (${lanes}) do not match the current mode (${state.LANES} lanes).`);
+    }
+
+    const chart = data.notes.map((note, index) => {
+      const time = Math.max(0, Number(note.time) || 0);
+      const duration = Math.max(0, Number(note.duration) || 0);
+      const hold = Boolean(note.hold) || duration >= HOLD_MIN_DURATION * 0.65 || Number(note.holdEnd) > time + 0.18;
+      const lane = clamp(Math.round(Number(note.lane) || 0), 0, state.LANES - 1);
+      const holdEnd = hold
+        ? roundTo(Math.max(time + Math.max(duration, 0.12), Number(note.holdEnd) || 0), 4)
+        : null;
+      return {
+        id:index,
+        time:roundTo(time, 4),
+        lane,
+        midi:Number.isFinite(Number(note.midi)) ? Math.round(Number(note.midi)) : null,
+        duration:roundTo(hold ? Math.max(holdEnd - time, 0.12) : Math.max(duration, 0.12), 4),
+        hold,
+        holdEnd,
+        holding:false,
+        hit:false,
+        missed:false
+      };
+    }).sort((a,b) => a.time - b.time || a.lane - b.lane || a.id - b.id);
+
+    chart.forEach((note, index) => { note.id = index; });
+    return chart;
+  }
+
+  async function applyChartTextEdit(){
+    if(!state.chartTextEditing) return;
+    const area = $('chartDataText');
+    const status = $('chartCopyStatus');
+    if(!area) return;
+
+    try{
+      const parsed = JSON.parse(area.value);
+      let chart = null;
+      let bpm = state.lastBpm || state.bpm || 120;
+
+      if(parsed?.format === 'midi-auto-chart-v1' || Array.isArray(parsed?.notes)){
+        chart = chartFromExportData(parsed);
+        bpm = Number(parsed.bpm) || bpm;
+      } else {
+        const imported = convertImportedChartData(parsed, preferredImportedDifficulty(state.mode));
+        if(!imported) throw new Error('Unsupported chart format.');
+        if(imported.laneCount !== state.LANES){
+          throw new Error(`Edited chart lanes (${imported.laneCount}) do not match the current mode (${state.LANES} lanes).`);
+        }
+        chart = imported.chart;
+        bpm = imported.bpm || bpm;
+      }
+
+      state.chartTextEditing = false;
+      syncChartTextEditUi();
+      if(status){
+        status.textContent = 'Chart applied. Restarting with the current mode.';
+        gsap.killTweensOf(status);
+        gsap.fromTo(status,{opacity:1},{opacity:.55,duration:.8,delay:1.1});
+      }
+      await startGame(chart, bpm, state.lastName || 'Edited Chart', state.lastPlayback || []);
+    }catch(err){
+      if(status){
+        status.textContent = `Apply failed: ${err.message}`;
+        gsap.killTweensOf(status);
+        gsap.fromTo(status,{opacity:1},{opacity:.65,duration:.8,delay:1.4});
+      }
+    }
+  }
+
   function refreshChartPanel(){
     if(!state.chartExport) buildChartExport();
 
@@ -354,6 +455,8 @@ function canEditChart(){
     if(!data){
       $('chartPanelSub').textContent = '아직 생성된 채보가 없습니다.';
       $('chartDataText').value = '아직 생성된 채보가 없습니다.';
+      syncChartTextEditUi();
+      refreshEditorPanel();
       return;
     }
 
@@ -362,7 +465,8 @@ function canEditChart(){
     $('chartSummaryNotes').textContent = data.noteCount ?? '-';
     $('chartSummaryHolds').textContent = data.holdCount ?? '-';
     $('chartSummaryNps').textContent = data.nps ?? '-';
-    $('chartDataText').value = state.chartExportText || JSON.stringify(data, null, 2);
+    if(!state.chartTextEditing) $('chartDataText').value = state.chartExportText || JSON.stringify(data, null, 2);
+    syncChartTextEditUi();
     refreshEditorPanel();
   }
 
@@ -419,8 +523,8 @@ function canEditChart(){
   // ─────────────────────────────────────────
   // HUD
   // ─────────────────────────────────────────
-  function updateHud(){
-    const now=Math.max(0,Math.min(state.duration,songTime()));
+  function updateHud(nowValue){
+    const now=Math.max(0,Math.min(state.duration, Number.isFinite(nowValue) ? nowValue : songTime()));
     $('score').textContent=Math.floor(state.score).toLocaleString();
     $('combo').textContent=state.combo;
     const acc=state.judged?Math.round(state.hits/state.judged*100):100;
@@ -446,28 +550,28 @@ function canEditChart(){
       : Math.max(0, Math.min(1, (state.combo - prevStageCombo) / stageSpan));
     const readyCombo = nextStage ? Math.max(0, nextStage.combo - state.combo) : 0;
 
-    if(comboHud) comboHud.classList.toggle('active', state.started && (state.combo > 1 || state.feverActive));
+    if(comboHud) comboHud.classList.toggle('active', state.started && (state.combo > 0 || state.feverLevel > 0));
     if(comboBurst) comboBurst.textContent = state.combo;
     if(comboStatus){
       comboStatus.textContent = state.feverLevel === 0
-        ? state.combo <= 1
+        ? state.combo === 0
           ? 'Build a streak'
-          : `${readyCombo} more for FEVER 1`
+          : `${readyCombo} more for ${FEVER_STAGES[0].label}`
         : state.feverLevel >= FEVER_STAGES.length
-          ? `MAX FEVER  x${state.feverMultiplier.toFixed(2)} SCORE`
-          : `${readyCombo} more for FEVER ${state.feverLevel + 1}`;
+          ? `FEVER ACTIVE  x${state.feverMultiplier.toFixed(2)} SCORE`
+          : `${readyCombo} more for ${nextStage.label}`;
     }
     if(feverFill) feverFill.style.width = `${stageProgress * 100}%`;
     if(feverState) feverState.textContent = state.feverLevel > 0
       ? nextStage
-        ? `FEVER ${state.feverLevel}  ${state.combo} / ${nextStage.combo}`
-        : `FEVER ${state.feverLevel}  MAX`
+        ? `${currentStage.label}  ${state.combo} / ${nextStage.combo}`
+        : `FEVER  ${state.combo} COMBO`
       : `READY ${state.combo} / ${FEVER_STAGES[0].combo}`;
     if(feverBonus) feverBonus.textContent = `x${state.feverMultiplier.toFixed(2)}`;
     if(feverHint) feverHint.textContent = state.feverLevel > 0
       ? nextStage
-        ? `FEVER ${state.feverLevel} x${state.feverMultiplier.toFixed(2)} -> ${nextStage.combo}`
-        : `FEVER ${state.feverLevel} MAX x${state.feverMultiplier.toFixed(2)}`
+        ? `${currentStage.label} x${state.feverMultiplier.toFixed(2)} -> ${nextStage.combo}`
+        : `FEVER MAX x${state.feverMultiplier.toFixed(2)}`
       : `FEVER 0 / ${FEVER_STAGES[0].combo}`;
   }
 

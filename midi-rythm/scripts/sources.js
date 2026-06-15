@@ -2,6 +2,7 @@
 
 function refreshAutoplayUi(){
     const el = $('autoPlayHint');
+    document.body.classList.toggle('autoplay-on', !!state.autoplay);
     if(!el) return;
     el.textContent = `F2 : AUTOPLAY ${state.autoplay ? 'ON' : 'OFF'}`;
     el.style.color = state.autoplay ? '#ffd978' : 'rgba(246,241,220,.78)';
@@ -86,28 +87,6 @@ function refreshAutoplayUi(){
       bpm:Number(data.bpm) || null,
       sourceTracks:Array.isArray(data.source_tracks) ? [...data.source_tracks] : []
     };
-  }
-  async function startLegacyPatternDemo(){
-    const bpm = 160, beat = 60/bpm;
-    const notes=[]; let t=1.0;
-    const pattern=[0,1,2,3,4,5,6,7,6,5,4,3,2,1].map(p=>p % state.LANES);
-    for(let r=0;r<18;r++){
-      for(let pi=0; pi<pattern.length; pi++){
-        const p = pattern[pi];
-        const lane = (p+r)%state.LANES;
-        // 각 라운드의 첫 노트는 길게 눌러야 하는 롱노트로 데모
-        const isHold = (pi===0 && r % 3 === 1);
-        const dur = isHold ? (beat*1.5) : 0.12;
-        notes.push({
-          id:notes.length, time:t, lane,
-          duration:dur, hold:isHold, holdEnd:t+dur, holding:false,
-          hit:false, missed:false
-        });
-        t += (r>10 ? beat/2 : beat);
-      }
-    }
-    const playback = notes.map(n => ({time:n.time, duration:Math.min(n.duration,0.5), midi:60+n.lane, velocity:0.65}));
-    startGame(notes, bpm, 'Built-in Demo', playback);
   }
 
   // ─────────────────────────────────────────

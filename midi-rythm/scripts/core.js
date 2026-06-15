@@ -7,25 +7,28 @@ const MODE_KEYS = {
   };
   const HIT_RATIO = 0.79;
   const FALL_TIME = 2.0;
-  const PERFECT = 0.04, GOOD = 0.078, BAD = 0.13;
+  const PERFECT = 0.033, GOOD = 0.064, BAD = 0.105;
   const HOLD_MIN_DURATION = 0.6;  // 이 이상이면 롱노트로 분류 (캐논류 긴 음 과다 방지)
   const HOLD_MAX_DURATION = 1.0;  // 롱노트 최대 길이 (꼬리가 화면 밖으로 과도하게 길어지지 않도록)
-  const TETRIS_COLORS = [0x35e7ff, 0x4f8dff, 0xffa03c, 0xffd24f, 0x7dff75, 0x9d6dff, 0xff5678, 0xfff0a8];
+  const BEMUSE_COLORS = [0x63d6ff, 0xff6db2, 0x9a86ff, 0x7cf7c9, 0xffc86b, 0x73a8ff, 0xff8d6d, 0xf8fbff];
   const TETRIS_SHAPES = [
     [[0,0],[1,0],[2,0],[3,0]], [[0,0],[1,0],[0,1],[1,1]], [[1,0],[0,1],[1,1],[2,1]],
     [[0,0],[1,0],[1,1],[2,1]], [[1,0],[2,0],[0,1],[1,1]], [[0,0],[0,1],[1,1],[2,1]], [[2,0],[0,1],[1,1],[2,1]]
   ];
   const FEVER_STAGES = [
-    { combo:20, multiplier:1.15, label:'FEVER 1' },
-    { combo:40, multiplier:1.35, label:'FEVER 2' },
-    { combo:65, multiplier:1.65, label:'FEVER 3' }
+    { combo:20, multiplier:1.08, label:'20 COMBO' },
+    { combo:50, multiplier:1.18, label:'50 COMBO' },
+    { combo:80, multiplier:1.32, label:'80 COMBO' },
+    { combo:120, multiplier:1.55, label:'FEVER' }
   ];
   const DEMO_MIDI_URL = 'assets/mid/sPIU_Beethoven_Virus.mid';
   const DEMO_CHART_URL = 'assets/chart/sPIU_Beethoven_Virus.chart.json';
   const MAX_BG_BLOCKS = 24;
   const MAX_FX_CHILDREN = 240;
   const HOLD_PARTICLE_INTERVAL = 0.065;
-  function laneColor(lane){ return TETRIS_COLORS[lane % TETRIS_COLORS.length]; }
+  function laneColor(lane){
+    return BEMUSE_COLORS[lane % BEMUSE_COLORS.length];
+  }
 
   const state = {
     app:null, w:0, h:0, laneW:0, totalW:0, startX:0, hitY:0, speed:0,
@@ -34,12 +37,18 @@ const MODE_KEYS = {
     score:0, combo:0, maxCombo:0, judged:0, hits:0, bpm:120, duration:0,
     feverActive:false, feverLevel:0, feverMultiplier:1,
     sampler:null, samplerReady:false, samplerLoading:false, playbackNotes:[],
-    bg:null, lanes:null, notesLayer:null, fx:null, keyLayer:null, bgBlocks:[], keyButtons:[],
+    playfield:null, bg:null, lanes:null, notesLayer:null, fx:null, fxOverlay:null, fxParticles:null, keyLayer:null, bgBlocks:[], keyButtons:[], laneHitFlashes:[], hitLinePulse:null, keyPulseFx:[],
     lastChart:null, lastBpm:120, lastName:'', lastPlayback:[],
     gameOver:false, heldLanes:new Map(), pressedKeys:new Set(),
     keyGlowTime:0,
+    renderStartIndex:0, missIndex:0, autoplayIndex:0, hudNextUpdate:0,
+    lastCameraPulseAt:0, lastBurstAt:0, lastKeyPulseAt:0,
+    feverBackdrop:null,
+    fxParticlePool:[], fxParticleStore:[], fxActiveParticles:0,
+    notePools:{ single:[], hold:[] },
     autoplay:false,
     chartExport:null, chartExportText:'',
+    chartTextEditing:false,
     chartDebug:null,
     nextNoteUid:1,
     editor:{
@@ -56,6 +65,7 @@ const MODE_KEYS = {
   // ─────────────────────────────────────────
   async function init(){
     ensureDemoButtons();
+    document.body.classList.add('theme-bemuse');
     const app = new PIXI.Application();
     await app.init({
       resizeTo:window, backgroundAlpha:0, antialias:false,
@@ -65,12 +75,23 @@ const MODE_KEYS = {
     app.ticker.maxFPS = 60;
     if(app.renderer) app.renderer.roundPixels = true;
     $('gameRoot').appendChild(app.canvas);
+    state.playfield = new PIXI.Container();
     state.bg = new PIXI.Container();
     state.lanes = new PIXI.Container();
     state.notesLayer = new PIXI.Container();
     state.keyLayer = new PIXI.Container();
     state.fx = new PIXI.Container();
-    app.stage.addChild(state.bg, state.lanes, state.notesLayer, state.keyLayer, state.fx);
+    state.fxParticles = new PIXI.ParticleContainer(MAX_FX_CHILDREN, {
+      position:true,
+      scale:true,
+      rotation:true,
+      alpha:true,
+      tint:true
+    });
+    state.fxOverlay = new PIXI.Container();
+    state.fx.addChild(state.fxParticles, state.fxOverlay);
+    app.stage.addChild(state.playfield);
+    state.playfield.addChild(state.bg, state.lanes, state.notesLayer, state.keyLayer, state.fx);
     const loaderPanel = document.querySelector('.loader .panel');
     const loaderDesc = loaderPanel?.querySelector('p');
     if(loaderPanel?.querySelector('h1')) loaderPanel.querySelector('h1').textContent = 'MIDI MUSE';
@@ -86,6 +107,8 @@ const MODE_KEYS = {
     if($('chartCloseBtn')) $('chartCloseBtn').textContent = 'Close';
     if($('chartDataText')) $('chartDataText').value = 'No generated chart yet.';
     if($('copyChartBtn')) $('copyChartBtn').textContent = 'Copy All';
+    if($('editChartBtn')) $('editChartBtn').textContent = 'Edit';
+    if($('applyChartBtn')) $('applyChartBtn').textContent = 'Apply';
     if($('refreshChartBtn')) $('refreshChartBtn').textContent = 'Refresh';
     if($('copyNotesOnlyBtn')) $('copyNotesOnlyBtn').textContent = 'Copy Notes';
     if($('resultDemoBtn')) $('resultDemoBtn').textContent = 'Play Demo';
@@ -93,6 +116,7 @@ const MODE_KEYS = {
     if($('retryBtn')) $('retryBtn').textContent = 'Retry';
     if($('backBtn')) $('backBtn').textContent = 'Back';
     if($('resultSong')) $('resultSong').textContent = '-';
+    syncChartTextEditUi();
     refreshAutoplayUi();
     resize(); window.addEventListener('resize', resize);
     app.ticker.add(tick);
@@ -129,6 +153,8 @@ const MODE_KEYS = {
     $('chartToggleBtn')?.addEventListener('click', toggleChartPanel);
     $('chartCloseBtn')?.addEventListener('click', () => $('chartPanel')?.classList.remove('active'));
     $('copyChartBtn')?.addEventListener('click', () => copyChartData('full'));
+    $('editChartBtn')?.addEventListener('click', toggleChartTextEditing);
+    $('applyChartBtn')?.addEventListener('click', applyChartTextEdit);
     $('copyNotesOnlyBtn')?.addEventListener('click', () => copyChartData('notes'));
     $('refreshChartBtn')?.addEventListener('click', refreshChartPanel);
     $('editorPrevBtn')?.addEventListener('click', () => panEditorWindow(-4));
