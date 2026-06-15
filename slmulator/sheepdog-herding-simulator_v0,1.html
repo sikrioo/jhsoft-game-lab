@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Sheepdog Herding Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #07130d;
+  color: white;
+  font-family: Inter, Pretendard, Arial, sans-serif;
+}
+
+canvas { display: block; }
+
+.panel {
+  position: fixed;
+  top: 18px;
+  left: 18px;
+  z-index: 10;
+  width: 340px;
+  padding: 18px;
+  border-radius: 22px;
+  background: rgba(7, 20, 14, 0.78);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(18px);
+  box-shadow: 0 24px 90px rgba(0,0,0,0.45);
+}
+
+.title {
+  font-size: 19px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.desc {
+  font-size: 13px;
+  color: #c9d7cd;
+  line-height: 1.55;
+  margin-bottom: 14px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.card {
+  padding: 11px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.07);
+  border: 1px solid rgba(255,255,255,0.09);
+}
+
+.label {
+  font-size: 11px;
+  color: #9fb7a8;
+  margin-bottom: 4px;
+}
+
+.value {
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.key {
+  padding: 5px 9px;
+  border-radius: 9px;
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.12);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+button {
+  width: 100%;
+  margin-top: 14px;
+  padding: 12px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(135deg, #16a34a, #84cc16);
+  color: white;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 14px 32px rgba(22,163,74,0.35);
+}
+
+.badge {
+  position: fixed;
+  right: 18px;
+  top: 18px;
+  padding: 11px 15px;
+  border-radius: 999px;
+  background: rgba(7, 20, 14, 0.74);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(18px);
+  color: #d1fae5;
+  font-size: 13px;
+  z-index: 10;
+}
+</style>
+</head>
+
+<body>
+<div class="panel">
+  <div class="title">Sheepdog Herding Simulator</div>
+  <div class="desc">
+    양치기 개가 흩어진 양 떼를 목표 구역으로 모는 탑뷰 물리 시뮬레이션입니다.
+    양은 서로 뭉치려 하고, 개가 가까워지면 반대 방향으로 도망갑니다.
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">SHEEP</div>
+      <div class="value" id="sheepCount">220</div>
+    </div>
+    <div class="card">
+      <div class="label">IN PEN</div>
+      <div class="value" id="inPenCount">0</div>
+    </div>
+    <div class="card">
+      <div class="label">CONTROL</div>
+      <div class="value">Dog</div>
+    </div>
+    <div class="card">
+      <div class="label">ENGINE</div>
+      <div class="value">Matter.js</div>
+    </div>
+  </div>
+
+  <div class="keys">
+    <span class="key">W</span>
+    <span class="key">A</span>
+    <span class="key">S</span>
+    <span class="key">D</span>
+    <span class="key">Arrow</span>
+    <span class="key">Space Brake</span>
+  </div>
+
+  <button onclick="resetScene()">Reset Simulation</button>
+</div>
+
+<div class="badge">Presentation Prototype · Swarm Control</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const {
+  Engine,
+  World,
+  Bodies,
+  Body,
+  Events,
+  Composite,
+  Runner
+} = Matter;
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let screenW = window.innerWidth;
+let screenH = window.innerHeight;
+canvas.width = screenW;
+canvas.height = screenH;
+
+const engine = Engine.create();
+engine.gravity.x = 0;
+engine.gravity.y = 0;
+
+const world = engine.world;
+const runner = Runner.create();
+
+const worldW = 2300;
+const worldH = 1300;
+
+const camera = {
+  zoom: 0.68,
+  x: 0,
+  y: 0
+};
+
+let dog;
+let sheep = [];
+let walls = [];
+let particles = [];
+let penZone;
+let clearEffect = 0;
+let inPenCount = 0;
+
+const keys = {
+  up: false,
+  down: false,
+  left: false,
+  right: false,
+  brake: false
+};
+
+function screenCenterCamera() {
+  camera.x = screenW / 2 - worldW * camera.zoom / 2;
+  camera.y = screenH / 2 - worldH * camera.zoom / 2;
+}
+
+function applyCamera() {
+  ctx.setTransform(camera.zoom, 0, 0, camera.zoom, camera.x, camera.y);
+}
+
+function resetCamera() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function createWalls() {
+  const t = 120;
+
+  walls = [
+    Bodies.rectangle(worldW / 2, -t / 2, worldW, t, { isStatic: true }),
+    Bodies.rectangle(worldW / 2, worldH + t / 2, worldW, t, { isStatic: true }),
+    Bodies.rectangle(-t / 2, worldH / 2, t, worldH, { isStatic: true }),
+    Bodies.rectangle(worldW + t / 2, worldH / 2, t, worldH, { isStatic: true })
+  ];
+
+  World.add(world, walls);
+}
+
+function createDog() {
+  dog = Bodies.circle(240, worldH / 2, 22, {
+    restitution: 0.25,
+    friction: 0.02,
+    frictionAir: 0.032,
+    density: 0.012,
+    label: "dog"
+  });
+
+  World.add(world, dog);
+}
+
+function createPenZone() {
+  penZone = {
+    x: worldW - 410,
+    y: worldH / 2 - 260,
+    w: 280,
+    h: 520
+  };
+}
+
+function createSheep() {
+  sheep = [];
+
+  const total = 220;
+  const radius = 11;
+
+  const flockCenters = [
+    { x: 760, y: 420 },
+    { x: 960, y: 760 },
+    { x: 1210, y: 540 },
+    { x: 1430, y: 720 },
+    { x: 1580, y: 440 }
+  ];
+
+  for (let i = 0; i < total; i++) {
+    const center = flockCenters[Math.floor(Math.random() * flockCenters.length)];
+
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.pow(Math.random(), 0.58) * 190;
+
+    const x = center.x + Math.cos(angle) * distance;
+    const y = center.y + Math.sin(angle) * distance * 0.8;
+
+    const s = Bodies.circle(x, y, radius, {
+      restitution: 0.42,
+      friction: 0.14,
+      frictionAir: 0.055,
+      density: 0.0045,
+      label: "sheep"
+    });
+
+    s.phase = Math.random() * Math.PI * 2;
+    s.scared = 0;
+
+    Body.setVelocity(s, {
+      x: (Math.random() - 0.5) * 0.4,
+      y: (Math.random() - 0.5) * 0.4
+    });
+
+    sheep.push(s);
+  }
+
+  World.add(world, sheep);
+  document.getElementById("sheepCount").innerText = sheep.length;
+}
+
+function resetScene() {
+  Composite.clear(world, false);
+  particles = [];
+  clearEffect = 0;
+  inPenCount = 0;
+
+  createWalls();
+  createPenZone();
+  createDog();
+  createSheep();
+}
+
+function handleDogInput() {
+  const force = 0.004;
+
+  if (keys.up) Body.applyForce(dog, dog.position, { x: 0, y: -force });
+  if (keys.down) Body.applyForce(dog, dog.position, { x: 0, y: force });
+  if (keys.left) Body.applyForce(dog, dog.position, { x: -force, y: 0 });
+  if (keys.right) Body.applyForce(dog, dog.position, { x: force, y: 0 });
+
+  if (keys.brake) {
+    Body.setVelocity(dog, {
+      x: dog.velocity.x * 0.84,
+      y: dog.velocity.y * 0.84
+    });
+  }
+
+  const speed = Math.hypot(dog.velocity.x, dog.velocity.y);
+  const maxSpeed = 10;
+
+  if (speed > maxSpeed) {
+    Body.setVelocity(dog, {
+      x: dog.velocity.x / speed * maxSpeed,
+      y: dog.velocity.y / speed * maxSpeed
+    });
+  }
+}
+
+function updateSheepBehavior() {
+  const time = Date.now() * 0.001;
+
+  let centerX = 0;
+  let centerY = 0;
+
+  for (const s of sheep) {
+    centerX += s.position.x;
+    centerY += s.position.y;
+  }
+
+  centerX /= sheep.length;
+  centerY /= sheep.length;
+
+  inPenCount = 0;
+
+  for (const s of sheep) {
+    const dxDog = s.position.x - dog.position.x;
+    const dyDog = s.position.y - dog.position.y;
+    const distDog = Math.hypot(dxDog, dyDog) || 1;
+
+    let fx = 0;
+    let fy = 0;
+
+    // 1. 개가 가까우면 반대 방향으로 도망감
+    const fearRadius = 175;
+
+    if (distDog < fearRadius) {
+      const power = (1 - distDog / fearRadius) * 0.0019;
+      fx += dxDog / distDog * power;
+      fy += dyDog / distDog * power;
+      s.scared = Math.min(1, s.scared + 0.08);
+    } else {
+      s.scared = Math.max(0, s.scared - 0.025);
+    }
+
+    // 2. 양 떼 중심으로 약하게 뭉침
+    const dxCenter = centerX - s.position.x;
+    const dyCenter = centerY - s.position.y;
+    const distCenter = Math.hypot(dxCenter, dyCenter) || 1;
+
+    const cohesion = 0.000018;
+    fx += dxCenter / distCenter * cohesion;
+    fy += dyCenter / distCenter * cohesion;
+
+    // 3. 목표 목장 방향으로 아주 약한 유도
+    const targetX = penZone.x + penZone.w / 2;
+    const targetY = penZone.y + penZone.h / 2;
+
+    const dxPen = targetX - s.position.x;
+    const dyPen = targetY - s.position.y;
+    const distPen = Math.hypot(dxPen, dyPen) || 1;
+
+    const goalBias = 0.000006;
+    fx += dxPen / distPen * goalBias;
+    fy += dyPen / distPen * goalBias;
+
+    // 4. 자연스러운 흔들림
+    fx += Math.cos(time * 1.8 + s.phase) * 0.000035;
+    fy += Math.sin(time * 1.5 + s.phase) * 0.000035;
+
+    Body.applyForce(s, s.position, { x: fx, y: fy });
+
+    const speed = Math.hypot(s.velocity.x, s.velocity.y);
+    const maxSpeed = s.scared > 0.1 ? 2.6 : 1.25;
+
+    if (speed > maxSpeed) {
+      Body.setVelocity(s, {
+        x: s.velocity.x / speed * maxSpeed,
+        y: s.velocity.y / speed * maxSpeed
+      });
+    }
+
+    if (
+      s.position.x > penZone.x &&
+      s.position.x < penZone.x + penZone.w &&
+      s.position.y > penZone.y &&
+      s.position.y < penZone.y + penZone.h
+    ) {
+      inPenCount++;
+    }
+  }
+
+  document.getElementById("inPenCount").innerText = inPenCount;
+
+  if (inPenCount >= Math.floor(sheep.length * 0.88)) {
+    clearEffect = Math.min(clearEffect + 0.025, 1);
+  } else {
+    clearEffect = Math.max(clearEffect - 0.015, 0);
+  }
+}
+
+function spawnParticles(x, y, color, amount = 8) {
+  for (let i = 0; i < amount; i++) {
+    particles.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 4.5,
+      vy: (Math.random() - 0.5) * 4.5,
+      life: 24 + Math.random() * 12,
+      maxLife: 36,
+      radius: 1.8 + Math.random() * 2.5,
+      color
+    });
+  }
+}
+
+Events.on(engine, "collisionStart", event => {
+  for (const pair of event.pairs) {
+    const a = pair.bodyA;
+    const b = pair.bodyB;
+
+    if (
+      (a.label === "dog" && b.label === "sheep") ||
+      (a.label === "sheep" && b.label === "dog")
+    ) {
+      const x = (a.position.x + b.position.x) / 2;
+      const y = (a.position.y + b.position.y) / 2;
+      spawnParticles(x, y, "rgba(250,204,21,0.9)", 7);
+    }
+  }
+});
+
+function updateParticles() {
+  particles = particles.filter(p => p.life > 0);
+
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.955;
+    p.vy *= 0.955;
+    p.life--;
+  }
+}
+
+function drawBackground() {
+  resetCamera();
+
+  const bg = ctx.createLinearGradient(0, 0, screenW, screenH);
+  bg.addColorStop(0, "#03140b");
+  bg.addColorStop(0.45, "#092016");
+  bg.addColorStop(1, "#03100a");
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, screenW, screenH);
+
+  applyCamera();
+
+  ctx.fillStyle = "#12351f";
+  ctx.fillRect(0, 0, worldW, worldH);
+
+  ctx.strokeStyle = "rgba(255,255,255,0.055)";
+  ctx.lineWidth = 1;
+
+  const grid = 70;
+
+  for (let x = 0; x <= worldW; x += grid) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, worldH);
+    ctx.stroke();
+  }
+
+  for (let y = 0; y <= worldH; y += grid) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(worldW, y);
+    ctx.stroke();
+  }
+
+  // 잔디 느낌 점
+  ctx.fillStyle = "rgba(187,247,208,0.08)";
+  for (let i = 0; i < 700; i++) {
+    const x = (i * 193) % worldW;
+    const y = (i * 389) % worldH;
+    ctx.fillRect(x, y, 2, 7);
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(0, 0, worldW, worldH);
+}
+
+function drawPenZone() {
+  ctx.save();
+
+  ctx.fillStyle = "rgba(132,204,22,0.16)";
+  ctx.strokeStyle = "rgba(190,242,100,0.95)";
+  ctx.lineWidth = 4;
+
+  roundRect(ctx, penZone.x, penZone.y, penZone.w, penZone.h, 28);
+  ctx.fill();
+  ctx.stroke();
+
+  // 울타리 느낌
+  ctx.strokeStyle = "rgba(254,240,138,0.75)";
+  ctx.lineWidth = 7;
+
+  for (let y = penZone.y + 30; y < penZone.y + penZone.h; y += 52) {
+    ctx.beginPath();
+    ctx.moveTo(penZone.x - 8, y);
+    ctx.lineTo(penZone.x + penZone.w + 8, y);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "rgba(236,252,203,0.95)";
+  ctx.font = "900 25px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("SHEEP PEN", penZone.x + penZone.w / 2, penZone.y - 26);
+
+  ctx.restore();
+}
+
+function drawGuideArrow() {
+  ctx.save();
+
+  ctx.strokeStyle = "rgba(190,242,100,0.24)";
+  ctx.lineWidth = 5;
+  ctx.setLineDash([18, 20]);
+
+  ctx.beginPath();
+  ctx.moveTo(280, worldH / 2);
+  ctx.bezierCurveTo(
+    720, worldH / 2 - 250,
+    1350, worldH / 2 + 250,
+    penZone.x + 80,
+    worldH / 2
+  );
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawSheep(s) {
+  const x = s.position.x;
+  const y = s.position.y;
+  const r = s.circleRadius;
+
+  const angle = Math.atan2(s.velocity.y, s.velocity.x) + Math.PI / 2;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  ctx.shadowColor = "rgba(0,0,0,0.35)";
+  ctx.shadowBlur = 6;
+
+  ctx.beginPath();
+  ctx.ellipse(0, 1, r * 1.05, r * 0.9, 0, 0, Math.PI * 2);
+  ctx.fillStyle = s.scared > 0.15 ? "#fff7ed" : "#f8fafc";
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+
+  // 복슬복슬한 돌기
+  ctx.fillStyle = s.scared > 0.15 ? "#fed7aa" : "#e2e8f0";
+
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2;
+    ctx.beginPath();
+    ctx.arc(Math.cos(a) * r * 0.75, Math.sin(a) * r * 0.55, r * 0.32, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 머리
+  ctx.beginPath();
+  ctx.ellipse(0, -r * 0.9, r * 0.42, r * 0.36, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#334155";
+  ctx.fill();
+
+  // 귀
+  ctx.fillStyle = "#1e293b";
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.45, -r * 0.8, r * 0.18, r * 0.28, -0.4, 0, Math.PI * 2);
+  ctx.ellipse(r * 0.45, -r * 0.8, r * 0.18, r * 0.28, 0.4, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawDog() {
+  const x = dog.position.x;
+  const y = dog.position.y;
+  const speed = Math.hypot(dog.velocity.x, dog.velocity.y);
+  const angle = Math.atan2(dog.velocity.y, dog.velocity.x);
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  ctx.shadowColor = "rgba(250,204,21,0.65)";
+  ctx.shadowBlur = 18;
+
+  // 몸통
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 28, 17, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#111827";
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+
+  // 흰 무늬
+  ctx.beginPath();
+  ctx.ellipse(6, 0, 13, 10, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fill();
+
+  // 머리
+  ctx.beginPath();
+  ctx.ellipse(26, 0, 16, 13, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#0f172a";
+  ctx.fill();
+
+  // 얼굴 흰 무늬
+  ctx.beginPath();
+  ctx.ellipse(30, 0, 7, 8, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fill();
+
+  // 귀
+  ctx.fillStyle = "#020617";
+  ctx.beginPath();
+  ctx.moveTo(22, -10);
+  ctx.lineTo(12, -23);
+  ctx.lineTo(32, -13);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(22, 10);
+  ctx.lineTo(12, 23);
+  ctx.lineTo(32, 13);
+  ctx.closePath();
+  ctx.fill();
+
+  // 꼬리
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = 6;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-26, 0);
+  ctx.quadraticCurveTo(-42, -12 - Math.sin(Date.now() * 0.02) * 5, -54, -3);
+  ctx.stroke();
+
+  // 방향 표시
+  ctx.strokeStyle = "rgba(250,204,21,0.85)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(42, 0);
+  ctx.lineTo(58 + speed * 2, 0);
+  ctx.stroke();
+
+  ctx.restore();
+
+  // 영향권
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 175, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(250,204,21,0.10)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDogTrail() {
+  const vx = dog.velocity.x;
+  const vy = dog.velocity.y;
+  const speed = Math.hypot(vx, vy);
+
+  if (speed < 0.35) return;
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(250,204,21,0.4)";
+  ctx.lineWidth = 5;
+  ctx.lineCap = "round";
+
+  ctx.beginPath();
+  ctx.moveTo(dog.position.x - vx * 12, dog.position.y - vy * 12);
+  ctx.lineTo(dog.position.x, dog.position.y);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawClearMessage() {
+  if (clearEffect <= 0) return;
+
+  resetCamera();
+
+  ctx.save();
+  ctx.globalAlpha = clearEffect;
+
+  ctx.fillStyle = "rgba(132,204,22,0.14)";
+  ctx.fillRect(0, 0, screenW, screenH);
+
+  ctx.font = "900 58px Arial";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(236,252,203,0.98)";
+  ctx.fillText("HERDING SUCCESS", screenW / 2, 115);
+
+  ctx.font = "600 17px Arial";
+  ctx.fillStyle = "rgba(217,249,157,0.9)";
+  ctx.fillText("The sheepdog successfully guided the flock into the pen.", screenW / 2, 152);
+
+  ctx.restore();
+}
+
+function drawMiniMap() {
+  resetCamera();
+
+  const mapW = 250;
+  const mapH = 142;
+  const x = screenW - mapW - 20;
+  const y = screenH - mapH - 20;
+
+  ctx.save();
+
+  ctx.fillStyle = "rgba(7,20,14,0.78)";
+  ctx.strokeStyle = "rgba(255,255,255,0.14)";
+  ctx.lineWidth = 1;
+
+  roundRect(ctx, x, y, mapW, mapH, 16);
+  ctx.fill();
+  ctx.stroke();
+
+  const sx = mapW / worldW;
+  const sy = mapH / worldH;
+
+  ctx.fillStyle = "rgba(248,250,252,0.6)";
+  for (const s of sheep) {
+    ctx.beginPath();
+    ctx.arc(x + s.position.x * sx, y + s.position.y * sy, 1.3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "#facc15";
+  ctx.beginPath();
+  ctx.arc(x + dog.position.x * sx, y + dog.position.y * sy, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(132,204,22,0.75)";
+  ctx.fillRect(
+    x + penZone.x * sx,
+    y + penZone.y * sy,
+    penZone.w * sx,
+    penZone.h * sy
+  );
+
+  ctx.fillStyle = "rgba(236,252,203,0.9)";
+  ctx.font = "800 11px Arial";
+  ctx.fillText("HERD MAP", x + 16, y + 20);
+
+  ctx.restore();
+}
+
+function render() {
+  drawBackground();
+  drawGuideArrow();
+  drawPenZone();
+
+  for (const s of sheep) {
+    drawSheep(s);
+  }
+
+  drawDogTrail();
+  drawDog();
+  drawParticles();
+
+  drawClearMessage();
+  drawMiniMap();
+}
+
+function loop() {
+  updateSheepBehavior();
+  handleDogInput();
+  updateParticles();
+  render();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener("keydown", e => {
+  if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") keys.up = true;
+  if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") keys.down = true;
+  if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = true;
+  if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = true;
+  if (e.code === "Space") keys.brake = true;
+});
+
+window.addEventListener("keyup", e => {
+  if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") keys.up = false;
+  if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") keys.down = false;
+  if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = false;
+  if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = false;
+  if (e.code === "Space") keys.brake = false;
+});
+
+window.addEventListener("resize", () => {
+  screenW = window.innerWidth;
+  screenH = window.innerHeight;
+  canvas.width = screenW;
+  canvas.height = screenH;
+  screenCenterCamera();
+});
+
+screenCenterCamera();
+resetScene();
+Runner.run(runner, engine);
+loop();
+</script>
+</body>
+</html>

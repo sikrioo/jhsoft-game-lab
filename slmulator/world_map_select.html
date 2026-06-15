@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>GLOBAL OPS — Stage Select</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-deep:#050d1a; --bg-mid:#0a1628; --bg-panel:#0d1f36;
+  --bg-card:rgba(255,255,255,0.045); --border:rgba(255,255,255,0.09);
+  --border-gold:rgba(240,192,64,0.45); --gold:#f0c040; --gold-dim:#c8960a;
+  --cyan:#00d4ff; --cyan-dim:rgba(0,212,255,0.18);
+  --text-hi:#f0f4f8; --text-mid:#8da0b5; --text-lo:#4a6278;
+  --danger:#ff5252; --green:#3ddc84;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html,body{width:100%;height:100%;font-family:"Space Grotesk","Noto Sans KR",sans-serif;background:var(--bg-deep);overflow:hidden;color:var(--text-hi);}
+.app{display:flex;width:100vw;height:100vh;position:relative;}
+
+/* SIDEBAR */
+.sidebar{width:260px;min-width:260px;display:flex;flex-direction:column;background:linear-gradient(160deg,#0d1f36 0%,#07111f 100%);border-right:1px solid var(--border);z-index:1000;transition:width .28s cubic-bezier(.4,0,.2,1),min-width .28s cubic-bezier(.4,0,.2,1);overflow:hidden;}
+.sidebar.closed{width:64px;min-width:64px;}
+.sidebar-head{padding:18px 16px 14px;border-bottom:1px solid var(--border);flex-shrink:0;}
+.head-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.logo-mark{width:36px;height:36px;border-radius:10px;background:linear-gradient(135deg,var(--gold),#c87800);display:grid;place-items:center;font-family:"Space Mono",monospace;font-size:14px;font-weight:700;color:#07101d;letter-spacing:-1px;flex-shrink:0;}
+.logo-text{flex:1;margin-left:10px;overflow:hidden;}
+.logo-text h1{font-size:13px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);white-space:nowrap;}
+.logo-text p{font-size:11px;color:var(--text-mid);margin-top:2px;white-space:nowrap;font-family:"Space Mono",monospace;}
+.menu-toggle{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-mid);font-size:16px;cursor:pointer;display:grid;place-items:center;flex-shrink:0;transition:background .2s,color .2s;}
+.menu-toggle:hover{background:rgba(240,192,64,.12);color:var(--gold);}
+.stats-bar{display:flex;gap:10px;margin-top:10px;overflow:hidden;}
+.stat-chip{flex:1;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;padding:6px 10px;text-align:center;min-width:0;}
+.stat-chip .sv{font-family:"Space Mono",monospace;font-size:15px;font-weight:700;color:var(--cyan);}
+.stat-chip .sl{font-size:10px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.06em;margin-top:1px;}
+.cont-tabs{display:flex;flex-wrap:wrap;gap:5px;padding:12px 16px;border-bottom:1px solid var(--border);flex-shrink:0;overflow:hidden;}
+.cont-tab{padding:4px 9px;border-radius:20px;border:1px solid var(--border);font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;background:transparent;color:var(--text-mid);transition:.18s;white-space:nowrap;}
+.cont-tab:hover{border-color:var(--cyan);color:var(--cyan);}
+.cont-tab.active{background:var(--cyan-dim);border-color:var(--cyan);color:var(--cyan);}
+.stage-list-wrap{flex:1;overflow-y:auto;padding:10px;}
+.stage-list-wrap::-webkit-scrollbar{width:4px;}
+.stage-list-wrap::-webkit-scrollbar-thumb{background:rgba(240,192,64,.3);border-radius:4px;}
+.section-label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-lo);padding:8px 6px 5px;font-family:"Space Mono",monospace;}
+.stage-item{display:flex;align-items:center;gap:9px;padding:8px 9px;margin-bottom:4px;border-radius:10px;border:1px solid transparent;cursor:pointer;transition:.18s;position:relative;}
+.stage-item:hover{background:rgba(0,212,255,.06);border-color:rgba(0,212,255,.2);}
+.stage-item.active{background:rgba(240,192,64,.1);border-color:var(--border-gold);}
+.stage-num{font-family:"Space Mono",monospace;font-size:10px;color:var(--text-lo);width:20px;text-align:right;flex-shrink:0;}
+.stage-item.active .stage-num{color:var(--gold);}
+.stage-flag{width:38px;height:26px;object-fit:cover;border-radius:4px;box-shadow:0 2px 8px rgba(0,0,0,.4);flex-shrink:0;border:1px solid rgba(255,255,255,.1);}
+.stage-info{overflow:hidden;flex:1;}
+.stage-info strong{display:block;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.stage-info span{font-size:10px;color:var(--text-mid);font-family:"Space Mono",monospace;}
+.stage-dot{width:6px;height:6px;border-radius:50%;background:var(--text-lo);flex-shrink:0;}
+.stage-item.active .stage-dot{background:var(--gold);}
+.sidebar.closed .logo-text,.sidebar.closed .stats-bar,.sidebar.closed .cont-tabs,.sidebar.closed .section-label,.sidebar.closed .stage-info,.sidebar.closed .stage-num,.sidebar.closed .stage-dot{display:none;}
+.sidebar.closed .stage-item{justify-content:center;padding:7px 4px;}
+.sidebar.closed .sidebar-head{padding:16px 10px;}
+.sidebar.closed .head-top{justify-content:center;}
+
+/* MAP */
+#map{flex:1;height:100vh;position:relative;}
+#map::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 3px,rgba(0,0,0,.025) 3px,rgba(0,0,0,.025) 4px);pointer-events:none;z-index:500;}
+
+/* TOP BAR */
+.top-bar{position:absolute;top:16px;left:16px;right:16px;z-index:900;display:flex;align-items:center;gap:12px;pointer-events:none;}
+.top-bar-inner{display:flex;align-items:center;gap:10px;padding:9px 16px;background:rgba(5,13,26,.82);backdrop-filter:blur(12px);border:1px solid var(--border);border-radius:12px;pointer-events:all;}
+.top-label{font-family:"Space Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--text-lo);}
+.top-title{font-size:13px;font-weight:700;color:var(--text-hi);letter-spacing:.02em;}
+.status-pill{padding:4px 10px;border-radius:20px;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;display:flex;align-items:center;gap:5px;}
+.status-pill.live{background:rgba(61,220,132,.15);border:1px solid rgba(61,220,132,.4);color:var(--green);}
+.status-pill .blink{width:5px;height:5px;border-radius:50%;background:var(--green);animation:blink 1.4s ease-in-out infinite;}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+.top-spacer{flex:1;}
+.zoom-controls{display:flex;flex-direction:column;gap:4px;pointer-events:all;}
+.zoom-btn{width:32px;height:32px;border-radius:8px;border:1px solid var(--border);background:rgba(5,13,26,.85);backdrop-filter:blur(8px);color:var(--text-mid);font-size:18px;cursor:pointer;display:grid;place-items:center;transition:.18s;}
+.zoom-btn:hover{background:var(--cyan-dim);color:var(--cyan);border-color:var(--cyan);}
+
+/* BOTTOM PANEL */
+.bottom-panel{position:absolute;bottom:20px;left:20px;right:20px;z-index:900;display:flex;align-items:center;gap:16px;padding:14px 20px;background:rgba(5,13,26,.88);backdrop-filter:blur(16px);border:1px solid var(--border-gold);border-radius:16px;transform:translateY(0);transition:transform .3s cubic-bezier(.4,0,.2,1),opacity .3s;}
+.bottom-panel.hidden{transform:translateY(20px);opacity:0;pointer-events:none;}
+.panel-flag-wrap{position:relative;flex-shrink:0;}
+.panel-flag{width:70px;height:47px;object-fit:cover;border-radius:8px;border:2px solid rgba(240,192,64,.5);box-shadow:0 4px 20px rgba(0,0,0,.5);display:block;}
+.panel-num{position:absolute;bottom:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--gold);color:#111;font-size:10px;font-weight:900;display:grid;place-items:center;font-family:"Space Mono",monospace;border:2px solid var(--bg-deep);}
+.panel-divider{width:1px;height:40px;background:var(--border);flex-shrink:0;}
+.panel-info{flex:1;min-width:0;}
+.panel-eyebrow{font-family:"Space Mono",monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--cyan);margin-bottom:4px;}
+.panel-title{font-size:22px;font-weight:700;color:var(--text-hi);letter-spacing:-.01em;}
+.panel-sub{font-size:12px;color:var(--text-mid);margin-top:3px;}
+.panel-meta{display:flex;flex-direction:column;gap:8px;flex-shrink:0;}
+.meta-row{display:flex;align-items:center;gap:8px;}
+.meta-key{font-family:"Space Mono",monospace;font-size:10px;color:var(--text-lo);text-transform:uppercase;letter-spacing:.06em;width:60px;}
+.meta-val{font-size:12px;font-weight:600;color:var(--text-hi);}
+.meta-badge{padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;background:rgba(240,192,64,.15);border:1px solid rgba(240,192,64,.35);color:var(--gold);letter-spacing:.04em;}
+.start-btn{flex-shrink:0;padding:12px 28px;border:none;border-radius:12px;background:linear-gradient(145deg,#f5d84a,#d4870a);color:#1a0e00;font-family:"Space Grotesk",sans-serif;font-size:14px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;cursor:pointer;transition:.18s;box-shadow:0 4px 20px rgba(240,192,64,.35);position:relative;overflow:hidden;}
+.start-btn:hover{box-shadow:0 6px 28px rgba(240,192,64,.55);transform:translateY(-1px);}
+.start-btn:active{transform:translateY(0);}
+
+/* LEAFLET */
+.leaflet-control-attribution{background:rgba(5,13,26,.75)!important;color:#4a6278!important;font-size:9px!important;border-radius:4px 0 0 0!important;}
+.leaflet-control-attribution a{color:#5a7a99!important;}
+.leaflet-tooltip{background:rgba(5,13,26,.92)!important;border:1px solid var(--border-gold)!important;color:var(--text-hi)!important;border-radius:8px!important;font-family:"Space Grotesk",sans-serif!important;font-size:12px!important;padding:6px 10px!important;box-shadow:0 4px 16px rgba(0,0,0,.5)!important;white-space:nowrap!important;}
+.leaflet-tooltip::before{display:none!important;}
+.tt-name{font-weight:700;color:var(--gold);}
+.tt-cap{color:var(--text-mid);font-family:"Space Mono",monospace;font-size:10px;margin-top:2px;}
+.tt-cont{color:var(--cyan);font-size:10px;text-transform:uppercase;letter-spacing:.08em;}
+
+/* MARKERS */
+.gop-marker{position:relative;width:48px;text-align:center;}
+.gop-marker .flag-wrap{position:relative;display:inline-block;}
+.gop-marker img{width:42px;height:28px;object-fit:cover;border-radius:4px;border:2px solid rgba(255,255,255,.6);box-shadow:0 3px 12px rgba(0,0,0,.6);transition:transform .2s,border-color .2s;display:block;}
+.gop-marker.active img{border-color:var(--gold);transform:scale(1.2);box-shadow:0 0 0 3px rgba(240,192,64,.4),0 6px 18px rgba(0,0,0,.7);}
+.gop-marker .pin{width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-top:7px solid rgba(255,255,255,.6);margin:0 auto;display:block;}
+.gop-marker.active .pin{border-top-color:var(--gold);}
+.gop-marker .pulse{position:absolute;top:-4px;left:-4px;right:-4px;bottom:-4px;border-radius:6px;border:2px solid var(--gold);opacity:0;pointer-events:none;}
+.gop-marker.active .pulse{animation:pulse-ring 1.6s ease-out infinite;}
+@keyframes pulse-ring{0%{opacity:.9;transform:scale(1);}100%{opacity:0;transform:scale(1.7);}}
+.gop-marker .cont-dot{position:absolute;top:-4px;right:-4px;width:10px;height:10px;border-radius:50%;border:1.5px solid var(--bg-deep);}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-head">
+      <div class="head-top">
+        <div class="logo-mark">GO</div>
+        <div class="logo-text">
+          <h1>Global Ops</h1>
+          <p id="stageCountLabel">— stages</p>
+        </div>
+        <button class="menu-toggle" id="menuToggleBtn">☰</button>
+      </div>
+      <div class="stats-bar">
+        <div class="stat-chip"><div class="sv" id="statTotal">—</div><div class="sl">총 국가</div></div>
+        <div class="stat-chip"><div class="sv" id="statConts">7</div><div class="sl">대륙</div></div>
+        <div class="stat-chip"><div class="sv" id="statSelected">—</div><div class="sl">선택</div></div>
+      </div>
+    </div>
+    <div class="cont-tabs" id="contTabs"></div>
+    <div class="stage-list-wrap" id="stageList"></div>
+  </aside>
+
+  <div id="map">
+    <div class="top-bar">
+      <div class="top-bar-inner">
+        <div>
+          <div class="top-label">MISSION BRIEF</div>
+          <div class="top-title" id="topTitle">국가를 선택하세요</div>
+        </div>
+        <div class="status-pill live"><div class="blink"></div>LIVE</div>
+      </div>
+      <div class="top-spacer"></div>
+      <div class="zoom-controls">
+        <button class="zoom-btn" id="zoomInBtn">+</button>
+        <button class="zoom-btn" id="zoomOutBtn">−</button>
+      </div>
+    </div>
+    <div class="bottom-panel hidden" id="bottomPanel">
+      <div class="panel-flag-wrap">
+        <img class="panel-flag" id="panelFlag" src="" alt="">
+        <div class="panel-num" id="panelNum">1</div>
+      </div>
+      <div class="panel-divider"></div>
+      <div class="panel-info">
+        <div class="panel-eyebrow" id="panelContinent">—</div>
+        <div class="panel-title" id="panelTitle">—</div>
+        <div class="panel-sub" id="panelSub">—</div>
+      </div>
+      <div class="panel-meta">
+        <div class="meta-row"><div class="meta-key">수도</div><div class="meta-val" id="metaCapital">—</div></div>
+        <div class="meta-row"><div class="meta-key">지역</div><div class="meta-badge" id="metaRegion">—</div></div>
+      </div>
+      <div class="panel-divider"></div>
+      <button class="start-btn" id="startBtn">▶ 시작</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // Load Leaflet dynamically, then init app
+  var link = document.createElement('link');
+  link.rel = 'stylesheet';
+  link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+  document.head.appendChild(link);
+
+  var script = document.createElement('script');
+  script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+  script.onload = initApp;
+  script.onerror = function() {
+    // fallback CDN
+    var s2 = document.createElement('script');
+    s2.src = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
+    s2.onload = initApp;
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(script);
+})();
+
+function initApp() {
+  /* ── DATA ── */
+  var CONT_COLOR = {
+    "유럽":"#00d4ff","아시아":"#f0c040","아프리카":"#3ddc84",
+    "북아메리카":"#ff7a45","남아메리카":"#b06aff","오세아니아":"#ff4d94","중동":"#ff9a3c"
+  };
+
+  var stagesData = [
+    // 유럽
+    {id:1,  name:"독일",          code:"de",capital:"베를린",      continent:"유럽",  lat:52.52,   lng:13.405,  region:"서유럽"},
+    {id:2,  name:"프랑스",        code:"fr",capital:"파리",        continent:"유럽",  lat:48.856,  lng:2.352,   region:"서유럽"},
+    {id:3,  name:"영국",          code:"gb",capital:"런던",        continent:"유럽",  lat:51.507,  lng:-0.128,  region:"서유럽"},
+    {id:4,  name:"스페인",        code:"es",capital:"마드리드",    continent:"유럽",  lat:40.417,  lng:-3.704,  region:"서유럽"},
+    {id:5,  name:"이탈리아",      code:"it",capital:"로마",        continent:"유럽",  lat:41.903,  lng:12.496,  region:"남유럽"},
+    {id:6,  name:"네덜란드",      code:"nl",capital:"암스테르담",  continent:"유럽",  lat:52.368,  lng:4.904,   region:"서유럽"},
+    {id:7,  name:"벨기에",        code:"be",capital:"브뤼셀",      continent:"유럽",  lat:50.850,  lng:4.352,   region:"서유럽"},
+    {id:8,  name:"스위스",        code:"ch",capital:"베른",        continent:"유럽",  lat:46.948,  lng:7.447,   region:"중부유럽"},
+    {id:9,  name:"오스트리아",    code:"at",capital:"빈",          continent:"유럽",  lat:48.208,  lng:16.374,  region:"중부유럽"},
+    {id:10, name:"폴란드",        code:"pl",capital:"바르샤바",    continent:"유럽",  lat:52.230,  lng:21.012,  region:"동유럽"},
+    {id:11, name:"체코",          code:"cz",capital:"프라하",      continent:"유럽",  lat:50.076,  lng:14.438,  region:"중부유럽"},
+    {id:12, name:"스웨덴",        code:"se",capital:"스톡홀름",    continent:"유럽",  lat:59.329,  lng:18.069,  region:"북유럽"},
+    {id:13, name:"노르웨이",      code:"no",capital:"오슬로",      continent:"유럽",  lat:59.914,  lng:10.752,  region:"북유럽"},
+    {id:14, name:"덴마크",        code:"dk",capital:"코펜하겐",    continent:"유럽",  lat:55.676,  lng:12.568,  region:"북유럽"},
+    {id:15, name:"핀란드",        code:"fi",capital:"헬싱키",      continent:"유럽",  lat:60.170,  lng:24.938,  region:"북유럽"},
+    {id:16, name:"포르투갈",      code:"pt",capital:"리스본",      continent:"유럽",  lat:38.722,  lng:-9.139,  region:"서유럽"},
+    {id:17, name:"그리스",        code:"gr",capital:"아테네",      continent:"유럽",  lat:37.984,  lng:23.728,  region:"남유럽"},
+    {id:18, name:"루마니아",      code:"ro",capital:"부쿠레슈티",  continent:"유럽",  lat:44.427,  lng:26.103,  region:"동유럽"},
+    {id:19, name:"헝가리",        code:"hu",capital:"부다페스트",  continent:"유럽",  lat:47.498,  lng:19.040,  region:"중부유럽"},
+    {id:20, name:"우크라이나",    code:"ua",capital:"키이우",      continent:"유럽",  lat:50.450,  lng:30.523,  region:"동유럽"},
+    {id:21, name:"세르비아",      code:"rs",capital:"베오그라드",  continent:"유럽",  lat:44.787,  lng:20.449,  region:"동유럽"},
+    {id:22, name:"크로아티아",    code:"hr",capital:"자그레브",    continent:"유럽",  lat:45.815,  lng:15.982,  region:"동유럽"},
+    // 아시아
+    {id:23, name:"중국",          code:"cn",capital:"베이징",      continent:"아시아",lat:39.909,  lng:116.397, region:"동아시아"},
+    {id:24, name:"일본",          code:"jp",capital:"도쿄",        continent:"아시아",lat:35.690,  lng:139.692, region:"동아시아"},
+    {id:25, name:"한국",          code:"kr",capital:"서울",        continent:"아시아",lat:37.566,  lng:126.978, region:"동아시아"},
+    {id:26, name:"인도",          code:"in",capital:"뉴델리",      continent:"아시아",lat:28.614,  lng:77.209,  region:"남아시아"},
+    {id:27, name:"인도네시아",    code:"id",capital:"자카르타",    continent:"아시아",lat:-6.211,  lng:106.845, region:"동남아시아"},
+    {id:28, name:"태국",          code:"th",capital:"방콕",        continent:"아시아",lat:13.754,  lng:100.502, region:"동남아시아"},
+    {id:29, name:"베트남",        code:"vn",capital:"하노이",      continent:"아시아",lat:21.028,  lng:105.834, region:"동남아시아"},
+    {id:30, name:"말레이시아",    code:"my",capital:"쿠알라룸푸르",continent:"아시아",lat:3.147,   lng:101.693, region:"동남아시아"},
+    {id:31, name:"싱가포르",      code:"sg",capital:"싱가포르",    continent:"아시아",lat:1.352,   lng:103.820, region:"동남아시아"},
+    {id:32, name:"필리핀",        code:"ph",capital:"마닐라",      continent:"아시아",lat:14.599,  lng:120.984, region:"동남아시아"},
+    {id:33, name:"파키스탄",      code:"pk",capital:"이슬라마바드",continent:"아시아",lat:33.698,  lng:73.041,  region:"남아시아"},
+    {id:34, name:"방글라데시",    code:"bd",capital:"다카",        continent:"아시아",lat:23.728,  lng:90.399,  region:"남아시아"},
+    {id:35, name:"카자흐스탄",    code:"kz",capital:"아스타나",    continent:"아시아",lat:51.180,  lng:71.446,  region:"중앙아시아"},
+    {id:36, name:"미얀마",        code:"mm",capital:"네피도",      continent:"아시아",lat:19.745,  lng:96.129,  region:"동남아시아"},
+    {id:37, name:"우즈베키스탄",  code:"uz",capital:"타슈켄트",    continent:"아시아",lat:41.299,  lng:69.240,  region:"중앙아시아"},
+    {id:38, name:"대만",          code:"tw",capital:"타이베이",    continent:"아시아",lat:25.047,  lng:121.517, region:"동아시아"},
+    // 중동
+    {id:39, name:"사우디아라비아",code:"sa",capital:"리야드",      continent:"중동",  lat:24.687,  lng:46.722,  region:"걸프"},
+    {id:40, name:"이란",          code:"ir",capital:"테헤란",      continent:"중동",  lat:35.694,  lng:51.421,  region:"페르시아"},
+    {id:41, name:"UAE",           code:"ae",capital:"아부다비",    continent:"중동",  lat:24.466,  lng:54.367,  region:"걸프"},
+    {id:42, name:"이스라엘",      code:"il",capital:"텔아비브",    continent:"중동",  lat:32.085,  lng:34.781,  region:"레반트"},
+    {id:43, name:"이라크",        code:"iq",capital:"바그다드",    continent:"중동",  lat:33.341,  lng:44.401,  region:"메소포타미아"},
+    {id:44, name:"카타르",        code:"qa",capital:"도하",        continent:"중동",  lat:25.286,  lng:51.533,  region:"걸프"},
+    {id:45, name:"튀르키예",      code:"tr",capital:"앙카라",      continent:"중동",  lat:39.933,  lng:32.860,  region:"아나톨리아"},
+    {id:46, name:"쿠웨이트",      code:"kw",capital:"쿠웨이트시티",continent:"중동",  lat:29.375,  lng:47.980,  region:"걸프"},
+    // 아프리카
+    {id:47, name:"나이지리아",    code:"ng",capital:"아부자",      continent:"아프리카",lat:9.058,  lng:7.499,   region:"서아프리카"},
+    {id:48, name:"에티오피아",    code:"et",capital:"아디스아바바",continent:"아프리카",lat:9.005,  lng:38.763,  region:"동아프리카"},
+    {id:49, name:"이집트",        code:"eg",capital:"카이로",      continent:"아프리카",lat:30.044, lng:31.236,  region:"북아프리카"},
+    {id:50, name:"남아프리카공화국",code:"za",capital:"프리토리아",continent:"아프리카",lat:-25.746,lng:28.188,  region:"남아프리카"},
+    {id:51, name:"케냐",          code:"ke",capital:"나이로비",    continent:"아프리카",lat:-1.292, lng:36.822,  region:"동아프리카"},
+    {id:52, name:"탄자니아",      code:"tz",capital:"도도마",      continent:"아프리카",lat:-6.173, lng:35.739,  region:"동아프리카"},
+    {id:53, name:"가나",          code:"gh",capital:"아크라",      continent:"아프리카",lat:5.560,  lng:-0.197,  region:"서아프리카"},
+    {id:54, name:"모로코",        code:"ma",capital:"라바트",      continent:"아프리카",lat:33.994, lng:-6.855,  region:"북아프리카"},
+    {id:55, name:"알제리",        code:"dz",capital:"알제",        continent:"아프리카",lat:36.738, lng:3.086,   region:"북아프리카"},
+    {id:56, name:"콩고민주공화국",code:"cd",capital:"킨샤사",      continent:"아프리카",lat:-4.322, lng:15.322,  region:"중앙아프리카"},
+    {id:57, name:"앙골라",        code:"ao",capital:"루안다",      continent:"아프리카",lat:-8.836, lng:13.235,  region:"남아프리카"},
+    // 북아메리카
+    {id:58, name:"미국",          code:"us",capital:"워싱턴 D.C.",  continent:"북아메리카",lat:38.907,lng:-77.037, region:"북미"},
+    {id:59, name:"캐나다",        code:"ca",capital:"오타와",      continent:"북아메리카",lat:45.421,lng:-75.697, region:"북미"},
+    {id:60, name:"멕시코",        code:"mx",capital:"멕시코시티",  continent:"북아메리카",lat:19.433,lng:-99.133, region:"중미"},
+    {id:61, name:"쿠바",          code:"cu",capital:"아바나",      continent:"북아메리카",lat:23.136,lng:-82.359, region:"카리브해"},
+    {id:62, name:"코스타리카",    code:"cr",capital:"산호세",      continent:"북아메리카",lat:9.929, lng:-84.088, region:"중미"},
+    {id:63, name:"파나마",        code:"pa",capital:"파나마시티",  continent:"북아메리카",lat:8.994, lng:-79.519, region:"중미"},
+    {id:64, name:"과테말라",      code:"gt",capital:"과테말라시티",continent:"북아메리카",lat:14.641,lng:-90.513, region:"중미"},
+    // 남아메리카
+    {id:65, name:"브라질",        code:"br",capital:"브라질리아",  continent:"남아메리카",lat:-15.793,lng:-47.883,region:"중부"},
+    {id:66, name:"아르헨티나",    code:"ar",capital:"부에노스아이레스",continent:"남아메리카",lat:-34.614,lng:-58.440,region:"남부"},
+    {id:67, name:"콜롬비아",      code:"co",capital:"보고타",      continent:"남아메리카",lat:4.711, lng:-74.073, region:"북부"},
+    {id:68, name:"칠레",          code:"cl",capital:"산티아고",    continent:"남아메리카",lat:-33.457,lng:-70.648,region:"남부"},
+    {id:69, name:"페루",          code:"pe",capital:"리마",        continent:"남아메리카",lat:-12.046,lng:-77.043,region:"서부"},
+    {id:70, name:"베네수엘라",    code:"ve",capital:"카라카스",    continent:"남아메리카",lat:10.491, lng:-66.879,region:"북부"},
+    {id:71, name:"에콰도르",      code:"ec",capital:"키토",        continent:"남아메리카",lat:-0.220, lng:-78.512,region:"서부"},
+    {id:72, name:"볼리비아",      code:"bo",capital:"수크레",      continent:"남아메리카",lat:-19.040,lng:-65.261,region:"중부"},
+    {id:73, name:"우루과이",      code:"uy",capital:"몬테비데오",  continent:"남아메리카",lat:-34.901,lng:-56.165,region:"남부"},
+    // 오세아니아
+    {id:74, name:"호주",          code:"au",capital:"캔버라",      continent:"오세아니아",lat:-35.282,lng:149.129,region:"오세아니아"},
+    {id:75, name:"뉴질랜드",      code:"nz",capital:"웰링턴",      continent:"오세아니아",lat:-41.287,lng:174.776,region:"오세아니아"},
+    {id:76, name:"파푸아뉴기니",  code:"pg",capital:"포트모르즈비",continent:"오세아니아",lat:-9.444, lng:147.180,region:"멜라네시아"},
+    {id:77, name:"피지",          code:"fj",capital:"수바",        continent:"오세아니아",lat:-18.141,lng:178.441,region:"멜라네시아"},
+  ];
+
+  var ALL_CONTINENTS = ["전체","유럽","아시아","중동","아프리카","북아메리카","남아메리카","오세아니아"];
+  var selected = null;
+  var activeContinent = "전체";
+  var markerMap = {};
+
+  /* ── MAP ── */
+  var map = L.map("map", {
+    zoomControl: false, minZoom: 2, maxZoom: 8, worldCopyJump: true
+  }).setView([25, 15], 2);
+
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; <a href="https://www.openstreetmap.org/copyright">OSM</a>',
+    subdomains: "abcd", maxZoom: 19
+  }).addTo(map);
+
+  /* buttons */
+  document.getElementById("zoomInBtn").onclick = function(){ map.zoomIn(); };
+  document.getElementById("zoomOutBtn").onclick = function(){ map.zoomOut(); };
+  document.getElementById("menuToggleBtn").onclick = toggleMenu;
+  document.getElementById("startBtn").onclick = startStage;
+
+  function flagUrl(code) { return "https://flagcdn.com/w160/" + code.toLowerCase() + ".png"; }
+
+  function filteredStages() {
+    if (activeContinent === "전체") return stagesData;
+    return stagesData.filter(function(s){ return s.continent === activeContinent; });
+  }
+
+  function renderContTabs() {
+    var wrap = document.getElementById("contTabs");
+    wrap.innerHTML = "";
+    ALL_CONTINENTS.forEach(function(c) {
+      var btn = document.createElement("button");
+      btn.className = "cont-tab" + (c === activeContinent ? " active" : "");
+      btn.textContent = c === "전체" ? "ALL" : c;
+      btn.onclick = function() {
+        activeContinent = c;
+        renderContTabs(); renderList(); updateStats();
+      };
+      wrap.appendChild(btn);
+    });
+  }
+
+  function renderList() {
+    var wrap = document.getElementById("stageList");
+    wrap.innerHTML = "";
+    var list = filteredStages();
+    var groups = {};
+    list.forEach(function(s) {
+      if (!groups[s.continent]) groups[s.continent] = [];
+      groups[s.continent].push(s);
+    });
+    var order = ["유럽","아시아","중동","아프리카","북아메리카","남아메리카","오세아니아"];
+    var display = activeContinent === "전체" ? order : [activeContinent];
+    display.forEach(function(cont) {
+      if (!groups[cont]) return;
+      var lbl = document.createElement("div");
+      lbl.className = "section-label";
+      lbl.textContent = cont;
+      wrap.appendChild(lbl);
+      groups[cont].forEach(function(stage) {
+        var el = document.createElement("div");
+        el.className = "stage-item" + (selected && selected.id === stage.id ? " active" : "");
+        el.innerHTML =
+          '<div class="stage-num">' + String(stage.id).padStart(2,"0") + '</div>' +
+          '<img class="stage-flag" src="' + flagUrl(stage.code) + '" alt="' + stage.name + '" loading="lazy">' +
+          '<div class="stage-info"><strong>' + stage.name + '</strong><span>' + stage.capital + ' · ' + stage.region + '</span></div>' +
+          '<div class="stage-dot"></div>';
+        el.onclick = function() { selectStage(stage); };
+        wrap.appendChild(el);
+      });
+    });
+  }
+
+  function updateStats() {
+    var list = filteredStages();
+    document.getElementById("statTotal").textContent = list.length;
+    document.getElementById("statConts").textContent = activeContinent === "전체" ? 7 : 1;
+    document.getElementById("stageCountLabel").textContent = list.length + " 국가";
+    if (selected) document.getElementById("statSelected").textContent = selected.id;
+    else document.getElementById("statSelected").textContent = "—";
+  }
+
+  function createIcon(stage) {
+    var isActive = selected && selected.id === stage.id;
+    var color = CONT_COLOR[stage.continent] || "#ffffff";
+    return L.divIcon({
+      className: "",
+      html: '<div class="gop-marker ' + (isActive ? "active" : "") + '">' +
+              '<div class="flag-wrap">' +
+                '<div class="pulse"></div>' +
+                '<img src="' + flagUrl(stage.code) + '" alt="' + stage.name + '">' +
+                '<div class="cont-dot" style="background:' + color + '"></div>' +
+              '</div>' +
+              '<div class="pin"></div>' +
+            '</div>',
+      iconSize: [48, 44],
+      iconAnchor: [24, 44]
+    });
+  }
+
+  function renderMarkers() {
+    var visible = {};
+    filteredStages().forEach(function(s){ visible[s.id] = true; });
+    stagesData.forEach(function(stage) {
+      if (!visible[stage.id]) {
+        if (markerMap[stage.id]) { map.removeLayer(markerMap[stage.id]); delete markerMap[stage.id]; }
+        return;
+      }
+      var tip = '<div class="tt-cont">' + stage.continent + ' · ' + stage.region + '</div>' +
+                '<div class="tt-name">' + stage.name + '</div>' +
+                '<div class="tt-cap">⌖ ' + stage.capital + '</div>';
+      if (markerMap[stage.id]) {
+        markerMap[stage.id].setIcon(createIcon(stage));
+      } else {
+        var m = L.marker([stage.lat, stage.lng], { icon: createIcon(stage) })
+          .addTo(map)
+          .bindTooltip(tip, { direction: "top", offset: [0, -42] });
+        m.on("click", (function(s){ return function(){ selectStage(s); }; })(stage));
+        markerMap[stage.id] = m;
+      }
+    });
+  }
+
+  function renderPanel() {
+    if (!selected) return;
+    document.getElementById("bottomPanel").classList.remove("hidden");
+    document.getElementById("panelFlag").src = flagUrl(selected.code);
+    document.getElementById("panelNum").textContent = selected.id;
+    document.getElementById("panelContinent").textContent = selected.continent + " · " + selected.region;
+    document.getElementById("panelTitle").textContent = selected.name;
+    document.getElementById("panelSub").textContent = selected.capital + "에서 시작하는 글로벌 모험 스테이지";
+    document.getElementById("metaCapital").textContent = selected.capital;
+    document.getElementById("metaRegion").textContent = selected.continent;
+    document.getElementById("topTitle").textContent = selected.name + " — " + selected.capital;
+    document.getElementById("statSelected").textContent = selected.id;
+  }
+
+  function selectStage(stage) {
+    selected = stage;
+    map.flyTo([stage.lat, stage.lng], 5, { duration: 0.8, easeLinearity: 0.3 });
+    renderList(); renderMarkers(); renderPanel(); updateStats();
+  }
+
+  function startStage() {
+    if (!selected) return;
+    alert("🚀 " + selected.name + " (" + selected.capital + ") 스테이지 시작!");
+  }
+
+  function toggleMenu() {
+    document.getElementById("sidebar").classList.toggle("closed");
+    setTimeout(function(){ map.invalidateSize(); }, 280);
+  }
+
+  renderContTabs();
+  renderList();
+  renderMarkers();
+  updateStats();
+}
+</script>
+</body>
+</html>

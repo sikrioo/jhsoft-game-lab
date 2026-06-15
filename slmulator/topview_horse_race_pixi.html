@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Top View Horse Race MVP</title>
+<script src="https://cdn.jsdelivr.net/npm/pixi.js@7/dist/pixi.min.js"></script>
+<style>
+body{margin:0;background:#071018;color:#eee;font-family:Arial,sans-serif}
+.app{display:grid;grid-template-columns:270px 1fr 300px;grid-template-rows:70px 1fr 210px;height:100vh}
+header{grid-column:1/4;background:#0b121c;border-bottom:1px solid #263040;display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+.logo{font-size:24px;font-weight:900;color:#f4c96b}
+nav{display:flex;gap:28px;color:#bbb}
+.panel{background:#101925;border:1px solid #263040;padding:14px;overflow:auto}
+.left{grid-row:2/4}
+.right{grid-column:3;grid-row:2/4}
+.center{position:relative;background:#061018}
+.bottom{grid-column:2;grid-row:3}
+#raceCanvas{width:100%;height:100%;display:block}
+h3{margin:4px 0 14px}
+.horse-row,.rank-row{display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #263040;padding:10px 0}
+.badge{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:6px;font-weight:800;color:#111;background:#eee;margin-right:8px}
+button{background:#22314a;color:white;border:1px solid #3d4a62;border-radius:8px;padding:8px 10px;cursor:pointer}
+button:hover{background:#30415f}
+.bet-buttons{display:flex;gap:6px;margin-top:8px}
+.log{height:145px;overflow:auto;line-height:1.6;color:#d8dee9}
+.status{color:#f4c96b;font-weight:800}
+.money{color:#f4c96b;font-weight:900}
+.controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.small{font-size:12px;color:#98a2b3}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo">THUNDER TURF</div>
+    <nav>
+      <div>경주</div><div>마방</div><div>베팅</div><div>랭킹</div>
+    </nav>
+    <div><span class="money" id="balanceTop">5,620,000 G</span></div>
+  </header>
+
+  <aside class="panel left">
+    <h3>출전마 정보</h3>
+    <div id="horseList"></div>
+
+    <h3 style="margin-top:22px">베팅하기</h3>
+    <div class="small">선택한 마필</div>
+    <h2 id="selectedHorse">3 딥임팩트</h2>
+    <div class="bet-buttons">
+      <button onclick="bet(10000)">+1만</button>
+      <button onclick="bet(50000)">+5만</button>
+      <button onclick="bet(100000)">+10만</button>
+    </div>
+    <p>베팅금: <b id="betAmount">0 G</b></p>
+  </aside>
+
+  <main class="center">
+    <canvas id="raceCanvas"></canvas>
+  </main>
+
+  <aside class="panel right">
+    <div class="controls">
+      <button onclick="startRace()">경기 시작</button>
+      <button onclick="resetRace()">새 경기</button>
+      <button onclick="playReplay()">리플레이</button>
+      <button onclick="stopReplay()">라이브</button>
+    </div>
+
+    <h3>경기 상태</h3>
+    <p class="status" id="raceStatus">READY</p>
+    <p>서울 10R · 뚝섬배 GⅡ</p>
+    <p>1200m · 맑음 · 양호</p>
+    <p>남은 거리: <b id="remain">1200m</b></p>
+
+    <h3>현재 순위</h3>
+    <div id="rankList"></div>
+  </aside>
+
+  <section class="panel bottom">
+    <h3>실시간 중계</h3>
+    <div id="logs" class="log"></div>
+  </section>
+</div>
+
+<script>
+const app = new PIXI.Application({
+  view: document.getElementById("raceCanvas"),
+  resizeTo: document.querySelector(".center"),
+  backgroundColor: 0x061018,
+  antialias: true
+});
+
+const horses = [
+  {gate:1,name:"당대불패",style:"선행",color:0x6b3f24,jockey:0xe63946,speed:86,pos:0,lane:0,odds:2.1},
+  {gate:2,name:"포경선",style:"선입",color:0x1d1d1d,jockey:0x3a86ff,speed:80,pos:0,lane:1,odds:3.8},
+  {gate:3,name:"딥임팩트",style:"추입",color:0xb9894c,jockey:0xffbe0b,speed:92,pos:0,lane:2,odds:2.5},
+  {gate:4,name:"아르카디아",style:"선입",color:0x2f2f34,jockey:0x4cc9f0,speed:78,pos:0,lane:3,odds:7.6},
+  {gate:5,name:"골드쉽",style:"자유",color:0x8a6f3c,jockey:0x70e000,speed:83,pos:0,lane:4,odds:6.3}
+];
+
+let selectedGate = 3;
+let balance = 5620000;
+let totalBet = 0;
+let raceState = "READY";
+let replayMode = false;
+let replayFrames = [];
+let replayIndex = 0;
+let replayTimer = null;
+
+const world = new PIXI.Container();
+const horseLayer = new PIXI.Container();
+const fxLayer = new PIXI.Container();
+const uiLayer = new PIXI.Container();
+
+app.stage.addChild(world, horseLayer, fxLayer, uiLayer);
+
+function drawTrack(){
+  world.removeChildren();
+
+  const w = app.screen.width;
+  const h = app.screen.height;
+
+  const grass = new PIXI.Graphics();
+  grass.beginFill(0x1f5c32).drawRect(0,0,w,h).endFill();
+  world.addChild(grass);
+
+  for(let i=0;i<80;i++){
+    const tree = new PIXI.Graphics();
+    tree.beginFill([0x17401f,0x2e7d32,0x3f8f3f][i%3]);
+    tree.drawCircle(Math.random()*w, Math.random()*h, 10+Math.random()*14);
+    tree.endFill();
+    tree.alpha=.65;
+    world.addChild(tree);
+  }
+
+  const track = new PIXI.Graphics();
+  track.beginFill(0x8b623e);
+  track.drawRoundedRect(60,80,w-120,h-160,90);
+  track.endFill();
+
+  track.beginHole();
+  track.drawRoundedRect(145,155,w-290,h-310,55);
+  track.endHole();
+  world.addChild(track);
+
+  const inner = new PIXI.Graphics();
+  inner.lineStyle(5,0xe6dfc9,1);
+  inner.drawRoundedRect(145,155,w-290,h-310,55);
+  world.addChild(inner);
+
+  const outer = new PIXI.Graphics();
+  outer.lineStyle(5,0xe6dfc9,1);
+  outer.drawRoundedRect(60,80,w-120,h-160,90);
+  world.addChild(outer);
+
+  for(let i=0;i<5;i++){
+    const lane = new PIXI.Graphics();
+    lane.lineStyle(2,0xd6bd95,.45);
+    lane.drawRoundedRect(80+i*13,100+i*13,w-160-i*26,h-200-i*26,75);
+    world.addChild(lane);
+  }
+
+  const finish = new PIXI.Graphics();
+  const fx = w - 150;
+  const fy = h - 120;
+  for(let i=0;i<8;i++){
+    finish.beginFill(i%2?0xffffff:0x111111);
+    finish.drawRect(fx, fy-i*18, 18, 18);
+    finish.endFill();
+  }
+  world.addChild(finish);
+
+  const title = new PIXI.Text("서울 10R  ·  뚝섬배 GⅡ  ·  1200m", {
+    fill:0xffffff,fontSize:18,fontWeight:"700"
+  });
+  title.x = 22; title.y = 18;
+  world.addChild(title);
+}
+
+function getTrackPoint(progress, lane){
+  const w = app.screen.width;
+  const h = app.screen.height;
+  const margin = 82 + lane*15;
+  const x1 = margin;
+  const x2 = w - margin;
+  const y1 = margin + 25;
+  const y2 = h - margin - 25;
+
+  const p = progress % 1;
+
+  if(p < .36){
+    const t = p/.36;
+    return {x:x1+(x2-x1)*t,y:y2,rot:0};
+  }
+  if(p < .50){
+    const t = (p-.36)/.14;
+    return {x:x2+Math.sin(t*Math.PI)*20,y:y2-(y2-y1)*t,rot:-Math.PI/2};
+  }
+  if(p < .86){
+    const t = (p-.50)/.36;
+    return {x:x2-(x2-x1)*t,y:y1,rot:Math.PI};
+  }
+  const t = (p-.86)/.14;
+  return {x:x1-Math.sin(t*Math.PI)*20,y:y1+(y2-y1)*t,rot:Math.PI/2};
+}
+
+function createHorseSprite(h){
+  const c = new PIXI.Container();
+
+  const shadow = new PIXI.Graphics();
+  shadow.beginFill(0x000000,.35).drawEllipse(0,16,28,10).endFill();
+  c.addChild(shadow);
+
+  const body = new PIXI.Graphics();
+  body.beginFill(h.color).drawEllipse(0,0,28,13).endFill();
+  c.addChild(body);
+
+  const head = new PIXI.Graphics();
+  head.beginFill(h.color).drawEllipse(25,-3,10,7).endFill();
+  c.addChild(head);
+
+  const jockey = new PIXI.Graphics();
+  jockey.beginFill(h.jockey).drawCircle(2,-12,7).endFill();
+  jockey.beginFill(0xffffff).drawRect(-5,-8,12,10).endFill();
+  c.addChild(jockey);
+
+  const number = new PIXI.Text(String(h.gate),{fill:0xffffff,fontSize:13,fontWeight:"900"});
+  number.anchor.set(.5);
+  number.x = 0; number.y = 0;
+  c.addChild(number);
+
+  const label = new PIXI.Text(h.name,{fill:0xffffff,fontSize:12,fontWeight:"700",stroke:0x000000,strokeThickness:3});
+  label.anchor.set(.5);
+  label.y = -30;
+  c.addChild(label);
+
+  h.sprite = c;
+  horseLayer.addChild(c);
+}
+
+function createDust(x,y){
+  const d = new PIXI.Graphics();
+  d.beginFill(0xd6bd95,.55).drawCircle(0,0,3+Math.random()*4).endFill();
+  d.x=x; d.y=y;
+  d.life=24;
+  fxLayer.addChild(d);
+}
+
+function updateRace(delta){
+  if(raceState !== "RACING" || replayMode) return;
+
+  horses.forEach(h=>{
+    let boost = 0;
+    if(h.style==="선행" && h.pos < .35) boost += .00035;
+    if(h.style==="추입" && h.pos > .65) boost += .00055;
+    if(h.style==="선입" && h.pos > .35 && h.pos < .75) boost += .00028;
+
+    const noise = (Math.random()-.5)*.00025;
+    h.pos += (h.speed * .000035 + boost + noise) * delta;
+
+    if(h.pos >= 1){
+      h.pos = 1;
+      raceState = "FINISHED";
+      finishRace();
+    }
+  });
+
+  replayFrames.push(horses.map(h=>({...h, sprite:null})));
+
+  if(Math.random()<.08){
+    const leader = [...horses].sort((a,b)=>b.pos-a.pos)[0];
+    addLog(`${leader.name}, 선두권에서 속도를 끌어올립니다.`);
+  }
+}
+
+function renderHorses(list=horses){
+  list.forEach((h,i)=>{
+    const base = horses.find(x=>x.gate===h.gate);
+    const p = getTrackPoint(h.pos, i);
+    base.sprite.x = p.x;
+    base.sprite.y = p.y;
+    base.sprite.rotation = p.rot;
+
+    if(raceState==="RACING" && Math.random()<.25){
+      createDust(p.x-20*Math.cos(p.rot), p.y-20*Math.sin(p.rot));
+    }
+  });
+}
+
+function updateDust(){
+  fxLayer.children.forEach(d=>{
+    d.life--;
+    d.alpha = d.life/24;
+    d.scale.x += .03;
+    d.scale.y += .03;
+  });
+  fxLayer.children.filter(d=>d.life<=0).forEach(d=>fxLayer.removeChild(d));
+}
+
+function finishRace(){
+  const winner = [...horses].sort((a,b)=>b.pos-a.pos)[0];
+  const reward = selectedGate===winner.gate ? Math.floor(totalBet * winner.odds) : 0;
+  balance += reward;
+  addLog(`🏁 결승! 우승은 ${winner.name}. 적중금 ${reward.toLocaleString()}G`);
+  renderHtml();
+}
+
+function startRace(){
+  if(raceState==="RACING") return;
+  raceState="RACING";
+  addLog("출발했습니다! 뚝섬배 라이브 중계 시작!");
+  renderHtml();
+}
+
+function resetRace(){
+  stopReplay();
+  horses.forEach(h=>h.pos=0);
+  raceState="READY";
+  replayFrames=[];
+  totalBet=0;
+  addLog("새 경기 준비 완료.");
+  renderHtml();
+}
+
+function playReplay(){
+  if(replayFrames.length===0) return addLog("리플레이 데이터가 없습니다.");
+  replayMode=true;
+  replayIndex=0;
+  raceState="REPLAY";
+  replayTimer=setInterval(()=>{
+    if(replayIndex>=replayFrames.length){
+      stopReplay();
+      addLog("리플레이 종료.");
+      return;
+    }
+    renderHorses(replayFrames[replayIndex]);
+    replayIndex++;
+  },50);
+  renderHtml();
+}
+
+function stopReplay(){
+  replayMode=false;
+  if(replayTimer) clearInterval(replayTimer);
+  replayTimer=null;
+  if(raceState==="REPLAY") raceState="FINISHED";
+  renderHorses();
+  renderHtml();
+}
+
+function bet(amount){
+  if(raceState!=="READY") return;
+  if(balance<amount) return;
+  balance-=amount;
+  totalBet+=amount;
+  addLog(`${selectedGate}번 ${horses[selectedGate-1].name}에 ${amount.toLocaleString()}G 베팅`);
+  renderHtml();
+}
+
+function selectHorse(gate){
+  selectedGate=gate;
+  renderHtml();
+}
+
+function renderHtml(){
+  balanceTop.textContent = balance.toLocaleString()+" G";
+  betAmount.textContent = totalBet.toLocaleString()+" G";
+  selectedHorse.textContent = selectedGate+" "+horses[selectedGate-1].name;
+  raceStatus.textContent = raceState;
+
+  horseList.innerHTML = horses.map(h=>`
+    <div class="horse-row" onclick="selectHorse(${h.gate})" style="cursor:pointer">
+      <div><span class="badge">${h.gate}</span>${h.name}<br><span class="small">${h.style}</span></div>
+      <b>${h.odds}</b>
+    </div>
+  `).join("");
+
+  const ranked = [...horses].sort((a,b)=>b.pos-a.pos);
+  rankList.innerHTML = ranked.map((h,i)=>`
+    <div class="rank-row">
+      <div><b>${i+1}위</b> ${h.name}</div>
+      <div>${Math.floor(h.pos*1200)}m</div>
+    </div>
+  `).join("");
+
+  const leader = ranked[0];
+  remain.textContent = Math.max(0, 1200-Math.floor(leader.pos*1200))+"m";
+}
+
+function addLog(text){
+  const div=document.createElement("div");
+  div.textContent=new Date().toLocaleTimeString()+"  "+text;
+  logs.appendChild(div);
+  logs.scrollTop=logs.scrollHeight;
+}
+
+app.ticker.add(delta=>{
+  updateRace(delta);
+  renderHorses();
+  updateDust();
+  renderHtml();
+});
+
+window.addEventListener("resize",()=>drawTrack());
+
+drawTrack();
+horses.forEach(createHorseSprite);
+renderHorses();
+renderHtml();
+addLog("탑뷰 2D 경마 데모 준비 완료.");
+</script>
+</body>
+</html>

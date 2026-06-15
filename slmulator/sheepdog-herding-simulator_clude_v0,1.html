@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8"/>
+<title>Sheepdog Herding Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+<style>
+*{box-sizing:border-box;}
+body{margin:0;overflow:hidden;background:#04100a;color:white;font-family:Inter,Pretendard,Arial,sans-serif;}
+canvas{display:block;}
+
+.panel{
+  position:fixed;top:18px;left:18px;z-index:10;width:300px;
+  padding:16px 18px 14px;border-radius:22px;
+  background:rgba(5,16,10,0.90);border:1px solid rgba(255,255,255,0.12);
+  backdrop-filter:blur(22px);box-shadow:0 24px 80px rgba(0,0,0,0.55);
+}
+.title{font-size:17px;font-weight:900;color:#d1fae5;margin-bottom:2px;letter-spacing:-0.3px;}
+.subtitle{font-size:10px;color:#3a6a4a;text-transform:uppercase;letter-spacing:.08em;margin-bottom:11px;}
+
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:9px;}
+.card{padding:8px 10px;border-radius:11px;background:rgba(255,255,255,0.055);border:1px solid rgba(255,255,255,0.07);}
+.card .lbl{font-size:9px;color:#3a6a4a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;}
+.card .val{font-size:17px;font-weight:900;color:#ecfdf5;line-height:1;}
+.card .val.g{color:#86efac;} .card .val.y{color:#fde68a;} .card .val.r{color:#fca5a5;}
+
+/* Dog mode badge */
+.mode-badge{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;border-radius:12px;margin-bottom:9px;
+  border:1px solid rgba(255,255,255,0.08);
+  background:rgba(255,255,255,0.05);
+  transition:background .3s,border-color .3s;
+}
+.mode-badge.gather{background:rgba(250,204,21,0.1);border-color:rgba(250,204,21,0.22);}
+.mode-badge.drive{background:rgba(96,165,250,0.1);border-color:rgba(96,165,250,0.22);}
+.mode-dot{width:9px;height:9px;border-radius:50%;background:#555;flex-shrink:0;transition:background .3s;}
+.mode-badge.gather .mode-dot{background:#facc15;}
+.mode-badge.drive .mode-dot{background:#60a5fa;}
+.mode-text{font-size:11px;font-weight:800;color:#d1fae5;letter-spacing:.04em;}
+.mode-sub{font-size:10px;color:#4a7a5a;margin-left:auto;}
+
+/* Sheep states row */
+.states-row{display:flex;gap:5px;margin-bottom:9px;}
+.state-chip{
+  flex:1;padding:5px 4px;border-radius:9px;text-align:center;
+  background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.07);
+  font-size:9px;font-weight:700;color:#6b9c7b;letter-spacing:.04em;text-transform:uppercase;
+  transition:background .3s,color .3s;
+}
+.state-chip .sv{display:block;font-size:15px;font-weight:900;color:#ecfdf5;margin-bottom:1px;}
+.state-chip.active-idle{background:rgba(134,239,172,.12);border-color:rgba(134,239,172,.25);color:#86efac;}
+.state-chip.active-flee{background:rgba(251,191,36,.12);border-color:rgba(251,191,36,.25);color:#fbbf24;}
+.state-chip.active-panic{background:rgba(248,113,113,.18);border-color:rgba(248,113,113,.35);color:#f87171;}
+
+.bar-row{margin-bottom:7px;}
+.bar-head{display:flex;justify-content:space-between;font-size:10px;color:#3a6a4a;text-transform:uppercase;letter-spacing:.06em;margin-bottom:3px;}
+.bar-track{width:100%;height:7px;border-radius:99px;background:rgba(255,255,255,0.06);overflow:hidden;}
+.bar-fill{height:100%;border-radius:99px;transition:width .18s ease,background .3s;}
+#staminaFill{background:linear-gradient(90deg,#16a34a,#86efac);}
+#progressFill{background:linear-gradient(90deg,#0ea5e9,#38bdf8);}
+
+.keys{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:9px;}
+.key{padding:3px 7px;border-radius:7px;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.08);font-size:10px;font-weight:700;color:#c4d9ca;}
+.key.sp{background:rgba(250,204,21,.14);border-color:rgba(250,204,21,.22);color:#fef08a;}
+.key.br{background:rgba(96,165,250,.1);border-color:rgba(96,165,250,.18);color:#93c5fd;}
+
+button{width:100%;padding:9px;border:0;border-radius:11px;background:linear-gradient(135deg,#16a34a,#4ade80);color:#052e16;font-weight:900;font-size:12px;cursor:pointer;box-shadow:0 6px 20px rgba(22,163,74,.25);transition:opacity .15s;}
+button:hover{opacity:.88;}
+
+.badge{position:fixed;right:18px;top:18px;padding:8px 14px;border-radius:999px;background:rgba(5,16,10,.84);border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(18px);color:#86efac;font-size:11px;font-weight:700;z-index:10;letter-spacing:.04em;}
+
+/* Clear overlay */
+#clearOverlay{position:fixed;inset:0;z-index:100;display:none;background:rgba(0,0,0,.75);align-items:center;justify-content:center;flex-direction:column;}
+#clearOverlay.show{display:flex;}
+.clear-box{text-align:center;padding:44px 58px;border-radius:28px;background:rgba(5,20,12,.96);border:1px solid rgba(134,239,172,.32);box-shadow:0 0 80px rgba(22,163,74,.3);animation:popIn .4s cubic-bezier(.175,.885,.32,1.275);}
+@keyframes popIn{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}
+.clear-icon{font-size:62px;margin-bottom:8px;}
+.clear-title{font-size:36px;font-weight:900;color:#86efac;letter-spacing:-1px;margin-bottom:5px;}
+.clear-sub{font-size:14px;color:#6ee7b7;margin-bottom:22px;}
+.clear-stats{display:flex;gap:24px;justify-content:center;margin-bottom:26px;}
+.cs .cv{font-size:26px;font-weight:900;color:#d1fae5;} .cs .cl{font-size:10px;color:#4a7c5c;text-transform:uppercase;letter-spacing:.06em;margin-top:2px;}
+.clear-box button{width:auto;padding:12px 32px;font-size:14px;border-radius:14px;}
+
+/* Panic warning flash */
+#panicFlash{pointer-events:none;position:fixed;inset:0;z-index:50;background:rgba(239,68,68,0);transition:background .1s;}
+#panicFlash.on{background:rgba(239,68,68,0.22);}
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <div class="title">🐕 Sheepdog Herding</div>
+  <div class="subtitle">Swarm Control Simulator</div>
+
+  <!-- Dog mode indicator -->
+  <div class="mode-badge" id="modeBadge">
+    <div class="mode-dot"></div>
+    <div class="mode-text" id="modeText">STANDBY</div>
+    <div class="mode-sub" id="modeSub">—</div>
+  </div>
+
+  <!-- Sheep state counts -->
+  <div class="states-row">
+    <div class="state-chip" id="chipIdle"><span class="sv" id="cntIdle">0</span>idle</div>
+    <div class="state-chip" id="chipFlee"><span class="sv" id="cntFlee">0</span>flee</div>
+    <div class="state-chip" id="chipPanic"><span class="sv" id="cntPanic">0</span>panic</div>
+  </div>
+
+  <div class="stats">
+    <div class="card"><div class="lbl">Sheep</div><div class="val" id="sheepCount">200</div></div>
+    <div class="card"><div class="lbl">In Pen</div><div class="val g" id="inPenCount">0</div></div>
+    <div class="card"><div class="lbl">Time</div><div class="val y" id="timerVal">0:00</div></div>
+  </div>
+
+  <div class="bar-row">
+    <div class="bar-head"><span>Progress</span><span id="progressPct">0%</span></div>
+    <div class="bar-track"><div class="bar-fill" id="progressFill" style="width:0%"></div></div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-head"><span>Stamina</span><span id="staminaLabel">100%</span></div>
+    <div class="bar-track"><div class="bar-fill" id="staminaFill" style="width:100%"></div></div>
+  </div>
+
+  <div class="keys">
+    <span class="key">W</span><span class="key">A</span><span class="key">S</span><span class="key">D</span>
+    <span class="key sp">Space Sprint</span>
+    <span class="key br">Shift Brake</span>
+  </div>
+  <button onclick="resetScene()">↺ Reset</button>
+</div>
+
+<div class="badge">CEO Demo · Matter.js Swarm</div>
+<div id="panicFlash"></div>
+
+<div id="clearOverlay">
+  <div class="clear-box">
+    <div class="clear-icon">🏆</div>
+    <div class="clear-title">HERDING SUCCESS!</div>
+    <div class="clear-sub">The Border Collie guided the flock home.</div>
+    <div class="clear-stats">
+      <div class="cs"><div class="cv" id="cs-time">—</div><div class="cl">Time</div></div>
+      <div class="cs"><div class="cv" id="cs-sheep">—</div><div class="cl">Herded</div></div>
+      <div class="cs"><div class="cv" id="cs-pct">—</div><div class="cl">Completion</div></div>
+    </div>
+    <button onclick="resetScene()">Play Again</button>
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const {Engine,World,Bodies,Body,Events,Composite,Runner}=Matter;
+const canvas=document.getElementById("canvas");
+const ctx=canvas.getContext("2d");
+let screenW=window.innerWidth,screenH=window.innerHeight;
+canvas.width=screenW;canvas.height=screenH;
+
+const engine=Engine.create();engine.gravity.x=0;engine.gravity.y=0;
+const world=engine.world;
+const runner=Runner.create();
+
+const worldW=2400,worldH=1380;
+const camera={zoom:0.66,x:0,y:0};
+
+// ── State ──
+let dog,sheep=[],walls=[],particles=[],penZone;
+let gameCleared=false;
+let startTime=null,timerInterval=null;
+let inPenCount=0;
+let panicCount=0,fleeCount=0;
+let panicFlashTimer=0;
+
+// Dog mode: 'GATHER' | 'DRIVE'
+let dogMode='GATHER';
+let outlierTarget=null; // the furthest sheep from flock center
+
+// Stamina
+let stamina=100;
+const STAMINA_MAX=100,STAMINA_DRAIN=0.3,STAMINA_REGEN=0.26,STAMINA_MIN=12;
+
+let dogTrail=[];
+const keys={up:false,down:false,left:false,right:false,brake:false,sprint:false};
+
+// ── Camera ──
+function screenCenterCamera(){camera.x=screenW/2-worldW*camera.zoom/2;camera.y=screenH/2-worldH*camera.zoom/2;}
+function applyCamera(){ctx.setTransform(camera.zoom,0,0,camera.zoom,camera.x,camera.y);}
+function resetCamera(){ctx.setTransform(1,0,0,1,0,0);}
+
+function roundRect(c,x,y,w,h,r){
+  c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);
+  c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  c.lineTo(x+r,y+h);c.quadraticCurveTo(x,y+h,x,y+h-r);
+  c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);c.closePath();
+}
+
+// ── Build world ──
+function createWalls(){
+  const t=130;
+  walls=[
+    Bodies.rectangle(worldW/2,-t/2,worldW,t,{isStatic:true}),
+    Bodies.rectangle(worldW/2,worldH+t/2,worldW,t,{isStatic:true}),
+    Bodies.rectangle(-t/2,worldH/2,t,worldH,{isStatic:true}),
+    Bodies.rectangle(worldW+t/2,worldH/2,t,worldH,{isStatic:true})
+  ];
+  World.add(world,walls);
+}
+
+function createPenZone(){
+  penZone={
+    x:worldW-420,y:worldH/2-300,w:310,h:600,
+    entranceY1:worldH/2-115,entranceY2:worldH/2+115
+  };
+}
+
+function createDog(){
+  dog=Bodies.circle(420,worldH/2,22,{restitution:0.25,friction:0.02,frictionAir:0.035,density:0.012,label:"dog"});
+  dog.facing=0;
+  World.add(world,dog);
+}
+
+function createSheep(){
+  sheep=[];
+  const total=200;
+  const centers=[{x:820,y:520,r:145},{x:1020,y:760,r:125},{x:1160,y:470,r:135},{x:1310,y:680,r:115},{x:950,y:640,r:105}];
+  for(let i=0;i<total;i++){
+    const c=centers[Math.floor(Math.random()*centers.length)];
+    const a=Math.random()*Math.PI*2,d=Math.pow(Math.random(),0.5)*c.r;
+    const x=Math.max(100,Math.min(worldW-500,c.x+Math.cos(a)*d));
+    const y=Math.max(100,Math.min(worldH-100,c.y+Math.sin(a)*d*0.85));
+    const s=Bodies.circle(x,y,11,{restitution:0.15,friction:0.35,frictionAir:0.18,density:0.0045,label:"sheep"});
+    s.phase=Math.random()*Math.PI*2;
+    // States: 0=IDLE 1=FLEE 2=PANIC
+    s.state=0;
+    s.scared=0;        // 0..1 fear meter
+    s.panicTimer=0;    // frames remaining in PANIC
+    s.inPen=false;
+    s.colorTone=Math.random();
+    Body.setVelocity(s,{x:(Math.random()-0.5)*0.05,y:(Math.random()-0.5)*0.05});
+    sheep.push(s);
+  }
+  World.add(world,sheep);
+  document.getElementById("sheepCount").innerText=sheep.length;
+}
+
+function resetScene(){
+  Composite.clear(world,false);
+  particles=[];dogTrail=[];
+  inPenCount=0;panicCount=0;fleeCount=0;
+  gameCleared=false;stamina=STAMINA_MAX;
+  outlierTarget=null;dogMode='GATHER';
+  document.getElementById("clearOverlay").classList.remove("show");
+  document.getElementById("progressFill").style.width="0%";
+  document.getElementById("progressPct").innerText="0%";
+  document.getElementById("inPenCount").innerText="0";
+  document.getElementById("panicFlash").classList.remove("on");
+  if(timerInterval)clearInterval(timerInterval);
+  startTime=Date.now();
+  timerInterval=setInterval(()=>{
+    if(gameCleared)return;
+    const s=Math.floor((Date.now()-startTime)/1000);
+    document.getElementById("timerVal").innerText=Math.floor(s/60)+":"+(s%60).toString().padStart(2,"0");
+  },500);
+  createWalls();createPenZone();createDog();createSheep();
+  updateStaminaUI();
+}
+
+// ── Stamina UI ──
+function updateStaminaUI(){
+  const p=Math.round(stamina);
+  document.getElementById("staminaFill").style.width=p+"%";
+  document.getElementById("staminaLabel").innerText=p+"%";
+  const f=document.getElementById("staminaFill");
+  if(stamina<STAMINA_MIN)f.style.background="linear-gradient(90deg,#dc2626,#f87171)";
+  else if(stamina<35)f.style.background="linear-gradient(90deg,#d97706,#fcd34d)";
+  else f.style.background="linear-gradient(90deg,#16a34a,#86efac)";
+}
+
+// ── Dog mode logic ──
+// Returns flock center (excluding penned) and flock radius
+function getFlockStats(){
+  let cx=0,cy=0,cnt=0;
+  for(const s of sheep){if(!s.inPen){cx+=s.position.x;cy+=s.position.y;cnt++;}}
+  if(cnt===0)return{cx:worldW/2,cy:worldH/2,radius:0,cnt:0};
+  cx/=cnt;cy/=cnt;
+  let maxDist=0;
+  for(const s of sheep){
+    if(!s.inPen){const d=Math.hypot(s.position.x-cx,s.position.y-cy);if(d>maxDist)maxDist=d;}
+  }
+  return{cx,cy,radius:maxDist,cnt};
+}
+
+function updateDogMode(flockStats){
+  const GATHER_THRESHOLD=320; // flock radius above which = GATHER
+  const prevMode=dogMode;
+
+  if(flockStats.radius>GATHER_THRESHOLD){
+    dogMode='GATHER';
+    // Find furthest outlier
+    let maxD=0,best=null;
+    for(const s of sheep){
+      if(s.inPen)continue;
+      const d=Math.hypot(s.position.x-flockStats.cx,s.position.y-flockStats.cy);
+      if(d>maxD){maxD=d;best=s;}
+    }
+    outlierTarget=best;
+  } else {
+    dogMode='DRIVE';
+    outlierTarget=null;
+  }
+
+  // Update UI
+  const badge=document.getElementById("modeBadge");
+  const modeText=document.getElementById("modeText");
+  const modeSub=document.getElementById("modeSub");
+  badge.className="mode-badge "+(dogMode==='GATHER'?'gather':'drive');
+  if(dogMode==='GATHER'){
+    modeText.innerText="GATHER MODE";
+    modeSub.innerText="낙오자 회수";
+  } else {
+    modeText.innerText="DRIVE MODE";
+    modeSub.innerText="목적지로 몰기";
+  }
+}
+
+// ── Sheep behavior ──
+function updateSheepBehavior(){
+  const time=Date.now()*0.001;
+  const isSprinting=keys.sprint&&stamina>STAMINA_MIN;
+  const flockStats=getFlockStats();
+  updateDogMode(flockStats);
+
+  const {cx,cy}=flockStats;
+
+  // Build neighbor lookup (spatial — simplified: just iterate)
+  panicCount=0;fleeCount=0;
+  inPenCount=0;
+  let idleCount=0;
+
+  // Dog speed for panic detection
+  const dogSpeed=Math.hypot(dog.velocity.x,dog.velocity.y);
+
+  for(const s of sheep){
+    const dxDog=s.position.x-dog.position.x;
+    const dyDog=s.position.y-dog.position.y;
+    const distDog=Math.hypot(dxDog,dyDog)||1;
+
+    // ── State transitions ──
+    const fearRadius=isSprinting?240:180;
+    const inFearZone=distDog<fearRadius;
+
+    // Panic: dog charges too fast through fear zone, or sheep near wall
+    const nearWall=s.position.x<80||s.position.x>worldW-80||s.position.y<80||s.position.y>worldH-80;
+    const dogCharging=inFearZone&&dogSpeed>12;
+
+    if(s.panicTimer>0){
+      s.state=2; // PANIC
+      s.panicTimer--;
+    } else if(dogCharging||( nearWall&&inFearZone)){
+      s.state=2;
+      s.panicTimer=120+Math.floor(Math.random()*60); // 2-3 sec panic
+      spawnParticles(s.position.x,s.position.y,"rgba(248,113,113,0.85)",4);
+    } else if(inFearZone){
+      s.state=1; // FLEE
+    } else {
+      s.state=0; // IDLE
+    }
+
+    // Count states
+    if(s.inPen){inPenCount++;}
+    else if(s.state===2)panicCount++;
+    else if(s.state===1)fleeCount++;
+    else idleCount++;
+
+    // ── Force accumulation ──
+    let fx=0,fy=0;
+
+    if(s.state===2){
+      // PANIC: 결합 붕괴, 랜덤 scatter — 힘은 약하게, frictionAir가 잡아줌
+      fx+=(Math.random()-0.5)*0.0014;
+      fy+=(Math.random()-0.5)*0.0014;
+      if(distDog<fearRadius){
+        const p=(1-distDog/fearRadius)*0.0009;
+        fx+=dxDog/distDog*p; fy+=dyDog/distDog*p;
+      }
+      s.scared=1;
+    } else if(s.state===1){
+      // FLEE: 개 반대 방향으로 도망 — 자연스러운 세기
+      const power=(1-distDog/fearRadius)*(isSprinting?0.0016:0.0011);
+      fx+=dxDog/distDog*power;
+      fy+=dyDog/distDog*power;
+      s.scared=Math.min(1,s.scared+0.06);
+    } else {
+      // IDLE: 그냥 서있음, 아주 약하게 무리 방향
+      s.scared=Math.max(0,s.scared-0.02);
+      if(!s.inPen){
+        const dxC=cx-s.position.x,dyC=cy-s.position.y;
+        const dC=Math.hypot(dxC,dyC)||1;
+        const coh=dC>250?0.000010:0.000003; // 멀면 조금, 가까우면 거의 없음
+        fx+=dxC/dC*coh; fy+=dyC/dC*coh;
+      }
+    }
+
+    // Separation — 너무 가까운 양끼리만 살짝 밀어냄
+    for(const o of sheep){
+      if(o===s)continue;
+      const dx=s.position.x-o.position.x,dy=s.position.y-o.position.y;
+      const d=Math.hypot(dx,dy)||1;
+      if(d<24){const sep=(1-d/24)*0.00028;fx+=dx/d*sep;fy+=dy/d*sep;}
+    }
+
+    // Weak pen goal bias
+    if(!s.inPen){
+      const tx=penZone.x+penZone.w/2,ty=penZone.y+penZone.h/2;
+      const dxP=tx-s.position.x,dyP=ty-s.position.y;
+      const dP=Math.hypot(dxP,dyP)||1;
+      fx+=dxP/dP*0.0000025;fy+=dyP/dP*0.0000025;
+    }
+
+    // Wander
+    // 아주 약한 wander — 가만히 있되 살짝 풀 뜯는 정도
+    fx+=Math.cos(time*0.6+s.phase)*0.000008;
+    fy+=Math.sin(time*0.5+s.phase)*0.000008;
+
+    // Pen damping
+    const inPenNow=(s.position.x>penZone.x+20&&s.position.x<penZone.x+penZone.w-10&&s.position.y>penZone.y+10&&s.position.y<penZone.y+penZone.h-10);
+    if(inPenNow){
+      s.inPen=true;
+      Body.setVelocity(s,{x:s.velocity.x*0.7,y:s.velocity.y*0.7});
+      const pcx=penZone.x+penZone.w/2,pcy=penZone.y+penZone.h/2;
+      const dpc=Math.hypot(pcx-s.position.x,pcy-s.position.y)||1;
+      fx+=(pcx-s.position.x)/dpc*0.00014;fy+=(pcy-s.position.y)/dpc*0.00014;
+      if(s.position.x>penZone.x+60)s.scared=Math.max(0,s.scared-0.07);
+    } else {
+      s.inPen=false;
+    }
+
+    Body.applyForce(s,s.position,{x:fx,y:fy});
+
+    const maxSp=s.inPen?0.5:(s.state===2?2.2:(s.state===1?(isSprinting?2.4:1.8):0.7));
+    const sp=Math.hypot(s.velocity.x,s.velocity.y);
+    if(sp>maxSp)Body.setVelocity(s,{x:s.velocity.x/sp*maxSp,y:s.velocity.y/sp*maxSp});
+  }
+
+  // Update state chips UI
+  document.getElementById("cntIdle").innerText=idleCount;
+  document.getElementById("cntFlee").innerText=fleeCount;
+  document.getElementById("cntPanic").innerText=panicCount;
+  const chipIdle=document.getElementById("chipIdle");
+  const chipFlee=document.getElementById("chipFlee");
+  const chipPanic=document.getElementById("chipPanic");
+  chipIdle.className="state-chip"+(idleCount>fleeCount&&idleCount>panicCount?" active-idle":"");
+  chipFlee.className="state-chip"+(fleeCount>panicCount&&fleeCount>0?" active-flee":"");
+  chipPanic.className="state-chip"+(panicCount>0?" active-panic":"");
+
+  // Panic flash
+  if(panicCount>5){
+    document.getElementById("panicFlash").classList.add("on");
+    panicFlashTimer=8;
+  } else if(--panicFlashTimer<=0){
+    document.getElementById("panicFlash").classList.remove("on");
+  }
+
+  const pct=Math.round(inPenCount/sheep.length*100);
+  document.getElementById("inPenCount").innerText=inPenCount;
+  document.getElementById("progressPct").innerText=pct+"%";
+  document.getElementById("progressFill").style.width=pct+"%";
+
+  if(!gameCleared&&inPenCount>=Math.floor(sheep.length*0.88))triggerClear();
+}
+
+// ── Dog input ──
+function handleDogInput(){
+  const isSprinting=keys.sprint&&stamina>STAMINA_MIN;
+  const force=0.0042*(isSprinting?2.15:1.0);
+  if(keys.up)   Body.applyForce(dog,dog.position,{x:0,y:-force});
+  if(keys.down) Body.applyForce(dog,dog.position,{x:0,y:force});
+  if(keys.left) Body.applyForce(dog,dog.position,{x:-force,y:0});
+  if(keys.right)Body.applyForce(dog,dog.position,{x:force,y:0});
+  if(keys.brake)Body.setVelocity(dog,{x:dog.velocity.x*0.8,y:dog.velocity.y*0.8});
+
+  const moving=keys.up||keys.down||keys.left||keys.right;
+  if(isSprinting&&moving)stamina=Math.max(0,stamina-STAMINA_DRAIN);
+  else stamina=Math.min(STAMINA_MAX,stamina+STAMINA_REGEN);
+  updateStaminaUI();
+
+  const maxSp=isSprinting?20:9;
+  const sp=Math.hypot(dog.velocity.x,dog.velocity.y);
+  if(sp>maxSp)Body.setVelocity(dog,{x:dog.velocity.x/sp*maxSp,y:dog.velocity.y/sp*maxSp});
+  if(sp>0.3)dog.facing=Math.atan2(dog.velocity.y,dog.velocity.x);
+
+  if(isSprinting&&moving){
+    dogTrail.push({x:dog.position.x,y:dog.position.y,life:16});
+    if(dogTrail.length>34)dogTrail.shift();
+  }
+  dogTrail=dogTrail.filter(p=>--p.life>0);
+}
+
+// ── Clear ──
+function triggerClear(){
+  gameCleared=true;
+  if(timerInterval)clearInterval(timerInterval);
+  const ms=Date.now()-startTime;
+  const s=Math.floor(ms/1000),m=Math.floor(s/60);
+  document.getElementById("cs-time").innerText=m+"m "+(s%60)+"s";
+  document.getElementById("cs-sheep").innerText=inPenCount+"/"+sheep.length;
+  document.getElementById("cs-pct").innerText=Math.round(inPenCount/sheep.length*100)+"%";
+  setTimeout(()=>document.getElementById("clearOverlay").classList.add("show"),600);
+  for(let i=0;i<100;i++){
+    const colors=["rgba(134,239,172,.9)","rgba(250,204,21,.9)","rgba(96,165,250,.9)","rgba(248,113,113,.9)","rgba(167,243,208,.9)"];
+    particles.push({
+      x:penZone.x+penZone.w/2+((Math.random()-0.5)*penZone.w*0.8),
+      y:penZone.y+penZone.h/2+((Math.random()-0.5)*penZone.h*0.8),
+      vx:(Math.random()-0.5)*9,vy:-Math.random()*11-2,
+      life:65+Math.random()*30,maxLife:95,radius:3+Math.random()*4,
+      color:colors[Math.floor(Math.random()*colors.length)]
+    });
+  }
+}
+
+// ── Particles ──
+function spawnParticles(x,y,color,amt=7){
+  for(let i=0;i<amt;i++)particles.push({x,y,vx:(Math.random()-0.5)*5,vy:(Math.random()-0.5)*5,life:22+Math.random()*10,maxLife:32,radius:2+Math.random()*2.4,color});
+}
+Events.on(engine,"collisionStart",event=>{
+  for(const{bodyA:a,bodyB:b}of event.pairs){
+    if((a.label==="dog"&&b.label==="sheep")||(a.label==="sheep"&&b.label==="dog")){
+      spawnParticles((a.position.x+b.position.x)/2,(a.position.y+b.position.y)/2,"rgba(250,204,21,0.9)",5);
+    }
+  }
+});
+function updateParticles(){
+  particles=particles.filter(p=>p.life>0);
+  for(const p of particles){p.x+=p.vx;p.y+=p.vy;p.vx*=0.95;p.vy*=0.95;p.vy+=0.12;p.life--;}
+}
+
+// ─────────── DRAW ───────────
+
+function drawBackground(){
+  resetCamera();
+  ctx.fillStyle="#04100a";ctx.fillRect(0,0,screenW,screenH);
+  applyCamera();
+  ctx.fillStyle="#0d2918";ctx.fillRect(0,0,worldW,worldH);
+  for(let i=0;i<1400;i++){
+    const gx=(i*197+13)%worldW,gy=(i*311+47)%worldH;
+    ctx.fillStyle=`rgba(70,160,80,${0.03+(i%7)*0.009})`;
+    ctx.fillRect(gx,gy,2,7+(i%4)*2);
+  }
+  ctx.strokeStyle="rgba(140,100,55,0.045)";ctx.lineWidth=100;ctx.lineCap="round";
+  ctx.beginPath();ctx.moveTo(300,worldH/2);
+  ctx.bezierCurveTo(700,worldH/2-200,1400,worldH/2+200,penZone.x+60,worldH/2);
+  ctx.stroke();
+  ctx.strokeStyle="rgba(255,255,255,0.022)";ctx.lineWidth=1;
+  for(let x=0;x<=worldW;x+=80){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,worldH);ctx.stroke();}
+  for(let y=0;y<=worldH;y+=80){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(worldW,y);ctx.stroke();}
+  ctx.strokeStyle="rgba(255,255,255,0.13)";ctx.lineWidth=3;
+  ctx.strokeRect(2,2,worldW-4,worldH-4);
+}
+
+// ── GATHER mode visual: outlier highlight + path hint ──
+function drawGatherHints(flockStats){
+  if(dogMode!=='GATHER'||!outlierTarget)return;
+  const{cx,cy}=flockStats;
+  const ox=outlierTarget.position.x,oy=outlierTarget.position.y;
+
+  // Line from flock center to outlier
+  ctx.save();
+  ctx.strokeStyle="rgba(250,204,21,0.25)";ctx.lineWidth=2;ctx.setLineDash([12,14]);
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(ox,oy);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Outlier highlight ring
+  ctx.strokeStyle="rgba(250,204,21,0.7)";ctx.lineWidth=3;
+  ctx.beginPath();ctx.arc(ox,oy,22+Math.sin(Date.now()*0.008)*5,0,Math.PI*2);ctx.stroke();
+
+  // Ideal dog position: behind outlier away from flock
+  const dx=ox-cx,dy=oy-cy,d=Math.hypot(dx,dy)||1;
+  const idealX=ox+dx/d*60,idealY=oy+dy/d*60;
+  ctx.strokeStyle="rgba(250,204,21,0.35)";ctx.lineWidth=2;ctx.setLineDash([6,8]);
+  ctx.beginPath();ctx.arc(idealX,idealY,18,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle="rgba(250,204,21,0.15)";
+  ctx.beginPath();ctx.arc(idealX,idealY,18,0,Math.PI*2);ctx.fill();
+
+  ctx.restore();
+}
+
+// ── DRIVE mode visual: driving line hint ──
+function drawDriveHints(flockStats){
+  if(dogMode!=='DRIVE')return;
+  const{cx,cy}=flockStats;
+  const tx=penZone.x+penZone.w/2,ty=penZone.y+penZone.h/2;
+
+  // Line from flock center through to pen
+  ctx.save();
+  ctx.strokeStyle="rgba(96,165,250,0.22)";ctx.lineWidth=2;ctx.setLineDash([14,16]);
+  ctx.beginPath();ctx.moveTo(cx,cy);ctx.lineTo(tx,ty);ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Ideal dog position: behind flock center away from pen
+  const dx=cx-tx,dy=cy-ty,d=Math.hypot(dx,dy)||1;
+  const idealX=cx+dx/d*90,idealY=cy+dy/d*90;
+  ctx.strokeStyle="rgba(96,165,250,0.5)";ctx.lineWidth=2;ctx.setLineDash([5,7]);
+  ctx.beginPath();ctx.arc(idealX,idealY,26,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle="rgba(96,165,250,0.12)";
+  ctx.beginPath();ctx.arc(idealX,idealY,26,0,Math.PI*2);ctx.fill();
+
+  // Label
+  ctx.fillStyle="rgba(147,197,253,0.6)";ctx.font="700 11px Arial";ctx.textAlign="center";
+  ctx.fillText("DOG TARGET",idealX,idealY-32);
+
+  ctx.restore();
+}
+
+// ── Flock hull highlight (cohesion state visual) ──
+function drawFlockHull(flockStats){
+  const{cx,cy,radius}=flockStats;
+  if(radius<10)return;
+  ctx.save();
+  // Soft circle around flock
+  const grad=ctx.createRadialGradient(cx,cy,radius*0.5,cx,cy,radius*1.1);
+  grad.addColorStop(0,"rgba(134,239,172,0.0)");
+  if(dogMode==='DRIVE'){
+    grad.addColorStop(1,"rgba(134,239,172,0.06)");
+    ctx.strokeStyle="rgba(134,239,172,0.14)";
+  } else {
+    grad.addColorStop(1,"rgba(250,204,21,0.05)");
+    ctx.strokeStyle="rgba(250,204,21,0.1)";
+  }
+  ctx.fillStyle=grad;
+  ctx.beginPath();ctx.arc(cx,cy,radius*1.08,0,Math.PI*2);
+  ctx.fill();
+  ctx.lineWidth=1.5;ctx.setLineDash([6,10]);
+  ctx.beginPath();ctx.arc(cx,cy,radius*1.08,0,Math.PI*2);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawPenZone(){
+  ctx.save();
+  ctx.shadowColor="rgba(134,239,172,0.16)";ctx.shadowBlur=26;
+  ctx.fillStyle="rgba(80,180,50,0.08)";
+  roundRect(ctx,penZone.x,penZone.y,penZone.w,penZone.h,28);ctx.fill();
+  ctx.shadowBlur=0;
+
+  // Floor lines
+  ctx.strokeStyle="rgba(134,239,172,0.1)";ctx.lineWidth=1.5;ctx.setLineDash([12,16]);
+  for(let y=penZone.y+80;y<penZone.y+penZone.h-40;y+=80){
+    ctx.beginPath();ctx.moveTo(penZone.x+28,y);ctx.lineTo(penZone.x+penZone.w-28,y);ctx.stroke();
+  }
+  ctx.setLineDash([]);
+
+  const railC="rgba(175,125,60,0.88)";
+  ctx.strokeStyle=railC;ctx.lineWidth=5;ctx.lineCap="round";
+  // Top/bottom rails
+  ctx.beginPath();ctx.moveTo(penZone.x,penZone.y+22);ctx.lineTo(penZone.x+penZone.w,penZone.y+22);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(penZone.x,penZone.y+42);ctx.lineTo(penZone.x+penZone.w,penZone.y+42);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(penZone.x,penZone.y+penZone.h-22);ctx.lineTo(penZone.x+penZone.w,penZone.y+penZone.h-22);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(penZone.x,penZone.y+penZone.h-42);ctx.lineTo(penZone.x+penZone.w,penZone.y+penZone.h-42);ctx.stroke();
+  // Back (right) wall
+  ctx.beginPath();ctx.moveTo(penZone.x+penZone.w-22,penZone.y);ctx.lineTo(penZone.x+penZone.w-22,penZone.y+penZone.h);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(penZone.x+penZone.w-42,penZone.y);ctx.lineTo(penZone.x+penZone.w-42,penZone.y+penZone.h);ctx.stroke();
+  // Left fence (with entrance gap)
+  ctx.beginPath();ctx.moveTo(penZone.x+22,penZone.y);ctx.lineTo(penZone.x+22,penZone.entranceY1);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(penZone.x+22,penZone.entranceY2);ctx.lineTo(penZone.x+22,penZone.y+penZone.h);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(penZone.x+42,penZone.y);ctx.lineTo(penZone.x+42,penZone.entranceY1);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(penZone.x+42,penZone.entranceY2);ctx.lineTo(penZone.x+42,penZone.y+penZone.h);ctx.stroke();
+
+  // Posts
+  const postC="rgba(135,95,45,0.95)";ctx.fillStyle=postC;
+  for(let x=penZone.x;x<=penZone.x+penZone.w;x+=76){
+    ctx.beginPath();ctx.arc(x,penZone.y+22,7,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(x,penZone.y+penZone.h-22,7,0,Math.PI*2);ctx.fill();
+  }
+  for(let y=penZone.y;y<=penZone.y+penZone.h;y+=76){
+    ctx.beginPath();ctx.arc(penZone.x+penZone.w-22,y,7,0,Math.PI*2);ctx.fill();
+  }
+  for(let y=penZone.y;y<=penZone.entranceY1;y+=76){ctx.beginPath();ctx.arc(penZone.x+22,y,7,0,Math.PI*2);ctx.fill();}
+  for(let y=penZone.entranceY2;y<=penZone.y+penZone.h;y+=76){ctx.beginPath();ctx.arc(penZone.x+22,y,7,0,Math.PI*2);ctx.fill();}
+
+  // Gate posts
+  ctx.fillStyle="rgba(195,155,75,0.95)";
+  ctx.beginPath();ctx.arc(penZone.x+22,penZone.entranceY1,11,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(penZone.x+22,penZone.entranceY2,11,0,Math.PI*2);ctx.fill();
+
+  // Entrance arrow
+  const midY=penZone.y+penZone.h/2;
+  ctx.strokeStyle="rgba(134,239,172,0.5)";ctx.lineWidth=2.5;ctx.setLineDash([9,11]);
+  ctx.beginPath();ctx.moveTo(penZone.x-90,midY);ctx.lineTo(penZone.x+22,midY);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle="rgba(134,239,172,0.65)";
+  ctx.beginPath();ctx.moveTo(penZone.x+36,midY);ctx.lineTo(penZone.x+18,midY-10);ctx.lineTo(penZone.x+18,midY+10);ctx.closePath();ctx.fill();
+
+  // Label
+  ctx.fillStyle="rgba(209,250,229,0.9)";ctx.font="900 24px Arial";ctx.textAlign="center";
+  ctx.fillText("SHEEP PEN",penZone.x+penZone.w/2,penZone.y-30);
+  ctx.font="600 12px Arial";ctx.fillStyle="rgba(134,239,172,0.65)";
+  ctx.fillText("← ENTRANCE",penZone.x+penZone.w/2,penZone.y-13);
+  ctx.restore();
+}
+
+function drawGuideArrow(){
+  ctx.save();
+  ctx.strokeStyle="rgba(134,239,172,0.12)";ctx.lineWidth=7;ctx.setLineDash([20,22]);
+  ctx.beginPath();ctx.moveTo(300,worldH/2);
+  ctx.bezierCurveTo(750,worldH/2-260,1380,worldH/2+260,penZone.x-30,worldH/2);
+  ctx.stroke();ctx.setLineDash([]);ctx.restore();
+}
+
+function drawSheep(s){
+  const x=s.position.x,y=s.position.y,r=s.circleRadius;
+  const spd=Math.hypot(s.velocity.x,s.velocity.y);
+  const angle=spd>0.12?Math.atan2(s.velocity.y,s.velocity.x)+Math.PI/2:0;
+
+  ctx.save();ctx.translate(x,y);ctx.rotate(angle);
+
+  // Shadow
+  ctx.fillStyle="rgba(0,0,0,0.16)";
+  ctx.beginPath();ctx.ellipse(2,4,r*1.1,r*0.62,0,0,Math.PI*2);ctx.fill();
+
+  const isPanic=s.state===2;
+  const isFlee=s.state===1;
+
+  const woolBase=s.inPen?"#e8f5e9":(isPanic?"#ffe4e4":(isFlee?"#fff3e0":"#f0f4ef"));
+  const puffBase=s.inPen?"#c8e6c9":(isPanic?"#fecaca":(isFlee?"#ffe0b2":"#dde6dc"));
+
+  // Outer puffs
+  ctx.fillStyle=puffBase;
+  for(let i=0;i<7;i++){
+    const a=(i/7)*Math.PI*2;
+    ctx.beginPath();ctx.arc(Math.cos(a)*r*0.72,Math.sin(a)*r*0.57,r*0.35,0,Math.PI*2);ctx.fill();
+  }
+  // Body
+  ctx.beginPath();ctx.ellipse(0,1,r*0.9,r*0.76,0,0,Math.PI*2);
+  ctx.fillStyle=woolBase;ctx.fill();
+
+  // PANIC red outline
+  if(isPanic){
+    ctx.strokeStyle="rgba(239,68,68,0.75)";ctx.lineWidth=2;
+    ctx.beginPath();ctx.ellipse(0,1,r*1.08,r*0.9,0,0,Math.PI*2);ctx.stroke();
+  }
+  // In pen: green dot
+  if(s.inPen){
+    ctx.fillStyle="rgba(134,239,172,0.75)";
+    ctx.beginPath();ctx.arc(0,0,r*0.28,0,Math.PI*2);ctx.fill();
+  }
+
+  // Legs
+  ctx.fillStyle="#5a6570";
+  const legY=r*0.62;
+  [-r*0.36,-r*0.12,r*0.12,r*0.36].forEach(lx=>{
+    ctx.beginPath();ctx.roundRect(lx-2.5,legY,5,r*0.5,2);ctx.fill();
+    ctx.fillStyle="#4a545a";ctx.beginPath();ctx.ellipse(lx,legY+r*0.52,3.5,2.5,0,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="#5a6570";
+  });
+
+  // Head
+  ctx.beginPath();ctx.ellipse(0,-r*0.94,r*0.38,r*0.32,0,0,Math.PI*2);
+  ctx.fillStyle=isPanic?"#5a2020":"#3a4840";ctx.fill();
+  // Ears
+  ctx.fillStyle=isPanic?"#3a1818":"#2a3830";
+  ctx.beginPath();ctx.ellipse(-r*0.42,-r*0.8,r*0.16,r*0.27,-0.35,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(r*0.42,-r*0.8,r*0.16,r*0.27,0.35,0,Math.PI*2);ctx.fill();
+  // Eyes
+  ctx.fillStyle="#fff8e7";
+  ctx.beginPath();ctx.arc(-r*0.15,-r*0.96,r*0.1,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(r*0.15,-r*0.96,r*0.1,0,Math.PI*2);ctx.fill();
+  // Panic eyes wider
+  ctx.fillStyle="#1a1a1a";
+  const eyeR=isPanic?r*0.08:r*0.058;
+  ctx.beginPath();ctx.arc(-r*0.15,-r*0.96,eyeR,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(r*0.15,-r*0.96,eyeR,0,Math.PI*2);ctx.fill();
+
+  if(isFlee||isPanic){
+    ctx.globalAlpha=isPanic?0.8:((s.scared-0.1)*0.55);
+    ctx.fillStyle=isPanic?"#dc2626":"#f97316";
+    ctx.beginPath();ctx.arc(-r*0.3,-r*0.8,r*0.14,0,Math.PI*2);ctx.fill();
+    ctx.beginPath();ctx.arc(r*0.3,-r*0.8,r*0.14,0,Math.PI*2);ctx.fill();
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+
+function drawDog(){
+  if(!dog)return;
+  const x=dog.position.x,y=dog.position.y;
+  const isSprinting=keys.sprint&&stamina>STAMINA_MIN;
+  const speed=Math.hypot(dog.velocity.x,dog.velocity.y);
+  const angle=dog.facing||0; // 개가 바라보는 방향
+  const t=Date.now()*0.001;
+
+  // ── 1. 손전등 FOV (개 앞 방향) ──
+  const fearR=isSprinting?240:185;
+  const fovAngle=isSprinting?0.72:0.58; // 반각 (라디안) — 약 66°~84° 원뿔
+  ctx.save();
+  // 원뿔 gradient: 개 위치 → fearR 거리
+  const gx1=x, gy1=y;
+  const gx2=x+Math.cos(angle)*fearR, gy2=y+Math.sin(angle)*fearR;
+  const fovGrad=ctx.createRadialGradient(gx1,gy1,8,gx1,gy1,fearR);
+  if(isSprinting){
+    fovGrad.addColorStop(0,"rgba(250,204,21,0.22)");
+    fovGrad.addColorStop(0.55,"rgba(250,204,21,0.09)");
+    fovGrad.addColorStop(1,"rgba(250,204,21,0)");
+  } else {
+    fovGrad.addColorStop(0,"rgba(250,204,21,0.13)");
+    fovGrad.addColorStop(0.5,"rgba(250,204,21,0.05)");
+    fovGrad.addColorStop(1,"rgba(250,204,21,0)");
+  }
+  ctx.fillStyle=fovGrad;
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.arc(x,y,fearR,angle-fovAngle,angle+fovAngle);
+  ctx.closePath();
+  ctx.fill();
+  // FOV 테두리선 두 줄 (손전등 빔 엣지)
+  ctx.strokeStyle=isSprinting?"rgba(250,204,21,0.35)":"rgba(250,204,21,0.18)";
+  ctx.lineWidth=1.5;
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x+Math.cos(angle-fovAngle)*fearR, y+Math.sin(angle-fovAngle)*fearR);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x,y);
+  ctx.lineTo(x+Math.cos(angle+fovAngle)*fearR, y+Math.sin(angle+fovAngle)*fearR);
+  ctx.stroke();
+  // 호 (끝부분)
+  ctx.beginPath();
+  ctx.arc(x,y,fearR,angle-fovAngle,angle+fovAngle);
+  ctx.strokeStyle=isSprinting?"rgba(250,204,21,0.25)":"rgba(250,204,21,0.12)";
+  ctx.stroke();
+  ctx.restore();
+
+  // ── 2. 스프린트 잔상 ──
+  for(let i=0;i<dogTrail.length;i++){
+    const tr=dogTrail[i];
+    ctx.save();
+    ctx.globalAlpha=(i/dogTrail.length)*0.25;
+    ctx.fillStyle="#fef08a";
+    ctx.beginPath();ctx.arc(tr.x,tr.y,3.5*(i/dogTrail.length),0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  }
+
+  // ── 3. 개 본체 (심플 보더콜리) ──
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.rotate(angle);
+
+  // 보행/달리기 bobbing
+  const walkFreq=isSprinting?0.032:0.016;
+  const walkAmp=isSprinting?2.8:1.2;
+  const bob=speed>0.4?Math.sin(t/walkFreq*0.001*1000*walkFreq)*walkAmp:0;
+  // 좌우 흔들림 (sway)
+  const swayAmp=isSprinting?1.8:0.7;
+  const sway=speed>0.4?Math.cos(t/walkFreq*0.001*1000*walkFreq*0.5)*swayAmp:0;
+  ctx.translate(sway, bob);
+
+  // 그림자
+  ctx.fillStyle="rgba(0,0,0,0.2)";
+  ctx.beginPath();ctx.ellipse(2,14,18,7,0,0,Math.PI*2);ctx.fill();
+
+  // 다리 4개 — 앞뒤 쌍이 교차
+  const legSwing=speed>0.4?Math.sin(t*1000*walkFreq*0.001)*( isSprinting?18:10):0;
+  ctx.fillStyle="#1e2a1e";
+  // 뒷다리
+  [[- 8, 1],[ 8, 1]].forEach(([lx,side],i)=>{
+    const swing=(i===0?legSwing:-legSwing);
+    ctx.save();
+    ctx.translate(lx,6);ctx.rotate(swing*0.06);
+    ctx.beginPath();ctx.roundRect(-3,0,6,14,3);ctx.fill();
+    ctx.fillStyle="#141e14";ctx.beginPath();ctx.ellipse(0,14,4,3,0,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  });
+  // 앞다리
+  [[- 6,-2],[ 6,-2]].forEach(([lx,],i)=>{
+    const swing=(i===0?-legSwing:legSwing);
+    ctx.save();
+    ctx.translate(lx,6);ctx.rotate(swing*0.06);
+    ctx.fillStyle="#1e2a1e";ctx.beginPath();ctx.roundRect(-3,0,6,13,3);ctx.fill();
+    ctx.fillStyle="#141e14";ctx.beginPath();ctx.ellipse(0,13,4,3,0,0,Math.PI*2);ctx.fill();
+    ctx.restore();
+  });
+
+  // 몸통 (검정 + 흰 안장)
+  ctx.fillStyle=isSprinting?"#161624":"#111820";
+  ctx.beginPath();ctx.ellipse(0,0,20,11,0,0,Math.PI*2);ctx.fill();
+  // 흰 안장
+  ctx.fillStyle="#dde8e4";
+  ctx.beginPath();ctx.ellipse(-4,-4,10,6,0.25,0,Math.PI*2);ctx.fill();
+  // 흰 가슴
+  ctx.fillStyle="#e8eeec";
+  ctx.beginPath();ctx.ellipse(14,2,6,5,0,0,Math.PI*2);ctx.fill();
+
+  // 목
+  ctx.fillStyle="#111820";
+  ctx.beginPath();ctx.ellipse(16,0,8,6,0.15,0,Math.PI*2);ctx.fill();
+
+  // 머리 (심플 타원)
+  ctx.fillStyle="#0d1510";
+  ctx.beginPath();ctx.ellipse(24,0,10,8,0,0,Math.PI*2);ctx.fill();
+  // 콧등 흰 블레이즈
+  ctx.fillStyle="#d8e4e0";
+  ctx.beginPath();ctx.ellipse(25,0,4,5.5,0,0,Math.PI*2);ctx.fill();
+  // 주둥이
+  ctx.fillStyle="#2a3828";
+  ctx.beginPath();ctx.ellipse(31,0.5,5,3.5,0,0,Math.PI*2);ctx.fill();
+  // 코
+  ctx.fillStyle="#0a0f0a";
+  ctx.beginPath();ctx.ellipse(34.5,0,2.5,2,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="rgba(255,255,255,0.5)";
+  ctx.beginPath();ctx.arc(33.5,-0.6,0.9,0,Math.PI*2);ctx.fill();
+
+  // 눈 (한쪽만 — 탑뷰라 위쪽 눈)
+  ctx.fillStyle="#f5f0e0";
+  ctx.beginPath();ctx.ellipse(22,-4,3.5,2.5,0.2,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="#1a0e00";
+  ctx.beginPath();ctx.arc(22,-4,1.8,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle="rgba(255,255,255,0.75)";
+  ctx.beginPath();ctx.arc(21.4,-4.6,0.7,0,Math.PI*2);ctx.fill();
+
+  // 귀 — 반접힌 삼각형 귀 (단순하게)
+  ctx.fillStyle="#0d1510";
+  ctx.beginPath();
+  ctx.moveTo(17,-7);ctx.lineTo(22,-16);ctx.lineTo(28,-8);ctx.closePath();ctx.fill();
+  ctx.fillStyle="#1a2018";
+  ctx.beginPath();
+  ctx.moveTo(18,-7);ctx.lineTo(22,-14);ctx.lineTo(27,-8);ctx.closePath();ctx.fill();
+
+  // 꼬리 — 짧고 위로 말린 형태
+  const wagF=isSprinting?0.038:0.022;
+  const wagA=isSprinting?22:13;
+  const wag=Math.sin(t*wagF*1000*0.001)*wagA;
+  ctx.save();
+  ctx.translate(-20,0);ctx.rotate(wag*0.055);
+  ctx.strokeStyle="#e0eae6";ctx.lineWidth=4;ctx.lineCap="round";
+  // 짧은 꼬리 — 한 획
+  ctx.beginPath();
+  ctx.moveTo(0,0);
+  ctx.quadraticCurveTo(-8,-10,-12,-5);
+  ctx.stroke();
+  ctx.restore();
+
+  // 달릴때 혀
+  if(isSprinting){
+    ctx.fillStyle="rgba(220,50,50,0.85)";
+    ctx.beginPath();ctx.ellipse(34,3.5,3,2.5,0.2,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="#f87171";
+    ctx.beginPath();ctx.ellipse(34,3.5,1.8,1.5,0.2,0,Math.PI*2);ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawParticles(){
+  for(const p of particles){
+    ctx.save();ctx.globalAlpha=Math.max(0,p.life/p.maxLife);
+    ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.radius,0,Math.PI*2);ctx.fill();ctx.restore();
+  }
+}
+
+function drawMiniMap(){
+  resetCamera();
+  const mw=248,mh=140,mx=screenW-mw-18,my=screenH-mh-18;
+  ctx.save();
+  ctx.fillStyle="rgba(5,16,10,0.88)";ctx.strokeStyle="rgba(255,255,255,0.11)";ctx.lineWidth=1;
+  roundRect(ctx,mx,my,mw,mh,14);ctx.fill();ctx.stroke();
+  const sx=mw/worldW,sy=mh/worldH;
+  ctx.fillStyle="rgba(134,239,172,0.42)";
+  ctx.fillRect(mx+penZone.x*sx,my+penZone.y*sy,penZone.w*sx,penZone.h*sy);
+  for(const s of sheep){
+    if(s.inPen)ctx.fillStyle="rgba(134,239,172,0.8)";
+    else if(s.state===2)ctx.fillStyle="rgba(248,113,113,0.85)";
+    else if(s.state===1)ctx.fillStyle="rgba(251,191,36,0.7)";
+    else ctx.fillStyle="rgba(210,225,215,0.45)";
+    ctx.beginPath();ctx.arc(mx+s.position.x*sx,my+s.position.y*sy,1.4,0,Math.PI*2);ctx.fill();
+  }
+  ctx.shadowColor="#facc15";ctx.shadowBlur=9;
+  ctx.fillStyle="#facc15";ctx.beginPath();ctx.arc(mx+dog.position.x*sx,my+dog.position.y*sy,5,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  ctx.font="700 10px Arial";ctx.textAlign="left";
+  ctx.fillStyle="rgba(187,247,208,0.8)";ctx.fillText("MAP",mx+10,my+16);
+  // Legend
+  const items=[{c:"#facc15",l:"Dog"},{c:"rgba(134,239,172,.8)",l:"Penned"},{c:"rgba(251,191,36,.8)",l:"Flee"},{c:"rgba(248,113,113,.8)",l:"Panic"}];
+  items.forEach((it,i)=>{
+    ctx.fillStyle=it.c;ctx.beginPath();ctx.arc(mx+10+i*56,my+mh-16,4,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle="rgba(200,220,210,.65)";ctx.font="600 9px Arial";ctx.fillText(it.l,mx+17+i*56,my+mh-13);
+  });
+  ctx.restore();
+}
+
+// ─── Main loop ───
+const flockCache={cx:worldW/2,cy:worldH/2,radius:0,cnt:0};
+function render(){
+  const fs=getFlockStats();
+  drawBackground();
+  drawGuideArrow();
+  drawFlockHull(fs);
+  drawGatherHints(fs);
+  drawDriveHints(fs);
+  drawPenZone();
+  for(const s of sheep)drawSheep(s);
+  drawParticles();
+  drawDog();
+  drawMiniMap();
+}
+
+function loop(){
+  if(dog&&!gameCleared)handleDogInput();
+  if(sheep.length&&!gameCleared)updateSheepBehavior();
+  updateParticles();
+  render();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener("keydown",e=>{
+  if(["ArrowUp","w","W"].includes(e.key)){keys.up=true;e.preventDefault();}
+  if(["ArrowDown","s","S"].includes(e.key)){keys.down=true;e.preventDefault();}
+  if(["ArrowLeft","a","A"].includes(e.key)){keys.left=true;e.preventDefault();}
+  if(["ArrowRight","d","D"].includes(e.key)){keys.right=true;e.preventDefault();}
+  if(e.code==="Space"){keys.sprint=true;e.preventDefault();}
+  if(e.key==="Shift")keys.brake=true;
+});
+window.addEventListener("keyup",e=>{
+  if(["ArrowUp","w","W"].includes(e.key))keys.up=false;
+  if(["ArrowDown","s","S"].includes(e.key))keys.down=false;
+  if(["ArrowLeft","a","A"].includes(e.key))keys.left=false;
+  if(["ArrowRight","d","D"].includes(e.key))keys.right=false;
+  if(e.code==="Space")keys.sprint=false;
+  if(e.key==="Shift")keys.brake=false;
+});
+window.addEventListener("resize",()=>{
+  screenW=window.innerWidth;screenH=window.innerHeight;
+  canvas.width=screenW;canvas.height=screenH;
+  screenCenterCamera();
+});
+screenCenterCamera();resetScene();Runner.run(runner,engine);loop();
+</script>
+</body>
+</html>

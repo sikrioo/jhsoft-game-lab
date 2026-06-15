@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Penguin Swarm AI Drone Simulation</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+<style>
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    overflow: hidden;
+    background: #030712;
+    color: white;
+    font-family: Inter, Pretendard, Arial, sans-serif;
+  }
+
+  canvas { display: block; }
+
+  .panel {
+    position: fixed;
+    top: 18px;
+    left: 18px;
+    z-index: 10;
+    width: 330px;
+    padding: 18px;
+    border-radius: 22px;
+    background: rgba(8, 13, 28, 0.78);
+    border: 1px solid rgba(255,255,255,0.12);
+    backdrop-filter: blur(18px);
+    box-shadow: 0 24px 90px rgba(0,0,0,0.48);
+  }
+
+  .title {
+    font-size: 18px;
+    font-weight: 900;
+    margin-bottom: 8px;
+    letter-spacing: -0.04em;
+  }
+
+  .desc {
+    font-size: 13px;
+    color: #b8c2d6;
+    line-height: 1.55;
+    margin-bottom: 14px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .card {
+    padding: 11px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .label {
+    font-size: 11px;
+    color: #8fa1c3;
+    margin-bottom: 4px;
+  }
+
+  .value {
+    font-size: 16px;
+    font-weight: 900;
+  }
+
+  .keys {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .key {
+    padding: 5px 9px;
+    border-radius: 9px;
+    background: rgba(255,255,255,0.11);
+    border: 1px solid rgba(255,255,255,0.1);
+    font-size: 12px;
+    font-weight: 800;
+  }
+
+  button {
+    width: 100%;
+    margin-top: 14px;
+    padding: 12px;
+    border: 0;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #2563eb, #38bdf8);
+    color: white;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow: 0 14px 32px rgba(37,99,235,0.38);
+  }
+
+  button:hover { filter: brightness(1.08); }
+
+  .badge {
+    position: fixed;
+    right: 18px;
+    top: 18px;
+    padding: 11px 15px;
+    border-radius: 999px;
+    background: rgba(8, 13, 28, 0.74);
+    border: 1px solid rgba(255,255,255,0.12);
+    backdrop-filter: blur(18px);
+    color: #cbd5e1;
+    font-size: 13px;
+    z-index: 10;
+  }
+</style>
+</head>
+
+<body>
+<div class="panel">
+  <div class="title">AI Drone vs Penguin Swarm</div>
+  <div class="desc">
+    400개의 펭귄형 물리 에이전트가 군집처럼 움직이고,
+    AI 드론이 그 사이를 통과하는 탑뷰 물리 시뮬레이션입니다.
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <div class="label">AGENTS</div>
+      <div class="value" id="agentCount">400</div>
+    </div>
+    <div class="card">
+      <div class="label">PHYSICS</div>
+      <div class="value">Matter.js</div>
+    </div>
+    <div class="card">
+      <div class="label">MODE</div>
+      <div class="value">Top View</div>
+    </div>
+    <div class="card">
+      <div class="label">OBJECTIVE</div>
+      <div class="value">Navigate</div>
+    </div>
+  </div>
+
+  <div class="keys">
+    <span class="key">W</span>
+    <span class="key">A</span>
+    <span class="key">S</span>
+    <span class="key">D</span>
+    <span class="key">Arrow</span>
+    <span class="key">Space Brake</span>
+  </div>
+
+  <button onclick="resetScene()">Reset Simulation</button>
+</div>
+
+<div class="badge">Presentation Prototype · Swarm Navigation</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const {
+  Engine,
+  World,
+  Bodies,
+  Body,
+  Events,
+  Composite,
+  Runner
+} = Matter;
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let screenW = window.innerWidth;
+let screenH = window.innerHeight;
+
+canvas.width = screenW;
+canvas.height = screenH;
+
+const engine = Engine.create();
+engine.gravity.x = 0;
+engine.gravity.y = 0;
+
+const world = engine.world;
+const runner = Runner.create();
+
+const worldW = 2300;
+const worldH = 1300;
+
+const camera = {
+  zoom: 0.68,
+  x: 0,
+  y: 0
+};
+
+let drone;
+let penguins = [];
+let walls = [];
+let particles = [];
+let goalZone;
+let clearEffect = 0;
+
+const keys = {
+  up: false,
+  down: false,
+  left: false,
+  right: false,
+  brake: false
+};
+
+function screenCenterCamera() {
+  camera.x = screenW / 2 - worldW * camera.zoom / 2;
+  camera.y = screenH / 2 - worldH * camera.zoom / 2;
+}
+
+function applyCamera() {
+  ctx.setTransform(camera.zoom, 0, 0, camera.zoom, camera.x, camera.y);
+}
+
+function resetCamera() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function createWalls() {
+  const t = 120;
+
+  walls = [
+    Bodies.rectangle(worldW / 2, -t / 2, worldW, t, { isStatic: true }),
+    Bodies.rectangle(worldW / 2, worldH + t / 2, worldW, t, { isStatic: true }),
+    Bodies.rectangle(-t / 2, worldH / 2, t, worldH, { isStatic: true }),
+    Bodies.rectangle(worldW + t / 2, worldH / 2, t, worldH, { isStatic: true })
+  ];
+
+  World.add(world, walls);
+}
+
+function createDrone() {
+  drone = Bodies.circle(150, worldH / 2, 20, {
+    restitution: 0.28,
+    friction: 0.02,
+    frictionAir: 0.035,
+    density: 0.009,
+    label: "drone"
+  });
+
+  World.add(world, drone);
+}
+
+function createPenguins() {
+  penguins = [];
+
+  const total = 400;
+  const radius = 10;
+
+  const flockCenters = [
+    { x: 620, y: 420 },
+    { x: 780, y: 730 },
+    { x: 1030, y: 520 },
+    { x: 1240, y: 760 },
+    { x: 1500, y: 460 },
+    { x: 1690, y: 690 }
+  ];
+
+  for (let i = 0; i < total; i++) {
+    const center = flockCenters[Math.floor(Math.random() * flockCenters.length)];
+
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.pow(Math.random(), 0.58) * 175;
+
+    const px = center.x + Math.cos(angle) * distance;
+    const py = center.y + Math.sin(angle) * distance * 0.75;
+
+    const penguin = Bodies.circle(px, py, radius, {
+      restitution: 0.5,
+      friction: 0.12,
+      frictionAir: 0.045,
+      density: 0.004,
+      label: "penguin"
+    });
+
+    penguin.swarmCenter = center;
+    penguin.phase = Math.random() * Math.PI * 2;
+    penguin.wanderPower = 0.00005 + Math.random() * 0.00005;
+
+    Body.setVelocity(penguin, {
+      x: (Math.random() - 0.5) * 0.25,
+      y: (Math.random() - 0.5) * 0.25
+    });
+
+    penguins.push(penguin);
+  }
+
+  World.add(world, penguins);
+  document.getElementById("agentCount").innerText = penguins.length;
+}
+
+function createGoalZone() {
+  goalZone = {
+    x: worldW - 220,
+    y: worldH / 2 - 190,
+    w: 100,
+    h: 380
+  };
+}
+
+function resetScene() {
+  Composite.clear(world, false);
+  particles = [];
+  clearEffect = 0;
+
+  createWalls();
+  createDrone();
+  createPenguins();
+  createGoalZone();
+}
+
+function updatePenguinSwarm() {
+  const time = Date.now() * 0.001;
+
+  for (const p of penguins) {
+    const cx = p.swarmCenter.x + Math.sin(time * 0.45 + p.phase) * 45;
+    const cy = p.swarmCenter.y + Math.cos(time * 0.38 + p.phase) * 35;
+
+    const dx = cx - p.position.x;
+    const dy = cy - p.position.y;
+    const dist = Math.hypot(dx, dy) || 1;
+
+    const cohesion = 0.000012;
+    const wanderX = Math.cos(time * 1.5 + p.phase) * p.wanderPower;
+    const wanderY = Math.sin(time * 1.4 + p.phase) * p.wanderPower;
+
+    Body.applyForce(p, p.position, {
+      x: dx / dist * cohesion + wanderX,
+      y: dy / dist * cohesion + wanderY
+    });
+
+    const speed = Math.hypot(p.velocity.x, p.velocity.y);
+    const maxSpeed = 1.15;
+
+    if (speed > maxSpeed) {
+      Body.setVelocity(p, {
+        x: p.velocity.x / speed * maxSpeed,
+        y: p.velocity.y / speed * maxSpeed
+      });
+    }
+  }
+}
+
+function handleDroneInput() {
+  const force = 0.0034;
+
+  if (keys.up) Body.applyForce(drone, drone.position, { x: 0, y: -force });
+  if (keys.down) Body.applyForce(drone, drone.position, { x: 0, y: force });
+  if (keys.left) Body.applyForce(drone, drone.position, { x: -force, y: 0 });
+  if (keys.right) Body.applyForce(drone, drone.position, { x: force, y: 0 });
+
+  if (keys.brake) {
+    Body.setVelocity(drone, {
+      x: drone.velocity.x * 0.85,
+      y: drone.velocity.y * 0.85
+    });
+  }
+
+  const speed = Math.hypot(drone.velocity.x, drone.velocity.y);
+  const maxSpeed = 9.5;
+
+  if (speed > maxSpeed) {
+    Body.setVelocity(drone, {
+      x: drone.velocity.x / speed * maxSpeed,
+      y: drone.velocity.y / speed * maxSpeed
+    });
+  }
+}
+
+function spawnImpactParticles(x, y, color, amount = 10) {
+  for (let i = 0; i < amount; i++) {
+    particles.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 5.2,
+      vy: (Math.random() - 0.5) * 5.2,
+      life: 28 + Math.random() * 12,
+      maxLife: 40,
+      radius: 1.8 + Math.random() * 3,
+      color
+    });
+  }
+}
+
+Events.on(engine, "collisionStart", event => {
+  for (const pair of event.pairs) {
+    const a = pair.bodyA;
+    const b = pair.bodyB;
+
+    if (
+      (a.label === "drone" && b.label === "penguin") ||
+      (a.label === "penguin" && b.label === "drone")
+    ) {
+      const x = (a.position.x + b.position.x) / 2;
+      const y = (a.position.y + b.position.y) / 2;
+      spawnImpactParticles(x, y, "rgba(96,165,250,0.9)", 9);
+    }
+  }
+});
+
+function updateParticles() {
+  particles = particles.filter(p => p.life > 0);
+
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= 0.955;
+    p.vy *= 0.955;
+    p.life--;
+  }
+}
+
+function drawBackground() {
+  resetCamera();
+
+  const bg = ctx.createLinearGradient(0, 0, screenW, screenH);
+  bg.addColorStop(0, "#020617");
+  bg.addColorStop(0.45, "#07111f");
+  bg.addColorStop(1, "#030712");
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, screenW, screenH);
+
+  applyCamera();
+
+  ctx.fillStyle = "rgba(255,255,255,0.025)";
+  ctx.fillRect(0, 0, worldW, worldH);
+
+  ctx.strokeStyle = "rgba(148,163,184,0.07)";
+  ctx.lineWidth = 1;
+
+  const grid = 70;
+
+  for (let x = 0; x <= worldW; x += grid) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, worldH);
+    ctx.stroke();
+  }
+
+  for (let y = 0; y <= worldH; y += grid) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(worldW, y);
+    ctx.stroke();
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.16)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(0, 0, worldW, worldH);
+}
+
+function drawFlowGuide() {
+  ctx.save();
+
+  ctx.strokeStyle = "rgba(56,189,248,0.16)";
+  ctx.lineWidth = 4;
+  ctx.setLineDash([16, 20]);
+
+  ctx.beginPath();
+  ctx.moveTo(150, worldH / 2);
+  ctx.bezierCurveTo(
+    600, worldH / 2 - 250,
+    1350, worldH / 2 + 250,
+    worldW - 165,
+    worldH / 2
+  );
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.restore();
+}
+
+function drawGoalZone() {
+  ctx.save();
+
+  const pulse = Math.sin(Date.now() * 0.006) * 0.08 + 0.92;
+
+  ctx.fillStyle = `rgba(34,197,94,${0.16 * pulse})`;
+  ctx.strokeStyle = "rgba(74,222,128,0.95)";
+  ctx.lineWidth = 3;
+
+  roundRect(ctx, goalZone.x, goalZone.y, goalZone.w, goalZone.h, 26);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "rgba(187,247,208,0.95)";
+  ctx.font = "900 24px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("GOAL", goalZone.x + goalZone.w / 2, goalZone.y - 24);
+
+  ctx.restore();
+}
+
+function drawPenguin(p) {
+  const x = p.position.x;
+  const y = p.position.y;
+  const r = p.circleRadius;
+
+  const angle = Math.atan2(p.velocity.y, p.velocity.x) + Math.PI / 2;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  ctx.shadowColor = "rgba(0,0,0,0.45)";
+  ctx.shadowBlur = 7;
+
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 0.88, r * 1.18, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#101827";
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+
+  ctx.beginPath();
+  ctx.ellipse(0, 2, r * 0.46, r * 0.74, 0, 0, Math.PI * 2);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(-r * 0.33, -r * 0.45, r * 0.13, 0, Math.PI * 2);
+  ctx.arc(r * 0.33, -r * 0.45, r * 0.13, 0, Math.PI * 2);
+  ctx.fillStyle = "#f8fafc";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(0, -r * 1.0);
+  ctx.lineTo(-r * 0.28, -r * 0.62);
+  ctx.lineTo(r * 0.28, -r * 0.62);
+  ctx.closePath();
+  ctx.fillStyle = "#f59e0b";
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.ellipse(-r * 0.63, 0, r * 0.18, r * 0.52, -0.2, 0, Math.PI * 2);
+  ctx.ellipse(r * 0.63, 0, r * 0.18, r * 0.52, 0.2, 0, Math.PI * 2);
+  ctx.fillStyle = "#0f172a";
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawDrone() {
+  const x = drone.position.x;
+  const y = drone.position.y;
+  const speed = Math.hypot(drone.velocity.x, drone.velocity.y);
+  const angle = Math.atan2(drone.velocity.y, drone.velocity.x);
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  ctx.shadowColor = "rgba(59,130,246,0.95)";
+  ctx.shadowBlur = 24;
+
+  ctx.beginPath();
+  ctx.roundRect?.(-22, -12, 44, 24, 10);
+  if (!ctx.roundRect) {
+    roundRect(ctx, -22, -12, 44, 24, 10);
+  }
+  ctx.fillStyle = "#2563eb";
+  ctx.fill();
+
+  ctx.shadowBlur = 0;
+
+  ctx.fillStyle = "#93c5fd";
+  ctx.beginPath();
+  ctx.arc(-24, -16, 6, 0, Math.PI * 2);
+  ctx.arc(24, -16, 6, 0, Math.PI * 2);
+  ctx.arc(-24, 16, 6, 0, Math.PI * 2);
+  ctx.arc(24, 16, 6, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(191,219,254,0.8)";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-18, -8, 36, 16);
+
+  ctx.beginPath();
+  ctx.moveTo(24, 0);
+  ctx.lineTo(38 + speed * 2, 0);
+  ctx.strokeStyle = "rgba(147,197,253,0.8)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.restore();
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, 31 + speed * 0.5, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(96,165,250,0.25)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawDroneTrail() {
+  const vx = drone.velocity.x;
+  const vy = drone.velocity.y;
+  const speed = Math.hypot(vx, vy);
+
+  if (speed < 0.35) return;
+
+  ctx.save();
+  ctx.strokeStyle = "rgba(96,165,250,0.55)";
+  ctx.lineWidth = 5;
+  ctx.lineCap = "round";
+
+  ctx.beginPath();
+  ctx.moveTo(drone.position.x - vx * 13, drone.position.y - vy * 13);
+  ctx.lineTo(drone.position.x, drone.position.y);
+  ctx.stroke();
+
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function checkGoal() {
+  const p = drone.position;
+
+  if (
+    p.x > goalZone.x &&
+    p.x < goalZone.x + goalZone.w &&
+    p.y > goalZone.y &&
+    p.y < goalZone.y + goalZone.h
+  ) {
+    clearEffect = Math.min(clearEffect + 0.025, 1);
+  } else {
+    clearEffect = Math.max(clearEffect - 0.015, 0);
+  }
+}
+
+function drawClearMessage() {
+  if (clearEffect <= 0) return;
+
+  resetCamera();
+
+  ctx.save();
+  ctx.globalAlpha = clearEffect;
+
+  ctx.fillStyle = "rgba(34,197,94,0.12)";
+  ctx.fillRect(0, 0, screenW, screenH);
+
+  ctx.font = "900 58px Arial";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "rgba(220,252,231,0.98)";
+  ctx.fillText("MISSION CLEAR", screenW / 2, 115);
+
+  ctx.font = "600 17px Arial";
+  ctx.fillStyle = "rgba(187,247,208,0.9)";
+  ctx.fillText("AI drone successfully navigated through the penguin swarm.", screenW / 2, 152);
+
+  ctx.restore();
+}
+
+function drawMiniMap() {
+  resetCamera();
+
+  const mapW = 245;
+  const mapH = 138;
+  const x = screenW - mapW - 20;
+  const y = screenH - mapH - 20;
+
+  ctx.save();
+
+  ctx.fillStyle = "rgba(8,13,28,0.74)";
+  ctx.strokeStyle = "rgba(255,255,255,0.13)";
+  ctx.lineWidth = 1;
+
+  roundRect(ctx, x, y, mapW, mapH, 16);
+  ctx.fill();
+  ctx.stroke();
+
+  const sx = mapW / worldW;
+  const sy = mapH / worldH;
+
+  ctx.fillStyle = "rgba(248,250,252,0.55)";
+  for (const p of penguins) {
+    ctx.beginPath();
+    ctx.arc(x + p.position.x * sx, y + p.position.y * sy, 1.2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "#60a5fa";
+  ctx.beginPath();
+  ctx.arc(x + drone.position.x * sx, y + drone.position.y * sy, 4.8, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "rgba(34,197,94,0.78)";
+  ctx.fillRect(
+    x + goalZone.x * sx,
+    y + goalZone.y * sy,
+    goalZone.w * sx,
+    goalZone.h * sy
+  );
+
+  ctx.fillStyle = "rgba(226,232,240,0.85)";
+  ctx.font = "800 11px Arial";
+  ctx.fillText("SWARM MAP", x + 16, y + 20);
+
+  ctx.restore();
+}
+
+function render() {
+  drawBackground();
+  drawFlowGuide();
+  drawGoalZone();
+
+  for (const p of penguins) {
+    drawPenguin(p);
+  }
+
+  drawDroneTrail();
+  drawDrone();
+  drawParticles();
+
+  checkGoal();
+  drawClearMessage();
+  drawMiniMap();
+}
+
+function loop() {
+  updatePenguinSwarm();
+  handleDroneInput();
+  updateParticles();
+  render();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener("keydown", e => {
+  if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") keys.up = true;
+  if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") keys.down = true;
+  if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = true;
+  if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = true;
+  if (e.code === "Space") keys.brake = true;
+});
+
+window.addEventListener("keyup", e => {
+  if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") keys.up = false;
+  if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") keys.down = false;
+  if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = false;
+  if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = false;
+  if (e.code === "Space") keys.brake = false;
+});
+
+window.addEventListener("resize", () => {
+  screenW = window.innerWidth;
+  screenH = window.innerHeight;
+  canvas.width = screenW;
+  canvas.height = screenH;
+  screenCenterCamera();
+});
+
+screenCenterCamera();
+resetScene();
+Runner.run(runner, engine);
+loop();
+</script>
+</body>
+</html>

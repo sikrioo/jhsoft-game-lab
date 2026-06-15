@@ -1,0 +1,1573 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<title>Sheepdog Herding Simulator</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #0b1f0f;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+canvas { display: block; }
+
+.panel {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  width: 310px;
+  padding: 18px;
+  border-radius: 14px;
+  background: rgba(5, 20, 8, 0.86);
+  border: 1px solid rgba(180, 255, 140, 0.18);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+  z-index: 10;
+}
+
+.title {
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -1px;
+}
+
+.subtitle {
+  margin-top: 6px;
+  color: #9bea72;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+hr {
+  border: 0;
+  border-top: 1px solid rgba(160,255,130,0.18);
+  margin: 18px 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 13px 0;
+  font-weight: 800;
+}
+
+.value { font-size: 18px; }
+
+.control-title {
+  color: #9bea72;
+  font-weight: 900;
+  margin-bottom: 12px;
+}
+
+.keys {
+  display: grid;
+  grid-template-columns: 42px 42px 42px 1fr;
+  gap: 7px;
+  align-items: center;
+}
+
+.key {
+  background: rgba(255,255,255,0.15);
+  border-radius: 6px;
+  padding: 9px 0;
+  text-align: center;
+  font-weight: 900;
+  box-shadow: inset 0 -2px 0 rgba(0,0,0,0.25);
+}
+
+.key.wide { grid-column: span 3; }
+
+.help {
+  color: #e8ffe1;
+  font-size: 14px;
+  padding-left: 6px;
+}
+
+.stamina-wrap { margin-top: 16px; }
+
+.stamina-label {
+  display: flex;
+  justify-content: space-between;
+  font-weight: 900;
+  color: #facc15;
+  margin-bottom: 7px;
+}
+
+.stamina-bg {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.13);
+  overflow: hidden;
+}
+
+.stamina-fill {
+  height: 100%;
+  width: 100%;
+  background: linear-gradient(90deg, #facc15, #84cc16);
+  border-radius: 999px;
+}
+
+.notice {
+  margin-top: 16px;
+  border: 2px dashed rgba(86, 190, 66, 0.65);
+  border-radius: 12px;
+  padding: 12px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #ecffe8;
+}
+
+.notice b { color: #9bea72; }
+
+button {
+  width: 100%;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 8px;
+  padding: 13px;
+  font-size: 20px;
+  font-weight: 900;
+  color: white;
+  background: linear-gradient(135deg, #43b02a, #65c943);
+  cursor: pointer;
+}
+
+.objective {
+  position: fixed;
+  right: 28px;
+  top: 28px;
+  width: 250px;
+  padding: 18px;
+  border-radius: 12px;
+  background: rgba(5, 20, 8, 0.86);
+  border: 1px solid rgba(180, 255, 140, 0.18);
+  z-index: 10;
+}
+
+.objective-title {
+  color: #facc15;
+  font-size: 18px;
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.objective-desc {
+  color: #fff;
+  line-height: 1.4;
+  font-size: 15px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="panel">
+  <div class="title">SHEEPDOG</div>
+  <div class="subtitle">HERDING SIMULATOR</div>
+
+  <hr />
+
+  <div class="row">
+    <span>🐑 SHEEP</span>
+    <span class="value"><span id="outCount">220</span> / <span id="totalCount">220</span></span>
+  </div>
+
+  <div class="row">
+    <span>🎯 IN PEN</span>
+    <span class="value" id="inPenCount">0</span>
+  </div>
+
+  <div class="row">
+    <span>🚩 OBJECTIVE</span>
+    <span class="value" id="modeValue">GATHER</span>
+  </div>
+
+  <hr />
+
+  <div class="control-title">CONTROLS</div>
+
+  <div class="keys">
+    <div></div><div class="key">W</div><div></div><div class="help">Move</div>
+    <div class="key">A</div><div class="key">S</div><div class="key">D</div><div></div>
+    <div class="key">↑</div><div class="key">↓</div><div class="key">←</div><div class="help">Move</div>
+    <div class="key wide">SPACE</div><div class="help">Run</div>
+  </div>
+
+  <div class="stamina-wrap">
+    <div class="stamina-label">
+      <span>⚡ STAMINA</span>
+      <span id="staminaText">100%</span>
+    </div>
+    <div class="stamina-bg">
+      <div class="stamina-fill" id="staminaFill"></div>
+    </div>
+  </div>
+
+  <div class="notice">
+    <b>STAY AREA</b><br>
+    초록색 원 안에서는 개가 천천히 움직입니다.<br>
+    SPACE를 누르면 빠르게 뛰지만 스태미너가 줄어듭니다.
+  </div>
+
+  <button onclick="resetScene()">↻ RESET</button>
+</div>
+
+<div class="objective">
+  <div class="objective-title">★ OBJECTIVE</div>
+  <div class="objective-desc" id="objectiveDesc">Gather all sheep into the pen!</div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+const {
+  Engine,
+  World,
+  Bodies,
+  Body,
+  Events,
+  Composite,
+  Runner
+} = Matter;
+
+const canvas = document.getElementById("canvas");
+const ctx = canvas.getContext("2d");
+
+let screenW = window.innerWidth;
+let screenH = window.innerHeight;
+
+canvas.width = screenW;
+canvas.height = screenH;
+
+const engine = Engine.create();
+engine.gravity.x = 0;
+engine.gravity.y = 0;
+
+const world = engine.world;
+const runner = Runner.create();
+
+const worldW = 2100;
+const worldH = 1120;
+
+const camera = { zoom: 0.72, x: 0, y: 0 };
+
+let dog;
+let sheep = [];
+let walls = [];
+let penZone;
+let particles = [];
+let clearEffect = 0;
+let herdInfo;
+
+let stamina = 100;
+let canRun = true;
+
+const stayArea = {
+  x: 720,
+  y: 805,
+  r: 145
+};
+
+const keys = {
+  up: false,
+  down: false,
+  left: false,
+  right: false,
+  run: false
+};
+
+const WALK_FORCE = 0.0065 * 2.0;
+const WALK_MAX_SPEED = 12.5 * 2.0;
+const RUN_FORCE = 0.0095 * 2.1;
+const RUN_MAX_SPEED = 18.5 * 2.1;
+const WALK_BOB = 2.0 * 0.7;
+const WALK_SQUASH = 0.035 * 0.7;
+const RUN_STAMINA_DRAIN = 0.14;
+const STAMINA_RECOVERY = 0.38;
+const RUN_RECOVER_THRESHOLD = 15;
+const SHEEP_STATE = {
+  IDLE: "IDLE",
+  GROUPING: "GROUPING",
+  FLEE: "FLEE",
+  PANIC: "PANIC"
+};
+const HERD_MODE = {
+  GATHER: "GATHER",
+  DRIVE: "DRIVE"
+};
+const SHEEP_COMFORT_MIN = 26;
+const SHEEP_COMFORT_MAX = 82;
+const SHEEP_NEIGHBOR_RADIUS = 118;
+const SHEEP_NEIGHBOR_RADIUS_SQ = SHEEP_NEIGHBOR_RADIUS * SHEEP_NEIGHBOR_RADIUS;
+const HERD_GATHER_RADIUS = 205;
+const HERD_DRIVE_RADIUS = 160;
+const PANIC_ENTER_THRESHOLD = 0.74;
+const PANIC_RELEASE_THRESHOLD = 0.46;
+const PANIC_GAIN = 0.045;
+const PANIC_DECAY = 0.04;
+const COLLISION_CATEGORY = {
+  SHEEP: 0x0002,
+  DOG: 0x0004,
+  WALL: 0x0008
+};
+
+function createEmptyHerdInfo() {
+  return {
+    center: { x: 0, y: 0 },
+    avgVelocity: { x: 0, y: 0 },
+    driveDir: { x: 1, y: 0 },
+    sideDir: { x: 0, y: 1 },
+    target: { x: 0, y: 0 },
+    mode: HERD_MODE.GATHER,
+    radius: 0,
+    straggler: null,
+    stragglerDistance: 0,
+    panicRatio: 0,
+    leftSpread: 0,
+    rightSpread: 0
+  };
+}
+
+herdInfo = createEmptyHerdInfo();
+
+function centerCamera() {
+  camera.zoom = Math.min(screenW / worldW, screenH / worldH) * 0.98;
+  camera.x = screenW / 2 - worldW * camera.zoom / 2;
+  camera.y = screenH / 2 - worldH * camera.zoom / 2;
+}
+
+function applyCamera() {
+  ctx.setTransform(camera.zoom, 0, 0, camera.zoom, camera.x, camera.y);
+}
+
+function resetCamera() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function normalizeVector(x, y, fallbackX = 0, fallbackY = 0) {
+  const len = Math.hypot(x, y);
+
+  if (len < 0.0001) {
+    const fallbackLen = Math.hypot(fallbackX, fallbackY) || 1;
+    return {
+      x: fallbackX / fallbackLen,
+      y: fallbackY / fallbackLen
+    };
+  }
+
+  return {
+    x: x / len,
+    y: y / len
+  };
+}
+
+function isInsidePen(body) {
+  return (
+    body.position.x > penZone.x &&
+    body.position.x < penZone.x + penZone.w &&
+    body.position.y > penZone.y &&
+    body.position.y < penZone.y + penZone.h
+  );
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+function createWalls() {
+  const t = 100;
+
+  walls = [
+    Bodies.rectangle(worldW / 2, -t / 2, worldW, t, {
+      isStatic: true,
+      collisionFilter: {
+        category: COLLISION_CATEGORY.WALL,
+        mask: COLLISION_CATEGORY.SHEEP | COLLISION_CATEGORY.DOG
+      }
+    }),
+    Bodies.rectangle(worldW / 2, worldH + t / 2, worldW, t, {
+      isStatic: true,
+      collisionFilter: {
+        category: COLLISION_CATEGORY.WALL,
+        mask: COLLISION_CATEGORY.SHEEP | COLLISION_CATEGORY.DOG
+      }
+    }),
+    Bodies.rectangle(-t / 2, worldH / 2, t, worldH, {
+      isStatic: true,
+      collisionFilter: {
+        category: COLLISION_CATEGORY.WALL,
+        mask: COLLISION_CATEGORY.SHEEP | COLLISION_CATEGORY.DOG
+      }
+    }),
+    Bodies.rectangle(worldW + t / 2, worldH / 2, t, worldH, {
+      isStatic: true,
+      collisionFilter: {
+        category: COLLISION_CATEGORY.WALL,
+        mask: COLLISION_CATEGORY.SHEEP | COLLISION_CATEGORY.DOG
+      }
+    })
+  ];
+
+  World.add(world, walls);
+}
+
+function createPenZone() {
+  penZone = {
+    x: worldW - 650,
+    y: 300,
+    w: 500,
+    h: 560
+  };
+}
+
+function createDog() {
+  dog = Bodies.circle(720, 805, 22, {
+    restitution: 0.1,
+    friction: 0.08,
+    frictionAir: 0.1,
+    density: 0.012,
+    label: "dog",
+    collisionFilter: {
+      category: COLLISION_CATEGORY.DOG,
+      mask: COLLISION_CATEGORY.SHEEP | COLLISION_CATEGORY.WALL
+    }
+  });
+
+  dog.faceAngle = 0;
+  dog.isRunning = false;
+  dog.runFxCooldown = 0;
+
+  World.add(world, dog);
+}
+
+function createSheep() {
+  sheep = [];
+
+  const total = 220;
+  const radius = 13;
+
+  const centers = [
+    { x: 520, y: 230 },
+    { x: 730, y: 370 },
+    { x: 950, y: 520 },
+    { x: 620, y: 650 },
+    { x: 1060, y: 300 }
+  ];
+
+  for (let i = 0; i < total; i++) {
+    const c = centers[Math.floor(Math.random() * centers.length)];
+    const angle = Math.random() * Math.PI * 2;
+    const dist = Math.pow(Math.random(), 0.58) * 155;
+
+    const x = c.x + Math.cos(angle) * dist;
+    const y = c.y + Math.sin(angle) * dist * 0.78;
+
+    const s = Bodies.circle(x, y, radius, {
+      restitution: 0.36,
+      friction: 0.16,
+      frictionAir: 0.06,
+      density: 0.0045,
+      label: "sheep",
+      collisionFilter: {
+        category: COLLISION_CATEGORY.SHEEP,
+        mask: COLLISION_CATEGORY.DOG | COLLISION_CATEGORY.WALL
+      }
+    });
+
+    s.phase = Math.random() * Math.PI * 2;
+    s.scared = 0;
+    s.panic = 0;
+    s.state = SHEEP_STATE.IDLE;
+    s.faceAngle = Math.random() * Math.PI * 2;
+    s.comfortMin = SHEEP_COMFORT_MIN + (Math.random() - 0.5) * 4;
+    s.comfortMax = SHEEP_COMFORT_MAX + (Math.random() - 0.5) * 8;
+    s.fearBias = 0.92 + Math.random() * 0.16;
+    s.isStraggler = false;
+
+    Body.setVelocity(s, {
+      x: (Math.random() - 0.5) * 0.3,
+      y: (Math.random() - 0.5) * 0.3
+    });
+
+    sheep.push(s);
+  }
+
+  World.add(world, sheep);
+  document.getElementById("totalCount").innerText = sheep.length;
+}
+
+function resetScene() {
+  Composite.clear(world, false);
+  particles = [];
+  clearEffect = 0;
+  herdInfo = createEmptyHerdInfo();
+  stamina = 100;
+  canRun = true;
+
+  createWalls();
+  createPenZone();
+  createDog();
+  createSheep();
+}
+
+function isDogInStayArea() {
+  const dx = dog.position.x - stayArea.x;
+  const dy = dog.position.y - stayArea.y;
+  return Math.hypot(dx, dy) < stayArea.r;
+}
+
+function handleDogInput() {
+  const moving = keys.up || keys.down || keys.left || keys.right;
+  const inStayArea = isDogInStayArea();
+  const running = keys.run && canRun && stamina > 0 && moving;
+
+  let force = running ? RUN_FORCE : WALK_FORCE;
+  let maxSpeed = running ? RUN_MAX_SPEED : WALK_MAX_SPEED;
+
+  if (inStayArea && !running) {
+    force *= 0.55;
+    maxSpeed *= 0.55;
+  }
+
+  if (running) {
+    stamina -= RUN_STAMINA_DRAIN;
+
+    if (stamina <= 0) {
+      stamina = 0;
+      canRun = false;
+    }
+  } else {
+    stamina += STAMINA_RECOVERY;
+
+    if (stamina >= RUN_RECOVER_THRESHOLD) canRun = true;
+    if (stamina > 100) stamina = 100;
+  }
+
+  document.getElementById("staminaFill").style.width = stamina + "%";
+  document.getElementById("staminaText").innerText = Math.round(stamina) + "%";
+
+  let inputX = 0;
+  let inputY = 0;
+
+  if (keys.up) inputY -= 1;
+  if (keys.down) inputY += 1;
+  if (keys.left) inputX -= 1;
+  if (keys.right) inputX += 1;
+
+  if (inputX !== 0 || inputY !== 0) {
+    const len = Math.hypot(inputX, inputY);
+    inputX /= len;
+    inputY /= len;
+
+    Body.applyForce(dog, dog.position, {
+      x: inputX * force,
+      y: inputY * force
+    });
+
+    dog.faceAngle = Math.atan2(inputY, inputX);
+  }
+
+  const speed = Math.hypot(dog.velocity.x, dog.velocity.y);
+
+  if (speed > maxSpeed) {
+    Body.setVelocity(dog, {
+      x: dog.velocity.x / speed * maxSpeed,
+      y: dog.velocity.y / speed * maxSpeed
+    });
+  }
+
+  if (!moving) {
+    Body.setVelocity(dog, {
+      x: dog.velocity.x * 0.58,
+      y: dog.velocity.y * 0.58
+    });
+
+    if (Math.hypot(dog.velocity.x, dog.velocity.y) < 0.08) {
+      Body.setVelocity(dog, { x: 0, y: 0 });
+    }
+  }
+
+  dog.isRunning = running;
+
+  const currentSpeed = Math.hypot(dog.velocity.x, dog.velocity.y);
+
+  if (running && currentSpeed > RUN_MAX_SPEED * 0.36) {
+    dog.runFxCooldown = Math.max(0, (dog.runFxCooldown || 0) - 1);
+
+    if (dog.runFxCooldown <= 0) {
+      spawnRunDust(dog.position.x, dog.position.y, dog.faceAngle || 0);
+      dog.runFxCooldown = 2;
+    }
+  } else {
+    dog.runFxCooldown = 0;
+  }
+}
+
+function updateHerdInfo() {
+  if (sheep.length === 0) {
+    herdInfo = createEmptyHerdInfo();
+    return;
+  }
+
+  const goalX = penZone.x + penZone.w / 2;
+  const goalY = penZone.y + penZone.h / 2;
+
+  let cx = 0;
+  let cy = 0;
+  let vx = 0;
+  let vy = 0;
+
+  for (const s of sheep) {
+    cx += s.position.x;
+    cy += s.position.y;
+    vx += s.velocity.x;
+    vy += s.velocity.y;
+    s.isStraggler = false;
+  }
+
+  cx /= sheep.length;
+  cy /= sheep.length;
+  vx /= sheep.length;
+  vy /= sheep.length;
+
+  const driveDir = normalizeVector(goalX - cx, goalY - cy, vx, vy);
+  const sideDir = { x: -driveDir.y, y: driveDir.x };
+
+  let radius = 0;
+  let straggler = null;
+  let stragglerDistance = 0;
+  let panicCount = 0;
+  let leftSpread = 0;
+  let rightSpread = 0;
+
+  for (const s of sheep) {
+    const dx = s.position.x - cx;
+    const dy = s.position.y - cy;
+    const dist = Math.hypot(dx, dy);
+    const lateral = dx * sideDir.x + dy * sideDir.y;
+
+    radius = Math.max(radius, dist);
+
+    if (dist > stragglerDistance) {
+      stragglerDistance = dist;
+      straggler = s;
+    }
+
+    leftSpread = Math.max(leftSpread, lateral);
+    rightSpread = Math.max(rightSpread, -lateral);
+
+    if (s.state === SHEEP_STATE.PANIC || s.panic > PANIC_ENTER_THRESHOLD) {
+      panicCount++;
+    }
+  }
+
+  let mode = herdInfo.mode || HERD_MODE.GATHER;
+
+  if (mode === HERD_MODE.DRIVE) {
+    if (radius > HERD_GATHER_RADIUS || stragglerDistance > HERD_GATHER_RADIUS * 0.96) {
+      mode = HERD_MODE.GATHER;
+    }
+  } else if (radius < HERD_DRIVE_RADIUS && stragglerDistance < HERD_DRIVE_RADIUS * 0.88) {
+    mode = HERD_MODE.DRIVE;
+  }
+
+  let target;
+
+  if (mode === HERD_MODE.GATHER && straggler) {
+    const gatherDir = normalizeVector(
+      straggler.position.x - cx,
+      straggler.position.y - cy,
+      -driveDir.x,
+      -driveDir.y
+    );
+
+    target = {
+      x: straggler.position.x + gatherDir.x * 96,
+      y: straggler.position.y + gatherDir.y * 96
+    };
+
+    straggler.isStraggler = true;
+  } else {
+    const wave = Math.sin(Date.now() * 0.0042) * 40;
+    const flankBias = clamp((leftSpread - rightSpread) / 52, -1, 1) * 58;
+    target = {
+      x: cx - driveDir.x * 118 + sideDir.x * (wave + flankBias),
+      y: cy - driveDir.y * 118 + sideDir.y * (wave + flankBias)
+    };
+  }
+
+  herdInfo = {
+    center: { x: cx, y: cy },
+    avgVelocity: { x: vx, y: vy },
+    driveDir,
+    sideDir,
+    target,
+    mode,
+    radius,
+    straggler,
+    stragglerDistance,
+    panicRatio: panicCount / sheep.length,
+    leftSpread,
+    rightSpread
+  };
+}
+
+function updateObjectiveUI() {
+  const modeValue = document.getElementById("modeValue");
+  const objectiveDesc = document.getElementById("objectiveDesc");
+
+  if (!modeValue || !objectiveDesc) return;
+
+  modeValue.innerText = herdInfo.mode;
+
+  if (herdInfo.panicRatio > 0.12) {
+    objectiveDesc.innerText = "Too much pressure. Back off, let the flock regroup, then sweep in again.";
+  } else if (herdInfo.mode === HERD_MODE.GATHER && herdInfo.straggler) {
+    objectiveDesc.innerText = "A straggler broke away. Circle wide and pressure from behind the highlighted sheep.";
+  } else {
+    objectiveDesc.innerText = "The flock is compact. Stay behind the herd and zigzag to drive them into the pen.";
+  }
+}
+
+function updateSheepBehavior() {
+  updateHerdInfo();
+  updateObjectiveUI();
+
+  const goalX = penZone.x + penZone.w / 2;
+  const goalY = penZone.y + penZone.h / 2;
+  const dogSpeed = Math.hypot(dog.velocity.x, dog.velocity.y);
+  const dogCenterDist = Math.hypot(
+    dog.position.x - herdInfo.center.x,
+    dog.position.y - herdInfo.center.y
+  );
+  const time = Date.now() * 0.002;
+  let inPen = 0;
+
+  for (const s of sheep) {
+    let separationX = 0;
+    let separationY = 0;
+    let alignmentX = 0;
+    let alignmentY = 0;
+    let cohesionX = 0;
+    let cohesionY = 0;
+    let neighborCount = 0;
+
+    for (const other of sheep) {
+      if (other === s) continue;
+
+      const dx = other.position.x - s.position.x;
+      const dy = other.position.y - s.position.y;
+      const distSq = dx * dx + dy * dy;
+
+      if (distSq > SHEEP_NEIGHBOR_RADIUS_SQ) continue;
+
+      const dist = Math.sqrt(distSq) || 1;
+      neighborCount++;
+
+      alignmentX += other.velocity.x;
+      alignmentY += other.velocity.y;
+      cohesionX += other.position.x;
+      cohesionY += other.position.y;
+
+      if (dist < s.comfortMin) {
+        const push = (s.comfortMin - dist) / s.comfortMin;
+        separationX -= dx / dist * push;
+        separationY -= dy / dist * push;
+      }
+    }
+
+    if (neighborCount > 0) {
+      alignmentX = alignmentX / neighborCount - s.velocity.x;
+      alignmentY = alignmentY / neighborCount - s.velocity.y;
+      cohesionX = cohesionX / neighborCount - s.position.x;
+      cohesionY = cohesionY / neighborCount - s.position.y;
+    } else {
+      cohesionX = 0;
+      cohesionY = 0;
+    }
+
+    const dxCenter = herdInfo.center.x - s.position.x;
+    const dyCenter = herdInfo.center.y - s.position.y;
+    const distCenter = Math.hypot(dxCenter, dyCenter) || 1;
+    const centerDir = normalizeVector(dxCenter, dyCenter);
+    const localCohesionMag = Math.hypot(cohesionX, cohesionY);
+    const localCohesionDir = normalizeVector(cohesionX, cohesionY, centerDir.x, centerDir.y);
+    const herdReturnStrength = clamp(
+      (distCenter - Math.max(s.comfortMax * 0.95, herdInfo.radius * 0.42)) /
+      Math.max(herdInfo.radius * 0.42, 70),
+      0,
+      1
+    );
+
+    const dxDog = s.position.x - dog.position.x;
+    const dyDog = s.position.y - dog.position.y;
+    const distDog = Math.hypot(dxDog, dyDog) || 1;
+    const fearRadius = (dog.isRunning ? 325 : 245) * s.fearBias;
+    const fearAmount = clamp(1 - distDog / fearRadius, 0, 1);
+    const fleeDir = normalizeVector(dxDog, dyDog, centerDir.x, centerDir.y);
+
+    const wallDist = Math.min(
+      s.position.x,
+      worldW - s.position.x,
+      s.position.y,
+      worldH - s.position.y
+    );
+    const dogPenetrating =
+      dog.isRunning &&
+      dogSpeed > RUN_MAX_SPEED * 0.82 &&
+      dogCenterDist < Math.max(herdInfo.radius * 0.52, 88) &&
+      fearAmount > 0.42;
+    const wallPanic =
+      wallDist < 52 &&
+      fearAmount > 0.55 &&
+      dogSpeed > WALK_MAX_SPEED * 0.72;
+
+    if (dogPenetrating || wallPanic) {
+      s.panic = clamp(s.panic + PANIC_GAIN, 0, 1);
+    } else {
+      s.panic = clamp(s.panic - PANIC_DECAY, 0, 1);
+    }
+
+    s.scared = clamp(Math.max(s.scared * 0.92, fearAmount), 0, 1);
+
+    if (s.panic > PANIC_ENTER_THRESHOLD) {
+      s.state = SHEEP_STATE.PANIC;
+    } else if (s.state === SHEEP_STATE.PANIC && s.panic > PANIC_RELEASE_THRESHOLD) {
+      s.state = SHEEP_STATE.PANIC;
+    } else if (fearAmount > 0.1) {
+      s.state = SHEEP_STATE.FLEE;
+    } else if (
+      (herdInfo.mode === HERD_MODE.GATHER && distCenter > herdInfo.radius * 0.52) ||
+      distCenter > herdInfo.radius * 0.78 ||
+      (neighborCount < 2 && distCenter > herdInfo.radius * 0.58)
+    ) {
+      s.state = SHEEP_STATE.GROUPING;
+    } else {
+      s.state = SHEEP_STATE.IDLE;
+    }
+
+    let fx = 0;
+    let fy = 0;
+
+    const sepWeight = s.state === SHEEP_STATE.PANIC ? 0.00185 : 0.0011;
+    const alignWeight = s.state === SHEEP_STATE.IDLE ? 0.00046 : 0.00036;
+    const cohesionWeight = s.state === SHEEP_STATE.PANIC ? 0.00002 : 0.00018;
+    const localCohesionStrength = neighborCount > 0
+      ? clamp(localCohesionMag / Math.max(s.comfortMax, 1), 0.18, 1)
+      : 0;
+
+    fx += separationX * sepWeight;
+    fy += separationY * sepWeight;
+    fx += alignmentX * alignWeight;
+    fy += alignmentY * alignWeight;
+    fx += localCohesionDir.x * cohesionWeight * localCohesionStrength;
+    fy += localCohesionDir.y * cohesionWeight * localCohesionStrength;
+
+    if (herdReturnStrength > 0) {
+      fx += centerDir.x * (0.00008 + herdReturnStrength * 0.00018);
+      fy += centerDir.y * (0.00008 + herdReturnStrength * 0.00018);
+    }
+
+    if (s.state === SHEEP_STATE.GROUPING) {
+      fx += centerDir.x * (0.00014 + herdReturnStrength * 0.00014);
+      fy += centerDir.y * (0.00014 + herdReturnStrength * 0.00014);
+    }
+
+    if (s.isStraggler && herdInfo.mode === HERD_MODE.GATHER) {
+      fx += centerDir.x * (0.00018 + herdReturnStrength * 0.00022);
+      fy += centerDir.y * (0.00018 + herdReturnStrength * 0.00022);
+    }
+
+    if (s.state === SHEEP_STATE.FLEE) {
+      const fleeWeight = dog.isRunning ? 0.0042 : 0.003;
+      fx += fleeDir.x * fleeWeight * (0.5 + fearAmount);
+      fy += fleeDir.y * fleeWeight * (0.5 + fearAmount);
+
+      if (fearAmount < 0.7) {
+        const flockHold = herdInfo.mode === HERD_MODE.GATHER ? 0.00012 : 0.00008;
+        fx += centerDir.x * flockHold * (1 - fearAmount * 0.75);
+        fy += centerDir.y * flockHold * (1 - fearAmount * 0.75);
+      }
+    }
+
+    if (s.state === SHEEP_STATE.PANIC) {
+      const panicDir = normalizeVector(
+        fleeDir.x + Math.cos(time + s.phase) * 0.8,
+        fleeDir.y + Math.sin(time * 1.3 + s.phase) * 0.8,
+        fleeDir.x,
+        fleeDir.y
+      );
+
+      fx += panicDir.x * (0.0038 + s.panic * 0.0016);
+      fy += panicDir.y * (0.0038 + s.panic * 0.0016);
+    }
+
+    const lateralOffset =
+      (s.position.x - herdInfo.center.x) * herdInfo.sideDir.x +
+      (s.position.y - herdInfo.center.y) * herdInfo.sideDir.y;
+
+    if (herdInfo.mode === HERD_MODE.DRIVE && s.state !== SHEEP_STATE.PANIC) {
+      fx += herdInfo.driveDir.x * 0.00017 * (neighborCount > 1 ? 1 : 0.7);
+      fy += herdInfo.driveDir.y * 0.00017 * (neighborCount > 1 ? 1 : 0.7);
+
+      if (Math.abs(lateralOffset) > herdInfo.radius * 0.58) {
+        fx += -herdInfo.sideDir.x * Math.sign(lateralOffset) * 0.00034;
+        fy += -herdInfo.sideDir.y * Math.sign(lateralOffset) * 0.00034;
+      }
+    }
+
+    fx += Math.cos(time * 0.7 + s.phase) * 0.000024;
+    fy += Math.sin(time * 0.9 + s.phase) * 0.000024;
+
+    if (isInsidePen(s) && fearAmount < 0.12) {
+      fx += herdInfo.driveDir.x * 0.00007;
+      fy += herdInfo.driveDir.y * 0.00007;
+    }
+
+    Body.applyForce(s, s.position, { x: fx, y: fy });
+
+    const speed = Math.hypot(s.velocity.x, s.velocity.y);
+    let maxSpeed = herdInfo.mode === HERD_MODE.DRIVE ? 2.2 : 1.85;
+
+    if (s.state === SHEEP_STATE.GROUPING) maxSpeed = herdInfo.mode === HERD_MODE.DRIVE ? 2.95 : 2.5;
+    if (s.state === SHEEP_STATE.FLEE) maxSpeed = dog.isRunning ? 4.65 : 3.95;
+    if (s.state === SHEEP_STATE.PANIC) maxSpeed = dog.isRunning ? 5.2 : 4.5;
+    if (isInsidePen(s) && s.state === SHEEP_STATE.IDLE) maxSpeed *= 0.94;
+
+    if (speed > maxSpeed) {
+      Body.setVelocity(s, {
+        x: s.velocity.x / speed * maxSpeed,
+        y: s.velocity.y / speed * maxSpeed
+      });
+    }
+
+    if (speed > 0.18) {
+      s.faceAngle = Math.atan2(s.velocity.y, s.velocity.x) + Math.PI / 2;
+    }
+
+    if (isInsidePen(s)) {
+      inPen++;
+    }
+  }
+
+  document.getElementById("inPenCount").innerText = inPen;
+  document.getElementById("outCount").innerText = sheep.length - inPen;
+
+  if (inPen >= Math.floor(sheep.length * 0.9)) {
+    clearEffect = Math.min(clearEffect + 0.025, 1);
+  } else {
+    clearEffect = Math.max(clearEffect - 0.015, 0);
+  }
+}
+
+function drawBackground() {
+  resetCamera();
+
+  const bg = ctx.createLinearGradient(0, 0, screenW, screenH);
+  bg.addColorStop(0, "#102d13");
+  bg.addColorStop(1, "#0a1c0c");
+
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, screenW, screenH);
+
+  applyCamera();
+
+  ctx.fillStyle = "#315f1c";
+  ctx.fillRect(0, 0, worldW, worldH);
+
+  ctx.fillStyle = "rgba(255,255,255,0.045)";
+
+  for (let i = 0; i < 1200; i++) {
+    const x = (i * 139) % worldW;
+    const y = (i * 293) % worldH;
+    ctx.fillRect(x, y, 2, 6);
+  }
+
+  ctx.fillStyle = "rgba(255,255,120,0.18)";
+
+  for (let i = 0; i < 120; i++) {
+    const x = (i * 421) % worldW;
+    const y = (i * 191) % worldH;
+    ctx.beginPath();
+    ctx.arc(x, y, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  drawOuterFence();
+}
+
+function drawOuterFence() {
+  ctx.save();
+
+  ctx.strokeStyle = "#8a6738";
+  ctx.lineWidth = 12;
+  ctx.strokeRect(8, 8, worldW - 16, worldH - 16);
+
+  ctx.strokeStyle = "#c59b5c";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(16, 16, worldW - 32, worldH - 32);
+
+  ctx.fillStyle = "#6b4a25";
+
+  for (let x = 20; x < worldW; x += 95) {
+    ctx.beginPath();
+    ctx.arc(x, 16, 10, 0, Math.PI * 2);
+    ctx.arc(x, worldH - 16, 10, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (let y = 20; y < worldH; y += 95) {
+    ctx.beginPath();
+    ctx.arc(16, y, 10, 0, Math.PI * 2);
+    ctx.arc(worldW - 16, y, 10, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+}
+
+function drawPenZone() {
+  ctx.save();
+
+  ctx.fillStyle = "rgba(150, 210, 80, 0.16)";
+  ctx.strokeStyle = "rgba(190,242,100,0.4)";
+  ctx.lineWidth = 2;
+
+  roundRect(ctx, penZone.x, penZone.y, penZone.w, penZone.h, 8);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.strokeStyle = "#8a6738";
+  ctx.lineWidth = 12;
+  ctx.strokeRect(penZone.x, penZone.y, penZone.w, penZone.h);
+
+  ctx.strokeStyle = "#c59b5c";
+  ctx.lineWidth = 4;
+  ctx.strokeRect(penZone.x + 8, penZone.y + 8, penZone.w - 16, penZone.h - 16);
+
+  ctx.fillStyle = "#6b4a25";
+
+  for (let x = penZone.x; x <= penZone.x + penZone.w; x += 115) {
+    ctx.beginPath();
+    ctx.arc(x, penZone.y, 12, 0, Math.PI * 2);
+    ctx.arc(x, penZone.y + penZone.h, 12, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  for (let y = penZone.y; y <= penZone.y + penZone.h; y += 115) {
+    ctx.beginPath();
+    ctx.arc(penZone.x, y, 12, 0, Math.PI * 2);
+    ctx.arc(penZone.x + penZone.w, y, 12, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "rgba(190,242,100,0.92)";
+  ctx.font = "900 48px Arial";
+  ctx.textAlign = "center";
+  ctx.fillText("PEN", penZone.x + penZone.w / 2, penZone.y + penZone.h / 2 - 10);
+
+  ctx.font = "800 28px Arial";
+  ctx.fillText(
+    document.getElementById("inPenCount").innerText + " / " + sheep.length,
+    penZone.x + penZone.w / 2,
+    penZone.y + penZone.h / 2 + 36
+  );
+
+  ctx.restore();
+}
+
+function drawStayArea() {
+  ctx.save();
+
+  ctx.beginPath();
+  ctx.arc(stayArea.x, stayArea.y, stayArea.r, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(74, 222, 128, 0.55)";
+  ctx.lineWidth = 4;
+  ctx.setLineDash([16, 16]);
+  ctx.stroke();
+
+  ctx.setLineDash([]);
+  ctx.fillStyle = "rgba(74,222,128,0.07)";
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawHerdGuides() {
+  if (!herdInfo || sheep.length === 0) return;
+
+  const angle = Math.atan2(herdInfo.driveDir.y, herdInfo.driveDir.x);
+  const overlayColor = herdInfo.panicRatio > 0.12
+    ? "rgba(251, 146, 60, 0.14)"
+    : herdInfo.mode === HERD_MODE.GATHER
+      ? "rgba(250, 204, 21, 0.09)"
+      : "rgba(226, 232, 240, 0.11)";
+  const strokeColor = herdInfo.panicRatio > 0.12
+    ? "rgba(251, 146, 60, 0.55)"
+    : herdInfo.mode === HERD_MODE.GATHER
+      ? "rgba(250, 204, 21, 0.45)"
+      : "rgba(226, 232, 240, 0.36)";
+
+  ctx.save();
+  ctx.translate(herdInfo.center.x, herdInfo.center.y);
+  ctx.rotate(angle);
+  ctx.fillStyle = overlayColor;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, herdInfo.radius * 1.08, Math.max(herdInfo.radius * 0.72, 72), 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  ctx.strokeStyle = strokeColor;
+  ctx.lineWidth = herdInfo.mode === HERD_MODE.GATHER ? 3 : 2;
+  ctx.setLineDash([12, 10]);
+  ctx.beginPath();
+  ctx.moveTo(herdInfo.center.x, herdInfo.center.y);
+  ctx.lineTo(herdInfo.target.x, herdInfo.target.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  ctx.beginPath();
+  ctx.arc(herdInfo.target.x, herdInfo.target.y, herdInfo.mode === HERD_MODE.GATHER ? 22 : 18, 0, Math.PI * 2);
+  ctx.stroke();
+
+  if (herdInfo.straggler && herdInfo.mode === HERD_MODE.GATHER) {
+    ctx.strokeStyle = "rgba(250, 204, 21, 0.95)";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(herdInfo.straggler.position.x, herdInfo.straggler.position.y, 20, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.restore();
+}
+
+function drawSheep(s) {
+  const x = s.position.x;
+  const y = s.position.y;
+  const r = s.circleRadius;
+  const woolColor = s.state === SHEEP_STATE.PANIC
+    ? "#fed7aa"
+    : s.scared > 0.15
+      ? "#fff7ed"
+      : "#f5f1df";
+  const woolShade = s.state === SHEEP_STATE.PANIC
+    ? "rgba(255, 237, 213, 0.96)"
+    : s.scared > 0.15
+      ? "rgba(255, 237, 213, 0.92)"
+      : "rgba(255,255,255,0.92)";
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(s.faceAngle || 0);
+
+  ctx.fillStyle = "rgba(0,0,0,0.28)";
+  ctx.beginPath();
+  ctx.ellipse(6, 9, r * 0.9, r * 0.55, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = woolColor;
+  const woolPuffs = [
+    { x: -r * 0.8, y: -r * 0.08, rr: r * 0.48 },
+    { x: -r * 0.38, y: -r * 0.44, rr: r * 0.5 },
+    { x: r * 0.06, y: -r * 0.5, rr: r * 0.54 },
+    { x: r * 0.56, y: -r * 0.18, rr: r * 0.5 },
+    { x: r * 0.56, y: r * 0.26, rr: r * 0.46 },
+    { x: r * 0.02, y: r * 0.46, rr: r * 0.52 },
+    { x: -r * 0.54, y: r * 0.3, rr: r * 0.47 }
+  ];
+
+  for (const puff of woolPuffs) {
+    ctx.beginPath();
+    ctx.arc(puff.x, puff.y, puff.rr, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.beginPath();
+  ctx.ellipse(0, 0, r * 1.02, r * 0.76, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = woolShade;
+  ctx.beginPath();
+  ctx.arc(-r * 0.18, -r * 0.16, r * 0.42, 0, Math.PI * 2);
+  ctx.arc(r * 0.24, -r * 0.22, r * 0.34, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (s.isStraggler || s.state === SHEEP_STATE.PANIC) {
+    ctx.strokeStyle = s.state === SHEEP_STATE.PANIC
+      ? "rgba(249, 115, 22, 0.95)"
+      : "rgba(250, 204, 21, 0.9)";
+    ctx.lineWidth = s.state === SHEEP_STATE.PANIC ? 3 : 2;
+    ctx.beginPath();
+    ctx.ellipse(0, 0, r * 1.26, r * 0.95, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = "#222";
+  ctx.beginPath();
+  ctx.arc(0, -r * 0.82, r * 0.36, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#111";
+  ctx.beginPath();
+  ctx.arc(-r * 0.55, r * 0.45, r * 0.18, 0, Math.PI * 2);
+  ctx.arc(r * 0.55, r * 0.45, r * 0.18, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function drawDog() {
+  const x = dog.position.x;
+  const y = dog.position.y;
+
+  const speed = Math.hypot(dog.velocity.x, dog.velocity.y);
+  const moving = speed > 0.35;
+
+  if (moving) {
+    dog.faceAngle = Math.atan2(dog.velocity.y, dog.velocity.x);
+  }
+
+  const angle = dog.faceAngle || 0;
+
+  const t = Date.now() * 0.018;
+  const bounce = moving ? Math.abs(Math.sin(t * (dog.isRunning ? 1.9 : 1.25))) : 0;
+
+  const bob = bounce * (dog.isRunning ? 3.2 : WALK_BOB);
+  const squash = bounce * (dog.isRunning ? 0.035 : WALK_SQUASH);
+  const tailWag = moving ? Math.sin(t * 2.4) * 2.2 : 0;
+
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+
+  // 그림자
+  ctx.fillStyle = "rgba(0,0,0,0.33)";
+  ctx.beginPath();
+  ctx.ellipse(4, 10, 34, 14, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.translate(0, -bob);
+
+  // 달릴 때만 잔상
+
+  // 몸통
+  ctx.save();
+  ctx.scale(1 + squash, 1 - squash);
+
+  ctx.fillStyle = "#0f172a";
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 31, 15, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#f8fafc";
+  ctx.beginPath();
+  ctx.ellipse(2, 0, 12, 9, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+
+  // 머리
+  ctx.fillStyle = "#111827";
+  ctx.beginPath();
+  ctx.arc(29, 0, 12, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#f8fafc";
+  ctx.beginPath();
+  ctx.arc(33, 0, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 귀
+  ctx.fillStyle = "#050505";
+
+  ctx.beginPath();
+  ctx.moveTo(25, -8);
+  ctx.lineTo(18, -17);
+  ctx.lineTo(33, -10);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(25, 8);
+  ctx.lineTo(18, 17);
+  ctx.lineTo(33, 10);
+  ctx.closePath();
+  ctx.fill();
+
+  // 짧은 꼬리
+  ctx.strokeStyle = "#f8fafc";
+  ctx.lineWidth = 6;
+  ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(-28, -1);
+  ctx.quadraticCurveTo(-38, -6 + tailWag, -45, -3 + tailWag * 0.25);
+  ctx.stroke();
+
+  ctx.restore();
+
+  // 영향권
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, dog.isRunning ? 275 : 205, 0, Math.PI * 2);
+  ctx.strokeStyle = dog.isRunning
+    ? "rgba(250,204,21,0.18)"
+    : "rgba(250,204,21,0.09)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawMiniMap() {
+  resetCamera();
+
+  const mapW = 260;
+  const mapH = 150;
+  const x = screenW - mapW - 28;
+  const y = screenH - mapH - 28;
+
+  ctx.save();
+
+  ctx.fillStyle = "rgba(5, 20, 8, 0.86)";
+  roundRect(ctx, x, y, mapW, mapH, 10);
+  ctx.fill();
+
+  ctx.strokeStyle = "rgba(160,255,130,0.25)";
+  ctx.stroke();
+
+  const sx = mapW / worldW;
+  const sy = mapH / worldH;
+
+  ctx.fillStyle = "#f8fafc";
+  for (const s of sheep) {
+    ctx.beginPath();
+    ctx.arc(x + s.position.x * sx, y + s.position.y * sy, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.fillStyle = "#facc15";
+  ctx.beginPath();
+  ctx.arc(x + dog.position.x * sx, y + dog.position.y * sy, 5, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = "#9bea72";
+  ctx.lineWidth = 2;
+  ctx.strokeRect(
+    x + penZone.x * sx,
+    y + penZone.y * sy,
+    penZone.w * sx,
+    penZone.h * sy
+  );
+
+  ctx.fillStyle = "#9bea72";
+  ctx.font = "900 16px Arial";
+  ctx.fillText("MINI MAP", x + 18, y + 26);
+
+  ctx.restore();
+}
+
+function drawParticles() {
+  for (const p of particles) {
+    ctx.save();
+    ctx.globalAlpha = p.life / p.maxLife;
+    ctx.fillStyle = p.color;
+
+    if (p.shape === "ellipse") {
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation || 0);
+      ctx.beginPath();
+      ctx.ellipse(0, 0, p.w, p.h, 0, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.restore();
+  }
+}
+
+function updateParticles() {
+  particles = particles.filter(p => p.life > 0);
+
+  for (const p of particles) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vx *= p.drag ?? 0.95;
+    p.vy *= p.drag ?? 0.95;
+    p.rotation = (p.rotation || 0) + (p.vr || 0);
+
+    if (p.grow) {
+      p.w += p.grow;
+      p.h += p.grow * 0.45;
+    }
+
+    p.life--;
+  }
+}
+
+function spawnParticles(x, y) {
+  for (let i = 0; i < 7; i++) {
+    particles.push({
+      x,
+      y,
+      vx: (Math.random() - 0.5) * 4,
+      vy: (Math.random() - 0.5) * 4,
+      r: 2 + Math.random() * 2,
+      life: 24,
+      maxLife: 24,
+      color: "rgba(250,204,21,0.9)"
+    });
+  }
+}
+
+function spawnRunDust(x, y, angle) {
+  const dirX = Math.cos(angle);
+  const dirY = Math.sin(angle);
+  const sideX = -dirY;
+  const sideY = dirX;
+  const dustColors = [
+    "rgba(244, 234, 205, 0.42)",
+    "rgba(214, 196, 150, 0.34)",
+    "rgba(160, 140, 102, 0.26)"
+  ];
+
+  for (let i = 0; i < 2; i++) {
+    const side = i === 0 ? -1 : 1;
+    const life = 13 + Math.floor(Math.random() * 5);
+    const backOffset = 18 + Math.random() * 6;
+    const sideOffset = (8 + Math.random() * 5) * side;
+
+    particles.push({
+      x: x - dirX * backOffset + sideX * sideOffset,
+      y: y - dirY * backOffset + sideY * sideOffset + 10,
+      vx: -dirX * (0.5 + Math.random() * 0.9) + sideX * side * (0.12 + Math.random() * 0.22),
+      vy: -dirY * (0.5 + Math.random() * 0.9) + sideY * side * (0.12 + Math.random() * 0.22) - 0.08,
+      w: 8 + Math.random() * 5,
+      h: 3 + Math.random() * 2,
+      rotation: angle + Math.PI + (Math.random() - 0.5) * 0.6,
+      vr: (Math.random() - 0.5) * 0.04,
+      life,
+      maxLife: life,
+      grow: 0.18,
+      drag: 0.88,
+      shape: "ellipse",
+      color: dustColors[Math.floor(Math.random() * dustColors.length)]
+    });
+  }
+}
+
+Events.on(engine, "collisionStart", event => {
+  for (const pair of event.pairs) {
+    const a = pair.bodyA;
+    const b = pair.bodyB;
+
+    if (
+      (a.label === "dog" && b.label === "sheep") ||
+      (a.label === "sheep" && b.label === "dog")
+    ) {
+      spawnParticles(
+        (a.position.x + b.position.x) / 2,
+        (a.position.y + b.position.y) / 2
+      );
+    }
+  }
+});
+
+function drawClearMessage() {
+  if (clearEffect <= 0) return;
+
+  resetCamera();
+
+  ctx.save();
+
+  ctx.globalAlpha = clearEffect;
+  ctx.fillStyle = "rgba(132,204,22,0.18)";
+  ctx.fillRect(0, 0, screenW, screenH);
+
+  ctx.font = "900 58px Arial";
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#ecfccb";
+  ctx.fillText("HERDING SUCCESS", screenW / 2, 120);
+
+  ctx.restore();
+}
+
+function render() {
+  drawBackground();
+  drawPenZone();
+  drawStayArea();
+  drawHerdGuides();
+
+  for (const s of sheep) {
+    drawSheep(s);
+  }
+
+  drawDog();
+  drawParticles();
+  drawClearMessage();
+  drawMiniMap();
+}
+
+function loop() {
+  handleDogInput();
+  updateSheepBehavior();
+  updateParticles();
+  render();
+  requestAnimationFrame(loop);
+}
+
+window.addEventListener("keydown", e => {
+  if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") keys.up = true;
+  if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") keys.down = true;
+  if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = true;
+  if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = true;
+  if (e.code === "Space") keys.run = true;
+});
+
+window.addEventListener("keyup", e => {
+  if (e.key === "ArrowUp" || e.key.toLowerCase() === "w") keys.up = false;
+  if (e.key === "ArrowDown" || e.key.toLowerCase() === "s") keys.down = false;
+  if (e.key === "ArrowLeft" || e.key.toLowerCase() === "a") keys.left = false;
+  if (e.key === "ArrowRight" || e.key.toLowerCase() === "d") keys.right = false;
+  if (e.code === "Space") keys.run = false;
+});
+
+window.addEventListener("resize", () => {
+  screenW = window.innerWidth;
+  screenH = window.innerHeight;
+  canvas.width = screenW;
+  canvas.height = screenH;
+  centerCamera();
+});
+
+centerCamera();
+resetScene();
+Runner.run(runner, engine);
+loop();
+</script>
+
+</body>
+</html>
