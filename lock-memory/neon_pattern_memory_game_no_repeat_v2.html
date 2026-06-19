@@ -1,0 +1,1639 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>LOCK MEMORY - Android Pattern Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  /* ===================================================================
+     THEME TOKENS
+     - neon (기본, 기존 디자인): 사이버펑크 네온
+     - simple: 극단적 미니멀, 흰 배경, 모노스페이스, 장식 제로
+     - flamboyant: 극단적 맥시멀, 멀티 네온 그라디언트, 글리치, 과장된 모션
+     =================================================================== */
+  :root {
+    --bg: #020407;
+    --cyan: #3df7ff;
+    --green: #8cff7a;
+    --red: #ff4c6a;
+    --gold: #ffd166;
+    --text: #d9fbff;
+    --muted: #6d8b93;
+    --font-display: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-body: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --radius: 18px;
+    --radius-pill: 999px;
+    --glow-strength: 1;
+    --line-width: 11;
+    --node-fill: rgba(3,16,22,.82);
+    --card-bg: linear-gradient(180deg, rgba(8, 18, 26, .66), rgba(2, 5, 9, .36));
+    --card-border: rgba(61, 247, 255, .16);
+    --particle-shadow: 16px;
+  }
+
+  /* ---------- SIMPLE THEME ---------- */
+  body.theme-simple {
+    --bg: #ffffff;
+    --cyan: #111111;
+    --green: #111111;
+    --red: #b3261e;
+    --gold: #111111;
+    --text: #111111;
+    --muted: #8a8a8a;
+    --font-display: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    --font-body: "JetBrains Mono", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+    --radius: 2px;
+    --radius-pill: 2px;
+    --glow-strength: 0;
+    --line-width: 3;
+    --node-fill: #ffffff;
+    --card-bg: #ffffff;
+    --card-border: #111111;
+    --particle-shadow: 0px;
+  }
+
+  /* ---------- FLAMBOYANT THEME ---------- */
+  body.theme-flamboyant {
+    --bg: #0a0014;
+    --cyan: #00f0ff;
+    --green: #39ff6a;
+    --red: #ff2a6d;
+    --gold: #ffea00;
+    --text: #fff7ff;
+    --muted: #c79bff;
+    --font-display: "Times New Roman", Georgia, serif;
+    --font-body: Inter, ui-sans-serif, system-ui, sans-serif;
+    --radius: 30px;
+    --radius-pill: 999px;
+    --glow-strength: 1.8;
+    --line-width: 15;
+    --node-fill: rgba(20,2,36,.78);
+    --card-bg: linear-gradient(135deg, rgba(255,0,200,.22), rgba(0,240,255,.16) 50%, rgba(255,234,0,.14));
+    --card-border: rgba(255, 0, 200, .45);
+    --particle-shadow: 26px;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body {
+    margin: 0; width: 100%; height: 100%; overflow: hidden;
+    background:
+      radial-gradient(circle at 50% 20%, rgba(34, 255, 245, .11), transparent 34%),
+      radial-gradient(circle at 20% 80%, rgba(67, 119, 255, .08), transparent 33%),
+      linear-gradient(180deg, #020407, #000 78%);
+    font-family: var(--font-body);
+    color: var(--text);
+    transition: background .4s ease, color .4s ease;
+  }
+  body.theme-simple {
+    background: #ffffff;
+  }
+  body.theme-flamboyant {
+    background:
+      radial-gradient(circle at 15% 15%, rgba(255, 0, 200, .22), transparent 38%),
+      radial-gradient(circle at 85% 25%, rgba(0, 240, 255, .18), transparent 38%),
+      radial-gradient(circle at 50% 90%, rgba(255, 234, 0, .14), transparent 42%),
+      linear-gradient(180deg, #0a0014, #02000a 80%);
+    background-size: 200% 200%, 200% 200%, 200% 200%, 100% 100%;
+    animation: flamboyantDrift 14s ease-in-out infinite;
+  }
+  @keyframes flamboyantDrift {
+    0%, 100% { background-position: 0% 0%, 100% 0%, 50% 100%, 0 0; }
+    50% { background-position: 30% 40%, 70% 60%, 40% 70%, 0 0; }
+  }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; touch-action: none; cursor: crosshair; }
+  .scanline { position: fixed; inset: 0; pointer-events: none; background: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px); background-size: 100% 4px; mix-blend-mode: screen; opacity: .35; }
+  body.theme-simple .scanline { opacity: 0; }
+  body.theme-flamboyant .scanline { opacity: .5; mix-blend-mode: overlay; }
+  .vignette { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px rgba(0,0,0,.95), inset 0 0 40px rgba(0,0,0,.9); }
+  body.theme-simple .vignette { box-shadow: none; }
+  body.theme-flamboyant .vignette { box-shadow: inset 0 0 220px rgba(40,0,60,.85), inset 0 0 70px rgba(255,0,150,.25); }
+  .hud {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    width: min(220px, calc(100vw - 24px));
+    display: grid;
+    gap: 8px;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .card {
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: 0 0 22px rgba(61, 247, 255, calc(.045 * var(--glow-strength))), inset 0 0 22px rgba(61, 247, 255, calc(.03 * var(--glow-strength)));
+    backdrop-filter: blur(12px);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+  }
+  body.theme-simple .card { backdrop-filter: none; box-shadow: none; }
+  body.theme-flamboyant .card { backdrop-filter: blur(16px); box-shadow: 0 0 40px rgba(255,0,200,.18), inset 0 0 30px rgba(0,240,255,.06); }
+  .brand { letter-spacing: .22em; font-size: 11px; color: var(--muted); margin-bottom: 6px; font-family: var(--font-body); }
+  body.theme-flamboyant .brand { letter-spacing: .3em; background: linear-gradient(90deg, var(--cyan), var(--gold), var(--red)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .stage {
+    font-size: clamp(26px, 7vw, 42px);
+    font-weight: 950;
+    line-height: .95;
+    text-shadow: 0 0 24px rgba(61, 247, 255, calc(.42 * var(--glow-strength)));
+    font-family: var(--font-display);
+  }
+  body.theme-simple .stage { font-weight: 700; }
+  body.theme-flamboyant .stage { text-shadow: 0 0 18px var(--cyan), 0 0 38px var(--red), 0 0 60px var(--gold); }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+    text-align: left;
+  }
+  .stat { min-width: 0; }
+  .label { color: var(--muted); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; }
+  .value { font-size: 17px; font-weight: 950; color: #f4feff; }
+  .center-ui {
+    position: fixed;
+    left: 50%;
+    top: max(18px, env(safe-area-inset-top));
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 6;
+    pointer-events: none;
+  }
+  .status {
+    min-width: 190px;
+    max-width: min(360px, 58vw);
+    padding: 10px 16px;
+    border-radius: var(--radius-pill);
+    background: rgba(2, 8, 12, .52);
+    border: 1px solid rgba(61, 247, 255, .14);
+    box-shadow: 0 0 34px rgba(61, 247, 255, calc(.055 * var(--glow-strength)));
+    color: var(--text);
+    font-size: 12px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-family: var(--font-body);
+  }
+  body.theme-simple .status { background: #ffffff; border: 1px solid #111111; box-shadow: none; border-radius: 2px; }
+  body.theme-flamboyant .status { background: rgba(20,2,36,.6); border: 1px solid rgba(255,0,200,.4); box-shadow: 0 0 30px rgba(255,0,200,.25); }
+  .rule {
+    display: none;
+  }
+  .countdown {
+    margin-top: 10px; font-size: clamp(48px, 12vw, 120px); font-weight: 950;
+    color: white; text-shadow: 0 0 32px var(--cyan), 0 0 80px rgba(61, 247, 255, calc(.55 * var(--glow-strength)));
+    line-height: .9; opacity: 0; transform: scale(.9); transition: .16s ease;
+    font-family: var(--font-display);
+  }
+  body.theme-simple .countdown { color: #111111; text-shadow: none; font-weight: 700; }
+  body.theme-flamboyant .countdown { color: #fff; text-shadow: 0 0 24px var(--cyan), 0 0 50px var(--red), 0 0 90px var(--gold); }
+  .countdown.show { opacity: 1; transform: scale(1); }
+  .bottom {
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    z-index: 6;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    pointer-events: auto;
+  }
+  button {
+    color: var(--text);
+    background: rgba(6, 16, 22, .68);
+    border: 1px solid rgba(61, 247, 255, .22);
+    border-radius: var(--radius-pill);
+    padding: 11px 13px;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: .07em;
+    box-shadow: 0 0 20px rgba(61, 247, 255, calc(.055 * var(--glow-strength)));
+    cursor: pointer;
+    font-family: var(--font-body);
+    transition: border-color .2s ease, box-shadow .2s ease, transform .15s ease;
+  }
+  button:hover { border-color: rgba(61, 247, 255, .55); box-shadow: 0 0 28px rgba(61, 247, 255, calc(.17 * var(--glow-strength))); }
+  body.theme-simple button { background: #ffffff; border: 1px solid #111111; box-shadow: none; border-radius: 2px; }
+  body.theme-simple button:hover { background: #111111; color: #ffffff; }
+  body.theme-flamboyant button { background: rgba(20,2,36,.7); border: 1px solid rgba(255,0,200,.4); box-shadow: 0 0 22px rgba(255,0,200,.3); }
+  body.theme-flamboyant button:hover { box-shadow: 0 0 36px rgba(0,240,255,.5); transform: translateY(-2px) scale(1.04); }
+  .overlay {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    background: radial-gradient(circle at center, rgba(10, 40, 46, .34), rgba(0,0,0,.88) 65%);
+    z-index: 20; padding: 24px;
+  }
+  body.theme-simple .overlay { background: rgba(255,255,255,.96); }
+  body.theme-flamboyant .overlay { background: radial-gradient(circle at center, rgba(120,0,140,.45), rgba(5,0,15,.92) 65%); }
+  .menu {
+    width: min(620px, 92vw); text-align: center; padding: 34px 26px; border-radius: var(--radius);
+    background: var(--card-bg);
+    border: 1px solid var(--card-border);
+    box-shadow: 0 0 80px rgba(61, 247, 255, calc(.12 * var(--glow-strength))), inset 0 0 50px rgba(61, 247, 255, calc(.045 * var(--glow-strength)));
+  }
+  body.theme-simple .menu { background: #ffffff; border: 1px solid #111111; box-shadow: none; border-radius: 2px; }
+  body.theme-flamboyant .menu { box-shadow: 0 0 100px rgba(255,0,200,.25), inset 0 0 60px rgba(0,240,255,.08); }
+  h1 { margin: 0 0 8px; font-size: clamp(36px, 9vw, 72px); letter-spacing: -.06em; line-height: .9; text-shadow: 0 0 30px rgba(61, 247, 255, calc(.35 * var(--glow-strength))); font-family: var(--font-display); }
+  body.theme-simple h1 { letter-spacing: -.02em; text-shadow: none; font-weight: 700; }
+  body.theme-flamboyant h1 {
+    background: linear-gradient(90deg, var(--cyan), var(--gold), var(--red), var(--cyan));
+    background-size: 300% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    text-shadow: none;
+    animation: flamboyantTitle 5s linear infinite;
+    font-style: italic;
+  }
+  @keyframes flamboyantTitle { to { background-position: 300% 0; } }
+  .subtitle { margin: 0 auto 24px; max-width: 500px; color: var(--muted); line-height: 1.65; font-family: var(--font-body); }
+  .primary { font-size: 16px; padding: 15px 24px; background: linear-gradient(180deg, rgba(61,247,255,.22), rgba(61,247,255,.07)); }
+  body.theme-simple .primary { background: #111111; color: #ffffff; }
+  body.theme-flamboyant .primary { background: linear-gradient(135deg, rgba(255,0,200,.5), rgba(0,240,255,.4)); }
+  .tips { margin-top: 22px; display: grid; gap: 8px; color: var(--muted); font-size: 13px; }
+  .hidden { display: none; }
+  .shake { animation: shake .28s linear; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); } 20% { transform: translateX(-8px); }
+    40% { transform: translateX(7px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(4px); }
+  }
+
+  /* ===================================================================
+     CHECKPOINT — 티어 전환 직전 등장하는 특수 규칙 구간 연출.
+     "보스전"보다 담백하게: 시스템이 잠깐 다른 규칙을 안내하는 톤.
+     =================================================================== */
+  .cp-icon {
+    display: none;
+    margin-left: 8px;
+    font-size: .55em;
+    vertical-align: middle;
+    opacity: .85;
+    filter: grayscale(.15);
+  }
+  .cp-icon.show { display: inline-block; animation: cpIconPulse 1.6s ease-in-out infinite; }
+  @keyframes cpIconPulse {
+    0%, 100% { opacity: .55; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.12); }
+  }
+
+  .boss-overlay {
+    position: fixed; inset: 0; z-index: 15;
+    display: grid; place-items: center;
+    background: rgba(2, 4, 8, .58);
+    opacity: 0; pointer-events: none;
+    transition: opacity .25s ease;
+    text-align: center;
+  }
+  .boss-overlay.show { opacity: 1; }
+  .boss-overlay .boss-name {
+    font-size: clamp(28px, 7vw, 52px);
+    font-weight: 950;
+    letter-spacing: .04em;
+    color: var(--gold);
+    text-shadow: 0 0 26px rgba(255, 209, 102, .5);
+    font-family: var(--font-display);
+    margin-bottom: 8px;
+  }
+  .boss-overlay .boss-rule {
+    font-size: 13px;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+    color: var(--text);
+    opacity: .85;
+  }
+  .boss-overlay.victory .boss-name { color: var(--gold); }
+  body.theme-simple .boss-overlay { background: rgba(255,255,255,.92); }
+  body.theme-simple .boss-overlay .boss-name { color: #111111; text-shadow: none; }
+  body.theme-flamboyant .boss-overlay { background: rgba(10, 0, 20, .68); }
+  body.theme-flamboyant .boss-overlay .boss-name { text-shadow: 0 0 30px var(--gold), 0 0 60px var(--red); }
+
+  /* 체크포인트 진행 중 전역 톤 보정 — 시안 글로우를 골드 계열로 살짝 치환 */
+  body.checkpoint-active .card { border-color: rgba(255, 209, 102, .35); }
+  body.checkpoint-active .countdown { text-shadow: 0 0 32px var(--gold), 0 0 80px rgba(255,209,102,.45); }
+  body.checkpoint-active .status { border-color: rgba(255, 209, 102, .3); }
+
+  .boss-pulse { animation: bossPulse .5s ease-in-out; }
+  @keyframes bossPulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.06); }
+  }
+
+  @media (max-width: 760px) {
+    .hud {
+      width: 154px;
+      gap: 6px;
+    }
+    .brand {
+      font-size: 9px;
+      letter-spacing: .15em;
+      margin-bottom: 4px;
+    }
+    .stage {
+      font-size: 28px;
+    }
+    .stats {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px 8px;
+    }
+    .card {
+      padding: 9px 10px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(8, 18, 26, .56), rgba(2, 5, 9, .28));
+    }
+    .label {
+      font-size: 8.5px;
+      letter-spacing: .09em;
+    }
+    .value {
+      font-size: 14px;
+    }
+    .center-ui {
+      top: calc(max(12px, env(safe-area-inset-top)) + 2px);
+    }
+    .status {
+      min-width: 128px;
+      max-width: 44vw;
+      padding: 8px 11px;
+      font-size: 10px;
+      letter-spacing: .08em;
+    }
+    .bottom {
+      right: max(10px, env(safe-area-inset-right));
+      bottom: max(10px, env(safe-area-inset-bottom));
+      gap: 5px;
+      max-width: calc(100vw - 20px);
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    button {
+      padding: 9px 9px;
+      font-size: 9.5px;
+    }
+    #display, #modeBtn, #themeBtn {
+      max-width: 58px;
+      overflow: hidden;
+    }
+    #mute {
+      width: 38px;
+      overflow: hidden;
+      white-space: nowrap;
+      color: transparent;
+      position: relative;
+    }
+    #mute::after {
+      content: "♪";
+      color: var(--text);
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+    }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="scanline"></div>
+<div class="vignette"></div>
+
+<div class="hud">
+  <div class="card">
+    <div class="brand">LOCK MEMORY</div>
+    <div class="stage">STAGE <span id="stage">1</span><span class="cp-icon" id="cpIcon">🔒</span></div>
+    <div class="stats" style="margin-top: 12px;">
+      <div class="stat"><div class="label">Tier</div><div class="value" id="tier">BR</div></div>
+      <div class="stat"><div class="label">Chance</div><div class="value" id="chance">3</div></div>
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="combo">0</div></div>
+      <div class="stat"><div class="label">Dots</div><div class="value" id="dots">4</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="center-ui">
+  <div class="status" id="status">READY</div>
+  <div class="rule" id="rule">No repeat · Android skip rule</div>
+  <div class="countdown" id="countdown">3</div>
+</div>
+
+<div class="boss-overlay" id="bossOverlay">
+  <div class="boss-name">CHECKPOINT 01</div>
+  <div class="boss-rule">RULE: TRACE BACKWARDS</div>
+</div>
+
+<div class="bottom">
+  <button id="themeBtn">NEON</button>
+  <button id="display">DOT</button>
+  <button id="modeBtn">DOUBT</button>
+  <button id="restart">RESTART</button>
+  <button id="mute">SOUND</button>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="menu">
+    <h1>LOCK<br/>MEMORY</h1>
+    <p class="subtitle">
+      이제 패턴은 실제 안드로이드 락 규칙으로 생성됩니다.
+      중복 점은 금지되고, 중간 점을 건너뛰는 이동은 해당 점이 이미 사용된 경우에만 허용됩니다.
+      DOT 디스플레이, 입력 제한시간이 있는 DOUBT 모드, 조용히 연습하는 ZEN 모드를 지원합니다.
+    </p>
+    <button class="primary" id="start">START GAME</button>
+    <div class="tips">
+      <div>PC: 마우스로 드래그 · 모바일: 손가락으로 드래그</div>
+      <div>실제 패턴락처럼 1→3을 긋고 2가 비어 있으면 2가 먼저 자동 입력됩니다</div>
+      <div>DOT: 숫자 없는 미니멀 표시 · 123: 숫자 표시</div>
+      <div>DOUBT: 입력 제한시간 · ZEN: 실패해도 같은 패턴 무한 연습</div>
+      <div>우측 하단 첫 버튼으로 NEON / SIMPLE / WILD 테마 전환</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  const ui = {
+    stage: document.getElementById("stage"),
+    score: document.getElementById("score"),
+    combo: document.getElementById("combo"),
+    dots: document.getElementById("dots"),
+    chance: document.getElementById("chance"),
+    tier: document.getElementById("tier"),
+    best: document.getElementById("best"),
+    status: document.getElementById("status"),
+    rule: document.getElementById("rule"),
+    countdown: document.getElementById("countdown"),
+    overlay: document.getElementById("overlay"),
+    start: document.getElementById("start"),
+    restart: document.getElementById("restart"),
+    mute: document.getElementById("mute"),
+    display: document.getElementById("display"),
+    modeBtn: document.getElementById("modeBtn"),
+    themeBtn: document.getElementById("themeBtn"),
+    cpIcon: document.getElementById("cpIcon"),
+    bossOverlay: document.getElementById("bossOverlay")
+  };
+
+  const coord = {
+    1:[0,0], 2:[1,0], 3:[2,0],
+    4:[0,1], 5:[1,1], 6:[2,1],
+    7:[0,2], 8:[1,2], 9:[2,2]
+  };
+
+  const idFromCoord = new Map(Object.entries(coord).map(([id, p]) => [p.join(","), Number(id)]));
+
+  let W = 0, H = 0, DPR = 1;
+  let nodes = [], particles = [];
+  let demoTrail = [], inputTrail = [];
+  let currentPattern = [], playerPattern = [];
+  let currentProfile = "BRONZE";
+  let currentDifficulty = 0;
+  let currentTier = "BRONZE";
+  let patternHistory = [];
+  const HISTORY_LIMIT = 40;
+  let stage = 1, score = 0, combo = 0;
+  let remainingChance = 3;
+  let best = Number(localStorage.getItem("pattern_best_v2") || 0);
+  let mode = "menu";
+  let playMode = "DOUBT"; // DOUBT: time attack, ZEN: no game over pressure
+  let displayMode = "DOT"; // DOT or NUMBER
+  let inputLimit = 0;
+  let inputRemain = 0;
+  let pointerDown = false;
+  let activePointerId = null;
+  let mouse = { x: 0, y: 0 };
+  let muted = false, audioCtx = null;
+  let lastTime = performance.now(), flash = 0, wrongFlash = 0;
+  let statusTimerLast = -1;
+  let generatingPattern = false;
+
+  // 현재 스테이지가 체크포인트인지, 그리고 적용 중인 입력 변환
+  let activeCheckpoint = null;     // CHECKPOINT_CONFIG 항목 또는 null
+  let expectedPattern = [];        // 변환이 적용된 "실제 입력해야 하는" 패턴
+
+  // ---------------------------------------------------------------------
+  // 테마 시스템: neon(기본) / simple(미니멀) / flamboyant(맥시멀)
+  // CSS 변수에서 실제 hex 색을 읽어와 캔버스 렌더링에 반영한다.
+  // ---------------------------------------------------------------------
+  const THEMES = ["neon", "simple", "flamboyant"];
+  const THEME_LABELS = { neon: "NEON", simple: "SIMPLE", flamboyant: "WILD" };
+  let theme = localStorage.getItem("pattern_theme_v1") || "neon";
+  let themeColors = { cyan: "#3df7ff", green: "#8cff7a", red: "#ff4c6a", gold: "#ffd166", text: "#d9fbff", muted: "#6d8b93", bg: "#020407", nodeFill: "rgba(3,16,22,.82)", glow: 1, lineWidth: 11 };
+
+  function readThemeColors() {
+    const cs = getComputedStyle(document.body);
+    const pick = (name, fallback) => (cs.getPropertyValue(name) || fallback).trim() || fallback;
+    themeColors = {
+      cyan: pick("--cyan", "#3df7ff"),
+      green: pick("--green", "#8cff7a"),
+      red: pick("--red", "#ff4c6a"),
+      gold: pick("--gold", "#ffd166"),
+      text: pick("--text", "#d9fbff"),
+      muted: pick("--muted", "#6d8b93"),
+      nodeFill: pick("--node-fill", "rgba(3,16,22,.82)"),
+      glow: parseFloat(pick("--glow-strength", "1")) || 0,
+      lineWidth: parseFloat(pick("--line-width", "11")) || 11
+    };
+  }
+
+  function applyTheme(next) {
+    theme = next;
+    document.body.classList.remove("theme-simple", "theme-flamboyant");
+    if (theme === "simple") document.body.classList.add("theme-simple");
+    if (theme === "flamboyant") document.body.classList.add("theme-flamboyant");
+    ui.themeBtn.textContent = THEME_LABELS[theme];
+    localStorage.setItem("pattern_theme_v1", theme);
+    readThemeColors();
+  }
+
+  function cycleTheme() {
+    const idx = THEMES.indexOf(theme);
+    applyTheme(THEMES[(idx + 1) % THEMES.length]);
+  }
+
+  ui.best.textContent = best;
+
+  function gcd(a, b) {
+    a = Math.abs(a); b = Math.abs(b);
+    while (b) [a, b] = [b, a % b];
+    return a || 1;
+  }
+
+  function normalizedSlope(a, b) {
+    const [x1, y1] = coord[a];
+    const [x2, y2] = coord[b];
+    let dx = x2 - x1, dy = y2 - y1;
+    const g = gcd(dx, dy);
+    dx /= g; dy /= g;
+    return `${dx},${dy}`;
+  }
+
+  function blockerBetween(a, b) {
+    const [x1, y1] = coord[a];
+    const [x2, y2] = coord[b];
+    const dx = x2 - x1, dy = y2 - y1;
+    const g = gcd(dx, dy);
+    if (g <= 1) return null;
+    const sx = dx / g, sy = dy / g;
+    const blockers = [];
+    for (let i = 1; i < g; i++) {
+      const id = idFromCoord.get(`${x1 + sx * i},${y1 + sy * i}`);
+      if (id) blockers.push(id);
+    }
+    return blockers.length ? blockers : null;
+  }
+
+  function isLegalMove(a, b, used) {
+    if (a === b || used.has(b)) return false;
+    const blockers = blockerBetween(a, b);
+    if (!blockers) return true;
+    return blockers.every(id => used.has(id));
+  }
+
+  function legalNexts(last, used) {
+    const arr = [];
+    for (let b = 1; b <= 9; b++) {
+      if (!used.has(b) && (!last || isLegalMove(last, b, used))) arr.push(b);
+    }
+    return shuffle(arr);
+  }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function uniqueSlopeCount(pattern) {
+    const s = new Set();
+    for (let i = 1; i < pattern.length; i++) s.add(normalizedSlope(pattern[i-1], pattern[i]));
+    return s.size;
+  }
+
+  function generateLegalPattern(length, preferUniqueSlopes = false) {
+    let bestCandidate = null;
+    let bestScore = -999;
+
+    for (let attempt = 0; attempt < 220; attempt++) {
+      const start = 1 + Math.floor(Math.random() * 9);
+      const used = new Set([start]);
+      const pattern = [start];
+      const slopes = new Set();
+
+      function dfs() {
+        if (pattern.length === length) return true;
+        let nexts = legalNexts(pattern[pattern.length - 1], used);
+
+        if (preferUniqueSlopes) {
+          nexts.sort((a, b) => {
+            const sa = normalizedSlope(pattern[pattern.length - 1], a);
+            const sb = normalizedSlope(pattern[pattern.length - 1], b);
+            return Number(slopes.has(sa)) - Number(slopes.has(sb)) || Math.random() - .5;
+          });
+        }
+
+        for (const n of nexts) {
+          const sl = normalizedSlope(pattern[pattern.length - 1], n);
+          used.add(n); pattern.push(n);
+          const had = slopes.has(sl);
+          slopes.add(sl);
+          if (dfs()) return true;
+          if (!had) slopes.delete(sl);
+          pattern.pop(); used.delete(n);
+        }
+        return false;
+      }
+
+      if (dfs()) {
+        const sc = uniqueSlopeCount(pattern) * 10 + pattern.length + (new Set(pattern).size);
+        if (sc > bestScore) {
+          bestScore = sc;
+          bestCandidate = pattern.slice();
+        }
+        if (!preferUniqueSlopes || uniqueSlopeCount(pattern) >= Math.min(8, length - 1)) return pattern;
+      }
+    }
+    return bestCandidate || [1,2,3,6];
+  }
+
+  // ---------------------------------------------------------------------
+  // MASTER 티어: 9칸 전체 / 8개 슬로프를 전부 쓰는 "완전 패턴"은 대칭을
+  // 고려해도 후보 수가 한정적이다. 매번 DFS로 찾는 대신, 알려진 베이스
+  // 해 몇 개를 회전/반전/시작점 변경으로 변형해 즉시 뽑아낸다.
+  // (DFS는 최초 1회, 베이스 시드가 비었을 때만 폴백으로 사용)
+  // ---------------------------------------------------------------------
+  const MAX_COMPLEXITY_BASES = [
+    [1,2,3,6,9,8,7,4,5]
+  ];
+  let maxComplexityCache = null;
+
+  // 3x3 격자의 대칭군(회전 0/90/180/270 x 반사) — id(1~9) 치환 테이블 생성
+  function buildSymmetryMaps() {
+    const maps = [];
+    const transforms = [
+      (x,y)=>[x,y], (x,y)=>[2-y,x], (x,y)=>[2-x,2-y], (x,y)=>[y,2-x],
+      (x,y)=>[2-x,y], (x,y)=>[y,x], (x,y)=>[x,2-y], (x,y)=>[2-y,2-x]
+    ];
+    for (const fn of transforms) {
+      const map = {};
+      for (let id = 1; id <= 9; id++) {
+        const [x,y] = coord[id];
+        const [nx,ny] = fn(x,y);
+        map[id] = idFromCoord.get(`${nx},${ny}`);
+      }
+      maps.push(map);
+    }
+    return maps;
+  }
+  const SYMMETRY_MAPS = buildSymmetryMaps();
+
+  // ---------------------------------------------------------------------
+  // CHECKPOINT 입력 변환용 명시적 거울 맵.
+  // SYMMETRY_MAPS[4]가 좌우반사와 동일하지만, 의도를 명확히 하기 위해
+  // 별도 이름으로 다시 정의한다.
+  // ---------------------------------------------------------------------
+  const MIRROR_H = (() => { // 좌우반사 (x -> 2-x)
+    const map = {};
+    for (let id = 1; id <= 9; id++) {
+      const [x, y] = coord[id];
+      map[id] = idFromCoord.get(`${2 - x},${y}`);
+    }
+    return map;
+  })();
+
+  const MIRROR_V = (() => { // 상하반사 (y -> 2-y)
+    const map = {};
+    for (let id = 1; id <= 9; id++) {
+      const [x, y] = coord[id];
+      map[id] = idFromCoord.get(`${x},${2 - y}`);
+    }
+    return map;
+  })();
+
+  function expandMaxComplexityCache() {
+    if (maxComplexityCache) return maxComplexityCache;
+    const results = [];
+    const seen = new Set();
+    for (const base of MAX_COMPLEXITY_BASES) {
+      for (const map of SYMMETRY_MAPS) {
+        const variant = base.map(id => map[id]);
+        const key = variant.join("-");
+        const revKey = variant.slice().reverse().join("-");
+        if (seen.has(key) || seen.has(revKey)) continue;
+        seen.add(key);
+        results.push(variant);
+      }
+    }
+    maxComplexityCache = results;
+    return results;
+  }
+
+  function generateMaxComplexity3x3() {
+    const cache = expandMaxComplexityCache();
+    if (cache.length) return cache[Math.floor(Math.random() * cache.length)][Symbol.iterator] ? cache[Math.floor(Math.random() * cache.length)].slice() : cache[0].slice();
+    // 캐시가 비정상적으로 비어 있을 때만 느린 DFS 폴백
+    return generateLegalPattern(9, true);
+  }
+
+  function segmentIntersect(a, b, c, d) {
+    const A = coord[a], B = coord[b], C = coord[c], D = coord[d];
+    function orient(p, q, r) {
+      return (q[0]-p[0])*(r[1]-p[1]) - (q[1]-p[1])*(r[0]-p[0]);
+    }
+    if (a === c || a === d || b === c || b === d) return false;
+    const o1 = orient(A, B, C), o2 = orient(A, B, D);
+    const o3 = orient(C, D, A), o4 = orient(C, D, B);
+    return (o1 * o2 < 0) && (o3 * o4 < 0);
+  }
+
+  function angleTurnScore(prev, cur, next) {
+    const [x1,y1] = coord[prev], [x2,y2] = coord[cur], [x3,y3] = coord[next];
+    const ax = x2-x1, ay = y2-y1, bx = x3-x2, by = y3-y2;
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (!la || !lb) return 0;
+    const dot = Math.max(-1, Math.min(1, (ax*bx + ay*by)/(la*lb)));
+    const deg = Math.acos(dot) * 180 / Math.PI;
+    if (deg < 20) return 0;
+    if (deg < 70) return 3;
+    if (deg < 120) return 6;
+    return 9;
+  }
+
+  function patternMetrics(pattern) {
+    const slopes = new Set();
+    let longMoves = 0, knightMoves = 0, turns = 0, crossings = 0, backtrack = 0;
+    let centerEarly = pattern.indexOf(5) >= 0 && pattern.indexOf(5) <= 2 ? 1 : 0;
+
+    for (let i = 1; i < pattern.length; i++) {
+      const a = pattern[i-1], b = pattern[i];
+      slopes.add(normalizedSlope(a, b));
+      const [x1,y1] = coord[a], [x2,y2] = coord[b];
+      const dx = Math.abs(x2-x1), dy = Math.abs(y2-y1);
+      const d = Math.hypot(dx, dy);
+      if (d >= 2) longMoves++;
+      if ((dx === 1 && dy === 2) || (dx === 2 && dy === 1)) knightMoves++;
+    }
+
+    for (let i = 2; i < pattern.length; i++) {
+      turns += angleTurnScore(pattern[i-2], pattern[i-1], pattern[i]);
+      const s1 = normalizedSlope(pattern[i-2], pattern[i-1]).split(",").map(Number);
+      const s2 = normalizedSlope(pattern[i-1], pattern[i]).split(",").map(Number);
+      if (s1[0] === -s2[0] && s1[1] === -s2[1]) backtrack++;
+    }
+
+    for (let i = 1; i < pattern.length; i++) {
+      for (let j = i + 2; j < pattern.length; j++) {
+        if (segmentIntersect(pattern[i-1], pattern[i], pattern[j-1], pattern[j])) crossings++;
+      }
+    }
+
+    return { length: pattern.length, slopes: slopes.size, longMoves, knightMoves, turns, crossings, centerEarly, backtrack };
+  }
+
+  function difficultyScore(pattern) {
+    const m = patternMetrics(pattern);
+    let score = 0;
+    score += m.length * 6;
+    score += m.slopes * 7;
+    score += m.longMoves * 6;
+    score += m.knightMoves * 5;
+    score += m.turns;
+    score += m.crossings * 12;
+    score += m.backtrack * 5;
+    score -= m.centerEarly * 6;
+    return Math.max(1, Math.min(100, Math.round(score)));
+  }
+
+  const TIERS = [
+    { name: "BRONZE",  short: "BR", min:  1, max: 25, stageFrom: 1,  color: "#b8875f" },
+    { name: "SILVER",  short: "SV", min: 26, max: 45, stageFrom: 6,  color: "#b8c7d6" },
+    { name: "GOLD",    short: "GD", min: 46, max: 65, stageFrom: 11, color: "#ffd166" },
+    { name: "DIAMOND", short: "DM", min: 66, max: 82, stageFrom: 18, color: "#3df7ff" },
+    { name: "MASTER",  short: "MS", min: 83, max:100, stageFrom: 26, color: "#ff4cfa" }
+  ];
+
+  function tierForStage() {
+    let selected = TIERS[0];
+    for (const t of TIERS) if (stage >= t.stageFrom) selected = t;
+    return selected;
+  }
+
+  // ---------------------------------------------------------------------
+  // CHECKPOINT: 티어 전환 직전 스테이지에 등장하는 특수 규칙 구간.
+  // 일반 패턴 생성기는 그대로 쓰되, 입력 시 정답 패턴에 변환(REVERSE/
+  // MIRROR)을 적용해 "다른 규칙으로 같은 패턴을 풀게" 만든다.
+  // ---------------------------------------------------------------------
+  const CHECKPOINT_CONFIG = {};
+  (() => {
+    const transforms = ["REVERSE", "MIRROR_H", "MIRROR_V", "BOTH"];
+    TIERS.slice(1).forEach((tier, i) => {
+      const cpStage = tier.stageFrom - 1;
+      const idx = Math.min(i, transforms.length - 1);
+      const transform = transforms[idx];
+      const ruleLabel = {
+        REVERSE: "TRACE BACKWARDS",
+        MIRROR_H: "LEFT-RIGHT FLIP",
+        MIRROR_V: "TOP-BOTTOM FLIP",
+        BOTH: "REVERSE + MIRROR"
+      }[transform];
+      CHECKPOINT_CONFIG[cpStage] = {
+        label: `CHECKPOINT ${String(i + 1).padStart(2, "0")}`,
+        ruleLabel,
+        transform
+      };
+    });
+  })();
+
+  function checkpointForStage(s) {
+    return CHECKPOINT_CONFIG[s] || null;
+  }
+
+  // 정답 패턴에 체크포인트 변환을 적용해 "실제로 입력해야 하는 패턴"을 만든다.
+  function applyTransform(pattern, transform) {
+    switch (transform) {
+      case "REVERSE":
+        return pattern.slice().reverse();
+      case "MIRROR_H":
+        return pattern.map(id => MIRROR_H[id]);
+      case "MIRROR_V":
+        return pattern.map(id => MIRROR_V[id]);
+      case "BOTH":
+        return pattern.slice().reverse().map(id => MIRROR_H[id]);
+      default:
+        return pattern;
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // 티어 내부 점진적 난이도 곡선:
+  // 같은 티어 안에서도 스테이지가 진행될수록 목표 난이도 구간을
+  // [min, max] 전체가 아니라 점점 위쪽으로 좁혀서, "티어 진입 직후"와
+  // "티어 막바지"가 체감상 다르게 느껴지도록 한다.
+  //
+  // progress 0   → [min, min + span*0.55]  (티어 시작, 가장 쉬움)
+  // progress 1   → [max - span*0.25, max]  (티어 끝, 가장 어려움)
+  // 중간은 선형 보간.
+  // ---------------------------------------------------------------------
+  function tierProgress(tier) {
+    const idx = TIERS.indexOf(tier);
+    const next = TIERS[idx + 1];
+    const start = tier.stageFrom;
+    // 다음 티어가 없으면(=MASTER) 5스테이지 폭을 기본 사이클로 가정
+    const end = next ? next.stageFrom : start + 5;
+    const span = Math.max(1, end - start);
+    return Math.max(0, Math.min(1, (stage - start) / span));
+  }
+
+  function tierTargetRange(tier) {
+    const span = tier.max - tier.min;
+    const progress = tierProgress(tier);
+    // ease-in-out 느낌으로 살짝 곡선을 줘서 중반 체감 난이도가 너무
+    // 평탄하지 않게 한다.
+    const eased = progress * progress * (3 - 2 * progress);
+    const lo = tier.min + span * eased * 0.30;
+    const hi = tier.min + span * (0.55 + eased * 0.45);
+    return { min: Math.round(lo), max: Math.round(Math.min(tier.max, hi)) };
+  }
+
+
+  function patternKey(pattern) {
+    return pattern.join("-");
+  }
+
+  function reversePatternKey(pattern) {
+    return pattern.slice().reverse().join("-");
+  }
+
+  function patternSimilarity(a, b) {
+    if (!a || !b || !a.length || !b.length) return 0;
+    const maxLen = Math.max(a.length, b.length);
+    let samePosition = 0;
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      if (a[i] === b[i]) samePosition++;
+    }
+
+    const edgesA = new Set();
+    for (let i = 1; i < a.length; i++) edgesA.add(`${a[i-1]}-${a[i]}`);
+    let sameEdges = 0;
+    for (let i = 1; i < b.length; i++) {
+      if (edgesA.has(`${b[i-1]}-${b[i]}`)) sameEdges++;
+    }
+
+    return (samePosition / maxLen) * 0.58 + (sameEdges / Math.max(1, maxLen - 1)) * 0.42;
+  }
+
+  function isRecentlyUsedPattern(candidate) {
+    const key = patternKey(candidate);
+    const revKey = reversePatternKey(candidate);
+
+    for (const old of patternHistory) {
+      if (old.key === key || old.key === revKey) return true;
+      if (old.len === candidate.length && patternSimilarity(old.pattern, candidate) >= 0.72) return true;
+    }
+    return false;
+  }
+
+  function rememberPattern(pattern) {
+    patternHistory.push({
+      key: patternKey(pattern),
+      pattern: pattern.slice(),
+      len: pattern.length,
+      tier: currentTier,
+      difficulty: currentDifficulty
+    });
+    if (patternHistory.length > HISTORY_LIMIT) {
+      patternHistory.splice(0, patternHistory.length - HISTORY_LIMIT);
+    }
+  }
+
+  // ---------------------------------------------------------------------
+  // 패턴 생성을 청크 단위로 쪼개 메인스레드를 막지 않도록 처리.
+  // 기존 동기 generateTierPattern 로직은 그대로 두되, 시도 횟수를
+  // 일정 단위로 나눠 매 청크 사이에 한 프레임을 양보한다.
+  // ---------------------------------------------------------------------
+  function frameYield() {
+    return new Promise(r => requestAnimationFrame(() => r()));
+  }
+
+  async function generateTierPatternAsync(tier) {
+    let bestCandidate = null, bestGap = Infinity, bestNovelty = -Infinity;
+    const minLen = tier.name === "BRONZE" ? 4 : tier.name === "SILVER" ? 5 : tier.name === "GOLD" ? 6 : 8;
+    const maxLen = tier.name === "BRONZE" ? 5 : tier.name === "SILVER" ? 7 : 9;
+
+    // 티어 내부 진행도에 따라 목표 난이도 구간을 좁혀서, 같은 티어 안에서도
+    // 스테이지가 진행될수록 체감 난이도가 점점 올라가도록 한다.
+    const { min: targetMin, max: targetMax } = tierTargetRange(tier);
+    const progress = tierProgress(tier);
+
+    // 길이도 같은 진행도로 살짝 밀어준다 (티어 막바지엔 더 긴 패턴 비중↑).
+    const lenBias = Math.round(progress * (maxLen - minLen) * 0.4);
+    const effMinLen = Math.min(maxLen, minLen + lenBias);
+
+    // MASTER는 더 이상 무거운 DFS 탐색이 필요 없다 (사전 계산된 대칭 변형 사용).
+    const attempts = tier.name === "MASTER" ? 240 : 760;
+    const CHUNK = 80; // 이 개수마다 한 프레임 양보
+
+    for (let i = 0; i < attempts; i++) {
+      let candidate;
+      if (tier.name === "MASTER" && i % 3 === 0) {
+        candidate = generateMaxComplexity3x3();
+      } else {
+        const len = effMinLen + Math.floor(Math.random() * (maxLen - effMinLen + 1));
+        candidate = generateLegalPattern(len, tier.name !== "BRONZE");
+      }
+
+      const sc = difficultyScore(candidate);
+      const gap = sc < targetMin ? targetMin - sc : sc > targetMax ? sc - targetMax : 0;
+      const duplicate = isRecentlyUsedPattern(candidate);
+
+      if (!duplicate && gap === 0) {
+        currentDifficulty = sc;
+        return candidate;
+      }
+
+      let maxSimilarity = 0;
+      for (const old of patternHistory) {
+        if (old.len === candidate.length) {
+          maxSimilarity = Math.max(maxSimilarity, patternSimilarity(old.pattern, candidate));
+        }
+      }
+      const novelty = 1 - maxSimilarity;
+      const rank = novelty * 100 - gap * 3 - (duplicate ? 80 : 0);
+
+      if (rank > bestNovelty || (rank === bestNovelty && gap < bestGap)) {
+        bestNovelty = rank;
+        bestGap = gap;
+        bestCandidate = candidate;
+        currentDifficulty = sc;
+      }
+
+      if (i > 0 && i % CHUNK === 0) await frameYield();
+    }
+
+    return bestCandidate || generateLegalPattern(minLen, false);
+  }
+
+  function patternProfile() {
+    const tier = tierForStage();
+    currentTier = tier.name;
+    return { name: tier.name, len: tier.name === "BRONZE" ? 4 : tier.name === "SILVER" ? 6 : tier.name === "GOLD" ? 8 : 9 };
+  }
+
+  async function makePatternForStageAsync() {
+    const tier = tierForStage();
+    currentTier = tier.name;
+    currentProfile = tier.name;
+    const p = await generateTierPatternAsync(tier);
+    currentDifficulty = difficultyScore(p);
+    return p;
+  }
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.floor(window.innerWidth); H = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(W * DPR); canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    buildNodes();
+  }
+
+  function buildNodes() {
+    const size = Math.min(W, H) * (W < 600 ? 0.62 : 0.54);
+    const gap = size / 2;
+    const cx = W / 2, cy = H * (W < 600 ? 0.56 : 0.55);
+    const startX = cx - gap, startY = cy - gap;
+    const r = Math.max(20, Math.min(36, size * 0.085));
+    nodes = [];
+    let id = 1;
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 3; col++) nodes.push({ id:id++, x:startX+col*gap, y:startY+row*gap, r, glow:0, hit:0, fail:0 });
+    }
+  }
+
+  function setStatus(text) { ui.status.textContent = text; }
+
+  // inputRemain은 매 프레임 변하지만, 소수점 1자리가 바뀔 때만 DOM을
+  // 갱신해 불필요한 reflow를 줄인다.
+  function setStatusThrottled(text, key) {
+    if (key === statusTimerLast) return;
+    statusTimerLast = key;
+    ui.status.textContent = text;
+  }
+
+  function syncUI() {
+    ui.stage.textContent = stage;
+    ui.score.textContent = score;
+    ui.combo.textContent = combo;
+    ui.dots.textContent = currentPattern.length || patternProfile().len;
+    ui.chance.textContent = remainingChance;
+    ui.tier.textContent = TIERS.find(t => t.name === currentTier)?.short || "BR";
+    ui.tier.style.color = TIERS.find(t => t.name === currentTier)?.color || "#d9fbff";
+    ui.best.textContent = best;
+    ui.rule.textContent = `${playMode} · ${currentTier} · difficulty ${currentDifficulty}/100 · unique history ${patternHistory.length}`;
+    if (ui.cpIcon) ui.cpIcon.classList.toggle("show", !!activeCheckpoint);
+  }
+
+  function getNode(id) { return nodes[id - 1]; }
+  function dist(a,b,c,d) { return Math.hypot(a-c, b-d); }
+  function nodeAt(x,y) {
+    // 화면 크기에 비례한 여유 반경 — 작은 화면일수록 손가락 오차가 크므로
+    // 터치 판정을 살짝 더 넉넉하게 잡는다.
+    const slack = W < 600 ? 1.7 : 1.45;
+    return nodes.find(n => dist(x,y,n.x,n.y) < n.r * slack);
+  }
+
+  function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  }
+
+  function tone(freq=440, dur=.08, type="sine", gain=.055) {
+    if (muted || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(Math.max(40, freq), t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+
+  function sfx(name, n=1) {
+    if (name === "demo") tone(260+n*38, .075, "triangle", .05);
+    if (name === "input") tone(420+n*42, .055, "sine", .045);
+    if (name === "auto") tone(250+n*30, .05, "triangle", .035);
+    if (name === "success") { tone(520,.07,"triangle",.055); setTimeout(()=>tone(720,.09,"triangle",.055),65); setTimeout(()=>tone(980,.12,"triangle",.05),130); }
+    if (name === "fail") { tone(140,.18,"sawtooth",.035); setTimeout(()=>tone(90,.2,"sawtooth",.03),80); }
+  }
+
+  // 파티클 상한 — 연속 실패 등으로 짧은 시간에 burst가 누적될 때
+  // 배열이 무한정 커지지 않도록 오래된 것부터 정리한다.
+  const PARTICLE_LIMIT = 420;
+  function addBurst(x,y,color="cyan",amount=20) {
+    for (let i=0;i<amount;i++) {
+      const a = Math.random()*Math.PI*2, sp = 80+Math.random()*300;
+      particles.push({ x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:.45+Math.random()*.5, max:.85, size:1+Math.random()*3, color });
+    }
+    if (particles.length > PARTICLE_LIMIT) {
+      particles.splice(0, particles.length - PARTICLE_LIMIT);
+    }
+  }
+
+  async function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function demoSpeed() { return Math.max(165, 570 - stage * 24); }
+
+  function stageInputLimit() {
+    if (playMode === "ZEN") return 0;
+    const base = Math.max(4.2, 9.5 - stage * 0.18 + currentPattern.length * 0.18);
+    return activeCheckpoint ? base * 0.85 : base;
+  }
+
+  function startGame() {
+    initAudio();
+    ui.overlay.classList.add("hidden");
+    ui.modeBtn.textContent = playMode;
+    stage = 1; score = 0; combo = 0;
+    remainingChance = 3;
+    patternHistory = [];
+    flash = 0; wrongFlash = 0;
+    activeCheckpoint = null;
+    expectedPattern = [];
+    setBossVisuals(false);
+    nextStage();
+  }
+
+  async function nextStage() {
+    mode = "loading";
+    remainingChance = 3;
+    playerPattern = []; inputTrail = []; demoTrail = [];
+    activeCheckpoint = checkpointForStage(stage);
+    setBossVisuals(!!activeCheckpoint);
+    setStatus("PREPARING PATTERN");
+    syncUI();
+
+    generatingPattern = true;
+    currentPattern = await makePatternForStageAsync();
+    generatingPattern = false;
+
+    // 패턴 생성 중 유저가 재시작/모드변경 등으로 상태가 바뀌었으면 중단
+    if (mode !== "loading") return;
+
+    rememberPattern(currentPattern);
+    expectedPattern = activeCheckpoint ? applyTransform(currentPattern, activeCheckpoint.transform) : [];
+    syncUI();
+
+    if (activeCheckpoint) {
+      mode = "checkpoint-intro";
+      await playCheckpointIntro(activeCheckpoint);
+      if (mode !== "checkpoint-intro") return; // 인트로 중 재시작 등으로 중단됐으면 종료
+    }
+
+    setStatus("WATCH CAREFULLY");
+    mode = "demo";
+    playDemo();
+  }
+
+  // ---------------------------------------------------------------------
+  // CHECKPOINT 인트로: 화면을 잠깐 어둡게 하고 라벨 + 규칙을 보여준다.
+  // 과한 연출(보스전 느낌) 대신 "시스템이 다른 규칙을 적용한다"는
+  // 담백한 안내 톤으로 구성.
+  // ---------------------------------------------------------------------
+  async function playCheckpointIntro(cp) {
+    ui.bossOverlay.querySelector(".boss-name").textContent = cp.label;
+    ui.bossOverlay.querySelector(".boss-rule").textContent = `RULE: ${cp.ruleLabel}`;
+    ui.bossOverlay.classList.remove("victory");
+    ui.bossOverlay.classList.add("show");
+    tone(220, .3, "sawtooth", .045); // 낮고 짧은 안내음 (경고음보다 절제됨)
+    await wait(1400);
+    ui.bossOverlay.classList.remove("show");
+    await wait(280);
+  }
+
+  function setBossVisuals(active) {
+    document.body.classList.toggle("checkpoint-active", active);
+  }
+
+  async function playDemo() {
+    await wait(430);
+    const speed = demoSpeed();
+
+    for (let i = 0; i < currentPattern.length; i++) {
+      if (mode !== "demo") return;
+      const n = getNode(currentPattern[i]);
+      n.glow = 1; n.hit = 1;
+      demoTrail = currentPattern.slice(0, i + 1);
+      sfx("demo", currentPattern[i]);
+      addBurst(n.x, n.y, "cyan", 10);
+      await wait(speed);
+    }
+
+    demoTrail = [];
+    setStatus("MEMORY LOCK");
+    await countdown();
+
+    if (activeCheckpoint) {
+      setStatus(`⚠ ${activeCheckpoint.ruleLabel}`);
+      ui.status.classList.add("boss-pulse");
+      await wait(500);
+      ui.status.classList.remove("boss-pulse");
+    }
+
+    mode = "input";
+    inputTrail = []; playerPattern = [];
+    inputLimit = stageInputLimit();
+    inputRemain = inputLimit;
+    statusTimerLast = -1;
+    setStatus(playMode === "ZEN" ? "INPUT NOW" : `INPUT · ${inputRemain.toFixed(1)}s`);
+  }
+
+  async function countdown() {
+    const cd = ui.countdown;
+    for (const v of ["3","2","1"]) {
+      cd.textContent = v; cd.classList.add("show");
+      tone(v==="3"?300:v==="2"?380:480,.08,"triangle",.04);
+      await wait(650);
+      cd.classList.remove("show");
+      await wait(350);
+    }
+  }
+
+  function pushPlayerNode(id, auto=false) {
+    if (mode !== "input") return;
+    if (playerPattern.includes(id)) return;
+
+    const targetPattern = expectedPattern.length ? expectedPattern : currentPattern;
+    const expected = targetPattern[playerPattern.length];
+    const n = getNode(id);
+
+    playerPattern.push(id);
+    inputTrail.push(id);
+    n.hit = 1; n.glow = 1;
+    addBurst(n.x, n.y, auto ? "cyan" : "green", auto ? 9 : 16);
+    sfx(auto ? "auto" : "input", id);
+
+    if (id !== expected) {
+      fail(n);
+      return;
+    }
+
+    if (playerPattern.length === targetPattern.length) success();
+  }
+
+  function registerNode(node) {
+    if (mode !== "input") return;
+    if (playerPattern[playerPattern.length - 1] === node.id) return;
+    if (playerPattern.includes(node.id)) return;
+
+    const last = playerPattern[playerPattern.length - 1];
+
+    // 실제 안드로이드 패턴락의 자동 중간점 입력 규칙:
+    // 1→3을 긋고 2가 아직 비어 있으면, 2가 먼저 입력된 뒤 3이 입력된다.
+    if (last) {
+      const blockers = blockerBetween(last, node.id);
+      if (blockers) {
+        for (const b of blockers) {
+          if (!playerPattern.includes(b)) {
+            pushPlayerNode(b, true);
+            if (mode !== "input") return;
+          }
+        }
+      }
+    }
+
+    pushPlayerNode(node.id, false);
+  }
+
+  function success() {
+    mode = "success";
+    combo++;
+    const complexityBonus = currentDifficulty * 8 + uniqueSlopeCount(currentPattern) * 35;
+    let gained = 100 * stage + combo * 25 + currentPattern.length * 40 + complexityBonus;
+
+    if (activeCheckpoint) {
+      gained = Math.round(gained * 1.6); // 체크포인트 보너스 (보스급 과장 없이 1.6배)
+      score += gained;
+      best = Math.max(best, score);
+      localStorage.setItem("pattern_best_v2", String(best));
+      localStorage.setItem(`checkpoint_clear_${stage}`, "1");
+      flash = 1.3;
+      setStatus(`CHECKPOINT CLEARED +${gained}`);
+      tone(880, .15, "sine", .05); // 짧고 깔끔한 승인음 (화음 연타 없음)
+      syncUI();
+      for (const id of currentPattern) {
+        const n = getNode(id);
+        addBurst(n.x, n.y, "gold", 16); // 골드 단일색, 화이트 플래시 섞지 않음
+      }
+    } else {
+      score += gained;
+      best = Math.max(best, score);
+      localStorage.setItem("pattern_best_v2", String(best));
+      flash = 1;
+      setStatus("ACCESS GRANTED +" + gained);
+      syncUI();
+      sfx("success");
+      for (const id of currentPattern) {
+        const n = getNode(id);
+        addBurst(n.x, n.y, "green", 12);
+      }
+    }
+
+    setTimeout(() => { stage++; syncUI(); nextStage(); }, 950);
+  }
+
+  function retrySameStage() {
+    mode = "demo";
+    playerPattern = [];
+    inputTrail = [];
+    demoTrail = [];
+    setStatus(`RETRY · ${remainingChance} CHANCE LEFT`);
+    syncUI();
+    setTimeout(() => playDemo(), 760);
+  }
+
+  function fail(node) {
+    mode = "fail";
+    const cpLabel = activeCheckpoint ? activeCheckpoint.label : null;
+
+    if (playMode === "ZEN") {
+      combo = 0;
+      wrongFlash = 1;
+      setStatus(cpLabel ? `${cpLabel} RETRY` : "ZEN RETRY");
+      ui.status.classList.add("shake");
+      setTimeout(() => ui.status.classList.remove("shake"), 300);
+      sfx("fail");
+      node.fail = 1;
+      addBurst(node.x, node.y, "red", 26);
+      syncUI();
+      setTimeout(() => retrySameStage(), 900);
+      return;
+    }
+    remainingChance--;
+    combo = 0;
+    wrongFlash = 1;
+    if (cpLabel) {
+      setStatus(remainingChance > 0 ? `CHECKPOINT FAILED · RETRY ${remainingChance}/3` : "CHECKPOINT FAILED");
+    } else {
+      setStatus(remainingChance > 0 ? `ACCESS DENIED · RETRY ${remainingChance}/3` : "ACCESS DENIED");
+    }
+    ui.status.classList.add("shake");
+    setTimeout(() => ui.status.classList.remove("shake"), 300);
+    sfx("fail");
+    node.fail = 1;
+    addBurst(node.x, node.y, "red", 34);
+    syncUI();
+
+    if (remainingChance > 0) {
+      setTimeout(() => retrySameStage(), 950);
+      return;
+    }
+
+    setTimeout(() => {
+      ui.overlay.classList.remove("hidden");
+      if (cpLabel) {
+        ui.overlay.querySelector("h1").innerHTML = "CHECKPOINT<br/>FAILED";
+        ui.overlay.querySelector(".subtitle").innerHTML =
+          `${cpLabel} · ${activeCheckpoint.ruleLabel}에서 3번 실패했습니다.<br/>정답 패턴: ${currentPattern.join(" → ")}<br/>Score ${score} · Best ${best}`;
+      } else {
+        ui.overlay.querySelector("h1").innerHTML = "SYSTEM<br/>LOCKED";
+        ui.overlay.querySelector(".subtitle").innerHTML =
+          `Stage ${stage}에서 3번 실패했습니다.<br/>정답 패턴: ${currentPattern.join(" → ")}<br/>Score ${score} · Best ${best}`;
+      }
+      ui.start.textContent = "RETRY";
+    }, 850);
+  }
+
+  function pointerPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const p = e.touches ? e.touches[0] : e;
+    return { x:p.clientX-rect.left, y:p.clientY-rect.top };
+  }
+
+  // 멀티터치 시 첫 손가락(activePointerId)만 추적해 다른 손가락이
+  // 화면에 닿아도 좌표가 튀지 않도록 한다.
+  function touchById(e, id) {
+    if (!e.touches) return e;
+    for (const t of e.touches) if (t.identifier === id) return t;
+    return null;
+  }
+
+  function onDown(e) {
+    if (mode !== "input") return;
+    e.preventDefault(); initAudio(); pointerDown = true;
+    if (e.touches && e.touches.length) activePointerId = e.touches[0].identifier;
+    const p = pointerPos(e); mouse = p;
+    const n = nodeAt(p.x,p.y); if (n) registerNode(n);
+  }
+  function onMove(e) {
+    let p;
+    if (e.touches) {
+      const t = activePointerId !== null ? touchById(e, activePointerId) : e.touches[0];
+      if (!t) return;
+      const rect = canvas.getBoundingClientRect();
+      p = { x: t.clientX - rect.left, y: t.clientY - rect.top };
+    } else {
+      p = pointerPos(e);
+    }
+    mouse = p;
+    if (!pointerDown || mode !== "input") return;
+    e.preventDefault();
+    const n = nodeAt(p.x,p.y); if (n) registerNode(n);
+  }
+  function onUp() { pointerDown = false; activePointerId = null; }
+
+  function drawGridBackground(t) {
+    ctx.save(); ctx.globalAlpha=.22 * Math.max(.3, themeColors.glow || 1) ; ctx.strokeStyle=themeColors.muted; ctx.lineWidth=1;
+    ctx.globalAlpha = theme === "simple" ? .08 : .22;
+    const step=42, off=(t*12)%step;
+    for(let x=-step;x<W+step;x+=step){ ctx.beginPath(); ctx.moveTo(x+off,0); ctx.lineTo(x+off,H); ctx.stroke(); }
+    for(let y=-step;y<H+step;y+=step){ ctx.beginPath(); ctx.moveTo(0,y+off); ctx.lineTo(W,y+off); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawLine(a,b,color,width=12,alpha=1) {
+    const glow = themeColors.glow ?? 1;
+    width = themeColors.lineWidth || width;
+    ctx.save(); ctx.lineCap="round"; ctx.lineJoin="round";
+    ctx.shadowBlur = 28 * glow; ctx.shadowColor = color; ctx.strokeStyle = color;
+    if (glow > 0) {
+      ctx.globalAlpha=alpha*.18; ctx.lineWidth=width*2.4; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    }
+    ctx.globalAlpha=alpha; ctx.lineWidth=width; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.globalAlpha = theme === "simple" ? .9 : .95;
+    ctx.strokeStyle = theme === "simple" ? "rgba(0,0,0,.55)" : "rgba(255,255,255,.7)";
+    ctx.lineWidth=Math.max(1.4,width*.18);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawTrail(list,color,alpha=1,livePointer=false) {
+    if (!list.length) return;
+    for(let i=1;i<list.length;i++) drawLine(getNode(list[i-1]), getNode(list[i]), color, 11, alpha);
+    if (livePointer && pointerDown && list.length > 0 && mode === "input") drawLine(getNode(list[list.length-1]), mouse, color, 8, .42);
+  }
+
+  function drawNodes(dt,time) {
+    const glow = themeColors.glow ?? 1;
+    for(const n of nodes) {
+      n.glow=Math.max(0,n.glow-dt*2.5); n.hit=Math.max(0,n.hit-dt*3.2); n.fail=Math.max(0,n.fail-dt*2.6);
+      const pulse=.5+Math.sin(time*2.2+n.id)*.5, active=n.glow, fail=n.fail, radius=n.r*(1+n.hit*.24);
+      ctx.save(); ctx.translate(n.x,n.y);
+      ctx.globalAlpha=.18+pulse*.04*glow+active*.55+fail*.5;
+      ctx.fillStyle = fail ? hexToRgba(themeColors.red,.18) : hexToRgba(themeColors.cyan,.12*Math.max(.2,glow));
+      ctx.shadowBlur=(42+active*48+fail*60)*glow; ctx.shadowColor = fail ? themeColors.red : themeColors.cyan;
+      ctx.beginPath(); ctx.arc(0,0,radius*2.3,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1; ctx.lineWidth = theme === "simple" ? 1.5 : 2;
+      ctx.strokeStyle = fail ? hexToRgba(themeColors.red,.9) : hexToRgba(themeColors.cyan,.55);
+      ctx.fillStyle = fail ? hexToRgba(themeColors.red,.22) : themeColors.nodeFill;
+      ctx.shadowBlur=(22+active*42)*glow; ctx.beginPath(); ctx.arc(0,0,radius,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      if (displayMode === "NUMBER") {
+        ctx.fillStyle = fail ? themeColors.red : active>.15 ? themeColors.text : themeColors.cyan;
+        ctx.shadowBlur=20*glow; ctx.font=`900 ${Math.max(13,n.r*.55)}px ${theme === "simple" ? "var(--font-display)" : "Inter, system-ui"}`; ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.globalAlpha=.34+active*.66; ctx.fillText(n.id,0,1);
+      } else {
+        ctx.globalAlpha = .55 + active * .45;
+        ctx.fillStyle = fail ? themeColors.red : active > .15 ? themeColors.text : themeColors.cyan;
+        ctx.shadowBlur = (18 + active * 20) * glow;
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(3.5, n.r * .13), 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = active > .1 ? .95 : .22;
+        ctx.lineWidth = theme === "simple" ? 1.4 : 2;
+        ctx.strokeStyle = fail ? hexToRgba(themeColors.red,.8) : (theme === "simple" ? hexToRgba(themeColors.text,.7) : "rgba(255,255,255,.75)");
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * .72, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  // CSS hex/var 색상을 rgba 알파 합성에 쓸 수 있게 변환하는 헬퍼.
+  // 이미 rgba()/rgb() 형태면 그대로 alpha만 덮어쓴다.
+  function hexToRgba(color, alpha) {
+    if (!color) return `rgba(61,247,255,${alpha})`;
+    color = color.trim();
+    if (color.startsWith("rgba") || color.startsWith("rgb")) {
+      const nums = color.match(/[\d.]+/g);
+      if (nums && nums.length >= 3) return `rgba(${nums[0]},${nums[1]},${nums[2]},${alpha})`;
+      return color;
+    }
+    if (color.startsWith("#")) {
+      let hex = color.slice(1);
+      if (hex.length === 3) hex = hex.split("").map(c => c + c).join("");
+      const r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+      return `rgba(${r},${g},${b},${alpha})`;
+    }
+    return color;
+  }
+
+  function drawParticles(dt) {
+    const glow = themeColors.glow ?? 1;
+    for(let i=particles.length-1;i>=0;i--) {
+      const p=particles[i]; p.life-=dt;
+      if(p.life<=0){ particles.splice(i,1); continue; }
+      p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=Math.pow(.05,dt); p.vy*=Math.pow(.05,dt);
+      const a=Math.max(0,p.life/p.max);
+      ctx.save(); ctx.globalAlpha=a;
+      ctx.fillStyle = p.color==="red" ? themeColors.red : p.color==="green" ? themeColors.green : themeColors.cyan;
+      ctx.shadowBlur = 16 * glow; ctx.shadowColor=ctx.fillStyle; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+
+  function drawTimeBar() {
+    if (mode !== "input" || playMode === "ZEN" || inputLimit <= 0) return;
+    const pct = Math.max(0, inputRemain / inputLimit);
+    const barW = Math.min(420, W * .62);
+    const x = W / 2 - barW / 2;
+    const y = H * (W < 600 ? .19 : .17);
+    const glow = themeColors.glow ?? 1;
+    ctx.save();
+    ctx.globalAlpha = .9;
+    ctx.fillStyle = hexToRgba(themeColors.cyan, theme === "simple" ? .15 : .08);
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, 5, 99);
+    ctx.fill();
+
+    ctx.shadowBlur = 18 * glow;
+    ctx.shadowColor = pct < .28 ? themeColors.red : themeColors.cyan;
+    ctx.fillStyle = pct < .28 ? hexToRgba(themeColors.red,.86) : hexToRgba(themeColors.cyan,.82);
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW * pct, 5, 99);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawWatermark() {
+    ctx.save(); ctx.globalAlpha = theme === "simple" ? .05 : .035;
+    ctx.fillStyle = themeColors.text;
+    ctx.font=`950 ${Math.min(120,W*.12)}px ${theme === "simple" ? "var(--font-display)" : "Inter, system-ui"}`; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(currentProfile || "PATTERN", W/2, H*.5);
+    ctx.restore();
+  }
+
+  function loop(now) {
+    const dt=Math.min(.033,(now-lastTime)/1000), t=now/1000; lastTime=now;
+    if (mode === "input" && playMode !== "ZEN" && inputLimit > 0) {
+      inputRemain -= dt;
+      if (inputRemain <= 0) {
+        inputRemain = 0;
+        const last = inputTrail.length ? getNode(inputTrail[inputTrail.length - 1]) : getNode(currentPattern[0]);
+        fail(last);
+      } else {
+        // 소수점 1자리 단위로만 텍스트 갱신 (불필요한 DOM reflow 방지)
+        const rounded = Math.ceil(inputRemain * 10);
+        setStatusThrottled(`INPUT · ${inputRemain.toFixed(1)}s`, rounded);
+      }
+    }
+    flash=Math.max(0,flash-dt*1.8); wrongFlash=Math.max(0,wrongFlash-dt*2.2);
+    ctx.clearRect(0,0,W,H);
+    drawGridBackground(t); drawWatermark();
+    if(flash>0){ ctx.fillStyle=hexToRgba(themeColors.green, flash*.08); ctx.fillRect(0,0,W,H); }
+    if(wrongFlash>0){ ctx.fillStyle=hexToRgba(themeColors.red, wrongFlash*.11); ctx.fillRect(0,0,W,H); }
+    drawTrail(demoTrail, activeCheckpoint ? themeColors.gold : (currentProfile==="MAX COMPLEXITY" ? themeColors.gold : themeColors.cyan), 1, false);
+    drawTrail(inputTrail, mode==="fail" ? themeColors.red : themeColors.green, 1, true);
+    drawNodes(dt,t); drawTimeBar(); drawParticles(dt);
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener("resize", resize);
+  canvas.addEventListener("mousedown", onDown);
+  canvas.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+  canvas.addEventListener("touchstart", onDown, { passive:false });
+  canvas.addEventListener("touchmove", onMove, { passive:false });
+  window.addEventListener("touchend", onUp);
+
+  ui.start.addEventListener("click", startGame);
+  ui.restart.addEventListener("click", () => {
+    ui.overlay.classList.remove("hidden");
+    ui.overlay.querySelector("h1").innerHTML = "LOCK<br/>MEMORY";
+    ui.overlay.querySelector(".subtitle").innerHTML =
+      "패턴은 실제 안드로이드 락 규칙으로 생성되며, Bronze/Silver/Gold/Diamond/Master 난이도 그룹에 맞춰 점수 기반으로 선별됩니다.";
+    ui.start.textContent = "START GAME";
+    remainingChance = 3;
+    activeCheckpoint = null;
+    expectedPattern = [];
+    setBossVisuals(false);
+    ui.bossOverlay.classList.remove("show", "victory");
+    syncUI();
+    mode = "menu"; inputTrail = []; demoTrail = [];
+  });
+  ui.display.addEventListener("click", () => {
+    displayMode = displayMode === "DOT" ? "NUMBER" : "DOT";
+    ui.display.textContent = displayMode === "DOT" ? "DOT" : "123";
+  });
+
+  ui.modeBtn.addEventListener("click", () => {
+    playMode = playMode === "DOUBT" ? "ZEN" : "DOUBT";
+    ui.modeBtn.textContent = playMode;
+    setStatus(playMode === "ZEN" ? "ZEN MODE" : "DOUBT MODE");
+    syncUI();
+  });
+
+  ui.mute.addEventListener("click", () => {
+    muted = !muted;
+    ui.mute.textContent = muted ? "SOUND OFF" : "SOUND";
+  });
+
+  ui.themeBtn.addEventListener("click", () => {
+    cycleTheme();
+  });
+
+  applyTheme(theme);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,1096 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>LOCK MEMORY - Android Pattern Engine</title>
+<style>
+  :root {
+    --bg: #020407;
+    --cyan: #3df7ff;
+    --green: #8cff7a;
+    --red: #ff4c6a;
+    --gold: #ffd166;
+    --text: #d9fbff;
+    --muted: #6d8b93;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+  html, body {
+    margin: 0; width: 100%; height: 100%; overflow: hidden;
+    background:
+      radial-gradient(circle at 50% 20%, rgba(34, 255, 245, .11), transparent 34%),
+      radial-gradient(circle at 20% 80%, rgba(67, 119, 255, .08), transparent 33%),
+      linear-gradient(180deg, #020407, #000 78%);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--text);
+  }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; touch-action: none; cursor: crosshair; }
+  .scanline { position: fixed; inset: 0; pointer-events: none; background: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px); background-size: 100% 4px; mix-blend-mode: screen; opacity: .35; }
+  .vignette { position: fixed; inset: 0; pointer-events: none; box-shadow: inset 0 0 160px rgba(0,0,0,.95), inset 0 0 40px rgba(0,0,0,.9); }
+  .hud {
+    position: fixed;
+    top: max(12px, env(safe-area-inset-top));
+    left: max(12px, env(safe-area-inset-left));
+    width: min(220px, calc(100vw - 24px));
+    display: grid;
+    gap: 8px;
+    z-index: 5;
+    pointer-events: none;
+  }
+  .card {
+    background: linear-gradient(180deg, rgba(8, 18, 26, .66), rgba(2, 5, 9, .36));
+    border: 1px solid rgba(61, 247, 255, .16);
+    box-shadow: 0 0 22px rgba(61, 247, 255, .045), inset 0 0 22px rgba(61, 247, 255, .03);
+    backdrop-filter: blur(12px);
+    border-radius: 18px;
+    padding: 12px 14px;
+  }
+  .brand { letter-spacing: .22em; font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .stage {
+    font-size: clamp(26px, 7vw, 42px);
+    font-weight: 950;
+    line-height: .95;
+    text-shadow: 0 0 24px rgba(61, 247, 255, .42);
+  }
+  .stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 10px;
+    text-align: left;
+  }
+  .stat { min-width: 0; }
+  .label { color: var(--muted); font-size: 10px; letter-spacing: .11em; text-transform: uppercase; }
+  .value { font-size: 17px; font-weight: 950; color: #f4feff; }
+  .center-ui {
+    position: fixed;
+    left: 50%;
+    top: max(18px, env(safe-area-inset-top));
+    transform: translateX(-50%);
+    text-align: center;
+    z-index: 6;
+    pointer-events: none;
+  }
+  .status {
+    min-width: 190px;
+    max-width: min(360px, 58vw);
+    padding: 10px 16px;
+    border-radius: 999px;
+    background: rgba(2, 8, 12, .52);
+    border: 1px solid rgba(61, 247, 255, .14);
+    box-shadow: 0 0 34px rgba(61, 247, 255, .055);
+    color: #c9faff;
+    font-size: 12px;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .rule {
+    display: none;
+  }
+  .countdown {
+    margin-top: 10px; font-size: clamp(48px, 12vw, 120px); font-weight: 950;
+    color: white; text-shadow: 0 0 32px var(--cyan), 0 0 80px rgba(61, 247, 255, .55);
+    line-height: .9; opacity: 0; transform: scale(.9); transition: .16s ease;
+  }
+  .countdown.show { opacity: 1; transform: scale(1); }
+  .bottom {
+    position: fixed;
+    right: max(12px, env(safe-area-inset-right));
+    bottom: max(14px, env(safe-area-inset-bottom));
+    z-index: 6;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    pointer-events: auto;
+  }
+  button {
+    color: var(--text);
+    background: rgba(6, 16, 22, .68);
+    border: 1px solid rgba(61, 247, 255, .22);
+    border-radius: 999px;
+    padding: 11px 13px;
+    font-size: 12px;
+    font-weight: 950;
+    letter-spacing: .07em;
+    box-shadow: 0 0 20px rgba(61, 247, 255, .055);
+    cursor: pointer;
+  }
+  button:hover { border-color: rgba(61, 247, 255, .55); box-shadow: 0 0 28px rgba(61, 247, 255, .17); }
+  .overlay {
+    position: fixed; inset: 0; display: grid; place-items: center;
+    background: radial-gradient(circle at center, rgba(10, 40, 46, .34), rgba(0,0,0,.88) 65%);
+    z-index: 20; padding: 24px;
+  }
+  .menu {
+    width: min(620px, 92vw); text-align: center; padding: 34px 26px; border-radius: 28px;
+    background: linear-gradient(180deg, rgba(8, 20, 28, .86), rgba(1, 4, 7, .7));
+    border: 1px solid rgba(61, 247, 255, .24);
+    box-shadow: 0 0 80px rgba(61, 247, 255, .12), inset 0 0 50px rgba(61, 247, 255, .045);
+  }
+  h1 { margin: 0 0 8px; font-size: clamp(36px, 9vw, 72px); letter-spacing: -.06em; line-height: .9; text-shadow: 0 0 30px rgba(61, 247, 255, .35); }
+  .subtitle { margin: 0 auto 24px; max-width: 500px; color: #9bbcc4; line-height: 1.65; }
+  .primary { font-size: 16px; padding: 15px 24px; background: linear-gradient(180deg, rgba(61,247,255,.22), rgba(61,247,255,.07)); }
+  .tips { margin-top: 22px; display: grid; gap: 8px; color: #7e9da5; font-size: 13px; }
+  .hidden { display: none; }
+  .shake { animation: shake .28s linear; }
+  @keyframes shake {
+    0%,100% { transform: translateX(0); } 20% { transform: translateX(-8px); }
+    40% { transform: translateX(7px); } 60% { transform: translateX(-5px); } 80% { transform: translateX(4px); }
+  }
+  @media (max-width: 760px) {
+    .hud {
+      width: 154px;
+      gap: 6px;
+    }
+    .brand {
+      font-size: 9px;
+      letter-spacing: .15em;
+      margin-bottom: 4px;
+    }
+    .stage {
+      font-size: 28px;
+    }
+    .stats {
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px 8px;
+    }
+    .card {
+      padding: 9px 10px;
+      border-radius: 14px;
+      background: linear-gradient(180deg, rgba(8, 18, 26, .56), rgba(2, 5, 9, .28));
+    }
+    .label {
+      font-size: 8.5px;
+      letter-spacing: .09em;
+    }
+    .value {
+      font-size: 14px;
+    }
+    .center-ui {
+      top: calc(max(12px, env(safe-area-inset-top)) + 2px);
+    }
+    .status {
+      min-width: 128px;
+      max-width: 44vw;
+      padding: 8px 11px;
+      font-size: 10px;
+      letter-spacing: .08em;
+    }
+    .bottom {
+      right: max(10px, env(safe-area-inset-right));
+      bottom: max(10px, env(safe-area-inset-bottom));
+      gap: 6px;
+    }
+    button {
+      padding: 10px 11px;
+      font-size: 10px;
+    }
+    #display, #modeBtn {
+      max-width: 58px;
+      overflow: hidden;
+    }
+    #mute {
+      width: 38px;
+      overflow: hidden;
+      white-space: nowrap;
+      color: transparent;
+      position: relative;
+    }
+    #mute::after {
+      content: "♪";
+      color: var(--text);
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+    }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="scanline"></div>
+<div class="vignette"></div>
+
+<div class="hud">
+  <div class="card">
+    <div class="brand">LOCK MEMORY</div>
+    <div class="stage">STAGE <span id="stage">1</span></div>
+    <div class="stats" style="margin-top: 12px;">
+      <div class="stat"><div class="label">Tier</div><div class="value" id="tier">BR</div></div>
+      <div class="stat"><div class="label">Chance</div><div class="value" id="chance">3</div></div>
+      <div class="stat"><div class="label">Score</div><div class="value" id="score">0</div></div>
+      <div class="stat"><div class="label">Combo</div><div class="value" id="combo">0</div></div>
+      <div class="stat"><div class="label">Dots</div><div class="value" id="dots">4</div></div>
+      <div class="stat"><div class="label">Best</div><div class="value" id="best">0</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="center-ui">
+  <div class="status" id="status">READY</div>
+  <div class="rule" id="rule">No repeat · Android skip rule</div>
+  <div class="countdown" id="countdown">3</div>
+</div>
+
+<div class="bottom">
+  <button id="display">DOT</button>
+  <button id="modeBtn">DOUBT</button>
+  <button id="restart">RESTART</button>
+  <button id="mute">SOUND</button>
+</div>
+
+<div class="overlay" id="overlay">
+  <div class="menu">
+    <h1>LOCK<br/>MEMORY</h1>
+    <p class="subtitle">
+      이제 패턴은 실제 안드로이드 락 규칙으로 생성됩니다.
+      중복 점은 금지되고, 중간 점을 건너뛰는 이동은 해당 점이 이미 사용된 경우에만 허용됩니다.
+      DOT 디스플레이, 입력 제한시간이 있는 DOUBT 모드, 조용히 연습하는 ZEN 모드를 지원합니다.
+    </p>
+    <button class="primary" id="start">START GAME</button>
+    <div class="tips">
+      <div>PC: 마우스로 드래그 · 모바일: 손가락으로 드래그</div>
+      <div>실제 패턴락처럼 1→3을 긋고 2가 비어 있으면 2가 먼저 자동 입력됩니다</div>
+      <div>DOT: 숫자 없는 미니멀 표시 · 123: 숫자 표시</div>
+      <div>DOUBT: 입력 제한시간 · ZEN: 실패해도 같은 패턴 무한 연습</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const canvas = document.getElementById("game");
+  const ctx = canvas.getContext("2d");
+
+  const ui = {
+    stage: document.getElementById("stage"),
+    score: document.getElementById("score"),
+    combo: document.getElementById("combo"),
+    dots: document.getElementById("dots"),
+    chance: document.getElementById("chance"),
+    tier: document.getElementById("tier"),
+    best: document.getElementById("best"),
+    status: document.getElementById("status"),
+    rule: document.getElementById("rule"),
+    countdown: document.getElementById("countdown"),
+    overlay: document.getElementById("overlay"),
+    start: document.getElementById("start"),
+    restart: document.getElementById("restart"),
+    mute: document.getElementById("mute"),
+    display: document.getElementById("display"),
+    modeBtn: document.getElementById("modeBtn")
+  };
+
+  const coord = {
+    1:[0,0], 2:[1,0], 3:[2,0],
+    4:[0,1], 5:[1,1], 6:[2,1],
+    7:[0,2], 8:[1,2], 9:[2,2]
+  };
+
+  const idFromCoord = new Map(Object.entries(coord).map(([id, p]) => [p.join(","), Number(id)]));
+
+  let W = 0, H = 0, DPR = 1;
+  let nodes = [], particles = [];
+  let demoTrail = [], inputTrail = [];
+  let currentPattern = [], playerPattern = [];
+  let currentProfile = "BRONZE";
+  let currentDifficulty = 0;
+  let currentTier = "BRONZE";
+  let patternHistory = [];
+  const HISTORY_LIMIT = 40;
+  let stage = 1, score = 0, combo = 0;
+  let remainingChance = 3;
+  let best = Number(localStorage.getItem("pattern_best_v2") || 0);
+  let mode = "menu";
+  let playMode = "DOUBT"; // DOUBT: time attack, ZEN: no game over pressure
+  let displayMode = "DOT"; // DOT or NUMBER
+  let inputLimit = 0;
+  let inputRemain = 0;
+  let pointerDown = false;
+  let mouse = { x: 0, y: 0 };
+  let muted = false, audioCtx = null;
+  let lastTime = performance.now(), flash = 0, wrongFlash = 0;
+
+  ui.best.textContent = best;
+
+  function gcd(a, b) {
+    a = Math.abs(a); b = Math.abs(b);
+    while (b) [a, b] = [b, a % b];
+    return a || 1;
+  }
+
+  function normalizedSlope(a, b) {
+    const [x1, y1] = coord[a];
+    const [x2, y2] = coord[b];
+    let dx = x2 - x1, dy = y2 - y1;
+    const g = gcd(dx, dy);
+    dx /= g; dy /= g;
+    return `${dx},${dy}`;
+  }
+
+  function blockerBetween(a, b) {
+    const [x1, y1] = coord[a];
+    const [x2, y2] = coord[b];
+    const dx = x2 - x1, dy = y2 - y1;
+    const g = gcd(dx, dy);
+    if (g <= 1) return null;
+    const sx = dx / g, sy = dy / g;
+    const blockers = [];
+    for (let i = 1; i < g; i++) {
+      const id = idFromCoord.get(`${x1 + sx * i},${y1 + sy * i}`);
+      if (id) blockers.push(id);
+    }
+    return blockers.length ? blockers : null;
+  }
+
+  function isLegalMove(a, b, used) {
+    if (a === b || used.has(b)) return false;
+    const blockers = blockerBetween(a, b);
+    if (!blockers) return true;
+    return blockers.every(id => used.has(id));
+  }
+
+  function legalNexts(last, used) {
+    const arr = [];
+    for (let b = 1; b <= 9; b++) {
+      if (!used.has(b) && (!last || isLegalMove(last, b, used))) arr.push(b);
+    }
+    return shuffle(arr);
+  }
+
+  function shuffle(arr) {
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function uniqueSlopeCount(pattern) {
+    const s = new Set();
+    for (let i = 1; i < pattern.length; i++) s.add(normalizedSlope(pattern[i-1], pattern[i]));
+    return s.size;
+  }
+
+  function generateLegalPattern(length, preferUniqueSlopes = false) {
+    let bestCandidate = null;
+    let bestScore = -999;
+
+    for (let attempt = 0; attempt < 220; attempt++) {
+      const start = 1 + Math.floor(Math.random() * 9);
+      const used = new Set([start]);
+      const pattern = [start];
+      const slopes = new Set();
+
+      function dfs() {
+        if (pattern.length === length) return true;
+        let nexts = legalNexts(pattern[pattern.length - 1], used);
+
+        if (preferUniqueSlopes) {
+          nexts.sort((a, b) => {
+            const sa = normalizedSlope(pattern[pattern.length - 1], a);
+            const sb = normalizedSlope(pattern[pattern.length - 1], b);
+            return Number(slopes.has(sa)) - Number(slopes.has(sb)) || Math.random() - .5;
+          });
+        }
+
+        for (const n of nexts) {
+          const sl = normalizedSlope(pattern[pattern.length - 1], n);
+          used.add(n); pattern.push(n);
+          const had = slopes.has(sl);
+          slopes.add(sl);
+          if (dfs()) return true;
+          if (!had) slopes.delete(sl);
+          pattern.pop(); used.delete(n);
+        }
+        return false;
+      }
+
+      if (dfs()) {
+        const sc = uniqueSlopeCount(pattern) * 10 + pattern.length + (new Set(pattern).size);
+        if (sc > bestScore) {
+          bestScore = sc;
+          bestCandidate = pattern.slice();
+        }
+        if (!preferUniqueSlopes || uniqueSlopeCount(pattern) >= Math.min(8, length - 1)) return pattern;
+      }
+    }
+    return bestCandidate || [1,2,3,6];
+  }
+
+  function generateMaxComplexity3x3() {
+    // 3x3에서 9개 점 전체, 8개 선분, 8가지 기울기 전부 중복 없이 쓰는 패턴을 백트래킹으로 탐색.
+    const answers = [];
+    const starts = shuffle([1,2,3,4,5,6,7,8,9]);
+
+    function dfs(pattern, used, slopes) {
+      if (answers.length >= 32) return;
+      if (pattern.length === 9) {
+        if (slopes.size === 8) answers.push(pattern.slice());
+        return;
+      }
+      const last = pattern[pattern.length - 1];
+      let nexts = legalNexts(last, used);
+      nexts.sort((a, b) => {
+        const sa = normalizedSlope(last, a), sb = normalizedSlope(last, b);
+        return Number(slopes.has(sa)) - Number(slopes.has(sb)) || Math.random() - .5;
+      });
+
+      for (const n of nexts) {
+        const sl = normalizedSlope(last, n);
+        if (slopes.has(sl)) continue;
+        used.add(n); slopes.add(sl); pattern.push(n);
+        dfs(pattern, used, slopes);
+        pattern.pop(); slopes.delete(sl); used.delete(n);
+      }
+    }
+
+    for (const s of starts) {
+      dfs([s], new Set([s]), new Set());
+      if (answers.length) break;
+    }
+
+    if (answers.length) return answers[Math.floor(Math.random() * answers.length)];
+
+    // 혹시 브라우저/환경에서 탐색이 실패하면 고유 기울기 우선으로 폴백
+    return generateLegalPattern(9, true);
+  }
+
+
+  function segmentIntersect(a, b, c, d) {
+    const A = coord[a], B = coord[b], C = coord[c], D = coord[d];
+    function orient(p, q, r) {
+      return (q[0]-p[0])*(r[1]-p[1]) - (q[1]-p[1])*(r[0]-p[0]);
+    }
+    if (a === c || a === d || b === c || b === d) return false;
+    const o1 = orient(A, B, C), o2 = orient(A, B, D);
+    const o3 = orient(C, D, A), o4 = orient(C, D, B);
+    return (o1 * o2 < 0) && (o3 * o4 < 0);
+  }
+
+  function angleTurnScore(prev, cur, next) {
+    const [x1,y1] = coord[prev], [x2,y2] = coord[cur], [x3,y3] = coord[next];
+    const ax = x2-x1, ay = y2-y1, bx = x3-x2, by = y3-y2;
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (!la || !lb) return 0;
+    const dot = Math.max(-1, Math.min(1, (ax*bx + ay*by)/(la*lb)));
+    const deg = Math.acos(dot) * 180 / Math.PI;
+    if (deg < 20) return 0;
+    if (deg < 70) return 3;
+    if (deg < 120) return 6;
+    return 9;
+  }
+
+  function patternMetrics(pattern) {
+    const slopes = new Set();
+    let longMoves = 0, knightMoves = 0, turns = 0, crossings = 0, backtrack = 0;
+    let centerEarly = pattern.indexOf(5) >= 0 && pattern.indexOf(5) <= 2 ? 1 : 0;
+
+    for (let i = 1; i < pattern.length; i++) {
+      const a = pattern[i-1], b = pattern[i];
+      slopes.add(normalizedSlope(a, b));
+      const [x1,y1] = coord[a], [x2,y2] = coord[b];
+      const dx = Math.abs(x2-x1), dy = Math.abs(y2-y1);
+      const d = Math.hypot(dx, dy);
+      if (d >= 2) longMoves++;
+      if ((dx === 1 && dy === 2) || (dx === 2 && dy === 1)) knightMoves++;
+    }
+
+    for (let i = 2; i < pattern.length; i++) {
+      turns += angleTurnScore(pattern[i-2], pattern[i-1], pattern[i]);
+      const s1 = normalizedSlope(pattern[i-2], pattern[i-1]).split(",").map(Number);
+      const s2 = normalizedSlope(pattern[i-1], pattern[i]).split(",").map(Number);
+      if (s1[0] === -s2[0] && s1[1] === -s2[1]) backtrack++;
+    }
+
+    for (let i = 1; i < pattern.length; i++) {
+      for (let j = i + 2; j < pattern.length; j++) {
+        if (segmentIntersect(pattern[i-1], pattern[i], pattern[j-1], pattern[j])) crossings++;
+      }
+    }
+
+    return { length: pattern.length, slopes: slopes.size, longMoves, knightMoves, turns, crossings, centerEarly, backtrack };
+  }
+
+  function difficultyScore(pattern) {
+    const m = patternMetrics(pattern);
+    let score = 0;
+    score += m.length * 6;
+    score += m.slopes * 7;
+    score += m.longMoves * 6;
+    score += m.knightMoves * 5;
+    score += m.turns;
+    score += m.crossings * 12;
+    score += m.backtrack * 5;
+    score -= m.centerEarly * 6;
+    return Math.max(1, Math.min(100, Math.round(score)));
+  }
+
+  const TIERS = [
+    { name: "BRONZE",  short: "BR", min:  1, max: 25, stageFrom: 1,  color: "#b8875f" },
+    { name: "SILVER",  short: "SV", min: 26, max: 45, stageFrom: 6,  color: "#b8c7d6" },
+    { name: "GOLD",    short: "GD", min: 46, max: 65, stageFrom: 11, color: "#ffd166" },
+    { name: "DIAMOND", short: "DM", min: 66, max: 82, stageFrom: 18, color: "#3df7ff" },
+    { name: "MASTER",  short: "MS", min: 83, max:100, stageFrom: 26, color: "#ff4cfa" }
+  ];
+
+  function tierForStage() {
+    let selected = TIERS[0];
+    for (const t of TIERS) if (stage >= t.stageFrom) selected = t;
+    return selected;
+  }
+
+
+  function patternKey(pattern) {
+    return pattern.join("-");
+  }
+
+  function reversePatternKey(pattern) {
+    return pattern.slice().reverse().join("-");
+  }
+
+  function patternSimilarity(a, b) {
+    if (!a || !b || !a.length || !b.length) return 0;
+    const maxLen = Math.max(a.length, b.length);
+    let samePosition = 0;
+    for (let i = 0; i < Math.min(a.length, b.length); i++) {
+      if (a[i] === b[i]) samePosition++;
+    }
+
+    const edgesA = new Set();
+    for (let i = 1; i < a.length; i++) edgesA.add(`${a[i-1]}-${a[i]}`);
+    let sameEdges = 0;
+    for (let i = 1; i < b.length; i++) {
+      if (edgesA.has(`${b[i-1]}-${b[i]}`)) sameEdges++;
+    }
+
+    return (samePosition / maxLen) * 0.58 + (sameEdges / Math.max(1, maxLen - 1)) * 0.42;
+  }
+
+  function isRecentlyUsedPattern(candidate) {
+    const key = patternKey(candidate);
+    const revKey = reversePatternKey(candidate);
+
+    for (const old of patternHistory) {
+      if (old.key === key || old.key === revKey) return true;
+      if (old.len === candidate.length && patternSimilarity(old.pattern, candidate) >= 0.72) return true;
+    }
+    return false;
+  }
+
+  function rememberPattern(pattern) {
+    patternHistory.push({
+      key: patternKey(pattern),
+      pattern: pattern.slice(),
+      len: pattern.length,
+      tier: currentTier,
+      difficulty: currentDifficulty
+    });
+    if (patternHistory.length > HISTORY_LIMIT) {
+      patternHistory.splice(0, patternHistory.length - HISTORY_LIMIT);
+    }
+  }
+
+  function generateTierPattern(tier) {
+    let bestCandidate = null, bestGap = Infinity, bestNovelty = -Infinity;
+    const minLen = tier.name === "BRONZE" ? 4 : tier.name === "SILVER" ? 5 : tier.name === "GOLD" ? 6 : 8;
+    const maxLen = tier.name === "BRONZE" ? 5 : tier.name === "SILVER" ? 7 : 9;
+    const attempts = tier.name === "MASTER" ? 1400 : 760;
+
+    for (let i = 0; i < attempts; i++) {
+      let candidate;
+      if (tier.name === "MASTER" && i % 3 === 0) {
+        candidate = generateMaxComplexity3x3();
+      } else {
+        const len = minLen + Math.floor(Math.random() * (maxLen - minLen + 1));
+        candidate = generateLegalPattern(len, tier.name !== "BRONZE");
+      }
+
+      const sc = difficultyScore(candidate);
+      const gap = sc < tier.min ? tier.min - sc : sc > tier.max ? sc - tier.max : 0;
+      const duplicate = isRecentlyUsedPattern(candidate);
+
+      // 완전히 같은 패턴/역순/매우 유사한 패턴은 우선 제외한다.
+      if (!duplicate && gap === 0) {
+        currentDifficulty = sc;
+        return candidate;
+      }
+
+      // 모든 후보가 실패할 경우를 대비한 폴백 후보.
+      // 점수대와 가깝고, 최근 패턴과 덜 닮은 후보를 선택한다.
+      let maxSimilarity = 0;
+      for (const old of patternHistory) {
+        if (old.len === candidate.length) {
+          maxSimilarity = Math.max(maxSimilarity, patternSimilarity(old.pattern, candidate));
+        }
+      }
+      const novelty = 1 - maxSimilarity;
+      const rank = novelty * 100 - gap * 3 - (duplicate ? 80 : 0);
+
+      if (rank > bestNovelty || (rank === bestNovelty && gap < bestGap)) {
+        bestNovelty = rank;
+        bestGap = gap;
+        bestCandidate = candidate;
+        currentDifficulty = sc;
+      }
+    }
+
+    return bestCandidate || generateLegalPattern(minLen, false);
+  }
+
+  function patternProfile() {
+    const tier = tierForStage();
+    currentTier = tier.name;
+    return { name: tier.name, len: tier.name === "BRONZE" ? 4 : tier.name === "SILVER" ? 6 : tier.name === "GOLD" ? 8 : 9 };
+  }
+
+  function makePatternForStage() {
+    const tier = tierForStage();
+    currentTier = tier.name;
+    currentProfile = tier.name;
+    const p = generateTierPattern(tier);
+    currentDifficulty = difficultyScore(p);
+    return p;
+  }
+
+  function resize() {
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.floor(window.innerWidth); H = Math.floor(window.innerHeight);
+    canvas.width = Math.floor(W * DPR); canvas.height = Math.floor(H * DPR);
+    canvas.style.width = W + "px"; canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    buildNodes();
+  }
+
+  function buildNodes() {
+    const size = Math.min(W, H) * (W < 600 ? 0.62 : 0.54);
+    const gap = size / 2;
+    const cx = W / 2, cy = H * (W < 600 ? 0.56 : 0.55);
+    const startX = cx - gap, startY = cy - gap;
+    const r = Math.max(20, Math.min(36, size * 0.085));
+    nodes = [];
+    let id = 1;
+    for (let row = 0; row < 3; row++) {
+      for (let col = 0; col < 3; col++) nodes.push({ id:id++, x:startX+col*gap, y:startY+row*gap, r, glow:0, hit:0, fail:0 });
+    }
+  }
+
+  function setStatus(text) { ui.status.textContent = text; }
+  function syncUI() {
+    ui.stage.textContent = stage;
+    ui.score.textContent = score;
+    ui.combo.textContent = combo;
+    ui.dots.textContent = currentPattern.length || patternProfile().len;
+    ui.chance.textContent = remainingChance;
+    ui.tier.textContent = TIERS.find(t => t.name === currentTier)?.short || "BR";
+    ui.tier.style.color = TIERS.find(t => t.name === currentTier)?.color || "#d9fbff";
+    ui.best.textContent = best;
+    ui.rule.textContent = `${playMode} · ${currentTier} · difficulty ${currentDifficulty}/100 · unique history ${patternHistory.length}`;
+  }
+
+  function getNode(id) { return nodes[id - 1]; }
+  function dist(a,b,c,d) { return Math.hypot(a-c, b-d); }
+  function nodeAt(x,y) { return nodes.find(n => dist(x,y,n.x,n.y) < n.r * 1.45); }
+
+  function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === "suspended") audioCtx.resume();
+  }
+
+  function tone(freq=440, dur=.08, type="sine", gain=.055) {
+    if (muted || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(Math.max(40, freq), t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.connect(g); g.connect(audioCtx.destination);
+    osc.start(t); osc.stop(t + dur + 0.02);
+  }
+
+  function sfx(name, n=1) {
+    if (name === "demo") tone(260+n*38, .075, "triangle", .05);
+    if (name === "input") tone(420+n*42, .055, "sine", .045);
+    if (name === "auto") tone(250+n*30, .05, "triangle", .035);
+    if (name === "success") { tone(520,.07,"triangle",.055); setTimeout(()=>tone(720,.09,"triangle",.055),65); setTimeout(()=>tone(980,.12,"triangle",.05),130); }
+    if (name === "fail") { tone(140,.18,"sawtooth",.035); setTimeout(()=>tone(90,.2,"sawtooth",.03),80); }
+  }
+
+  function addBurst(x,y,color="cyan",amount=20) {
+    for (let i=0;i<amount;i++) {
+      const a = Math.random()*Math.PI*2, sp = 80+Math.random()*300;
+      particles.push({ x,y, vx:Math.cos(a)*sp, vy:Math.sin(a)*sp, life:.45+Math.random()*.5, max:.85, size:1+Math.random()*3, color });
+    }
+  }
+
+  async function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
+  function demoSpeed() { return Math.max(165, 570 - stage * 24); }
+
+  function stageInputLimit() {
+    if (playMode === "ZEN") return 0;
+    return Math.max(4.2, 9.5 - stage * 0.18 + currentPattern.length * 0.18);
+  }
+
+  function startGame() {
+    initAudio();
+    ui.overlay.classList.add("hidden");
+    ui.modeBtn.textContent = playMode;
+    stage = 1; score = 0; combo = 0;
+    remainingChance = 3;
+    patternHistory = [];
+    flash = 0; wrongFlash = 0;
+    nextStage();
+  }
+
+  function nextStage() {
+    mode = "demo";
+    remainingChance = 3;
+    playerPattern = []; inputTrail = []; demoTrail = [];
+    currentPattern = makePatternForStage();
+    rememberPattern(currentPattern);
+    syncUI();
+    setStatus("WATCH CAREFULLY");
+    playDemo();
+  }
+
+  async function playDemo() {
+    await wait(430);
+    const speed = demoSpeed();
+
+    for (let i = 0; i < currentPattern.length; i++) {
+      if (mode !== "demo") return;
+      const n = getNode(currentPattern[i]);
+      n.glow = 1; n.hit = 1;
+      demoTrail = currentPattern.slice(0, i + 1);
+      sfx("demo", currentPattern[i]);
+      addBurst(n.x, n.y, "cyan", 10);
+      await wait(speed);
+    }
+
+    demoTrail = [];
+    setStatus("MEMORY LOCK");
+    await countdown();
+    mode = "input";
+    inputTrail = []; playerPattern = [];
+    inputLimit = stageInputLimit();
+    inputRemain = inputLimit;
+    setStatus(playMode === "ZEN" ? "INPUT NOW" : `INPUT · ${inputRemain.toFixed(1)}s`);
+  }
+
+  async function countdown() {
+    const cd = ui.countdown;
+    for (const v of ["3","2","1"]) {
+      cd.textContent = v; cd.classList.add("show");
+      tone(v==="3"?300:v==="2"?380:480,.08,"triangle",.04);
+      await wait(650);
+      cd.classList.remove("show");
+      await wait(350);
+    }
+  }
+
+  function pushPlayerNode(id, auto=false) {
+    if (mode !== "input") return;
+    if (playerPattern.includes(id)) return;
+
+    const expected = currentPattern[playerPattern.length];
+    const n = getNode(id);
+
+    playerPattern.push(id);
+    inputTrail.push(id);
+    n.hit = 1; n.glow = 1;
+    addBurst(n.x, n.y, auto ? "cyan" : "green", auto ? 9 : 16);
+    sfx(auto ? "auto" : "input", id);
+
+    if (id !== expected) {
+      fail(n);
+      return;
+    }
+
+    if (playerPattern.length === currentPattern.length) success();
+  }
+
+  function registerNode(node) {
+    if (mode !== "input") return;
+    if (playerPattern[playerPattern.length - 1] === node.id) return;
+    if (playerPattern.includes(node.id)) return;
+
+    const last = playerPattern[playerPattern.length - 1];
+
+    // 실제 안드로이드 패턴락의 자동 중간점 입력 규칙:
+    // 1→3을 긋고 2가 아직 비어 있으면, 2가 먼저 입력된 뒤 3이 입력된다.
+    if (last) {
+      const blockers = blockerBetween(last, node.id);
+      if (blockers) {
+        for (const b of blockers) {
+          if (!playerPattern.includes(b)) {
+            pushPlayerNode(b, true);
+            if (mode !== "input") return;
+          }
+        }
+      }
+    }
+
+    pushPlayerNode(node.id, false);
+  }
+
+  function success() {
+    mode = "success";
+    combo++;
+    const complexityBonus = currentDifficulty * 8 + uniqueSlopeCount(currentPattern) * 35;
+    const gained = 100 * stage + combo * 25 + currentPattern.length * 40 + complexityBonus;
+    score += gained;
+    best = Math.max(best, score);
+    localStorage.setItem("pattern_best_v2", String(best));
+    flash = 1;
+    setStatus("ACCESS GRANTED +" + gained);
+    syncUI();
+    sfx("success");
+    for (const id of currentPattern) {
+      const n = getNode(id);
+      addBurst(n.x, n.y, "green", 12);
+    }
+    setTimeout(() => { stage++; syncUI(); nextStage(); }, 950);
+  }
+
+  function retrySameStage() {
+    mode = "demo";
+    playerPattern = [];
+    inputTrail = [];
+    demoTrail = [];
+    setStatus(`RETRY · ${remainingChance} CHANCE LEFT`);
+    syncUI();
+    setTimeout(() => playDemo(), 760);
+  }
+
+  function fail(node) {
+    mode = "fail";
+    if (playMode === "ZEN") {
+      wrongFlash = 1;
+      setStatus("ZEN RETRY");
+      ui.status.classList.add("shake");
+      setTimeout(() => ui.status.classList.remove("shake"), 300);
+      sfx("fail");
+      node.fail = 1;
+      addBurst(node.x, node.y, "red", 26);
+      syncUI();
+      setTimeout(() => retrySameStage(), 900);
+      return;
+    }
+    remainingChance--;
+    combo = 0;
+    wrongFlash = 1;
+    setStatus(remainingChance > 0 ? `ACCESS DENIED · RETRY ${remainingChance}/3` : "ACCESS DENIED");
+    ui.status.classList.add("shake");
+    setTimeout(() => ui.status.classList.remove("shake"), 300);
+    sfx("fail");
+    node.fail = 1;
+    addBurst(node.x, node.y, "red", 34);
+    syncUI();
+
+    if (remainingChance > 0) {
+      setTimeout(() => retrySameStage(), 950);
+      return;
+    }
+
+    setTimeout(() => {
+      ui.overlay.classList.remove("hidden");
+      ui.overlay.querySelector("h1").innerHTML = "SYSTEM<br/>LOCKED";
+      ui.overlay.querySelector(".subtitle").innerHTML =
+        `Stage ${stage}에서 3번 실패했습니다.<br/>정답 패턴: ${currentPattern.join(" → ")}<br/>Score ${score} · Best ${best}`;
+      ui.start.textContent = "RETRY";
+    }, 850);
+  }
+
+  function pointerPos(e) {
+    const rect = canvas.getBoundingClientRect();
+    const p = e.touches ? e.touches[0] : e;
+    return { x:p.clientX-rect.left, y:p.clientY-rect.top };
+  }
+  function onDown(e) {
+    if (mode !== "input") return;
+    e.preventDefault(); initAudio(); pointerDown = true;
+    const p = pointerPos(e); mouse = p;
+    const n = nodeAt(p.x,p.y); if (n) registerNode(n);
+  }
+  function onMove(e) {
+    const p = pointerPos(e); mouse = p;
+    if (!pointerDown || mode !== "input") return;
+    e.preventDefault();
+    const n = nodeAt(p.x,p.y); if (n) registerNode(n);
+  }
+  function onUp() { pointerDown = false; }
+
+  function drawGridBackground(t) {
+    ctx.save(); ctx.globalAlpha=.22; ctx.strokeStyle="rgba(61,247,255,.055)"; ctx.lineWidth=1;
+    const step=42, off=(t*12)%step;
+    for(let x=-step;x<W+step;x+=step){ ctx.beginPath(); ctx.moveTo(x+off,0); ctx.lineTo(x+off,H); ctx.stroke(); }
+    for(let y=-step;y<H+step;y+=step){ ctx.beginPath(); ctx.moveTo(0,y+off); ctx.lineTo(W,y+off); ctx.stroke(); }
+    ctx.restore();
+  }
+
+  function drawLine(a,b,color,width=12,alpha=1) {
+    ctx.save(); ctx.lineCap="round"; ctx.lineJoin="round"; ctx.shadowBlur=28; ctx.shadowColor=color; ctx.strokeStyle=color;
+    ctx.globalAlpha=alpha*.18; ctx.lineWidth=width*2.4; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.globalAlpha=alpha; ctx.lineWidth=width; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.globalAlpha=.95; ctx.strokeStyle="rgba(255,255,255,.7)"; ctx.lineWidth=Math.max(2,width*.18);
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawTrail(list,color,alpha=1,livePointer=false) {
+    if (!list.length) return;
+    for(let i=1;i<list.length;i++) drawLine(getNode(list[i-1]), getNode(list[i]), color, 11, alpha);
+    if (livePointer && pointerDown && list.length > 0 && mode === "input") drawLine(getNode(list[list.length-1]), mouse, color, 8, .42);
+  }
+
+  function drawNodes(dt,time) {
+    for(const n of nodes) {
+      n.glow=Math.max(0,n.glow-dt*2.5); n.hit=Math.max(0,n.hit-dt*3.2); n.fail=Math.max(0,n.fail-dt*2.6);
+      const pulse=.5+Math.sin(time*2.2+n.id)*.5, active=n.glow, fail=n.fail, radius=n.r*(1+n.hit*.24);
+      ctx.save(); ctx.translate(n.x,n.y);
+      ctx.globalAlpha=.18+pulse*.04+active*.55+fail*.5;
+      ctx.fillStyle=fail?"rgba(255,76,106,.18)":"rgba(61,247,255,.12)";
+      ctx.shadowBlur=42+active*48+fail*60; ctx.shadowColor=fail?"#ff4c6a":"#3df7ff";
+      ctx.beginPath(); ctx.arc(0,0,radius*2.3,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1; ctx.lineWidth=2; ctx.strokeStyle=fail?"rgba(255,76,106,.9)":"rgba(61,247,255,.55)";
+      ctx.fillStyle=fail?"rgba(255,76,106,.22)":"rgba(3,16,22,.82)";
+      ctx.shadowBlur=22+active*42; ctx.beginPath(); ctx.arc(0,0,radius,0,Math.PI*2); ctx.fill(); ctx.stroke();
+      if (displayMode === "NUMBER") {
+        ctx.fillStyle=fail?"#ff9aac":active>.15?"#eaffff":"#a4faff";
+        ctx.shadowBlur=20; ctx.font=`900 ${Math.max(13,n.r*.55)}px Inter, system-ui`; ctx.textAlign="center"; ctx.textBaseline="middle";
+        ctx.globalAlpha=.34+active*.66; ctx.fillText(n.id,0,1);
+      } else {
+        ctx.globalAlpha = .55 + active * .45;
+        ctx.fillStyle = fail ? "#ff9aac" : active > .15 ? "#ffffff" : "#a4faff";
+        ctx.shadowBlur = 18 + active * 20;
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(3.5, n.r * .13), 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.globalAlpha = active > .1 ? .95 : .22;
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = fail ? "rgba(255,76,106,.8)" : "rgba(255,255,255,.75)";
+        ctx.beginPath();
+        ctx.arc(0, 0, radius * .72, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawParticles(dt) {
+    for(let i=particles.length-1;i>=0;i--) {
+      const p=particles[i]; p.life-=dt;
+      if(p.life<=0){ particles.splice(i,1); continue; }
+      p.x+=p.vx*dt; p.y+=p.vy*dt; p.vx*=Math.pow(.05,dt); p.vy*=Math.pow(.05,dt);
+      const a=Math.max(0,p.life/p.max);
+      ctx.save(); ctx.globalAlpha=a;
+      ctx.fillStyle=p.color==="red"?"#ff4c6a":p.color==="green"?"#8cff7a":"#3df7ff";
+      ctx.shadowBlur=16; ctx.shadowColor=ctx.fillStyle; ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+      ctx.restore();
+    }
+  }
+
+
+  function drawTimeBar() {
+    if (mode !== "input" || playMode === "ZEN" || inputLimit <= 0) return;
+    const pct = Math.max(0, inputRemain / inputLimit);
+    const barW = Math.min(420, W * .62);
+    const x = W / 2 - barW / 2;
+    const y = H * (W < 600 ? .19 : .17);
+    ctx.save();
+    ctx.globalAlpha = .9;
+    ctx.fillStyle = "rgba(61,247,255,.08)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW, 5, 99);
+    ctx.fill();
+
+    ctx.shadowBlur = 18;
+    ctx.shadowColor = pct < .28 ? "#ff4c6a" : "#3df7ff";
+    ctx.fillStyle = pct < .28 ? "rgba(255,76,106,.86)" : "rgba(61,247,255,.82)";
+    ctx.beginPath();
+    ctx.roundRect(x, y, barW * pct, 5, 99);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  function drawWatermark() {
+    ctx.save(); ctx.globalAlpha=.035; ctx.fillStyle="#eaffff";
+    ctx.font=`950 ${Math.min(120,W*.12)}px Inter, system-ui`; ctx.textAlign="center"; ctx.textBaseline="middle";
+    ctx.fillText(currentProfile || "PATTERN", W/2, H*.5);
+    ctx.restore();
+  }
+
+  function loop(now) {
+    const dt=Math.min(.033,(now-lastTime)/1000), t=now/1000; lastTime=now;
+    if (mode === "input" && playMode !== "ZEN" && inputLimit > 0) {
+      inputRemain -= dt;
+      if (inputRemain <= 0) {
+        inputRemain = 0;
+        const last = inputTrail.length ? getNode(inputTrail[inputTrail.length - 1]) : getNode(currentPattern[0]);
+        fail(last);
+      } else {
+        setStatus(`INPUT · ${inputRemain.toFixed(1)}s`);
+      }
+    }
+    flash=Math.max(0,flash-dt*1.8); wrongFlash=Math.max(0,wrongFlash-dt*2.2);
+    ctx.clearRect(0,0,W,H);
+    drawGridBackground(t); drawWatermark();
+    if(flash>0){ ctx.fillStyle=`rgba(140,255,122,${flash*.08})`; ctx.fillRect(0,0,W,H); }
+    if(wrongFlash>0){ ctx.fillStyle=`rgba(255,76,106,${wrongFlash*.11})`; ctx.fillRect(0,0,W,H); }
+    drawTrail(demoTrail, currentProfile==="MAX COMPLEXITY" ? "#ffd166" : "#3df7ff", 1, false);
+    drawTrail(inputTrail, mode==="fail"?"#ff4c6a":"#8cff7a", 1, true);
+    drawNodes(dt,t); drawTimeBar(); drawParticles(dt);
+    requestAnimationFrame(loop);
+  }
+
+  window.addEventListener("resize", resize);
+  canvas.addEventListener("mousedown", onDown);
+  canvas.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+  canvas.addEventListener("touchstart", onDown, { passive:false });
+  canvas.addEventListener("touchmove", onMove, { passive:false });
+  window.addEventListener("touchend", onUp);
+
+  ui.start.addEventListener("click", startGame);
+  ui.restart.addEventListener("click", () => {
+    ui.overlay.classList.remove("hidden");
+    ui.overlay.querySelector("h1").innerHTML = "LOCK<br/>MEMORY";
+    ui.overlay.querySelector(".subtitle").innerHTML =
+      "패턴은 실제 안드로이드 락 규칙으로 생성되며, Bronze/Silver/Gold/Diamond/Master 난이도 그룹에 맞춰 점수 기반으로 선별됩니다.";
+    ui.start.textContent = "START GAME";
+    remainingChance = 3;
+    syncUI();
+    mode = "menu"; inputTrail = []; demoTrail = [];
+  });
+  ui.display.addEventListener("click", () => {
+    displayMode = displayMode === "DOT" ? "NUMBER" : "DOT";
+    ui.display.textContent = displayMode === "DOT" ? "DOT" : "123";
+  });
+
+  ui.modeBtn.addEventListener("click", () => {
+    playMode = playMode === "DOUBT" ? "ZEN" : "DOUBT";
+    ui.modeBtn.textContent = playMode;
+    setStatus(playMode === "ZEN" ? "ZEN MODE" : "DOUBT MODE");
+    syncUI();
+  });
+
+  ui.mute.addEventListener("click", () => {
+    muted = !muted;
+    ui.mute.textContent = muted ? "SOUND OFF" : "SOUND";
+  });
+
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
