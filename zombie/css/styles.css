@@ -1,0 +1,332 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  color-scheme: dark;
+  --panel-bg: rgba(7, 14, 18, 0.86);
+  --panel-border: rgba(159, 241, 180, 0.2);
+  --panel-shadow: 0 24px 90px rgba(0, 0, 0, 0.48);
+  --text-main: #f1f5dd;
+  --text-soft: #c9d8ca;
+  --accent-lime: #b1ff6e;
+  --accent-cyan: #77f3ff;
+  --accent-amber: #ffb95f;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at top, rgba(42, 66, 57, 0.28), transparent 38%),
+    linear-gradient(180deg, #091219 0%, #05090d 42%, #020406 100%);
+  font-family: "Trebuchet MS", "Gill Sans", sans-serif;
+  color: var(--text-main);
+}
+
+body {
+  position: relative;
+}
+
+#game-shell {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+#game-shell::before,
+#game-shell::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+#game-shell::before {
+  background:
+    radial-gradient(circle at 20% 18%, rgba(255, 188, 84, 0.08), transparent 21%),
+    radial-gradient(circle at 76% 8%, rgba(125, 255, 180, 0.06), transparent 24%);
+}
+
+#game-shell::after {
+  background:
+    radial-gradient(circle at center, transparent 44%, rgba(0, 0, 0, 0.12) 74%, rgba(0, 0, 0, 0.42) 100%);
+}
+
+#game-container {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+canvas {
+  display: block;
+}
+
+.hud-card {
+  position: absolute;
+  z-index: 4;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(14, 24, 30, 0.94), var(--panel-bg));
+  border: 1px solid var(--panel-border);
+  box-shadow: var(--panel-shadow);
+}
+
+.hero-card {
+  top: 28px;
+  left: 28px;
+  width: min(430px, calc(100vw - 56px));
+  padding: 24px 26px 20px;
+  border-radius: 28px;
+}
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--accent-cyan);
+}
+
+.hero-card h1 {
+  margin: 0;
+  font-family: "Impact", "Arial Narrow Bold", sans-serif;
+  font-size: clamp(3rem, 6vw, 4.7rem);
+  line-height: 0.88;
+  letter-spacing: 0.06em;
+  color: #f8ffea;
+}
+
+.lead {
+  margin: 14px 0 0;
+  font-size: 0.96rem;
+  line-height: 1.6;
+  color: var(--text-soft);
+}
+
+.boot-line {
+  margin: 14px 0 0;
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-lime);
+}
+
+.stats-card {
+  top: 28px;
+  right: 28px;
+  width: 250px;
+  padding: 18px 18px 14px;
+  border-radius: 24px;
+}
+
+.stat-line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.stat-line:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.stat-line span {
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(240, 248, 227, 0.68);
+}
+
+.stat-line strong {
+  font-size: 1rem;
+  color: #ffffff;
+}
+
+.controls-card {
+  left: 28px;
+  bottom: 28px;
+  width: min(390px, calc(100vw - 56px));
+  padding: 20px 22px 18px;
+  border-radius: 24px;
+}
+
+.controls-card h2 {
+  margin: 0 0 12px;
+  font-family: "Impact", "Arial Narrow Bold", sans-serif;
+  font-size: 1.9rem;
+  letter-spacing: 0.08em;
+  color: #fff7df;
+}
+
+.controls-card p {
+  margin: 8px 0;
+  font-size: 0.92rem;
+  color: var(--text-soft);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 74px;
+  margin-right: 8px;
+  padding: 6px 9px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  font-family: inherit;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent-amber);
+  text-align: center;
+}
+
+.director-card {
+  right: 28px;
+  bottom: 28px;
+  width: min(320px, calc(100vw - 56px));
+  padding: 18px 20px;
+  border-radius: 22px;
+}
+
+.mini-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.72rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.56);
+}
+
+#director-state {
+  display: block;
+  font-family: "Impact", "Arial Narrow Bold", sans-serif;
+  font-size: 2.2rem;
+  line-height: 0.95;
+  letter-spacing: 0.07em;
+  color: var(--accent-lime);
+}
+
+#director-detail {
+  display: block;
+  margin-top: 10px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.toast {
+  position: absolute;
+  left: 50%;
+  bottom: 34px;
+  z-index: 5;
+  min-width: min(440px, calc(100vw - 44px));
+  max-width: min(540px, calc(100vw - 44px));
+  padding: 16px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(9, 18, 23, 0.84);
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.4);
+  font-size: 0.92rem;
+  color: #eff8ee;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 16px);
+  transition:
+    opacity 180ms ease,
+    transform 220ms ease,
+    border-color 180ms ease;
+}
+
+.toast.visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.toast[data-tone="alert"] {
+  border-color: rgba(119, 243, 255, 0.42);
+}
+
+.toast[data-tone="impact"] {
+  border-color: rgba(255, 185, 95, 0.44);
+}
+
+.toast[data-tone="calm"] {
+  border-color: rgba(177, 255, 110, 0.4);
+}
+
+@media (max-width: 960px) {
+  .hero-card {
+    width: calc(100vw - 36px);
+    left: 18px;
+    right: 18px;
+    top: 18px;
+    padding: 18px 20px 16px;
+  }
+
+  .stats-card,
+  .controls-card,
+  .director-card {
+    width: calc(50vw - 26px);
+  }
+
+  .stats-card {
+    top: auto;
+    right: 18px;
+    bottom: 18px;
+  }
+
+  .controls-card {
+    left: 18px;
+    bottom: 18px;
+  }
+
+  .director-card {
+    right: 18px;
+    top: 170px;
+  }
+}
+
+@media (max-width: 720px) {
+  .stats-card,
+  .controls-card,
+  .director-card {
+    position: static;
+    width: 100%;
+  }
+
+  .hud-card {
+    position: static;
+    margin: 12px 18px 0;
+    pointer-events: none;
+  }
+
+  #game-shell {
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  #game-container {
+    position: fixed;
+    inset: 0;
+  }
+
+  .hero-card {
+    position: static;
+    margin-top: 18px;
+    width: auto;
+  }
+
+  .toast {
+    bottom: 18px;
+  }
+}

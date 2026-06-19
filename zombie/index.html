@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Outbreak Block</title>
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <div id="game-shell">
+    <div id="game-container" aria-label="Zombie sandbox playfield"></div>
+
+    <section class="hud-card hero-card">
+      <p class="eyebrow">CraftPix Urban Zombie Sprite Pack</p>
+      <h1>OUTBREAK BLOCK</h1>
+      <p class="lead">
+        A dense zombie crowd sandbox built around the provided CraftPix sheets.
+        Left click drops a noise beacon. Right click detonates a stun pulse.
+      </p>
+      <p class="boot-line" id="boot-state">Loading world...</p>
+    </section>
+
+    <section class="hud-card stats-card">
+      <div class="stat-line">
+        <span>Population</span>
+        <strong id="population-count">0</strong>
+      </div>
+      <div class="stat-line">
+        <span>Alerted</span>
+        <strong id="alert-count">0</strong>
+      </div>
+      <div class="stat-line">
+        <span>Beacon</span>
+        <strong id="beacon-countdown">offline</strong>
+      </div>
+      <div class="stat-line">
+        <span>Camera</span>
+        <strong id="camera-state">drift</strong>
+      </div>
+      <div class="stat-line">
+        <span>FPS</span>
+        <strong id="fps-count">0</strong>
+      </div>
+    </section>
+
+    <section class="hud-card controls-card">
+      <h2>Controls</h2>
+      <p><kbd>Left Click</kbd> Place or move a noise beacon</p>
+      <p><kbd>Right Click</kbd> Trigger hurt and dead reactions</p>
+      <p><kbd>W A S D</kbd> or <kbd>Arrows</kbd> Pan the spectator camera</p>
+      <p><kbd>Mouse Wheel</kbd> or <kbd>Q / E</kbd> Zoom out or in</p>
+      <p><kbd>R</kbd> Clear the active beacon</p>
+      <p><kbd>Space</kbd> Pause or resume the crowd director</p>
+      <p><kbd>F</kbd> Snap back to the horde focus</p>
+    </section>
+
+    <section class="hud-card director-card">
+      <span class="mini-label">Director</span>
+      <strong id="director-state">ROAMING</strong>
+      <span id="director-detail">No active beacon. The horde is shambling freely.</span>
+    </section>
+
+    <div id="toast" class="toast" aria-live="polite"></div>
+  </div>
+
+  <script>
+    window.addEventListener("error", (event) => {
+      const boot = document.getElementById("boot-state");
+      if (boot) boot.textContent = `Runtime error: ${event.message}`;
+    });
+
+    window.addEventListener("unhandledrejection", (event) => {
+      const boot = document.getElementById("boot-state");
+      const message = event.reason && event.reason.message ? event.reason.message : String(event.reason);
+      if (boot) boot.textContent = `Promise error: ${message}`;
+    });
+  </script>
+  <script src="./vendor/phaser.min.js"></script>
+  <script type="module" src="./js/main.js"></script>
+</body>
+</html>
