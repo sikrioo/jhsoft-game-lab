@@ -1,0 +1,1541 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Tycoon Tilemap Network Editor Prototype</title>
+  <style>
+    :root{
+      --bg:#0b1117;
+      --panel:rgba(15, 23, 32, .82);
+      --panel-strong:rgba(12, 18, 26, .94);
+      --line:rgba(255,255,255,.12);
+      --text:#e8f1f2;
+      --muted:#9fb0b7;
+      --accent:#6ee7b7;
+      --accent-2:#7dd3fc;
+      --danger:#ff766c;
+      --warn:#ffd166;
+    }
+    *{box-sizing:border-box}
+    html,body{width:100%;height:100%;margin:0;overflow:hidden;background:var(--bg);font-family:Inter, Pretendard, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;color:var(--text)}
+    #game{position:fixed;inset:0;width:100vw;height:100vh;display:block;background:#071019;cursor:crosshair}
+    .topbar{
+      position:fixed;left:14px;right:14px;top:12px;height:58px;z-index:10;
+      display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--line);border-radius:18px;
+      background:linear-gradient(180deg, rgba(22,32,43,.88), rgba(10,16,24,.84));
+      backdrop-filter:blur(18px);box-shadow:0 18px 60px rgba(0,0,0,.35);
+    }
+    .brand{display:flex;align-items:center;gap:10px;padding:0 8px 0 4px;white-space:nowrap}
+    .brand .mark{width:36px;height:36px;border-radius:12px;background:radial-gradient(circle at 35% 30%, #c8fff0, #55d7ad 45%, #153f47 100%);box-shadow:0 0 24px rgba(110,231,183,.35)}
+    .brand .title{font-weight:800;font-size:14px;letter-spacing:.2px;line-height:1.05}
+    .brand .sub{font-size:11px;color:var(--muted);margin-top:2px}
+    .divider{height:34px;width:1px;background:var(--line);margin:0 2px}
+    .toolgroup{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+    button,select,label.fileBtn{
+      border:1px solid var(--line);background:rgba(255,255,255,.06);color:var(--text);border-radius:12px;height:36px;
+      padding:0 11px;font-weight:700;font-size:12px;letter-spacing:-.1px;outline:none;transition:.13s ease;white-space:nowrap;
+    }
+    select{padding-right:24px;color:#eef7f7;appearance:none;background-image:linear-gradient(45deg, transparent 50%, #b9ccd2 50%),linear-gradient(135deg, #b9ccd2 50%, transparent 50%);background-position:calc(100% - 14px) 15px, calc(100% - 9px) 15px;background-size:5px 5px;background-repeat:no-repeat;min-width:116px}
+    button:hover,label.fileBtn:hover,select:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.22);transform:translateY(-1px)}
+    button.active{background:linear-gradient(180deg, rgba(110,231,183,.24), rgba(125,211,252,.12));border-color:rgba(110,231,183,.6);box-shadow:0 0 0 1px rgba(110,231,183,.08) inset, 0 0 22px rgba(110,231,183,.12)}
+    button.danger:hover{border-color:rgba(255,118,108,.55);color:#ffd6d3}
+    label.fileBtn{display:flex;align-items:center;justify-content:center;cursor:pointer}
+    .spacer{flex:1}
+    .stats-pill{height:36px;display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:999px;padding:0 13px;background:rgba(0,0,0,.18);font-size:12px;color:var(--muted);white-space:nowrap}
+    .stats-pill b{color:var(--text)}
+    .panel{
+      position:fixed;z-index:9;border:1px solid var(--line);border-radius:18px;background:var(--panel);backdrop-filter:blur(18px);box-shadow:0 18px 50px rgba(0,0,0,.28)
+    }
+    .leftPanel{left:14px;top:84px;width:290px;padding:14px}
+    .rightPanel{right:14px;top:84px;width:310px;min-height:230px;padding:14px}
+    .panel h3{margin:0 0 10px;font-size:13px;letter-spacing:.2px}
+    .hint{font-size:12px;color:var(--muted);line-height:1.55;margin:8px 0 0}
+    .kbd{display:inline-flex;align-items:center;justify-content:center;min-width:21px;height:21px;border-radius:6px;border:1px solid var(--line);background:rgba(255,255,255,.07);color:#d7e5e8;font-size:11px;font-weight:800;padding:0 6px;margin:0 2px}
+    .metricGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}
+    .metric{border:1px solid var(--line);border-radius:14px;padding:10px;background:rgba(255,255,255,.045)}
+    .metric .n{font-size:18px;font-weight:900;color:#fff;line-height:1}
+    .metric .t{font-size:11px;color:var(--muted);margin-top:5px}
+    .inspectorBox{font-size:12px;line-height:1.55;color:#dbe8ea}
+    .inspectorBox .row{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid rgba(255,255,255,.07);padding:6px 0}
+    .inspectorBox .row:last-child{border-bottom:0}
+    .inspectorBox .label{color:var(--muted)}
+    .badge{display:inline-flex;align-items:center;height:22px;padding:0 8px;border:1px solid var(--line);border-radius:999px;background:rgba(255,255,255,.06);font-size:11px;color:#dcecee}
+    #miniWrap{position:fixed;right:14px;bottom:14px;z-index:11;width:236px;height:236px;border:1px solid var(--line);border-radius:18px;background:rgba(8,12,18,.82);backdrop-filter:blur(16px);box-shadow:0 18px 50px rgba(0,0,0,.38);padding:8px}
+    #mini{width:220px;height:220px;border-radius:12px;display:block;background:#071019}
+    #toast{position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(20px);z-index:20;background:var(--panel-strong);border:1px solid var(--line);border-radius:999px;padding:10px 14px;color:#f2fbfc;font-size:13px;opacity:0;pointer-events:none;transition:.22s ease;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+    #toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+    .progress{height:8px;border-radius:999px;background:rgba(255,255,255,.08);overflow:hidden;margin-top:8px;border:1px solid rgba(255,255,255,.08)}
+    .progress span{display:block;height:100%;width:0;background:linear-gradient(90deg, var(--accent), var(--accent-2));box-shadow:0 0 18px rgba(110,231,183,.25)}
+    .smallAction{height:30px;border-radius:10px;font-size:11px;padding:0 9px}
+    .rowActions{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+    .warnText{color:#ffd166}
+    @media (max-width:1100px){.leftPanel{display:none}.rightPanel{display:none}.brand .sub{display:none}.topbar{overflow-x:auto}.stats-pill{display:none}#miniWrap{width:172px;height:172px}#mini{width:156px;height:156px}}
+  </style>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div class="topbar">
+    <div class="brand">
+      <div class="mark"></div>
+      <div><div class="title">Network Tycoon Builder</div><div class="sub">Large Tilemap · Nodes · Roads · Simulation</div></div>
+    </div>
+    <div class="divider"></div>
+    <div class="toolgroup" id="toolButtons">
+      <button data-tool="select" class="active">선택 <span class="kbd">1</span></button>
+      <button data-tool="terrain">지형 <span class="kbd">2</span></button>
+      <button data-tool="node">노드 <span class="kbd">3</span></button>
+      <button data-tool="road">도로 <span class="kbd">4</span></button>
+      <button data-tool="bulldoze" class="danger">철거 <span class="kbd">5</span></button>
+    </div>
+    <div class="divider"></div>
+    <div class="toolgroup">
+      <select id="terrainSelect" title="지형 브러시">
+        <option value="0">초원 브러시</option>
+        <option value="2">모래 브러시</option>
+        <option value="3">숲 브러시</option>
+        <option value="4">산 브러시</option>
+        <option value="1">물 브러시</option>
+      </select>
+      <select id="nodeSelect" title="노드 종류">
+        <option value="town">타운</option>
+        <option value="farm">농장</option>
+        <option value="mine">광산</option>
+        <option value="factory">공장</option>
+        <option value="storage">물류창고</option>
+        <option value="power">발전소</option>
+        <option value="port">항구</option>
+      </select>
+    </div>
+    <div class="spacer"></div>
+    <div class="stats-pill" id="topStats">노드 <b>0</b> · 도로 <b>0</b> · 연결 <b>0</b></div>
+    <div class="toolgroup">
+      <button id="undoBtn">되돌리기</button>
+      <button id="simBtn" class="active">시뮬 ON</button>
+      <button id="saveBtn">저장</button>
+      <button id="loadBtn">불러오기</button>
+      <button id="exportBtn">JSON 내보내기</button>
+      <label for="importFile" class="fileBtn">가져오기</label>
+      <input id="importFile" type="file" accept="application/json,.json" hidden />
+      <button id="resetBtn" class="danger">초기화</button>
+    </div>
+  </div>
+
+  <section class="panel leftPanel">
+    <h3>빌더 조작</h3>
+    <div class="hint">
+      <span class="kbd">휠</span> 줌 · <span class="kbd">우클릭/Space 드래그</span> 카메라 이동<br>
+      <span class="kbd">노드</span> 모드: 타일 위에 시설 배치<br>
+      <span class="kbd">도로</span> 모드: 노드→노드 클릭 시 자동 경로 연결<br>
+      빈 타일을 드래그하면 수동 도로를 칠할 수 있습니다.<br>
+      <span class="kbd">Ctrl</span>+<span class="kbd">S</span> 저장 · <span class="kbd">Ctrl</span>+<span class="kbd">Z</span> 되돌리기
+    </div>
+    <div class="metricGrid">
+      <div class="metric"><div class="n" id="metricNodes">0</div><div class="t">배치 노드</div></div>
+      <div class="metric"><div class="n" id="metricRoads">0</div><div class="t">도로 타일</div></div>
+      <div class="metric"><div class="n" id="metricEdges">0</div><div class="t">노드 연결</div></div>
+      <div class="metric"><div class="n" id="metricIncome">0</div><div class="t">예상 월수익</div></div>
+    </div>
+    <div class="progress" title="네트워크 연결도"><span id="networkBar"></span></div>
+    <div class="hint" id="buildHint">팁: 광산은 산 근처, 항구는 물가에 배치됩니다.</div>
+  </section>
+
+  <section class="panel rightPanel">
+    <h3>인스펙터</h3>
+    <div id="inspector" class="inspectorBox">타일이나 노드를 클릭하면 상세 정보가 표시됩니다.</div>
+    <div class="rowActions">
+      <button class="smallAction" id="focusSelectionBtn">선택 중심</button>
+      <button class="smallAction" id="upgradeBtn">노드 업그레이드</button>
+      <button class="smallAction danger" id="deleteSelectionBtn">선택 삭제</button>
+    </div>
+  </section>
+
+  <div id="miniWrap"><canvas id="mini"></canvas></div>
+  <div id="toast"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const canvas = $('game');
+  const ctx = canvas.getContext('2d', { alpha: false });
+  const mini = $('mini');
+  const mctx = mini.getContext('2d');
+
+  let MAP_W = 320;
+  let MAP_H = 320;
+  const TILE = 28;
+  const MAX_HISTORY = 24;
+  const SAVE_KEY = 'network_tycoon_builder_state_v1';
+
+  const TERRAIN = [
+    { id:0, name:'초원', color:'#438a56', edge:'#39784b', cost:1, build:true },
+    { id:1, name:'물', color:'#1d5f88', edge:'#174e72', cost:Infinity, build:false },
+    { id:2, name:'모래', color:'#c8b56a', edge:'#aa9654', cost:1.1, build:true },
+    { id:3, name:'숲', color:'#2f7449', edge:'#295f3e', cost:2.25, build:true },
+    { id:4, name:'산', color:'#7b8383', edge:'#636b6c', cost:5.25, build:true },
+  ];
+
+  const NODE_TYPES = {
+    town:    { label:'타운', icon:'◎', w:3, h:3, color:'#7dd3fc', roof:'#2f75a8', income:18, capacity:90, desc:'주거/상업 수요를 만드는 중심 노드' },
+    farm:    { label:'농장', icon:'◆', w:3, h:2, color:'#a7f3d0', roof:'#43a36d', income:12, capacity:60, desc:'초원/모래에 배치 가능한 생산 노드' },
+    mine:    { label:'광산', icon:'▲', w:2, h:2, color:'#d4d4d8', roof:'#72777d', income:20, capacity:45, desc:'산 지형 또는 산 인접 타일에 배치' },
+    factory: { label:'공장', icon:'▣', w:4, h:3, color:'#fecaca', roof:'#b45b59', income:34, capacity:140, desc:'고수익 가공 노드. 넓은 평지가 필요' },
+    storage: { label:'물류창고', icon:'▤', w:3, h:3, color:'#fde68a', roof:'#b98a2d', income:22, capacity:180, desc:'연결 효율과 전체 물류 용량을 올림' },
+    power:   { label:'발전소', icon:'✦', w:3, h:3, color:'#c4b5fd', roof:'#7655b7', income:28, capacity:110, desc:'주변 산업 노드의 성장을 지원' },
+    port:    { label:'항구', icon:'▱', w:4, h:2, color:'#bfdbfe', roof:'#3269a8', income:38, capacity:160, desc:'물가에만 배치. 장거리 수송 허브' },
+  };
+
+  let tiles = new Uint8Array(MAP_W * MAP_H);
+  let manualRoadMask = new Uint8Array(MAP_W * MAP_H);
+  let edgeRoadMask = new Uint8Array(MAP_W * MAP_H);
+  let occupancy = new Int32Array(MAP_W * MAP_H);
+  let nodes = [];
+  let edges = [];
+  let vehicles = [];
+  let history = [];
+  let selected = null;
+  let hoverNode = null;
+  let selectedTile = null;
+  let nextNodeId = 1;
+  let nextEdgeId = 1;
+  let seed = 1337;
+  let simEnabled = true;
+  let roadStartNode = null;
+  let lastStatsAt = 0;
+
+  const camera = { x: 0, y: 0, zoom: 0.72 };
+  const view = { w: window.innerWidth, h: window.innerHeight, dpr: Math.max(1, window.devicePixelRatio || 1) };
+  const pointer = { x: 0, y: 0, wx: 0, wy: 0, tx: 0, ty: 0, inside:false };
+  const input = {
+    tool: 'select',
+    panning: false,
+    panStartX: 0,
+    panStartY: 0,
+    camStartX: 0,
+    camStartY: 0,
+    paintingTerrain: false,
+    paintingRoad: false,
+    bulldozing: false,
+    draggingNode: null,
+    dragOffsetX: 0,
+    dragOffsetY: 0,
+    dragOriginal: null,
+    dragMoved: false,
+    keys: new Set(),
+  };
+
+  const miniCache = document.createElement('canvas');
+  const miniRoadCache = document.createElement('canvas');
+  miniCache.width = MAP_W; miniCache.height = MAP_H;
+  miniRoadCache.width = MAP_W; miniRoadCache.height = MAP_H;
+
+  function idx(x, y) { return y * MAP_W + x; }
+  function inBounds(x, y) { return x >= 0 && y >= 0 && x < MAP_W && y < MAP_H; }
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function smooth(t) { return t * t * (3 - 2 * t); }
+  function worldW() { return MAP_W * TILE; }
+  function worldH() { return MAP_H * TILE; }
+  function isRoadIndex(i) { return manualRoadMask[i] === 1 || edgeRoadMask[i] === 1; }
+  function isRoadTile(x, y) { return inBounds(x, y) && isRoadIndex(idx(x, y)); }
+
+  function hash2(x, y, s = seed) {
+    let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(s | 0, 1442695041);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  }
+
+  function valueNoise(x, y, scale) {
+    const fx = x / scale;
+    const fy = y / scale;
+    const x0 = Math.floor(fx), y0 = Math.floor(fy);
+    const tx = smooth(fx - x0), ty = smooth(fy - y0);
+    const a = hash2(x0, y0);
+    const b = hash2(x0 + 1, y0);
+    const c = hash2(x0, y0 + 1);
+    const d = hash2(x0 + 1, y0 + 1);
+    return lerp(lerp(a, b, tx), lerp(c, d, tx), ty);
+  }
+
+  function fbm(x, y) {
+    let total = 0, amp = 0.54, sum = 0, scale = 92;
+    for (let i = 0; i < 5; i++) {
+      total += valueNoise(x + 100 * i, y - 73 * i, scale) * amp;
+      sum += amp;
+      amp *= 0.52;
+      scale *= 0.52;
+    }
+    return total / sum;
+  }
+
+  function generateMap() {
+    occupancy = new Int32Array(MAP_W * MAP_H);
+    occupancy.fill(-1);
+    tiles = new Uint8Array(MAP_W * MAP_H);
+    manualRoadMask = new Uint8Array(MAP_W * MAP_H);
+    edgeRoadMask = new Uint8Array(MAP_W * MAP_H);
+    nodes = [];
+    edges = [];
+    vehicles = [];
+    selected = null;
+    selectedTile = null;
+    roadStartNode = null;
+    nextNodeId = 1;
+    nextEdgeId = 1;
+
+    const cx = MAP_W / 2, cy = MAP_H / 2;
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const n = fbm(x, y);
+        const m = fbm(x + 421, y - 117);
+        const r = Math.hypot((x - cx) / MAP_W, (y - cy) / MAP_H);
+        const coastBias = n - r * 0.27;
+        let t = 0;
+        if (coastBias < 0.30) t = 1;
+        else if (coastBias < 0.345) t = 2;
+        else if (m > 0.73) t = 4;
+        else if (n > 0.56 && m > 0.42) t = 3;
+        else t = 0;
+        tiles[idx(x, y)] = t;
+      }
+    }
+    rebuildMiniTerrain();
+    rebuildMiniRoads();
+    toast('새 거대 타일맵을 생성했습니다.');
+  }
+
+  function resize() {
+    view.dpr = Math.max(1, window.devicePixelRatio || 1);
+    view.w = window.innerWidth;
+    view.h = window.innerHeight;
+    canvas.width = Math.floor(view.w * view.dpr);
+    canvas.height = Math.floor(view.h * view.dpr);
+    canvas.style.width = view.w + 'px';
+    canvas.style.height = view.h + 'px';
+    mini.width = Math.floor(mini.clientWidth * view.dpr);
+    mini.height = Math.floor(mini.clientHeight * view.dpr);
+    clampCamera();
+  }
+
+  function clampCamera() {
+    const margin = 520;
+    const vw = view.w / camera.zoom;
+    const vh = view.h / camera.zoom;
+    let minX = -margin, maxX = worldW() - vw + margin;
+    let minY = -margin, maxY = worldH() - vh + margin;
+    if (minX > maxX) camera.x = (worldW() - vw) / 2;
+    else camera.x = clamp(camera.x, minX, maxX);
+    if (minY > maxY) camera.y = (worldH() - vh) / 2;
+    else camera.y = clamp(camera.y, minY, maxY);
+  }
+
+  function screenToWorld(sx, sy) {
+    return { x: sx / camera.zoom + camera.x, y: sy / camera.zoom + camera.y };
+  }
+
+  function updatePointer(e) {
+    const rect = canvas.getBoundingClientRect();
+    pointer.x = e.clientX - rect.left;
+    pointer.y = e.clientY - rect.top;
+    pointer.inside = pointer.x >= 0 && pointer.y >= 0 && pointer.x <= rect.width && pointer.y <= rect.height;
+    const w = screenToWorld(pointer.x, pointer.y);
+    pointer.wx = w.x;
+    pointer.wy = w.y;
+    pointer.tx = Math.floor(w.x / TILE);
+    pointer.ty = Math.floor(w.y / TILE);
+    hoverNode = nodeAtWorld(pointer.wx, pointer.wy);
+  }
+
+  function setTool(tool) {
+    input.tool = tool;
+    roadStartNode = null;
+    document.querySelectorAll('#toolButtons button').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+    const text = {
+      select:'선택 모드: 노드를 드래그해서 이동하거나 타일 정보를 확인합니다.',
+      terrain:'지형 모드: 선택한 지형 브러시로 타일을 칠합니다.',
+      node:'노드 모드: 선택한 시설을 맵 위에 배치합니다.',
+      road:'도로 모드: 노드→노드 클릭으로 자동 도로를 연결하거나 빈 타일을 드래그합니다.',
+      bulldoze:'철거 모드: 노드 또는 도로를 제거합니다.'
+    }[tool];
+    $('buildHint').textContent = text;
+  }
+
+  function encodeRLE(arr) {
+    const out = [];
+    if (!arr.length) return out;
+    let v = arr[0], count = 1;
+    for (let i = 1; i < arr.length; i++) {
+      if (arr[i] === v && count < 65535) count++;
+      else { out.push([v, count]); v = arr[i]; count = 1; }
+    }
+    out.push([v, count]);
+    return out;
+  }
+
+  function decodeRLE(rle, length) {
+    const arr = new Uint8Array(length);
+    let p = 0;
+    for (const [v, count] of rle) {
+      arr.fill(v, p, p + count);
+      p += count;
+    }
+    return arr;
+  }
+
+  function serialize() {
+    return {
+      version: 1,
+      map: { w: MAP_W, h: MAP_H, tile: TILE, seed },
+      camera: { x: camera.x, y: camera.y, zoom: camera.zoom },
+      nextNodeId,
+      nextEdgeId,
+      tiles: encodeRLE(tiles),
+      manualRoads: encodeRLE(manualRoadMask),
+      nodes: nodes.map(n => ({ ...n })),
+      edges: edges.map(e => ({ id:e.id, a:e.a, b:e.b, level:e.level, traffic:e.traffic || 0, path:e.path.map(p => [p.x, p.y]) })),
+    };
+  }
+
+  function loadState(data, silent = false) {
+    if (!data || !data.map || !data.tiles) throw new Error('잘못된 저장 파일입니다.');
+    MAP_W = data.map.w;
+    MAP_H = data.map.h;
+    seed = data.map.seed || 1337;
+    tiles = decodeRLE(data.tiles, MAP_W * MAP_H);
+    manualRoadMask = decodeRLE(data.manualRoads || [[0, MAP_W * MAP_H]], MAP_W * MAP_H);
+    edgeRoadMask = new Uint8Array(MAP_W * MAP_H);
+    occupancy = new Int32Array(MAP_W * MAP_H);
+    occupancy.fill(-1);
+    nodes = (data.nodes || []).map(n => ({ ...n }));
+    edges = (data.edges || []).map(e => ({ ...e, path:(e.path || []).map(p => Array.isArray(p) ? { x:p[0], y:p[1] } : p) }));
+    nextNodeId = data.nextNodeId || (nodes.reduce((m, n) => Math.max(m, n.id), 0) + 1);
+    nextEdgeId = data.nextEdgeId || (edges.reduce((m, e) => Math.max(m, e.id), 0) + 1);
+    selected = null;
+    selectedTile = null;
+    roadStartNode = null;
+    for (const n of nodes) markOccupancy(n, n.id);
+    rebuildEdgeRoadMask(false);
+    rebuildVehicles();
+    camera.x = data.camera?.x ?? camera.x;
+    camera.y = data.camera?.y ?? camera.y;
+    camera.zoom = data.camera?.zoom ?? camera.zoom;
+    miniCache.width = MAP_W; miniCache.height = MAP_H;
+    miniRoadCache.width = MAP_W; miniRoadCache.height = MAP_H;
+    rebuildMiniTerrain();
+    rebuildMiniRoads();
+    clampCamera();
+    renderInspector();
+    updateStats(true);
+    if (!silent) toast('맵 데이터를 불러왔습니다.');
+  }
+
+  function pushHistory() {
+    history.push(serialize());
+    if (history.length > MAX_HISTORY) history.shift();
+    updateUndoState();
+  }
+
+  function undo() {
+    const prev = history.pop();
+    if (!prev) return toast('되돌릴 작업이 없습니다.');
+    loadState(prev, true);
+    updateUndoState();
+    toast('이전 상태로 되돌렸습니다.');
+  }
+
+  function updateUndoState() {
+    $('undoBtn').disabled = history.length === 0;
+    $('undoBtn').style.opacity = history.length === 0 ? .45 : 1;
+  }
+
+  function saveLocal() {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(serialize()));
+    toast('브라우저 로컬 저장소에 저장했습니다.');
+  }
+
+  function loadLocal() {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return toast('저장된 맵이 없습니다.');
+    pushHistory();
+    loadState(JSON.parse(raw));
+  }
+
+  function exportJSON() {
+    const json = JSON.stringify(serialize(), null, 2);
+    const blob = new Blob([json], { type:'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `network_tycoon_map_${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast('JSON 파일을 내보냈습니다.');
+  }
+
+  function rebuildMiniTerrain() {
+    const c = miniCache.getContext('2d');
+    const img = c.createImageData(MAP_W, MAP_H);
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const i = idx(x, y);
+        const color = hexToRgb(TERRAIN[tiles[i]].color);
+        const p = i * 4;
+        img.data[p] = color.r;
+        img.data[p + 1] = color.g;
+        img.data[p + 2] = color.b;
+        img.data[p + 3] = 255;
+      }
+    }
+    c.putImageData(img, 0, 0);
+  }
+
+  function rebuildMiniRoads() {
+    const c = miniRoadCache.getContext('2d');
+    c.clearRect(0, 0, MAP_W, MAP_H);
+    c.fillStyle = '#f8d98a';
+    for (let y = 0; y < MAP_H; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        if (isRoadTile(x, y)) c.fillRect(x, y, 1, 1);
+      }
+    }
+  }
+
+  function hexToRgb(hex) {
+    const h = hex.replace('#','');
+    return { r:parseInt(h.slice(0,2),16), g:parseInt(h.slice(2,4),16), b:parseInt(h.slice(4,6),16) };
+  }
+
+  function markOccupancy(node, value) {
+    const def = NODE_TYPES[node.type];
+    for (let y = node.y; y < node.y + def.h; y++) {
+      for (let x = node.x; x < node.x + def.w; x++) {
+        if (inBounds(x, y)) occupancy[idx(x, y)] = value;
+      }
+    }
+  }
+
+  function clearOccupancy(node) { markOccupancy(node, -1); }
+
+  function footprintInside(tx, ty, def) {
+    return tx >= 0 && ty >= 0 && tx + def.w <= MAP_W && ty + def.h <= MAP_H;
+  }
+
+  function hasAdjacentTerrain(tx, ty, def, terrainId) {
+    for (let y = ty - 1; y <= ty + def.h; y++) {
+      for (let x = tx - 1; x <= tx + def.w; x++) {
+        const onBorder = x === tx - 1 || x === tx + def.w || y === ty - 1 || y === ty + def.h;
+        if (onBorder && inBounds(x, y) && tiles[idx(x, y)] === terrainId) return true;
+      }
+    }
+    return false;
+  }
+
+  function hasTerrainInFootprint(tx, ty, def, terrainId) {
+    for (let y = ty; y < ty + def.h; y++) {
+      for (let x = tx; x < tx + def.w; x++) {
+        if (inBounds(x, y) && tiles[idx(x, y)] === terrainId) return true;
+      }
+    }
+    return false;
+  }
+
+  function terrainAllowedForNode(type, terrainId) {
+    if (terrainId === 1) return false;
+    if (type === 'farm') return terrainId === 0 || terrainId === 2;
+    if (type === 'mine') return terrainId === 0 || terrainId === 2 || terrainId === 4;
+    if (type === 'port') return terrainId === 0 || terrainId === 2;
+    if (type === 'factory' || type === 'storage' || type === 'power' || type === 'town') return terrainId !== 1 && terrainId !== 4;
+    return TERRAIN[terrainId].build;
+  }
+
+  function canPlaceNode(type, tx, ty, ignoreId = -999) {
+    const def = NODE_TYPES[type];
+    if (!def || !footprintInside(tx, ty, def)) return { ok:false, reason:'맵 범위를 벗어납니다.' };
+    for (let y = ty; y < ty + def.h; y++) {
+      for (let x = tx; x < tx + def.w; x++) {
+        const i = idx(x, y);
+        if (occupancy[i] !== -1 && occupancy[i] !== ignoreId) return { ok:false, reason:'다른 오브젝트와 겹칩니다.' };
+        if (!terrainAllowedForNode(type, tiles[i])) return { ok:false, reason:`${TERRAIN[tiles[i]].name} 위에는 배치할 수 없습니다.` };
+      }
+    }
+    if (type === 'mine' && !hasTerrainInFootprint(tx, ty, def, 4) && !hasAdjacentTerrain(tx, ty, def, 4)) {
+      return { ok:false, reason:'광산은 산 지형 위나 산 인접 위치에 필요합니다.' };
+    }
+    if (type === 'port' && !hasAdjacentTerrain(tx, ty, def, 1)) {
+      return { ok:false, reason:'항구는 물가에 붙어 있어야 합니다.' };
+    }
+    return { ok:true, reason:'배치 가능' };
+  }
+
+  function normalizeFootprint(node) {
+    const def = NODE_TYPES[node.type];
+    for (let y = node.y; y < node.y + def.h; y++) {
+      for (let x = node.x; x < node.x + def.w; x++) {
+        const i = idx(x, y);
+        if (tiles[i] === 3) tiles[i] = 0;
+      }
+    }
+  }
+
+  function placeNode(type, tx, ty) {
+    const check = canPlaceNode(type, tx, ty);
+    if (!check.ok) return toast(check.reason);
+    pushHistory();
+    const node = { id: nextNodeId++, type, x: tx, y: ty, level: 1, name: `${NODE_TYPES[type].label} ${nextNodeId - 1}`, createdAt: Date.now() };
+    normalizeFootprint(node);
+    nodes.push(node);
+    markOccupancy(node, node.id);
+    selected = { kind:'node', id: node.id };
+    selectedTile = null;
+    rebuildMiniTerrain();
+    renderInspector();
+    updateStats(true);
+    toast(`${NODE_TYPES[type].label} 노드를 배치했습니다.`);
+  }
+
+  function deleteNode(nodeId, recordHistory = true) {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node) return false;
+    if (recordHistory) pushHistory();
+    clearOccupancy(node);
+    nodes = nodes.filter(n => n.id !== nodeId);
+    edges = edges.filter(e => e.a !== nodeId && e.b !== nodeId);
+    if (selected?.kind === 'node' && selected.id === nodeId) selected = null;
+    rebuildEdgeRoadMask();
+    rebuildVehicles();
+    renderInspector();
+    updateStats(true);
+    return true;
+  }
+
+  function upgradeSelectedNode() {
+    const node = getSelectedNode();
+    if (!node) return toast('업그레이드할 노드를 선택하세요.');
+    pushHistory();
+    node.level = Math.min(5, (node.level || 1) + 1);
+    toast(`${node.name} 레벨 ${node.level}`);
+    renderInspector();
+    updateStats(true);
+  }
+
+  function getSelectedNode() {
+    if (!selected || selected.kind !== 'node') return null;
+    return nodes.find(n => n.id === selected.id) || null;
+  }
+
+  function nodeAtWorld(wx, wy) {
+    const tx = Math.floor(wx / TILE), ty = Math.floor(wy / TILE);
+    if (!inBounds(tx, ty)) return null;
+    const oid = occupancy[idx(tx, ty)];
+    if (oid === -1) return null;
+    return nodes.find(n => n.id === oid) || null;
+  }
+
+  function getNodeAnchor(node) {
+    const def = NODE_TYPES[node.type];
+    return { x: clamp(node.x + Math.floor(def.w / 2), 0, MAP_W - 1), y: clamp(node.y + Math.floor(def.h / 2), 0, MAP_H - 1) };
+  }
+
+  function paintTerrain(tx, ty) {
+    if (!inBounds(tx, ty)) return;
+    const i = idx(tx, ty);
+    if (occupancy[i] !== -1 || isRoadIndex(i)) return;
+    tiles[i] = Number($('terrainSelect').value);
+    rebuildMiniTerrain();
+  }
+
+  function canRoadOnTile(tx, ty) {
+    if (!inBounds(tx, ty)) return false;
+    const t = tiles[idx(tx, ty)];
+    return t !== 1;
+  }
+
+  function addManualRoad(tx, ty) {
+    if (!canRoadOnTile(tx, ty)) return false;
+    const i = idx(tx, ty);
+    manualRoadMask[i] = 1;
+    if (tiles[i] === 3) tiles[i] = 0;
+    rebuildMiniTerrain();
+    rebuildMiniRoads();
+    return true;
+  }
+
+  function removeRoadAt(tx, ty, recordHistory = true) {
+    if (!inBounds(tx, ty)) return false;
+    const i = idx(tx, ty);
+    const edge = edges.find(e => e.path.some(p => p.x === tx && p.y === ty));
+    if (edge) {
+      if (recordHistory) pushHistory();
+      edges = edges.filter(e => e.id !== edge.id);
+      rebuildEdgeRoadMask();
+      rebuildVehicles();
+      toast('해당 노드 연결 도로를 제거했습니다.');
+      return true;
+    }
+    if (manualRoadMask[i] === 1) {
+      if (recordHistory) pushHistory();
+      manualRoadMask[i] = 0;
+      rebuildMiniRoads();
+      toast('수동 도로 타일을 제거했습니다.');
+      return true;
+    }
+    return false;
+  }
+
+  function rebuildEdgeRoadMask(showToast = false) {
+    edgeRoadMask = new Uint8Array(MAP_W * MAP_H);
+    for (const e of edges) {
+      for (const p of e.path) {
+        if (inBounds(p.x, p.y)) edgeRoadMask[idx(p.x, p.y)] = 1;
+      }
+    }
+    rebuildMiniRoads();
+    if (showToast) toast('도로 네트워크를 다시 계산했습니다.');
+  }
+
+  function edgeExists(a, b) {
+    return edges.some(e => (e.a === a && e.b === b) || (e.a === b && e.b === a));
+  }
+
+  function connectNodes(aNode, bNode) {
+    if (!aNode || !bNode || aNode.id === bNode.id) return;
+    if (edgeExists(aNode.id, bNode.id)) return toast('이미 연결된 노드입니다.');
+    const a = getNodeAnchor(aNode);
+    const b = getNodeAnchor(bNode);
+    const path = findPath(a.x, a.y, b.x, b.y, [aNode.id, bNode.id]);
+    if (!path || path.length < 2) return toast('연결 가능한 경로를 찾지 못했습니다. 물 지형이나 장애물을 확인하세요.');
+    pushHistory();
+    for (const p of path) {
+      const i = idx(p.x, p.y);
+      if (tiles[i] === 3) tiles[i] = 0;
+    }
+    edges.push({ id: nextEdgeId++, a:aNode.id, b:bNode.id, level:1, traffic:0, path });
+    rebuildEdgeRoadMask();
+    rebuildVehicles();
+    rebuildMiniTerrain();
+    renderInspector();
+    updateStats(true);
+    toast(`${aNode.name} ↔ ${bNode.name} 도로 연결 완료`);
+  }
+
+  class MinHeap {
+    constructor() { this.a = []; }
+    get size() { return this.a.length; }
+    push(idx, f) {
+      const n = { idx, f };
+      const a = this.a;
+      a.push(n);
+      let i = a.length - 1;
+      while (i > 0) {
+        const p = (i - 1) >> 1;
+        if (a[p].f <= n.f) break;
+        a[i] = a[p]; i = p;
+      }
+      a[i] = n;
+    }
+    pop() {
+      const a = this.a;
+      if (a.length === 1) return a.pop();
+      const top = a[0];
+      const n = a.pop();
+      let i = 0;
+      while (true) {
+        let l = i * 2 + 1, r = l + 1;
+        if (l >= a.length) break;
+        let c = (r < a.length && a[r].f < a[l].f) ? r : l;
+        if (a[c].f >= n.f) break;
+        a[i] = a[c]; i = c;
+      }
+      a[i] = n;
+      return top;
+    }
+  }
+
+  function findPath(sx, sy, gx, gy, allowedOccupants = []) {
+    if (!inBounds(sx, sy) || !inBounds(gx, gy)) return null;
+    const start = idx(sx, sy), goal = idx(gx, gy);
+    const allowedSet = new Set(allowedOccupants);
+    const total = MAP_W * MAP_H;
+    const g = new Float32Array(total);
+    const parent = new Int32Array(total);
+    const closed = new Uint8Array(total);
+    g.fill(Infinity);
+    parent.fill(-1);
+    const heap = new MinHeap();
+    g[start] = 0;
+    heap.push(start, Math.abs(sx - gx) + Math.abs(sy - gy));
+    const dirs = [1,0,-1,0,1];
+    let iterations = 0;
+    const maxIterations = total * 3;
+
+    while (heap.size && iterations++ < maxIterations) {
+      const cur = heap.pop().idx;
+      if (closed[cur]) continue;
+      if (cur === goal) {
+        const path = [];
+        let p = goal;
+        while (p !== -1) {
+          path.push({ x:p % MAP_W, y:(p / MAP_W) | 0 });
+          if (p === start) break;
+          p = parent[p];
+        }
+        return path.reverse();
+      }
+      closed[cur] = 1;
+      const x = cur % MAP_W, y = (cur / MAP_W) | 0;
+      for (let d = 0; d < 4; d++) {
+        const nx = x + dirs[d], ny = y + dirs[d + 1];
+        if (!inBounds(nx, ny)) continue;
+        const ni = idx(nx, ny);
+        if (closed[ni]) continue;
+        const step = traversalCost(ni, start, goal, allowedSet);
+        if (!Number.isFinite(step)) continue;
+        const ng = g[cur] + step;
+        if (ng < g[ni]) {
+          g[ni] = ng;
+          parent[ni] = cur;
+          const h = Math.abs(nx - gx) + Math.abs(ny - gy);
+          heap.push(ni, ng + h * 1.05);
+        }
+      }
+    }
+    return null;
+  }
+
+  function traversalCost(i, start, goal, allowedSet = new Set()) {
+    const terrain = tiles[i];
+    if (terrain === 1 && i !== start && i !== goal) return Infinity;
+    const occ = occupancy[i];
+    if (occ !== -1 && i !== start && i !== goal && !allowedSet.has(occ)) return Infinity;
+    let c = TERRAIN[terrain].cost;
+    if (isRoadIndex(i)) c *= 0.35;
+    if (terrain === 4) c += 2.0;
+    return c;
+  }
+
+  function rebuildVehicles() {
+    vehicles = [];
+    for (const e of edges) {
+      if (e.path.length < 2) continue;
+      const count = e.path.length > 120 ? 3 : 2;
+      for (let i = 0; i < count; i++) {
+        vehicles.push({ edgeId:e.id, t:(i / count + hash2(e.id, i)) % 1, speed:5.5 + hash2(i, e.id) * 3.5, size:5 + hash2(e.id, i + 3) * 2 });
+      }
+    }
+  }
+
+  function update(dt, now) {
+    const panSpeed = 740 / camera.zoom;
+    if (input.keys.has('ArrowLeft') || input.keys.has('a')) camera.x -= panSpeed * dt;
+    if (input.keys.has('ArrowRight') || input.keys.has('d')) camera.x += panSpeed * dt;
+    if (input.keys.has('ArrowUp') || input.keys.has('w')) camera.y -= panSpeed * dt;
+    if (input.keys.has('ArrowDown') || input.keys.has('s')) camera.y += panSpeed * dt;
+    clampCamera();
+
+    if (simEnabled) {
+      for (const v of vehicles) {
+        const e = edges.find(edge => edge.id === v.edgeId);
+        if (!e || e.path.length < 2) continue;
+        v.t = (v.t + dt * v.speed / Math.max(8, e.path.length)) % 1;
+      }
+    }
+    if (now - lastStatsAt > 400) {
+      updateStats(false);
+      lastStatsAt = now;
+    }
+  }
+
+  function getVisibleTileRange(pad = 2) {
+    const tx0 = clamp(Math.floor(camera.x / TILE) - pad, 0, MAP_W - 1);
+    const ty0 = clamp(Math.floor(camera.y / TILE) - pad, 0, MAP_H - 1);
+    const tx1 = clamp(Math.ceil((camera.x + view.w / camera.zoom) / TILE) + pad, 0, MAP_W - 1);
+    const ty1 = clamp(Math.ceil((camera.y + view.h / camera.zoom) / TILE) + pad, 0, MAP_H - 1);
+    return { tx0, ty0, tx1, ty1 };
+  }
+
+  function render() {
+    ctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    const grad = ctx.createLinearGradient(0, 0, 0, view.h);
+    grad.addColorStop(0, '#09131b');
+    grad.addColorStop(1, '#05090e');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, view.w, view.h);
+
+    ctx.save();
+    ctx.translate(-camera.x * camera.zoom, -camera.y * camera.zoom);
+    ctx.scale(camera.zoom, camera.zoom);
+
+    const r = getVisibleTileRange();
+    drawTerrain(r);
+    drawGrid(r);
+    drawRoads(r);
+    drawEdgeHighlights(r);
+    drawVehicles();
+    drawNodes();
+    drawGhosts();
+
+    ctx.restore();
+    drawSelectionLine();
+    drawTopOverlay();
+    drawMiniMap();
+  }
+
+  function drawTerrain({ tx0, ty0, tx1, ty1 }) {
+    for (let y = ty0; y <= ty1; y++) {
+      for (let x = tx0; x <= tx1; x++) {
+        const i = idx(x, y);
+        const t = TERRAIN[tiles[i]];
+        ctx.fillStyle = t.color;
+        ctx.fillRect(x * TILE, y * TILE, TILE + 0.5, TILE + 0.5);
+        const h = hash2(x, y) - 0.5;
+        if (h > 0) {
+          ctx.fillStyle = `rgba(255,255,255,${h * 0.055})`;
+          ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+        } else {
+          ctx.fillStyle = `rgba(0,0,0,${-h * 0.065})`;
+          ctx.fillRect(x * TILE, y * TILE, TILE, TILE);
+        }
+        if (tiles[i] === 1) {
+          ctx.fillStyle = `rgba(255,255,255,${0.03 + hash2(x + 31, y - 9) * 0.045})`;
+          ctx.beginPath();
+          ctx.ellipse(x * TILE + TILE * .5, y * TILE + TILE * .45, TILE * .31, TILE * .10, -0.4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (tiles[i] === 3 && camera.zoom > 0.34) {
+          ctx.fillStyle = 'rgba(10,48,29,.35)';
+          ctx.beginPath();
+          ctx.arc(x * TILE + TILE * .55, y * TILE + TILE * .48, TILE * .23, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        if (tiles[i] === 4 && camera.zoom > 0.30) {
+          ctx.fillStyle = 'rgba(255,255,255,.13)';
+          ctx.beginPath();
+          ctx.moveTo(x * TILE + TILE * .20, y * TILE + TILE * .75);
+          ctx.lineTo(x * TILE + TILE * .52, y * TILE + TILE * .21);
+          ctx.lineTo(x * TILE + TILE * .84, y * TILE + TILE * .77);
+          ctx.closePath();
+          ctx.fill();
+        }
+      }
+    }
+  }
+
+  function drawGrid({ tx0, ty0, tx1, ty1 }) {
+    if (camera.zoom < 0.42) return;
+    ctx.strokeStyle = camera.zoom > 1.2 ? 'rgba(255,255,255,.105)' : 'rgba(255,255,255,.055)';
+    ctx.lineWidth = 1 / camera.zoom;
+    ctx.beginPath();
+    for (let x = tx0; x <= tx1 + 1; x++) {
+      ctx.moveTo(x * TILE, ty0 * TILE);
+      ctx.lineTo(x * TILE, (ty1 + 1) * TILE);
+    }
+    for (let y = ty0; y <= ty1 + 1; y++) {
+      ctx.moveTo(tx0 * TILE, y * TILE);
+      ctx.lineTo((tx1 + 1) * TILE, y * TILE);
+    }
+    ctx.stroke();
+  }
+
+  function roadSegments(range, draw) {
+    const { tx0, ty0, tx1, ty1 } = range;
+    for (let y = ty0; y <= ty1; y++) {
+      for (let x = tx0; x <= tx1; x++) {
+        if (!isRoadTile(x, y)) continue;
+        const cx = x * TILE + TILE / 2;
+        const cy = y * TILE + TILE / 2;
+        if (x < MAP_W - 1 && isRoadTile(x + 1, y)) draw(cx, cy, cx + TILE, cy);
+        if (y < MAP_H - 1 && isRoadTile(x, y + 1)) draw(cx, cy, cx, cy + TILE);
+      }
+    }
+  }
+
+  function drawRoadLayer(range, width, color, alpha = 1) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    roadSegments(range, (x1, y1, x2, y2) => { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); });
+    ctx.stroke();
+    const { tx0, ty0, tx1, ty1 } = range;
+    ctx.fillStyle = color;
+    for (let y = ty0; y <= ty1; y++) {
+      for (let x = tx0; x <= tx1; x++) {
+        if (!isRoadTile(x, y)) continue;
+        ctx.beginPath();
+        ctx.arc(x * TILE + TILE / 2, y * TILE + TILE / 2, width * .52, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawRoads(range) {
+    drawRoadLayer(range, TILE * .52, 'rgba(70,54,30,.50)', .70);
+    drawRoadLayer(range, TILE * .38, '#8a6b3b', .95);
+    drawRoadLayer(range, TILE * .25, '#d9bd77', 1);
+    if (camera.zoom > 0.62) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,255,255,.20)';
+      ctx.lineCap = 'round';
+      ctx.lineWidth = TILE * .035;
+      ctx.setLineDash([TILE * .25, TILE * .24]);
+      ctx.beginPath();
+      roadSegments(range, (x1, y1, x2, y2) => { ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); });
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  function drawEdgeHighlights(range) {
+    if (!roadStartNode || input.tool !== 'road') return;
+    const a = getNodeAnchor(roadStartNode);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(110,231,183,.55)';
+    ctx.lineWidth = 3 / camera.zoom;
+    ctx.setLineDash([8 / camera.zoom, 7 / camera.zoom]);
+    ctx.beginPath();
+    ctx.moveTo((a.x + .5) * TILE, (a.y + .5) * TILE);
+    ctx.lineTo(pointer.wx, pointer.wy);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawVehicles() {
+    if (!simEnabled || camera.zoom < 0.32) return;
+    for (const v of vehicles) {
+      const edge = edges.find(e => e.id === v.edgeId);
+      if (!edge) continue;
+      const s = samplePath(edge.path, v.t);
+      if (!s) continue;
+      ctx.save();
+      ctx.translate(s.x, s.y);
+      ctx.rotate(s.angle);
+      ctx.fillStyle = '#ecfeff';
+      ctx.shadowColor = 'rgba(125,211,252,.75)';
+      ctx.shadowBlur = 10;
+      roundRect(ctx, -v.size * 1.15, -v.size * .62, v.size * 2.3, v.size * 1.24, v.size * .45);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.fillStyle = 'rgba(30,64,175,.55)';
+      roundRect(ctx, -v.size * .35, -v.size * .44, v.size * .7, v.size * .88, v.size * .25);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function samplePath(path, t) {
+    if (!path || path.length < 2) return null;
+    const f = t * (path.length - 1);
+    const i = Math.min(path.length - 2, Math.floor(f));
+    const lt = f - i;
+    const p0 = path[i], p1 = path[i + 1];
+    const x0 = (p0.x + .5) * TILE, y0 = (p0.y + .5) * TILE;
+    const x1 = (p1.x + .5) * TILE, y1 = (p1.y + .5) * TILE;
+    return { x:lerp(x0, x1, lt), y:lerp(y0, y1, lt), angle:Math.atan2(y1 - y0, x1 - x0) };
+  }
+
+  function drawNodes() {
+    const r = getVisibleTileRange(6);
+    for (const node of nodes) {
+      const def = NODE_TYPES[node.type];
+      if (node.x + def.w < r.tx0 || node.x > r.tx1 || node.y + def.h < r.ty0 || node.y > r.ty1) continue;
+      const x = node.x * TILE, y = node.y * TILE, w = def.w * TILE, h = def.h * TILE;
+      const isSel = selected?.kind === 'node' && selected.id === node.id;
+      const isHover = hoverNode?.id === node.id;
+      ctx.save();
+      ctx.shadowColor = isSel ? 'rgba(110,231,183,.6)' : 'rgba(0,0,0,.42)';
+      ctx.shadowBlur = isSel ? 22 : 10;
+      ctx.fillStyle = 'rgba(0,0,0,.22)';
+      roundRect(ctx, x + 4, y + h - 8, w - 8, 14, 8);
+      ctx.fill();
+      ctx.fillStyle = def.color;
+      roundRect(ctx, x + 3, y + 5, w - 6, h - 9, 8);
+      ctx.fill();
+      ctx.fillStyle = def.roof;
+      roundRect(ctx, x + 8, y + 2, w - 16, Math.max(12, h * .34), 7);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = isSel ? '#6ee7b7' : isHover ? 'rgba(255,255,255,.78)' : 'rgba(255,255,255,.34)';
+      ctx.lineWidth = isSel ? 3 / camera.zoom : 1.5 / camera.zoom;
+      roundRect(ctx, x + 3, y + 5, w - 6, h - 9, 8);
+      ctx.stroke();
+      if (camera.zoom > 0.55) {
+        ctx.font = `900 ${Math.max(12, TILE * .52)}px system-ui, sans-serif`;
+        ctx.fillStyle = 'rgba(0,0,0,.38)';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(def.icon, x + w / 2 + 1, y + h / 2 + 1);
+        ctx.fillStyle = 'rgba(255,255,255,.93)';
+        ctx.fillText(def.icon, x + w / 2, y + h / 2);
+      }
+      if (camera.zoom > 0.74) {
+        ctx.font = `800 ${10 / camera.zoom}px system-ui, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = 'rgba(6,12,18,.72)';
+        roundRect(ctx, x + w / 2 - 35 / camera.zoom, y + h + 2, 70 / camera.zoom, 18 / camera.zoom, 9 / camera.zoom);
+        ctx.fill();
+        ctx.fillStyle = '#eafffb';
+        ctx.fillText(`${def.label} Lv.${node.level || 1}`, x + w / 2, y + h + 5 / camera.zoom);
+      }
+      ctx.restore();
+    }
+  }
+
+  function drawGhosts() {
+    if (!pointer.inside || !inBounds(pointer.tx, pointer.ty)) return;
+    if (input.tool === 'node') {
+      const type = $('nodeSelect').value;
+      const def = NODE_TYPES[type];
+      const check = canPlaceNode(type, pointer.tx, pointer.ty);
+      ctx.save();
+      ctx.globalAlpha = .72;
+      ctx.fillStyle = check.ok ? 'rgba(110,231,183,.22)' : 'rgba(255,118,108,.22)';
+      ctx.strokeStyle = check.ok ? '#6ee7b7' : '#ff766c';
+      ctx.lineWidth = 2 / camera.zoom;
+      roundRect(ctx, pointer.tx * TILE, pointer.ty * TILE, def.w * TILE, def.h * TILE, 8);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    }
+    if (input.tool === 'terrain') {
+      ctx.save();
+      ctx.strokeStyle = '#f8fafc';
+      ctx.lineWidth = 2 / camera.zoom;
+      ctx.strokeRect(pointer.tx * TILE + 1, pointer.ty * TILE + 1, TILE - 2, TILE - 2);
+      ctx.restore();
+    }
+    if (input.tool === 'road') {
+      ctx.save();
+      ctx.fillStyle = canRoadOnTile(pointer.tx, pointer.ty) ? 'rgba(248,217,138,.45)' : 'rgba(255,118,108,.35)';
+      ctx.beginPath();
+      ctx.arc(pointer.tx * TILE + TILE/2, pointer.ty * TILE + TILE/2, TILE * .22, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  function drawSelectionLine() {
+    if (!selectedTile) return;
+    const sx = (selectedTile.x * TILE - camera.x) * camera.zoom;
+    const sy = (selectedTile.y * TILE - camera.y) * camera.zoom;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(125,211,252,.9)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(sx, sy, TILE * camera.zoom, TILE * camera.zoom);
+    ctx.restore();
+  }
+
+  function drawTopOverlay() {
+    if (input.tool !== 'road' || !roadStartNode) return;
+    ctx.save();
+    ctx.font = '800 13px system-ui, sans-serif';
+    const text = `도로 시작: ${roadStartNode.name} · 연결할 두 번째 노드를 클릭하세요`;
+    const w = ctx.measureText(text).width + 26;
+    ctx.fillStyle = 'rgba(8,13,20,.76)';
+    roundRect(ctx, view.w / 2 - w / 2, 82, w, 34, 17);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(110,231,183,.42)';
+    ctx.stroke();
+    ctx.fillStyle = '#eafffb';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, view.w / 2, 99);
+    ctx.restore();
+  }
+
+  function drawMiniMap() {
+    const cssW = mini.clientWidth || 220;
+    const cssH = mini.clientHeight || 220;
+    mctx.setTransform(view.dpr, 0, 0, view.dpr, 0, 0);
+    mctx.clearRect(0, 0, cssW, cssH);
+    mctx.fillStyle = '#071019';
+    mctx.fillRect(0, 0, cssW, cssH);
+    const scale = Math.min(cssW / MAP_W, cssH / MAP_H);
+    const ox = (cssW - MAP_W * scale) / 2;
+    const oy = (cssH - MAP_H * scale) / 2;
+    mctx.imageSmoothingEnabled = false;
+    mctx.drawImage(miniCache, ox, oy, MAP_W * scale, MAP_H * scale);
+    mctx.drawImage(miniRoadCache, ox, oy, MAP_W * scale, MAP_H * scale);
+    for (const n of nodes) {
+      const def = NODE_TYPES[n.type];
+      mctx.fillStyle = def.color;
+      mctx.fillRect(ox + n.x * scale, oy + n.y * scale, Math.max(2, def.w * scale), Math.max(2, def.h * scale));
+    }
+    const vx = camera.x / TILE;
+    const vy = camera.y / TILE;
+    const vw = (view.w / camera.zoom) / TILE;
+    const vh = (view.h / camera.zoom) / TILE;
+    mctx.strokeStyle = '#ffffff';
+    mctx.lineWidth = 1.5;
+    mctx.strokeRect(ox + vx * scale, oy + vy * scale, vw * scale, vh * scale);
+    mctx.strokeStyle = 'rgba(110,231,183,.8)';
+    mctx.lineWidth = 1;
+    mctx.strokeRect(.5, .5, cssW - 1, cssH - 1);
+  }
+
+  function roundRect(c, x, y, w, h, r) {
+    r = Math.min(r, Math.abs(w) / 2, Math.abs(h) / 2);
+    c.beginPath();
+    c.moveTo(x + r, y);
+    c.arcTo(x + w, y, x + w, y + h, r);
+    c.arcTo(x + w, y + h, x, y + h, r);
+    c.arcTo(x, y + h, x, y, r);
+    c.arcTo(x, y, x + w, y, r);
+    c.closePath();
+  }
+
+  function renderInspector() {
+    const el = $('inspector');
+    const node = getSelectedNode();
+    if (node) {
+      const def = NODE_TYPES[node.type];
+      const connected = edges.filter(e => e.a === node.id || e.b === node.id);
+      const cap = def.capacity * (node.level || 1);
+      el.innerHTML = `
+        <div class="row"><span class="label">선택</span><b>${node.name}</b></div>
+        <div class="row"><span class="label">타입</span><span class="badge">${def.label}</span></div>
+        <div class="row"><span class="label">좌표</span><span>${node.x}, ${node.y}</span></div>
+        <div class="row"><span class="label">크기</span><span>${def.w}×${def.h} tiles</span></div>
+        <div class="row"><span class="label">레벨</span><span>Lv.${node.level || 1}</span></div>
+        <div class="row"><span class="label">연결</span><span>${connected.length}개</span></div>
+        <div class="row"><span class="label">용량</span><span>${cap.toLocaleString()}</span></div>
+        <div class="row"><span class="label">월수익</span><span>${(def.income * (node.level || 1)).toLocaleString()}</span></div>
+        <div class="hint">${def.desc}</div>
+      `;
+      return;
+    }
+    if (selectedTile && inBounds(selectedTile.x, selectedTile.y)) {
+      const i = idx(selectedTile.x, selectedTile.y);
+      const occ = occupancy[i];
+      el.innerHTML = `
+        <div class="row"><span class="label">타일</span><b>${selectedTile.x}, ${selectedTile.y}</b></div>
+        <div class="row"><span class="label">지형</span><span class="badge">${TERRAIN[tiles[i]].name}</span></div>
+        <div class="row"><span class="label">도로</span><span>${isRoadIndex(i) ? '있음' : '없음'}</span></div>
+        <div class="row"><span class="label">점유</span><span>${occ === -1 ? '비어 있음' : `노드 #${occ}`}</span></div>
+        <div class="row"><span class="label">이동 비용</span><span>${Number.isFinite(TERRAIN[tiles[i]].cost) ? TERRAIN[tiles[i]].cost : '통행 불가'}</span></div>
+      `;
+      return;
+    }
+    el.textContent = '타일이나 노드를 클릭하면 상세 정보가 표시됩니다.';
+  }
+
+  function computeMetrics() {
+    let roadTiles = 0;
+    for (let i = 0; i < manualRoadMask.length; i++) if (isRoadIndex(i)) roadTiles++;
+    let income = 0;
+    for (const n of nodes) income += NODE_TYPES[n.type].income * (n.level || 1);
+    income += Math.round(edges.length * 7 + roadTiles * 0.18);
+    const comps = connectedComponents();
+    const connectedScore = nodes.length <= 1 ? 1 : clamp((nodes.length - comps) / Math.max(1, nodes.length - 1), 0, 1);
+    return { roadTiles, income, comps, connectedScore };
+  }
+
+  function connectedComponents() {
+    if (nodes.length === 0) return 0;
+    const idToPos = new Map(nodes.map((n, i) => [n.id, i]));
+    const parent = nodes.map((_, i) => i);
+    const find = (x) => parent[x] === x ? x : (parent[x] = find(parent[x]));
+    const union = (a, b) => { a = find(a); b = find(b); if (a !== b) parent[b] = a; };
+    for (const e of edges) {
+      if (idToPos.has(e.a) && idToPos.has(e.b)) union(idToPos.get(e.a), idToPos.get(e.b));
+    }
+    return new Set(parent.map((_, i) => find(i))).size;
+  }
+
+  function updateStats(force) {
+    const m = computeMetrics();
+    $('metricNodes').textContent = nodes.length.toLocaleString();
+    $('metricRoads').textContent = m.roadTiles.toLocaleString();
+    $('metricEdges').textContent = edges.length.toLocaleString();
+    $('metricIncome').textContent = m.income.toLocaleString();
+    $('networkBar').style.width = `${Math.round(m.connectedScore * 100)}%`;
+    $('topStats').innerHTML = `노드 <b>${nodes.length}</b> · 도로 <b>${m.roadTiles}</b> · 연결 <b>${edges.length}</b>`;
+  }
+
+  function focusSelection() {
+    const node = getSelectedNode();
+    if (node) {
+      const def = NODE_TYPES[node.type];
+      camera.x = (node.x + def.w / 2) * TILE - (view.w / camera.zoom) / 2;
+      camera.y = (node.y + def.h / 2) * TILE - (view.h / camera.zoom) / 2;
+      camera.zoom = Math.max(camera.zoom, 1.0);
+      clampCamera();
+      return;
+    }
+    if (selectedTile) {
+      camera.x = selectedTile.x * TILE - (view.w / camera.zoom) / 2;
+      camera.y = selectedTile.y * TILE - (view.h / camera.zoom) / 2;
+      clampCamera();
+    }
+  }
+
+  function deleteSelection() {
+    const node = getSelectedNode();
+    if (node) {
+      deleteNode(node.id);
+      toast('선택 노드를 삭제했습니다.');
+      return;
+    }
+    if (selectedTile && removeRoadAt(selectedTile.x, selectedTile.y)) return;
+    toast('삭제할 노드 또는 도로를 선택하세요.');
+  }
+
+  function handleCanvasDown(e) {
+    updatePointer(e);
+    if (e.button === 2 || input.keys.has(' ') || e.altKey) {
+      input.panning = true;
+      input.panStartX = e.clientX; input.panStartY = e.clientY;
+      input.camStartX = camera.x; input.camStartY = camera.y;
+      canvas.style.cursor = 'grabbing';
+      return;
+    }
+    if (e.button !== 0) return;
+
+    if (input.tool === 'terrain') {
+      pushHistory();
+      input.paintingTerrain = true;
+      paintTerrain(pointer.tx, pointer.ty);
+    } else if (input.tool === 'node') {
+      placeNode($('nodeSelect').value, pointer.tx, pointer.ty);
+    } else if (input.tool === 'road') {
+      const n = hoverNode;
+      if (n) {
+        if (!roadStartNode) {
+          roadStartNode = n;
+          selected = { kind:'node', id:n.id };
+          selectedTile = null;
+          renderInspector();
+          toast(`${n.name} 선택. 연결할 두 번째 노드를 클릭하세요.`);
+        } else {
+          const from = roadStartNode;
+          roadStartNode = null;
+          connectNodes(from, n);
+        }
+      } else {
+        pushHistory();
+        input.paintingRoad = true;
+        addManualRoad(pointer.tx, pointer.ty);
+      }
+    } else if (input.tool === 'bulldoze') {
+      input.bulldozing = true;
+      bulldozeAtPointer();
+    } else if (input.tool === 'select') {
+      const n = hoverNode;
+      if (n) {
+        selected = { kind:'node', id:n.id };
+        selectedTile = null;
+        input.draggingNode = n;
+        input.dragOriginal = { x:n.x, y:n.y };
+        input.dragMoved = false;
+        input.dragOffsetX = pointer.tx - n.x;
+        input.dragOffsetY = pointer.ty - n.y;
+      } else {
+        selected = null;
+        selectedTile = inBounds(pointer.tx, pointer.ty) ? { x:pointer.tx, y:pointer.ty } : null;
+      }
+      renderInspector();
+    }
+  }
+
+  function handleCanvasMove(e) {
+    updatePointer(e);
+    if (input.panning) {
+      const dx = (e.clientX - input.panStartX) / camera.zoom;
+      const dy = (e.clientY - input.panStartY) / camera.zoom;
+      camera.x = input.camStartX - dx;
+      camera.y = input.camStartY - dy;
+      clampCamera();
+      return;
+    }
+    if (input.paintingTerrain) paintTerrain(pointer.tx, pointer.ty);
+    if (input.paintingRoad) addManualRoad(pointer.tx, pointer.ty);
+    if (input.bulldozing) {
+      if (manualRoadMask[idxSafe(pointer.tx, pointer.ty)] === 1) {
+        manualRoadMask[idx(pointer.tx, pointer.ty)] = 0;
+        rebuildMiniRoads();
+      }
+    }
+    if (input.draggingNode) {
+      const node = input.draggingNode;
+      const def = NODE_TYPES[node.type];
+      const ntx = clamp(pointer.tx - input.dragOffsetX, 0, MAP_W - def.w);
+      const nty = clamp(pointer.ty - input.dragOffsetY, 0, MAP_H - def.h);
+      if (ntx !== node.x || nty !== node.y) {
+        const check = canPlaceNode(node.type, ntx, nty, node.id);
+        if (check.ok) {
+          if (!input.dragMoved) pushHistory();
+          input.dragMoved = true;
+          clearOccupancy(node);
+          node.x = ntx; node.y = nty;
+          markOccupancy(node, node.id);
+          selected = { kind:'node', id:node.id };
+          renderInspector();
+        }
+      }
+    }
+  }
+
+  function idxSafe(x, y) { return inBounds(x, y) ? idx(x, y) : 0; }
+
+  function handleCanvasUp() {
+    if (input.panning) canvas.style.cursor = 'crosshair';
+    if (input.draggingNode && input.dragMoved) {
+      rerouteEdgesForNode(input.draggingNode.id);
+      rebuildVehicles();
+      toast('노드 위치를 이동하고 연결 도로를 재계산했습니다.');
+    }
+    input.panning = false;
+    input.paintingTerrain = false;
+    input.paintingRoad = false;
+    input.bulldozing = false;
+    input.draggingNode = null;
+    input.dragOriginal = null;
+    input.dragMoved = false;
+    rebuildMiniRoads();
+  }
+
+  function rerouteEdgesForNode(nodeId) {
+    const related = edges.filter(e => e.a === nodeId || e.b === nodeId);
+    for (const e of related) {
+      const a = nodes.find(n => n.id === e.a);
+      const b = nodes.find(n => n.id === e.b);
+      if (!a || !b) continue;
+      const aa = getNodeAnchor(a);
+      const bb = getNodeAnchor(b);
+      const path = findPath(aa.x, aa.y, bb.x, bb.y, [a.id, b.id]);
+      if (path) e.path = path;
+    }
+    rebuildEdgeRoadMask();
+  }
+
+  function bulldozeAtPointer() {
+    const n = hoverNode || nodeAtWorld(pointer.wx, pointer.wy);
+    if (n) {
+      deleteNode(n.id);
+      toast('노드를 철거했습니다.');
+      return;
+    }
+    if (removeRoadAt(pointer.tx, pointer.ty)) return;
+  }
+
+  function handleWheel(e) {
+    e.preventDefault();
+    updatePointer(e);
+    const before = screenToWorld(pointer.x, pointer.y);
+    const factor = Math.exp(-e.deltaY * 0.0011);
+    camera.zoom = clamp(camera.zoom * factor, 0.18, 3.2);
+    camera.x = before.x - pointer.x / camera.zoom;
+    camera.y = before.y - pointer.y / camera.zoom;
+    clampCamera();
+  }
+
+  function setupEvents() {
+    window.addEventListener('resize', resize);
+    canvas.addEventListener('contextmenu', e => e.preventDefault());
+    canvas.addEventListener('mousedown', handleCanvasDown);
+    canvas.addEventListener('mousemove', handleCanvasMove);
+    window.addEventListener('mouseup', handleCanvasUp);
+    canvas.addEventListener('wheel', handleWheel, { passive:false });
+    canvas.addEventListener('mouseleave', () => { pointer.inside = false; });
+
+    $('toolButtons').addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-tool]');
+      if (btn) setTool(btn.dataset.tool);
+    });
+    $('undoBtn').addEventListener('click', undo);
+    $('saveBtn').addEventListener('click', saveLocal);
+    $('loadBtn').addEventListener('click', loadLocal);
+    $('exportBtn').addEventListener('click', exportJSON);
+    $('resetBtn').addEventListener('click', () => {
+      if (!confirm('현재 맵을 초기화할까요? 저장하지 않은 변경사항은 사라집니다.')) return;
+      pushHistory();
+      seed = Math.floor(Math.random() * 999999);
+      generateMap();
+      updateStats(true);
+      renderInspector();
+    });
+    $('simBtn').addEventListener('click', () => {
+      simEnabled = !simEnabled;
+      $('simBtn').classList.toggle('active', simEnabled);
+      $('simBtn').textContent = simEnabled ? '시뮬 ON' : '시뮬 OFF';
+    });
+    $('importFile').addEventListener('change', (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          pushHistory();
+          loadState(JSON.parse(reader.result));
+        } catch (err) {
+          console.error(err);
+          toast('가져오기 실패: JSON 파일을 확인하세요.');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    });
+    $('focusSelectionBtn').addEventListener('click', focusSelection);
+    $('upgradeBtn').addEventListener('click', upgradeSelectedNode);
+    $('deleteSelectionBtn').addEventListener('click', deleteSelection);
+
+    window.addEventListener('keydown', (e) => {
+      const tag = document.activeElement?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+      input.keys.add(e.key.toLowerCase());
+      if (e.key === '1') setTool('select');
+      if (e.key === '2') setTool('terrain');
+      if (e.key === '3') setTool('node');
+      if (e.key === '4') setTool('road');
+      if (e.key === '5') setTool('bulldoze');
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveLocal(); }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+      if (e.key === '+' || e.key === '=') { camera.zoom = clamp(camera.zoom * 1.13, 0.18, 3.2); clampCamera(); }
+      if (e.key === '-' || e.key === '_') { camera.zoom = clamp(camera.zoom / 1.13, 0.18, 3.2); clampCamera(); }
+      if (e.key === 'Escape') { roadStartNode = null; input.draggingNode = null; }
+    });
+    window.addEventListener('keyup', (e) => input.keys.delete(e.key.toLowerCase()));
+  }
+
+  function toast(message) {
+    const el = $('toast');
+    el.textContent = message;
+    el.classList.add('show');
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => el.classList.remove('show'), 2100);
+  }
+
+  let last = performance.now();
+  function loop(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt, now);
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function boot() {
+    resize();
+    setupEvents();
+    generateMap();
+    camera.x = worldW() / 2 - view.w / camera.zoom / 2;
+    camera.y = worldH() / 2 - view.h / camera.zoom / 2;
+    updateUndoState();
+    updateStats(true);
+    renderInspector();
+    requestAnimationFrame(loop);
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>

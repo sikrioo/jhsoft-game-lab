@@ -1,0 +1,1037 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>MiniSim</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #1a2332;
+  font-family: system-ui, -apple-system, sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  user-select: none;
+}
+canvas { display:block; }
+
+/* HUD */
+#hud-top {
+  position: fixed; top: 0; left: 0; right: 0;
+  height: 52px;
+  display: flex; align-items: center;
+  padding: 0 20px;
+  gap: 10px;
+  pointer-events: none;
+  z-index: 100;
+}
+#hud-bottom {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  z-index: 100;
+}
+.pill {
+  background: rgba(15,20,30,0.85);
+  backdrop-filter: blur(8px);
+  border-radius: 999px;
+  padding: 8px 18px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: .3px;
+  pointer-events: all;
+  cursor: pointer;
+  border: none;
+  display: flex; align-items: center; gap: 7px;
+  transition: background .15s, transform .1s;
+  box-shadow: 0 2px 12px rgba(0,0,0,.4);
+}
+.pill:hover { background: rgba(30,40,55,0.95); transform: translateY(-1px); }
+.pill.active { background: rgba(59,130,246,0.9); }
+.pill.active-road { background: rgba(234,179,8,0.9); }
+.pill.active-erase { background: rgba(239,68,68,0.8); }
+.pill-icon { font-size: 16px; line-height: 1; }
+.pill-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Speed button */
+#speed-btn {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+  background: rgba(15,20,30,0.85);
+  backdrop-filter: blur(8px);
+  border-radius: 999px;
+  padding: 7px 18px;
+  color: #fff;
+  font-size: 13px; font-weight: 700;
+  border: none; cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+  box-shadow: 0 2px 12px rgba(0,0,0,.4);
+  z-index: 100;
+}
+
+/* Node type picker - appears near cursor */
+#type-picker {
+  position: fixed;
+  background: rgba(15,20,30,0.92);
+  backdrop-filter: blur(12px);
+  border-radius: 14px;
+  padding: 10px;
+  display: none;
+  gap: 8px;
+  z-index: 200;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  flex-wrap: wrap;
+  max-width: 200px;
+}
+.nt-btn {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
+  font-size: 20px;
+  display: flex; align-items: center; justify-content: center;
+  transition: transform .1s;
+}
+.nt-btn:hover { transform: scale(1.15); }
+
+/* Minimap */
+#minimap {
+  position: fixed; bottom: 70px; right: 16px;
+  width: 140px; height: 100px;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  border: 1.5px solid rgba(255,255,255,.1);
+  z-index: 100;
+}
+#minimap canvas { width: 100%; height: 100%; }
+
+/* Info panel */
+#info-panel {
+  position: fixed; top: 60px; right: 16px;
+  background: rgba(15,20,30,0.85);
+  backdrop-filter: blur(8px);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: #fff;
+  font-size: 12px;
+  min-width: 140px;
+  z-index: 100;
+  display: none;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+#info-panel h4 { font-size: 11px; opacity: .5; text-transform: uppercase; letter-spacing: .8px; margin-bottom: 8px; }
+.ip-row { display: flex; justify-content: space-between; gap: 20px; margin-bottom: 5px; }
+.ip-k { opacity: .6; }
+.ip-v { font-weight: 600; }
+#info-input {
+  width: 100%; margin-top: 8px;
+  background: rgba(255,255,255,.1);
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 6px;
+  padding: 5px 8px;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+}
+#info-input:focus { border-color: rgba(59,130,246,.6); }
+#info-del {
+  width: 100%; margin-top: 8px;
+  background: rgba(239,68,68,.15);
+  border: 1px solid rgba(239,68,68,.3);
+  border-radius: 6px;
+  padding: 5px;
+  color: #f87171;
+  font-size: 12px;
+  cursor: pointer;
+}
+#info-del:hover { background: rgba(239,68,68,.25); }
+
+/* Toast */
+#toast {
+  position: fixed; top: 60px; left: 50%; transform: translateX(-50%);
+  background: rgba(15,20,30,.9);
+  color: #fff; font-size: 12px; font-weight: 500;
+  padding: 7px 18px; border-radius: 999px;
+  pointer-events: none; z-index: 999;
+  opacity: 0; transition: opacity .3s;
+  white-space: nowrap;
+}
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+
+<!-- TOP HUD -->
+<div id="hud-top">
+  <!-- left: stats -->
+  <div class="pill" style="pointer-events:none; gap:14px; border-radius:12px; padding:8px 16px;">
+    <span id="st-nodes" style="font-size:18px;font-weight:800">0</span>
+    <span style="opacity:.5;font-size:11px">NODES</span>
+    <span id="st-roads" style="font-size:18px;font-weight:800;margin-left:4px">0</span>
+    <span style="opacity:.5;font-size:11px">ROADS</span>
+  </div>
+</div>
+
+<button id="speed-btn" onclick="cycleSpeed()">
+  <span id="speed-icon">▶▶</span>
+  <span id="speed-lbl">1×</span>
+</button>
+
+<!-- BOTTOM TOOLBAR -->
+<div id="hud-bottom">
+  <button class="pill active" id="btn-node" onclick="setTool('node')">
+    <span class="pill-icon">📍</span> Node
+  </button>
+  <button class="pill" id="btn-road" onclick="setTool('road')">
+    <span class="pill-icon">〰</span> Road
+  </button>
+  <button class="pill" id="btn-select" onclick="setTool('select')">
+    <span class="pill-icon">↖</span> Select
+  </button>
+  <button class="pill" id="btn-erase" onclick="setTool('erase')">
+    <span class="pill-icon">✕</span> Erase
+  </button>
+  <div style="width:1px;height:24px;background:rgba(255,255,255,.15)"></div>
+  <button class="pill" onclick="saveMap()" style="opacity:.7">💾</button>
+  <button class="pill" onclick="loadMap()" style="opacity:.7">📂</button>
+</div>
+
+<!-- NODE TYPE PICKER -->
+<div id="type-picker"></div>
+
+<!-- MINIMAP -->
+<div id="minimap"><canvas id="mm"></canvas></div>
+
+<!-- INFO PANEL -->
+<div id="info-panel">
+  <h4 id="ip-title">Node</h4>
+  <div class="ip-row"><span class="ip-k">Type</span><span class="ip-v" id="ip-type">—</span></div>
+  <div class="ip-row"><span class="ip-k">Pos</span><span class="ip-v" id="ip-pos">—</span></div>
+  <div class="ip-row" id="ip-conn-row"><span class="ip-k">Roads</span><span class="ip-v" id="ip-conn">—</span></div>
+  <input id="info-input" placeholder="Label..." onchange="renameSelected(this.value)" style="display:none">
+  <button id="info-del" onclick="deleteSel()">Delete</button>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+// MiniSim — Mini Metro / Mini Motorways style map editor
+// ═══════════════════════════════════════════════════════
+
+const cv = document.getElementById('c');
+const ctx = cv.getContext('2d');
+const mmCv = document.getElementById('mm');
+const mmCtx = mmCv.getContext('2d');
+
+// ── WORLD SIZE ──────────────────────────────────────────
+const WORLD_W = 2400;
+const WORLD_H = 1600;
+
+// ── NODE TYPES ──────────────────────────────────────────
+const NODE_TYPES = [
+  { id:'city',    label:'City',    color:'#3b82f6', bg:'#1d4ed8', emoji:'🏙', r:28 },
+  { id:'factory', label:'Factory', color:'#eab308', bg:'#a16207', emoji:'🏭', r:22 },
+  { id:'farm',    label:'Farm',    color:'#22c55e', bg:'#15803d', emoji:'🌾', r:20 },
+  { id:'port',    label:'Port',    color:'#06b6d4', bg:'#0e7490', emoji:'⚓', r:22 },
+  { id:'hub',     label:'Hub',     color:'#a855f7', bg:'#7e22ce', emoji:'🔗', r:20 },
+  { id:'mine',    label:'Mine',    color:'#f97316', bg:'#c2410c', emoji:'⛏', r:20 },
+];
+
+const ROAD_TYPES = [
+  { id:'road',    label:'Road',    color:'#94a3b8', width:6  },
+  { id:'highway', label:'Highway', color:'#eab308', width:9  },
+  { id:'rail',    label:'Rail',    color:'#60a5fa', width:4, dash:true },
+];
+
+// ── STATE ───────────────────────────────────────────────
+let nodes = [], roads = [];
+let nextNid = 1, nextRid = 1;
+let tool = 'node';
+let selNodeType = 'city';
+let selRoadType = 'road';
+let selected = null;
+let roadFrom = null;
+let cam = { x: 0, y: 0, zoom: 1 };
+let undos = [], redos = [];
+let simSpeed = 1; // 0=paused,1,2,3
+let simTime = 0;
+// Vehicles: [{id, roadId, t, dir, color}]
+let vehicles = [];
+let nextVid = 1;
+
+// Terrain blobs (organic background shapes)
+let terrainBlobs = [];
+let riverPath = null;
+
+// ── CAMERA ──────────────────────────────────────────────
+function centerCam() {
+  cam.zoom = Math.min(cv.width / WORLD_W, cv.height / WORLD_H) * 0.92;
+  cam.x = cv.width / 2 - WORLD_W * cam.zoom / 2;
+  cam.y = cv.height / 2 - WORLD_H * cam.zoom / 2;
+}
+
+function worldToScreen(wx, wy) {
+  return { sx: cam.x + wx * cam.zoom, sy: cam.y + wy * cam.zoom };
+}
+function screenToWorld(sx, sy) {
+  return { wx: (sx - cam.x) / cam.zoom, wy: (sy - cam.y) / cam.zoom };
+}
+
+// ── TERRAIN GENERATION ──────────────────────────────────
+function generateTerrain() {
+  terrainBlobs = [];
+  // Dark region blobs (land masses / districts)
+  const blobDefs = [
+    { x: 300,  y: 200,  rx: 380, ry: 280 },
+    { x: 900,  y: 300,  rx: 320, ry: 220 },
+    { x: 1500, y: 250,  rx: 260, ry: 200 },
+    { x: 400,  y: 900,  rx: 350, ry: 280 },
+    { x: 1100, y: 850,  rx: 400, ry: 260 },
+    { x: 1900, y: 700,  rx: 300, ry: 250 },
+    { x: 700,  y: 1300, rx: 280, ry: 200 },
+    { x: 1400, y: 1200, rx: 340, ry: 220 },
+    { x: 2100, y: 1100, rx: 260, ry: 200 },
+  ];
+  terrainBlobs = blobDefs;
+
+  // River: bezier path across the map
+  riverPath = [
+    { x: 1100, y: 0 },
+    { x: 1050, y: 200 },
+    { x: 1200, y: 450 },
+    { x: 1150, y: 700 },
+    { x: 1300, y: 950 },
+    { x: 1100, y: 1200 },
+    { x: 1200, y: 1400 },
+    { x: 1150, y: 1600 },
+  ];
+}
+
+// ── DRAW ────────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0, 0, cv.width, cv.height);
+  ctx.save();
+  ctx.translate(cam.x, cam.y);
+  ctx.scale(cam.zoom, cam.zoom);
+
+  drawTerrain();
+  drawRoads();
+  drawVehicles();
+  drawNodes();
+  drawRoadPreview();
+
+  ctx.restore();
+  drawMinimap();
+}
+
+function drawTerrain() {
+  // Base ocean/bg color
+  ctx.fillStyle = '#1a2332';
+  ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+
+  // Land blobs
+  for (const b of terrainBlobs) {
+    ctx.save();
+    const grad = ctx.createRadialGradient(b.x, b.y, 0, b.x, b.y, Math.max(b.rx, b.ry));
+    grad.addColorStop(0, 'rgba(40,55,75,0.9)');
+    grad.addColorStop(0.7, 'rgba(32,44,62,0.6)');
+    grad.addColorStop(1, 'rgba(26,35,50,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    // Organic blob via bezier
+    drawBlob(ctx, b.x, b.y, b.rx, b.ry);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // River
+  if (riverPath && riverPath.length > 1) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(30,60,100,0.7)';
+    ctx.lineWidth = 60;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(riverPath[0].x, riverPath[0].y);
+    for (let i = 1; i < riverPath.length - 1; i++) {
+      const mx = (riverPath[i].x + riverPath[i+1].x) / 2;
+      const my = (riverPath[i].y + riverPath[i+1].y) / 2;
+      ctx.quadraticCurveTo(riverPath[i].x, riverPath[i].y, mx, my);
+    }
+    ctx.lineTo(riverPath[riverPath.length-1].x, riverPath[riverPath.length-1].y);
+    ctx.stroke();
+
+    // River highlight
+    ctx.strokeStyle = 'rgba(40,80,140,0.4)';
+    ctx.lineWidth = 40;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Scattered dots (population/trees) — pre-seeded
+  ctx.fillStyle = 'rgba(80,120,100,0.35)';
+  for (let i = 0; i < dotPositions.length; i++) {
+    const d = dotPositions[i];
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.r, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+
+function drawBlob(ctx, cx, cy, rx, ry) {
+  const n = 7;
+  ctx.beginPath();
+  for (let i = 0; i <= n; i++) {
+    const angle = (i / n) * Math.PI * 2;
+    const noise = 0.75 + 0.25 * Math.sin(i * 2.3 + cx * 0.01);
+    const x = cx + Math.cos(angle) * rx * noise;
+    const y = cy + Math.sin(angle) * ry * noise;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+}
+
+function drawRoads() {
+  for (const r of roads) {
+    const fn = nodes.find(n => n.id === r.from);
+    const tn = nodes.find(n => n.id === r.to);
+    if (!fn || !tn) continue;
+    const def = ROAD_TYPES.find(t => t.id === r.type) || ROAD_TYPES[0];
+    const isSel = selected?.kind === 'road' && selected.id === r.id;
+
+    const pts = getRoadPoints(fn, tn);
+
+    ctx.save();
+    if (def.dash) ctx.setLineDash([16, 10]);
+
+    // Road casing (dark border)
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = def.width + 4;
+    ctx.lineCap = 'round';
+    drawCurvedRoad(ctx, pts);
+    ctx.stroke();
+
+    // Road fill
+    ctx.strokeStyle = isSel ? '#fbbf24' : def.color;
+    ctx.lineWidth = def.width;
+    drawCurvedRoad(ctx, pts);
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}
+
+function getRoadPoints(fn, tn) {
+  // Slightly curved road
+  const x1 = fn.wx, y1 = fn.wy;
+  const x2 = tn.wx, y2 = tn.wy;
+  return { x1, y1, x2, y2,
+    cx: (x1 + x2) / 2 + (y2 - y1) * 0.15,
+    cy: (y1 + y2) / 2 - (x2 - x1) * 0.15,
+  };
+}
+
+function drawCurvedRoad(ctx, pts) {
+  ctx.beginPath();
+  ctx.moveTo(pts.x1, pts.y1);
+  ctx.quadraticCurveTo(pts.cx, pts.cy, pts.x2, pts.y2);
+}
+
+function drawNodes() {
+  for (const n of nodes) {
+    const def = NODE_TYPES.find(t => t.id === n.type) || NODE_TYPES[0];
+    const r = def.r;
+    const isSel = selected?.kind === 'node' && selected.id === n.id;
+    const isRoadFrom = roadFrom === n.id;
+
+    ctx.save();
+
+    // Selection / road-from ring
+    if (isSel) {
+      ctx.strokeStyle = '#fbbf24';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 4]);
+      ctx.beginPath();
+      ctx.roundRect(n.wx - r - 10, n.wy - r - 10, (r+10)*2, (r+10)*2, 12);
+      ctx.stroke();
+    }
+    if (isRoadFrom) {
+      ctx.strokeStyle = '#4ade80';
+      ctx.lineWidth = 3;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.arc(n.wx, n.wy, r + 12, 0, Math.PI*2);
+      ctx.stroke();
+    }
+
+    // Node box background (like Mini Motorways)
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(15,22,35,0.55)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(n.wx - r - 8, n.wy - r - 8, (r+8)*2, (r+8)*2, 10);
+    ctx.fill();
+    ctx.stroke();
+
+    // Drop shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.beginPath();
+    ctx.arc(n.wx + 2, n.wy + 4, r, 0, Math.PI*2);
+    ctx.fill();
+
+    // Main circle
+    const grad = ctx.createRadialGradient(n.wx - r*0.25, n.wy - r*0.25, r*0.1, n.wx, n.wy, r);
+    grad.addColorStop(0, lighten(def.color, 30));
+    grad.addColorStop(1, def.color);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(n.wx, n.wy, r, 0, Math.PI*2);
+    ctx.fill();
+
+    // Location pin (top of node)
+    ctx.fillStyle = 'rgba(255,255,255,0.9)';
+    ctx.font = `bold ${10}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('📍', n.wx, n.wy - r - 14);
+
+    // Emoji icon
+    ctx.font = `${Math.floor(r * 0.9)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(def.emoji, n.wx, n.wy);
+
+    // Label
+    ctx.fillStyle = '#fff';
+    ctx.font = `600 ${11}px system-ui`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.shadowColor = 'rgba(0,0,0,0.8)';
+    ctx.shadowBlur = 4;
+    ctx.fillText(n.label, n.wx, n.wy + r + 6);
+    ctx.shadowBlur = 0;
+
+    ctx.restore();
+  }
+}
+
+function drawVehicles() {
+  for (const v of vehicles) {
+    const road = roads.find(r => r.id === v.roadId);
+    if (!road) continue;
+    const fn = nodes.find(n => n.id === road.from);
+    const tn = nodes.find(n => n.id === road.to);
+    if (!fn || !tn) continue;
+
+    const pts = getRoadPoints(fn, tn);
+    const pos = getPointOnCurve(pts, v.t);
+
+    ctx.save();
+    ctx.translate(pos.x, pos.y);
+    ctx.rotate(pos.angle + (v.dir < 0 ? Math.PI : 0));
+
+    // Vehicle body
+    const w = 14, h = 9;
+    ctx.fillStyle = 'rgba(0,0,0,.25)';
+    ctx.fillRect(-w/2+1, -h/2+2, w, h);
+    ctx.fillStyle = v.color;
+    ctx.beginPath();
+    ctx.roundRect(-w/2, -h/2, w, h, 3);
+    ctx.fill();
+    // Window
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.beginPath();
+    ctx.roundRect(-w/2+2, -h/2+2, w*0.45, h-4, 2);
+    ctx.fill();
+
+    ctx.restore();
+  }
+}
+
+function getPointOnCurve(pts, t) {
+  // Quadratic bezier point + tangent
+  const x = (1-t)*(1-t)*pts.x1 + 2*(1-t)*t*pts.cx + t*t*pts.x2;
+  const y = (1-t)*(1-t)*pts.y1 + 2*(1-t)*t*pts.cy + t*t*pts.y2;
+  const dx = 2*(1-t)*(pts.cx-pts.x1) + 2*t*(pts.x2-pts.cx);
+  const dy = 2*(1-t)*(pts.cy-pts.y1) + 2*t*(pts.y2-pts.cy);
+  return { x, y, angle: Math.atan2(dy, dx) };
+}
+
+let mouseWorld = null;
+function drawRoadPreview() {
+  if (tool !== 'road' || !roadFrom || !mouseWorld) return;
+  const fn = nodes.find(n => n.id === roadFrom);
+  if (!fn) return;
+  const def = ROAD_TYPES.find(t => t.id === selRoadType) || ROAD_TYPES[0];
+  const pts = {
+    x1: fn.wx, y1: fn.wy, x2: mouseWorld.wx, y2: mouseWorld.wy,
+    cx: (fn.wx + mouseWorld.wx)/2 + (mouseWorld.wy - fn.wy)*0.15,
+    cy: (fn.wy + mouseWorld.wy)/2 - (mouseWorld.wx - fn.wx)*0.15,
+  };
+  ctx.save();
+  ctx.setLineDash([14, 8]);
+  ctx.strokeStyle = def.color;
+  ctx.lineWidth = def.width;
+  ctx.globalAlpha = 0.45;
+  ctx.lineCap = 'round';
+  drawCurvedRoad(ctx, pts);
+  ctx.stroke();
+  ctx.restore();
+}
+
+// ── MINIMAP ──────────────────────────────────────────────
+function drawMinimap() {
+  const W = mmCv.width, H = mmCv.height;
+  const sx = W / WORLD_W, sy = H / WORLD_H;
+  mmCtx.clearRect(0, 0, W, H);
+  mmCtx.fillStyle = '#1a2332';
+  mmCtx.fillRect(0, 0, W, H);
+
+  // River
+  if (riverPath) {
+    mmCtx.strokeStyle = 'rgba(30,80,140,0.7)';
+    mmCtx.lineWidth = 4;
+    mmCtx.lineCap = 'round';
+    mmCtx.beginPath();
+    mmCtx.moveTo(riverPath[0].x*sx, riverPath[0].y*sy);
+    for (const p of riverPath.slice(1)) mmCtx.lineTo(p.x*sx, p.y*sy);
+    mmCtx.stroke();
+  }
+
+  // Roads
+  for (const r of roads) {
+    const fn = nodes.find(n => n.id === r.from);
+    const tn = nodes.find(n => n.id === r.to);
+    if (!fn || !tn) continue;
+    const def = ROAD_TYPES.find(t => t.id === r.type) || ROAD_TYPES[0];
+    mmCtx.strokeStyle = def.color;
+    mmCtx.lineWidth = 1.5;
+    mmCtx.beginPath();
+    mmCtx.moveTo(fn.wx*sx, fn.wy*sy);
+    mmCtx.lineTo(tn.wx*sx, tn.wy*sy);
+    mmCtx.stroke();
+  }
+
+  // Nodes
+  for (const n of nodes) {
+    const def = NODE_TYPES.find(t => t.id === n.type) || NODE_TYPES[0];
+    mmCtx.fillStyle = def.color;
+    mmCtx.beginPath();
+    mmCtx.arc(n.wx*sx, n.wy*sy, 3.5, 0, Math.PI*2);
+    mmCtx.fill();
+  }
+
+  // Viewport rect
+  const vx = (-cam.x / cam.zoom) * sx;
+  const vy = (-cam.y / cam.zoom) * sy;
+  const vw = (cv.width / cam.zoom) * sx;
+  const vh = (cv.height / cam.zoom) * sy;
+  mmCtx.strokeStyle = 'rgba(255,255,255,0.5)';
+  mmCtx.lineWidth = 1.5;
+  mmCtx.setLineDash([3,2]);
+  mmCtx.strokeRect(vx, vy, vw, vh);
+  mmCtx.setLineDash([]);
+}
+
+document.getElementById('minimap').addEventListener('click', e => {
+  const rect = document.getElementById('minimap').getBoundingClientRect();
+  const mx = (e.clientX - rect.left) / rect.width;
+  const my = (e.clientY - rect.top) / rect.height;
+  cam.x = cv.width/2 - mx * WORLD_W * cam.zoom;
+  cam.y = cv.height/2 - my * WORLD_H * cam.zoom;
+  draw();
+});
+
+// ── NODE TYPE PICKER ─────────────────────────────────────
+let pickerTargetPos = null;
+
+function buildTypePicker() {
+  const el = document.getElementById('type-picker');
+  el.addEventListener('pointerdown', e => e.stopPropagation());
+  NODE_TYPES.forEach(def => {
+    const btn = document.createElement('button');
+    btn.className = 'nt-btn';
+    btn.title = def.label;
+    btn.textContent = def.emoji;
+    btn.style.background = def.color + '44';
+    btn.style.border = `2px solid ${def.color}88`;
+    btn.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      selNodeType = def.id;
+      el.style.display = 'none';
+      if (pickerTargetPos) doPlaceNode(pickerTargetPos.wx, pickerTargetPos.wy);
+      pickerTargetPos = null;
+    });
+    el.appendChild(btn);
+  });
+}
+
+function showPicker(sx, sy, wx, wy) {
+  const el = document.getElementById('type-picker');
+  pickerTargetPos = { wx, wy };
+  el.style.display = 'flex';
+  el.style.left = Math.max(8, Math.min(sx - 10, window.innerWidth - 230)) + 'px';
+  el.style.top  = Math.max(60, Math.min(sy - 80, window.innerHeight - 130)) + 'px';
+}
+
+function closePicker() {
+  document.getElementById('type-picker').style.display = 'none';
+  pickerTargetPos = null;
+}
+
+// ── INPUT ────────────────────────────────────────────────
+let panning = false, panStart = null, spaceDown = false;
+
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const f = e.deltaY < 0 ? 1.1 : 0.91;
+  const mx = e.clientX, my = e.clientY;
+  const nz = Math.max(0.12, Math.min(5, cam.zoom * f));
+  cam.x = mx - (mx - cam.x) * nz / cam.zoom;
+  cam.y = my - (my - cam.y) * nz / cam.zoom;
+  cam.zoom = nz;
+  draw();
+}, { passive: false });
+
+cv.addEventListener('pointerdown', e => {
+  // Close picker if open (canvas click outside picker)
+  const picker = document.getElementById('type-picker');
+  if (picker.style.display === 'flex') { closePicker(); return; }
+  if (e.button === 1 || spaceDown) {
+    panning = true;
+    panStart = { x: e.clientX - cam.x, y: e.clientY - cam.y };
+    cv.style.cursor = 'grabbing';
+    return;
+  }
+  if (e.button === 0) handleClick(e);
+});
+cv.addEventListener('pointermove', e => {
+  if (panning) { cam.x = e.clientX - panStart.x; cam.y = e.clientY - panStart.y; draw(); return; }
+  const w = screenToWorld(e.clientX, e.clientY);
+  mouseWorld = w;
+  if (tool === 'road' && roadFrom) draw();
+});
+cv.addEventListener('pointerup', e => {
+  if (panning) { panning = false; cv.style.cursor = 'crosshair'; }
+});
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') { spaceDown = true; cv.style.cursor = 'grab'; }
+  if (e.code === 'KeyN') setTool('node');
+  if (e.code === 'KeyR') setTool('road');
+  if (e.code === 'KeyS') setTool('select');
+  if (e.code === 'KeyE') setTool('erase');
+  if (e.code === 'Escape') { roadFrom = null; selected = null; closePicker(); updateInfoPanel(); draw(); }
+  if ((e.code === 'Delete' || e.code === 'Backspace') && !e.target.tagName.match(/INPUT/i)) deleteSel();
+  if (e.ctrlKey && e.code === 'KeyZ') { e.preventDefault(); undo(); }
+  if (e.ctrlKey && e.code === 'KeyY') { e.preventDefault(); redo(); }
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space') { spaceDown = false; cv.style.cursor = 'crosshair'; }
+});
+
+function handleClick(e) {
+  const { wx, wy } = screenToWorld(e.clientX, e.clientY);
+  const hit = nodeNear(wx, wy);
+
+  if (tool === 'node') {
+    if (hit) return;
+    if (wx < 0 || wy < 0 || wx > WORLD_W || wy > WORLD_H) return;
+    showPicker(e.clientX, e.clientY, wx, wy);
+    return;
+  }
+  if (tool === 'road') {
+    if (hit) {
+      if (!roadFrom) {
+        roadFrom = hit.id;
+      } else if (roadFrom !== hit.id) {
+        const dup = roads.find(r => (r.from===roadFrom&&r.to===hit.id)||(r.from===hit.id&&r.to===roadFrom));
+        if (!dup) {
+          const road = { id: nextRid++, type: selRoadType, from: roadFrom, to: hit.id };
+          roads.push(road);
+          pushUndo({ type:'addRoad', road:{...road} });
+          spawnVehicle(road.id);
+          updateStats();
+        }
+        roadFrom = null;
+      }
+      draw();
+    }
+    return;
+  }
+  if (tool === 'select') {
+    if (hit) {
+      selected = { kind:'node', id:hit.id };
+    } else {
+      const hr = roadNear(wx, wy);
+      selected = hr ? { kind:'road', id:hr.id } : null;
+    }
+    updateInfoPanel(); draw(); return;
+  }
+  if (tool === 'erase') {
+    if (hit) { deleteNode(hit.id); }
+    else { const hr = roadNear(wx, wy); if (hr) deleteRoad(hr.id); }
+    draw(); return;
+  }
+}
+
+function doPlaceNode(wx, wy) {
+  const def = NODE_TYPES.find(t => t.id === selNodeType) || NODE_TYPES[0];
+  const node = { id: nextNid++, type: selNodeType, wx, wy, label: def.label };
+  nodes.push(node);
+  pushUndo({ type:'addNode', node:{...node} });
+  updateStats(); draw();
+}
+
+// ── HIT TEST ────────────────────────────────────────────
+function nodeNear(wx, wy) {
+  for (const n of nodes) {
+    const def = NODE_TYPES.find(t => t.id === n.type) || NODE_TYPES[0];
+    if (Math.hypot(wx - n.wx, wy - n.wy) < def.r + 12) return n;
+  }
+  return null;
+}
+function roadNear(wx, wy) {
+  for (const r of roads) {
+    const fn = nodes.find(n => n.id === r.from);
+    const tn = nodes.find(n => n.id === r.to);
+    if (!fn || !tn) continue;
+    if (distToQuadBezier(wx, wy, fn.wx, fn.wy, tn.wx, tn.wy) < 10) return r;
+  }
+  return null;
+}
+function distToQuadBezier(px, py, x1, y1, x2, y2) {
+  // Sample approximation
+  let minD = Infinity;
+  for (let t = 0; t <= 1; t += 0.05) {
+    const cx = (x1+x2)/2 + (y2-y1)*0.15;
+    const cy = (y1+y2)/2 - (x2-x1)*0.15;
+    const bx = (1-t)*(1-t)*x1 + 2*(1-t)*t*cx + t*t*x2;
+    const by = (1-t)*(1-t)*y1 + 2*(1-t)*t*cy + t*t*y2;
+    minD = Math.min(minD, Math.hypot(px-bx, py-by));
+  }
+  return minD;
+}
+
+// ── VEHICLES ────────────────────────────────────────────
+const VEHICLE_COLORS = ['#ef4444','#3b82f6','#22c55e','#f97316','#a855f7','#ec4899','#14b8a6'];
+
+function spawnVehicle(roadId) {
+  vehicles.push({
+    id: nextVid++,
+    roadId,
+    t: 0,
+    dir: 1,
+    color: VEHICLE_COLORS[Math.floor(Math.random() * VEHICLE_COLORS.length)],
+    speed: 0.003 + Math.random() * 0.002,
+  });
+}
+
+function updateVehicles(dt) {
+  const speedMult = [0, 1, 2, 3][simSpeed] || 1;
+  for (const v of vehicles) {
+    v.t += v.dir * v.speed * speedMult * dt * 0.06;
+    if (v.t >= 1) { v.t = 1; v.dir = -1; }
+    if (v.t <= 0) { v.t = 0; v.dir = 1; }
+    // Remove if road deleted
+    if (!roads.find(r => r.id === v.roadId)) {
+      vehicles.splice(vehicles.indexOf(v), 1);
+    }
+  }
+}
+
+// ── SIMULATION LOOP ──────────────────────────────────────
+let lastTime = null;
+function simLoop(ts) {
+  if (!lastTime) lastTime = ts;
+  const dt = ts - lastTime;
+  lastTime = ts;
+  if (simSpeed > 0) {
+    updateVehicles(dt);
+    draw();
+  }
+  requestAnimationFrame(simLoop);
+}
+
+function cycleSpeed() {
+  simSpeed = (simSpeed + 1) % 4;
+  const labels = ['⏸', '▶', '▶▶', '▶▶▶'];
+  const speeds = ['0×', '1×', '2×', '3×'];
+  document.getElementById('speed-icon').textContent = labels[simSpeed];
+  document.getElementById('speed-lbl').textContent = speeds[simSpeed];
+}
+
+// ── CRUD ─────────────────────────────────────────────────
+function deleteNode(id) {
+  const n = nodes.find(n => n.id === id); if (!n) return;
+  const rr = roads.filter(r => r.from===id || r.to===id);
+  roads = roads.filter(r => r.from!==id && r.to!==id);
+  vehicles = vehicles.filter(v => !rr.find(r => r.id === v.roadId));
+  nodes = nodes.filter(n => n.id !== id);
+  pushUndo({ type:'deleteNode', node:{...n}, removedRoads: rr.map(r=>({...r})) });
+  if (selected?.id === id) { selected = null; updateInfoPanel(); }
+  updateStats(); draw();
+}
+function deleteRoad(id) {
+  const r = roads.find(r => r.id === id); if (!r) return;
+  roads = roads.filter(r => r.id !== id);
+  vehicles = vehicles.filter(v => v.roadId !== id);
+  pushUndo({ type:'deleteRoad', road:{...r} });
+  if (selected?.id === id) { selected = null; updateInfoPanel(); }
+  updateStats(); draw();
+}
+function deleteSel() {
+  if (!selected) return;
+  if (selected.kind === 'node') deleteNode(selected.id);
+  else deleteRoad(selected.id);
+  selected = null; updateInfoPanel();
+}
+
+// ── UNDO ─────────────────────────────────────────────────
+function pushUndo(a) { undos.push(a); if (undos.length>100) undos.shift(); redos=[]; }
+function undo() {
+  const a = undos.pop(); if (!a) return; redos.push(a);
+  if (a.type==='addNode') nodes = nodes.filter(n => n.id!==a.node.id);
+  else if (a.type==='addRoad') { roads = roads.filter(r => r.id!==a.road.id); vehicles=vehicles.filter(v=>v.roadId!==a.road.id); }
+  else if (a.type==='deleteNode') { nodes.push({...a.node}); a.removedRoads.forEach(r=>{ roads.push({...r}); spawnVehicle(r.id); }); }
+  else if (a.type==='deleteRoad') { roads.push({...a.road}); spawnVehicle(a.road.id); }
+  updateStats(); draw(); updateInfoPanel();
+}
+function redo() {
+  const a = redos.pop(); if (!a) return; undos.push(a);
+  if (a.type==='addNode') nodes.push({...a.node});
+  else if (a.type==='addRoad') { roads.push({...a.road}); spawnVehicle(a.road.id); }
+  else if (a.type==='deleteNode') { nodes=nodes.filter(n=>n.id!==a.node.id); roads=roads.filter(r=>!a.removedRoads.find(rr=>rr.id===r.id)); }
+  else if (a.type==='deleteRoad') roads=roads.filter(r=>r.id!==a.road.id);
+  updateStats(); draw(); updateInfoPanel();
+}
+
+// ── TOOL ─────────────────────────────────────────────────
+function setTool(t) {
+  tool = t; roadFrom = null;
+  document.querySelectorAll('.pill').forEach(b => b.classList.remove('active','active-road','active-erase'));
+  const btn = document.getElementById('btn-'+t);
+  if (btn) btn.classList.add(t==='road'?'active-road':t==='erase'?'active-erase':'active');
+  draw();
+}
+
+// ── INFO PANEL ───────────────────────────────────────────
+function updateInfoPanel() {
+  const el = document.getElementById('info-panel');
+  if (!selected) { el.style.display='none'; return; }
+  el.style.display = 'block';
+  if (selected.kind === 'node') {
+    const n = nodes.find(n=>n.id===selected.id); if (!n) { el.style.display='none'; return; }
+    const def = NODE_TYPES.find(t=>t.id===n.type)||NODE_TYPES[0];
+    const conn = roads.filter(r=>r.from===n.id||r.to===n.id).length;
+    document.getElementById('ip-title').textContent = 'Node';
+    document.getElementById('ip-type').textContent = def.emoji + ' ' + def.label;
+    document.getElementById('ip-pos').textContent = Math.round(n.wx)+', '+Math.round(n.wy);
+    document.getElementById('ip-conn').textContent = conn;
+    document.getElementById('ip-conn-row').style.display='flex';
+    const inp = document.getElementById('info-input');
+    inp.style.display='block'; inp.value = n.label;
+  } else {
+    const r = roads.find(r=>r.id===selected.id); if (!r) { el.style.display='none'; return; }
+    const fn = nodes.find(n=>n.id===r.from), tn = nodes.find(n=>n.id===r.to);
+    const def = ROAD_TYPES.find(t=>t.id===r.type)||ROAD_TYPES[0];
+    document.getElementById('ip-title').textContent = 'Road';
+    document.getElementById('ip-type').textContent = def.label;
+    document.getElementById('ip-pos').textContent = (fn?.label||'?')+' → '+(tn?.label||'?');
+    document.getElementById('ip-conn-row').style.display='none';
+    document.getElementById('info-input').style.display='none';
+  }
+}
+function renameSelected(v) {
+  if (selected?.kind==='node') {
+    const n = nodes.find(n=>n.id===selected.id);
+    if (n) { n.label = v; draw(); }
+  }
+}
+
+// ── STATS ─────────────────────────────────────────────────
+function updateStats() {
+  document.getElementById('st-nodes').textContent = nodes.length;
+  document.getElementById('st-roads').textContent = roads.length;
+}
+
+// ── SAVE/LOAD ─────────────────────────────────────────────
+function saveMap() {
+  localStorage.setItem('minisim', JSON.stringify({ nodes, roads, nextNid, nextRid }));
+  toast('💾 Saved');
+}
+function loadMap() {
+  const raw = localStorage.getItem('minisim'); if (!raw) { toast('No save found'); return; }
+  const d = JSON.parse(raw);
+  nodes=d.nodes; roads=d.roads; nextNid=d.nextNid||1; nextRid=d.nextRid||1;
+  vehicles=[];
+  roads.forEach(r => spawnVehicle(r.id));
+  selected=null; roadFrom=null;
+  updateStats(); updateInfoPanel(); draw();
+  toast('📂 Loaded');
+}
+
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.style.opacity = 1;
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.style.opacity = 0, 2000);
+}
+
+// ── UTIL ──────────────────────────────────────────────────
+function lighten(hex, amt) {
+  let r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  r=Math.min(255,r+amt); g=Math.min(255,g+amt); b=Math.min(255,b+amt);
+  return `rgb(${r},${g},${b})`;
+}
+
+// Pre-generate dot positions (static, no random per frame)
+const dotPositions = [];
+(function() {
+  // Seeded via simple LCG
+  let seed = 42;
+  function rand() { seed=(seed*1664525+1013904223)&0xffffffff; return (seed>>>0)/4294967296; }
+  const clusters = [
+    {cx:300,cy:500},{cx:700,cy:300},{cx:900,cy:700},{cx:1300,cy:400},
+    {cx:500,cy:1100},{cx:1100,cy:1100},{cx:1700,cy:600},{cx:1500,cy:1300},
+    {cx:2000,cy:900},{cx:2200,cy:300},{cx:200,cy:1300},{cx:1900,cy:1400},
+  ];
+  for (const c of clusters) {
+    const count = 8 + Math.floor(rand()*12);
+    for (let i=0; i<count; i++) {
+      dotPositions.push({
+        x: c.cx + (rand()-0.5)*220,
+        y: c.cy + (rand()-0.5)*180,
+        r: 3 + rand()*6,
+      });
+    }
+  }
+})();
+
+// ── RESIZE ───────────────────────────────────────────────
+function resize() {
+  cv.width = window.innerWidth;
+  cv.height = window.innerHeight;
+  mmCv.width = 280; mmCv.height = 200;
+  draw();
+}
+window.addEventListener('resize', () => { resize(); centerCam(); draw(); });
+
+// ── INIT ─────────────────────────────────────────────────
+generateTerrain();
+buildTypePicker();
+resize();
+centerCam();
+draw();
+requestAnimationFrame(simLoop);
+</script>
+</body>
+</html>
